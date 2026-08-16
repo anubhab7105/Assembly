@@ -109,8 +109,12 @@ async function handleLogin(e) {
         });
 
         if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.detail || 'Login failed');
+            let detail = 'Login failed';
+            try {
+                const data = await res.json();
+                detail = data.detail || detail;
+            } catch (_) {}
+            throw new Error(detail);
         }
 
         const data = await res.json();
@@ -142,8 +146,12 @@ async function handleSignup(e) {
         });
 
         if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.detail || 'Signup failed');
+            let detail = 'Signup failed';
+            try {
+                const data = await res.json();
+                detail = data.detail || detail;
+            } catch (_) {}
+            throw new Error(detail);
         }
 
         const data = await res.json();
@@ -377,8 +385,14 @@ async function submitQuestion() {
         });
 
         if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.detail || 'Failed to submit question');
+            let detail = `Server error (${res.status})`;
+            try {
+                const data = await res.json();
+                detail = data.detail || detail;
+            } catch (_) {
+                // Response body isn't JSON (e.g. plain "Internal Server Error")
+            }
+            throw new Error(detail);
         }
 
         const execution = await res.json();
