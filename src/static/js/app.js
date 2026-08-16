@@ -482,10 +482,17 @@ function handleProgressEvent(event) {
 
         case 'error':
             addFeedItem('error', data.message || 'An error occurred');
+            // Check if this is a provider availability error
+            const errMsg = data.message || 'An error occurred during execution.';
+            const isProviderError = errMsg.includes('providers to be live') || errMsg.includes('providers');
             handleAnswerReady({
-                answer: data.message || 'An error occurred during execution.',
+                answer: isProviderError
+                    ? '⚠️ ' + errMsg + '\n\nPlease ensure at least 3 AI provider API keys (Gemini, Groq, Cerebras, OpenRouter, Hugging Face) are configured in the server\'s .env file.'
+                    : errMsg,
                 sources: [],
                 status: 'failed',
+                agent_count: 0,
+                providers_used: [],
             });
             break;
     }
@@ -544,6 +551,7 @@ function updateAgentCards(agents) {
                 <span class="agent-role">${roleEmoji[agent.agent_type] || '🤖'} ${capitalize(agent.agent_type)}</span>
             </div>
             <div class="agent-model">${agent.model}</div>
+            <div class="agent-provider" style="font-size:0.7rem;opacity:0.6;margin-top:2px;">via ${capitalize(agent.provider_name || 'unknown')}</div>
             <div class="agent-activity">${agent.role_description || 'Working...'}</div>
         `;
         container.appendChild(card);
@@ -594,10 +602,25 @@ function handleAnswerReady(data) {
     document.querySelector('.pulse-dot').style.background = 
         data.status === 'failed' ? 'var(--error)' : 'var(--success)';
 
+    // Build agent/provider info badge
+    let answerContent = data.answer || '';
+    const agentCount = data.agent_count || 0;
+    const providersUsed = data.providers_used || [];
+
+    // If answer doesn't already contain the footer (from synthesizer), add one
+    if (agentCount > 0 && !answerContent.includes('AI agents powered by')) {
+        const providerNames = {
+            gemini: 'Gemini', groq: 'Groq', cerebras: 'Cerebras',
+            openrouter: 'OpenRouter', huggingface: 'Hugging Face',
+        };
+        const displayNames = providersUsed.map(p => providerNames[p] || p).join(', ');
+        answerContent += `\n\n---\n\uD83E\uDD16 This answer was assembled by ${agentCount} AI agents powered by ${displayNames || 'multiple providers'}.`;
+    }
+
     // Small delay then show answer
     setTimeout(() => {
         hideWorkspace();
-        appendMessage('assistant', data.answer, data.sources);
+        appendMessage('assistant', answerContent, data.sources);
         handleInputChange();
         loadConversations();
     }, 1500);

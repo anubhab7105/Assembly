@@ -116,7 +116,7 @@ class AgentRun(Base):
     agent_type = Column(String, nullable=False)  # solver | researcher | critic | synthesizer
     role_description = Column(String, nullable=True)
     model = Column(String, nullable=False)
-    provider = Column(String, nullable=False)  # openai | gemini | groq
+    provider = Column(String, nullable=False)  # gemini | groq | cerebras | openrouter | huggingface
     input_tokens = Column(Integer, default=0)
     output_tokens = Column(Integer, default=0)
     status = Column(String, default="active")  # active | completed | failed | timeout

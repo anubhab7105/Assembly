@@ -35,14 +35,18 @@ class Settings(BaseSettings):
     )
 
     # ── AI Provider API Keys ─────────────────────────────────────────
-    openai_api_key: str = ""
     gemini_api_key: str = ""
     groq_api_key: str = ""
+    cerebras_api_key: str = ""
+    openrouter_api_key: str = ""
+    huggingface_api_key: str = ""
 
     # ── Default Models ───────────────────────────────────────────────
-    openai_default_model: str = "gpt-4o-mini"
     gemini_default_model: str = "gemini-2.0-flash"
     groq_default_model: str = "llama-3.1-8b-instant"
+    cerebras_default_model: str = "llama-3.3-70b"
+    openrouter_default_model: str = "meta-llama/llama-3.1-8b-instruct:free"
+    huggingface_default_model: str = "meta-llama/Meta-Llama-3-8B-Instruct"
 
     # ── Research / Web Search ────────────────────────────────────────
     tavily_api_key: str = ""
@@ -64,12 +68,16 @@ class Settings(BaseSettings):
     def has_provider(self, provider: str) -> bool:
         """Check if an API key is configured for a provider."""
         key_map = {
-            "openai": self.openai_api_key,
             "gemini": self.gemini_api_key,
             "groq": self.groq_api_key,
+            "cerebras": self.cerebras_api_key,
+            "openrouter": self.openrouter_api_key,
+            "huggingface": self.huggingface_api_key,
         }
         key = key_map.get(provider, "")
-        return bool(key) and not key.startswith("sk-your") and not key.startswith("your-") and not key.startswith("gsk_your")
+        # Reject placeholder values
+        placeholders = ("sk-your", "your-", "gsk_your", "hf_your", "csk_your")
+        return bool(key) and not any(key.startswith(p) for p in placeholders)
 
 
 # ── Singleton ────────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
 """
-Assembly — OpenAI Provider
+Assembly — Cerebras Provider
 
-Implements the AIProvider interface for OpenAI models (GPT-4o, GPT-4o-mini).
+Implements the AIProvider interface for Cerebras' ultra-fast inference.
+Uses the OpenAI-compatible API at https://api.cerebras.ai/v1.
 """
 
 from typing import List, Optional
@@ -12,14 +13,17 @@ from src.core.config import settings
 from src.core.logging_config import logger
 
 
-class OpenAIProvider(AIProvider):
-    """OpenAI / GPT provider."""
+class CerebrasProvider(AIProvider):
+    """Cerebras fast-inference provider (LLaMA models via OpenAI-compatible API)."""
 
-    provider_name = "openai"
+    provider_name = "cerebras"
 
     def __init__(self):
-        self.client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
-        self.default_model = settings.openai_default_model
+        self.client = openai.AsyncOpenAI(
+            api_key=settings.cerebras_api_key,
+            base_url="https://api.cerebras.ai/v1",
+        )
+        self.default_model = settings.cerebras_default_model
 
     async def generate(
         self,
@@ -30,7 +34,7 @@ class OpenAIProvider(AIProvider):
         **kwargs,
     ) -> ProviderResponse:
         model = model or self.default_model
-        logger.info(f"OpenAI  │ Generating with {model}")
+        logger.info(f"Cerebras │ Generating with {model}")
 
         try:
             response = await self.client.chat.completions.create(
@@ -54,11 +58,11 @@ class OpenAIProvider(AIProvider):
             )
 
         except Exception as e:
-            logger.error(f"OpenAI  │ Error: {e}")
+            logger.error(f"Cerebras │ Error: {e}")
             raise
 
     def is_available(self) -> bool:
-        return settings.has_provider("openai")
+        return settings.has_provider("cerebras")
 
     def get_available_models(self) -> List[str]:
-        return ["gpt-4o", "gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1-nano"]
+        return ["llama-3.3-70b", "llama-3.1-8b"]

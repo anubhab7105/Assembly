@@ -14,9 +14,10 @@ aiohttp>=3.9.0
 websockets>=12.0
 
 # AI Providers
-openai>=1.0.0
+openai>=1.0.0              # Also used by Cerebras & OpenRouter (OpenAI-compatible API)
 google-generativeai>=0.8.0
 groq>=0.4.0
+huggingface-hub>=0.20.0
 
 # Utilities
 aiofiles>=24.0.0

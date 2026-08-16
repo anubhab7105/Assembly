@@ -171,6 +171,7 @@ class AgentManager:
                 "agent_id": agent.agent_id,
                 "agent_type": agent.agent_type,
                 "model": agent.model,
+                "provider_name": agent.provider.provider_name,
                 "role_description": agent.role_description,
             }
             for agent in self.agents.values()
