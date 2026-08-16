@@ -3,16 +3,23 @@ Assembly — Model Router
 
 Selects the best provider + model for each agent role based on
 task type, complexity, cost, latency, and time budget (PRD Section 22).
+
+Supports 5 providers: Gemini, Groq, Cerebras, OpenRouter, Hugging Face.
+Enforces a minimum of 3 live providers before accepting any work.
 """
 
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
 from src.providers.base import AIProvider
-from src.providers.openai_provider import OpenAIProvider
 from src.providers.gemini_provider import GeminiProvider
 from src.providers.groq_provider import GroqProvider
+from src.providers.cerebras_provider import CerebrasProvider
+from src.providers.openrouter_provider import OpenRouterProvider
+from src.providers.huggingface_provider import HuggingFaceProvider
 from src.core.logging_config import logger
+
+MIN_REQUIRED_PROVIDERS = 3
 
 
 @dataclass
@@ -29,6 +36,8 @@ class ModelRouter:
     
     Routes agent roles to the best available provider/model combination
     based on task requirements and constraints.
+    
+    Requires at least 3 live providers to operate.
     """
 
     def __init__(self):
@@ -38,9 +47,11 @@ class ModelRouter:
     def _init_providers(self):
         """Initialize all available providers."""
         providers = [
-            ("openai", OpenAIProvider),
             ("gemini", GeminiProvider),
             ("groq", GroqProvider),
+            ("cerebras", CerebrasProvider),
+            ("openrouter", OpenRouterProvider),
+            ("huggingface", HuggingFaceProvider),
         ]
         for name, cls in providers:
             try:
@@ -53,9 +64,33 @@ class ModelRouter:
             except Exception as e:
                 logger.warning(f"Router  │ ✗ {name} provider — init error: {e}")
 
+        live = len(self._providers)
+        logger.info(f"Router  │ {live}/{len(providers)} providers live (minimum required: {MIN_REQUIRED_PROVIDERS})")
+        if live < MIN_REQUIRED_PROVIDERS:
+            logger.error(
+                f"Router  │ ⚠ Only {live} provider(s) available. "
+                f"Assembly requires at least {MIN_REQUIRED_PROVIDERS}. "
+                f"Add more API keys to .env."
+            )
+
     def get_available_providers(self) -> list[str]:
         """Return names of providers with valid credentials."""
         return list(self._providers.keys())
+
+    def get_live_count(self) -> int:
+        """Return the number of currently live providers."""
+        return len(self._providers)
+
+    def _enforce_minimum(self):
+        """Raise an error if fewer than 3 providers are live."""
+        live = len(self._providers)
+        if live < MIN_REQUIRED_PROVIDERS:
+            available = ", ".join(self._providers.keys()) if self._providers else "none"
+            raise RuntimeError(
+                f"Assembly requires at least {MIN_REQUIRED_PROVIDERS} AI providers to be live. "
+                f"Currently only {live} available ({available}). "
+                f"Please add more API keys to your .env file."
+            )
 
     def route(
         self,
@@ -69,15 +104,14 @@ class ModelRouter:
         Route an agent to the best available model.
         
         Strategy:
-        - Solver/Analyst → strongest reasoning model (GPT-4o, Gemini 2.5 Pro)
-        - Researcher → model with good comprehension (Gemini Flash, GPT-4o-mini)
-        - Critic → strong reasoning (GPT-4o, Gemini 2.5 Pro)
-        - Synthesizer → good writing model (GPT-4o-mini, Gemini Flash)
-        - Short time budgets → prefer fast/low-latency (Groq, GPT-4o-mini)
+        - Solver/Analyst → strongest reasoning (Gemini 2.5 Flash, Cerebras 70b)
+        - Researcher → good comprehension (Gemini Flash, Groq, HuggingFace)
+        - Critic → strong reasoning (Cerebras 70b, Gemini 2.5 Flash)
+        - Synthesizer → good writing (Gemini Flash, Groq, Cerebras)
+        - Short time budgets → prefer fast/low-latency (Groq, Cerebras)
         """
 
-        if not self._providers:
-            raise RuntimeError("No AI providers configured. Please add API keys to .env")
+        self._enforce_minimum()
 
         # If a specific provider is requested and available, use it
         if prefer_provider and prefer_provider in self._providers:
@@ -122,74 +156,88 @@ class ModelRouter:
         Returns list of (provider_name, model) tuples.
         """
 
-        # For tight time budgets, prefer fast models
+        # For tight time budgets, prefer fast models (Groq & Cerebras are ultra-fast)
         if time_budget_minutes <= 3:
             return [
                 ("groq", "llama-3.3-70b-versatile"),
-                ("openai", "gpt-4o-mini"),
+                ("cerebras", "llama-3.3-70b"),
                 ("gemini", "gemini-2.0-flash"),
+                ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+                ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
             ]
 
         if agent_type == "solver":
-            if problem_type == "math":
+            if problem_type in ("math", "coding"):
                 return [
-                    ("openai", "gpt-4o"),
                     ("gemini", "gemini-2.5-flash"),
+                    ("cerebras", "llama-3.3-70b"),
                     ("groq", "llama-3.3-70b-versatile"),
-                ]
-            elif problem_type == "coding":
-                return [
-                    ("openai", "gpt-4o"),
-                    ("gemini", "gemini-2.5-flash"),
-                    ("groq", "llama-3.3-70b-versatile"),
+                    ("openrouter", "meta-llama/llama-3.1-70b-instruct"),
+                    ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
                 ]
             else:
                 return [
-                    ("openai", "gpt-4o-mini"),
                     ("gemini", "gemini-2.0-flash"),
+                    ("cerebras", "llama-3.3-70b"),
                     ("groq", "llama-3.3-70b-versatile"),
+                    ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+                    ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
                 ]
 
         elif agent_type == "researcher":
             return [
                 ("gemini", "gemini-2.0-flash"),
-                ("openai", "gpt-4o-mini"),
                 ("groq", "llama-3.1-8b-instant"),
+                ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
+                ("cerebras", "llama-3.1-8b"),
+                ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
             ]
 
         elif agent_type == "critic":
             if complexity == "high":
                 return [
-                    ("openai", "gpt-4o"),
+                    ("cerebras", "llama-3.3-70b"),
                     ("gemini", "gemini-2.5-flash"),
                     ("groq", "llama-3.3-70b-versatile"),
+                    ("openrouter", "meta-llama/llama-3.1-70b-instruct"),
+                    ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
                 ]
             return [
-                ("openai", "gpt-4o-mini"),
+                ("cerebras", "llama-3.3-70b"),
                 ("gemini", "gemini-2.0-flash"),
                 ("groq", "llama-3.3-70b-versatile"),
+                ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+                ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
             ]
 
         elif agent_type == "synthesizer":
             return [
-                ("openai", "gpt-4o-mini"),
                 ("gemini", "gemini-2.0-flash"),
                 ("groq", "llama-3.3-70b-versatile"),
+                ("cerebras", "llama-3.3-70b"),
+                ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+                ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
             ]
 
         # Default fallback
         return [
-            ("openai", "gpt-4o-mini"),
             ("gemini", "gemini-2.0-flash"),
             ("groq", "llama-3.1-8b-instant"),
+            ("cerebras", "llama-3.3-70b"),
+            ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+            ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
         ]
 
     def route_for_planning(self) -> ModelAssignment:
         """Route specifically for the Planner (problem classification)."""
+        self._enforce_minimum()
+
         routing = [
-            ("openai", "gpt-4o-mini"),
             ("gemini", "gemini-2.0-flash"),
             ("groq", "llama-3.3-70b-versatile"),
+            ("cerebras", "llama-3.3-70b"),
+            ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+            ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
         ]
         for provider_name, model in routing:
             if provider_name in self._providers:

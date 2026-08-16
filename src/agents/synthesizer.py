@@ -32,8 +32,8 @@ RULES:
 4. If consensus is weak, honestly state the uncertainty.
 5. Include ONLY sources that were actually used and verified.
 6. Write clearly and professionally — this is what the user reads.
-7. Do NOT mention "agents", "debate", "consensus", or internal processes.
-8. Present the answer as if YOU are the expert giving the answer directly.
+7. Present the answer as a direct expert response.
+8. Do NOT include any footer or metadata about agents — that will be added automatically.
 
 You MUST respond with a JSON object in this exact format:
 ```json
@@ -99,10 +99,12 @@ Respond with the JSON format specified in your instructions."""
         agent_outputs: List[AgentOutput],
         consensus_score: float,
         debate_rounds: int,
+        providers_used: List[str] = None,
     ) -> AgentOutput:
         """
         Convenience method for final synthesis.
         Collects all sources and agent data into context.
+        Appends agent attribution footer to the final answer.
         """
         all_sources = []
         for output in agent_outputs:
@@ -126,4 +128,22 @@ Respond with the JSON format specified in your instructions."""
             "all_sources": unique_sources,
         }
 
-        return await self.run(question, context=context, temperature=0.3)
+        result = await self.run(question, context=context, temperature=0.3)
+
+        # Append attribution footer
+        agent_count = len(agent_outputs)
+        providers = providers_used or []
+        provider_names = {
+            "gemini": "Gemini",
+            "groq": "Groq",
+            "cerebras": "Cerebras",
+            "openrouter": "OpenRouter",
+            "huggingface": "Hugging Face",
+        }
+        display_names = [provider_names.get(p, p.title()) for p in providers]
+        providers_str = ", ".join(display_names) if display_names else "multiple providers"
+
+        footer = f"\n\n---\n\U0001F916 This answer was assembled by {agent_count} AI agents powered by {providers_str}."
+        result.position = result.position + footer
+
+        return result

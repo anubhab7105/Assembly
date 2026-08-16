@@ -39,6 +39,7 @@ class ExecutionResult:
         agent_count: int,
         debate_rounds: int,
         total_tokens: int,
+        providers_used: list = None,
         status: str = "completed",
     ):
         self.answer = answer
@@ -49,6 +50,7 @@ class ExecutionResult:
         self.agent_count = agent_count
         self.debate_rounds = debate_rounds
         self.total_tokens = total_tokens
+        self.providers_used = providers_used or []
         self.status = status
 
 
@@ -138,6 +140,10 @@ class Orchestrator:
 
             # Send agent info to frontend
             agent_info = agent_manager.get_agent_info()
+
+            # Track which providers are being used
+            providers_used = list(set(a.get("provider_name", "unknown") for a in agent_info))
+
             await self._emit_progress(on_progress, execution_id, "agent_update", {
                 "agents": agent_info,
                 "message": "Team assembled",
@@ -253,6 +259,7 @@ class Orchestrator:
                 agent_outputs=outputs,
                 consensus_score=consensus_result.score,
                 debate_rounds=round_number,
+                providers_used=providers_used,
             )
 
             # ════════════════════════════════════════════════════════════
@@ -273,6 +280,7 @@ class Orchestrator:
                 agent_count=len(agents),
                 debate_rounds=round_number,
                 total_tokens=total_tokens,
+                providers_used=providers_used,
                 status="completed",
             )
 
@@ -281,6 +289,8 @@ class Orchestrator:
                 "answer": result.answer,
                 "sources": result.sources,
                 "consensus_score": result.consensus_score,
+                "agent_count": result.agent_count,
+                "providers_used": result.providers_used,
                 **budget.get_status(),
             })
 

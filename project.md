@@ -18,12 +18,14 @@
 - `src/database/models.py` — 11 ORM models: User, Conversation, Message, Execution, AgentRun, AgentMessage, DebateRound, ConsensusEvent, Source, Citation, Usage
 - `src/database/schemas.py` — Pydantic request/response schemas for all API endpoints
 
-### 4. AI Provider Abstraction (3 providers)
+### 4. AI Provider Abstraction (5 providers)
 - `src/providers/base.py` — Abstract `AIProvider` interface with `generate()` contract
-- `src/providers/openai_provider.py` — OpenAI/GPT integration (GPT-4o, GPT-4o-mini)
 - `src/providers/gemini_provider.py` — Google Gemini integration (2.0 Flash, 2.5 Pro)
 - `src/providers/groq_provider.py` — Groq fast inference (LLaMA 3.x)
-- `src/providers/router.py` — Model Router: selects best provider/model per agent role, task type, complexity, and time budget
+- `src/providers/cerebras_provider.py` — Cerebras ultra-fast inference (LLaMA 3.3 70b, OpenAI-compatible API)
+- `src/providers/openrouter_provider.py` — OpenRouter multi-model aggregation (LLaMA, Mistral, Gemma free tiers)
+- `src/providers/huggingface_provider.py` — Hugging Face Inference API (LLaMA 3, Mistral, Phi-3)
+- `src/providers/router.py` — Model Router: selects best provider/model per agent role; enforces minimum 3 live providers
 
 ### 5. Agent System (4 MVP agents)
 - `src/agents/base_agent.py` — BaseAgent with structured JSON output parsing, provider abstraction, debate lifecycle
@@ -77,7 +79,7 @@
 
 ## Pending / Next Steps
 
-- [ ] Add API keys to `.env` (OPENAI_API_KEY, GEMINI_API_KEY, GROQ_API_KEY)
+- [ ] Add API keys to `.env` (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, HUGGINGFACE_API_KEY — minimum 3 required)
 - [ ] End-to-end execution test (ask question → get AI answer)
 - [ ] Add Tavily API key for web search capability
 - [ ] Migrate to PostgreSQL for production
