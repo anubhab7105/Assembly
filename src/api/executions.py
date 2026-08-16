@@ -29,7 +29,7 @@ _orchestrator = Orchestrator()
 
 
 @router.post("/", response_model=ExecutionResponse)
-def create_execution(
+async def create_execution(
     req: ExecutionRequest,
     user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
@@ -100,7 +100,7 @@ def create_execution(
 
 
 @router.get("/{execution_id}", response_model=ExecutionResponse)
-def get_execution(
+async def get_execution(
     execution_id: str,
     user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
