@@ -2,6 +2,7 @@
 Assembly — Application Configuration
 
 Loads all environment variables via Pydantic Settings.
+Supports local development (SQLite) and production (Supabase PostgreSQL).
 """
 
 import os
@@ -23,6 +24,9 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # ── Frontend URL (for CORS in production) ────────────────────────
+    frontend_url: str = ""  # e.g. "https://assembly-frontend.vercel.app"
+
     # ── Security ─────────────────────────────────────────────────────
     jwt_secret_key: str = "change-me-to-a-random-secret-key-at-least-32-chars"
     jwt_algorithm: str = "HS256"
@@ -31,7 +35,7 @@ class Settings(BaseSettings):
     # ── Database ─────────────────────────────────────────────────────
     database_url: str = Field(
         default=f"sqlite:///{BASE_DIR / 'assembly.db'}",
-        description="SQLAlchemy database URL",
+        description="Database URL. Use postgresql://... for Supabase, sqlite:///... for local dev.",
     )
 
     # ── AI Provider API Keys ─────────────────────────────────────────
@@ -64,6 +68,26 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def is_postgres(self) -> bool:
+        """Check if using PostgreSQL (Supabase) vs SQLite."""
+        return self.database_url.startswith("postgresql")
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Allowed CORS origins based on environment."""
+        if self.frontend_url:
+            # Production: only allow the specific frontend URL
+            origins = [self.frontend_url]
+            # Also allow common variations (with/without trailing slash)
+            if self.frontend_url.endswith("/"):
+                origins.append(self.frontend_url.rstrip("/"))
+            else:
+                origins.append(self.frontend_url + "/")
+            return origins
+        # Development: allow all origins
+        return ["*"]
 
     def has_provider(self, provider: str) -> bool:
         """Check if an API key is configured for a provider."""
