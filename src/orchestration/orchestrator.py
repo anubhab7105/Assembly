@@ -178,8 +178,10 @@ class Orchestrator:
 
             outputs = await agent_manager.run_all_independent(agents, question)
 
-            # Track token usage from outputs
-            # (we estimate based on response length since not all providers report tokens cleanly)
+            # Aggregate token usage from independent solving phase
+            for o in outputs:
+                total_tokens += o.tokens_used
+            budget.record_tokens(sum(o.tokens_used for o in outputs))
 
             # ════════════════════════════════════════════════════════════
             # PHASE 5: DEBATE — Cross-agent critique rounds
@@ -217,6 +219,11 @@ class Orchestrator:
                     round_number=round_number,
                 )
                 budget.record_debate_round()
+
+                # Aggregate token usage from debate round
+                round_tokens = sum(o.tokens_used for o in outputs)
+                total_tokens += round_tokens
+                budget.record_tokens(round_tokens)
 
                 # Re-evaluate consensus
                 force = budget.should_force_synthesis()
@@ -261,6 +268,10 @@ class Orchestrator:
                 debate_rounds=round_number,
                 providers_used=providers_used,
             )
+
+            # Aggregate token usage from synthesis
+            total_tokens += final_output.tokens_used
+            budget.record_tokens(final_output.tokens_used)
 
             # ════════════════════════════════════════════════════════════
             # DONE — Return the result

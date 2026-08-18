@@ -107,3 +107,6 @@
 - **Problem:** When an API call failed during debate, the agent's previous output was silently re-inserted. This made the agent look "stubborn" (unchanged position), artificially lowering `new_info_rate` and prematurely triggering consensus finalization.
 - **Fix:** (1) `DebateManager` now tags failed agent outputs with `_failed_round` attribute. (2) `ConsensusEngine._calculate_new_information_rate()` now accepts `round_number` and excludes any agent whose `_failed_round` matches the current round from the stabilization calculation, with a warning log.
 
+### Fix E — Token Tracking (`base_agent.py`, `orchestrator.py`) ✅
+- **Problem:** `total_tokens` was initialized to 0 in `orchestrator.py` but never updated. Providers already reported token counts in `ProviderResponse`, but the data was never propagated.
+- **Fix:** (1) Added `tokens_used` field to `AgentOutput` dataclass. (2) `BaseAgent.run()` now copies `response.total_tokens` into the output. (3) `Orchestrator.execute()` now aggregates tokens after each phase (independent solve, each debate round, synthesis) and feeds them to `BudgetController.record_tokens()` for real cost/budget enforcement.
