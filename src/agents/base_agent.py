@@ -6,6 +6,7 @@ structured output parsing, and the common agent lifecycle.
 """
 
 import json
+import re
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 
@@ -111,44 +112,99 @@ class BaseAgent:
     def _parse_response(self, response: ProviderResponse) -> AgentOutput:
         """
         Parse the LLM response into an AgentOutput.
-        Attempts JSON parsing first, then falls back to text extraction.
+        Uses a robust JSON extractor that handles:
+        - Raw JSON responses (no code fences)
+        - Any markdown code fence language (```json, ```javascript, ```, etc.)
+        - JSON embedded in surrounding text
+        - Nested JSON objects
         """
         content = response.content.strip()
+        json_str = self._extract_json(content)
 
-        # Try to extract JSON from the response
-        try:
-            # Look for JSON block in the response
-            json_str = content
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
+        if json_str:
+            try:
+                data = json.loads(json_str)
 
-            data = json.loads(json_str)
+                return AgentOutput(
+                    agent_id=self.agent_id,
+                    agent_type=self.agent_type,
+                    position=data.get("position", data.get("answer", data.get("conclusion", ""))),
+                    confidence=float(data.get("confidence", 0.7)),
+                    evidence=data.get("evidence", []),
+                    reasoning=data.get("reasoning", ""),
+                    supports=data.get("supports", []),
+                    disagrees_with=data.get("disagrees_with", []),
+                    remaining_uncertainty=data.get("remaining_uncertainty", []),
+                    sources=data.get("sources", []),
+                    raw_content=content,
+                )
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"Agent   │ {self.agent_id} — JSON decode failed after extraction: {e}")
 
-            return AgentOutput(
-                agent_id=self.agent_id,
-                agent_type=self.agent_type,
-                position=data.get("position", data.get("answer", data.get("conclusion", ""))),
-                confidence=float(data.get("confidence", 0.7)),
-                evidence=data.get("evidence", []),
-                reasoning=data.get("reasoning", ""),
-                supports=data.get("supports", []),
-                disagrees_with=data.get("disagrees_with", []),
-                remaining_uncertainty=data.get("remaining_uncertainty", []),
-                sources=data.get("sources", []),
-                raw_content=content,
-            )
-        except (json.JSONDecodeError, IndexError, ValueError):
-            # Fallback: treat entire response as the position
-            return AgentOutput(
-                agent_id=self.agent_id,
-                agent_type=self.agent_type,
-                position=content,
-                confidence=0.6,
-                reasoning=content,
-                raw_content=content,
-            )
+        # Fallback: treat entire response as the position
+        logger.warning(f"Agent   │ {self.agent_id} — No valid JSON found, using text fallback")
+        return AgentOutput(
+            agent_id=self.agent_id,
+            agent_type=self.agent_type,
+            position=content,
+            confidence=0.6,
+            reasoning=content,
+            raw_content=content,
+        )
+
+    @staticmethod
+    def _extract_json(text: str) -> Optional[str]:
+        """
+        Robustly extract a JSON object string from LLM output.
+
+        Strategy:
+        1. Strip markdown code fences of any language (```json, ```python, etc.)
+        2. Find the first '{' character
+        3. Walk forward, tracking brace depth, to find the matching '}'
+        4. Return the substring as the candidate JSON
+
+        Returns None if no valid JSON object structure is found.
+        """
+        # Step 1: Strip markdown code fences (handles ```json, ```javascript, ``` etc.)
+        stripped = re.sub(r'```\w*\s*', '', text)
+        stripped = stripped.replace('```', '').strip()
+
+        # Step 2: Find the first '{' — start of JSON object
+        start = stripped.find('{')
+        if start == -1:
+            return None
+
+        # Step 3: Walk forward tracking brace depth to find the matching '}'
+        depth = 0
+        in_string = False
+        escape_next = False
+
+        for i in range(start, len(stripped)):
+            char = stripped[i]
+
+            if escape_next:
+                escape_next = False
+                continue
+
+            if char == '\\' and in_string:
+                escape_next = True
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+
+            if in_string:
+                continue
+
+            if char == '{':
+                depth += 1
+            elif char == '}':
+                depth -= 1
+                if depth == 0:
+                    return stripped[start:i + 1]
+
+        return None
 
     # ── Convenience for debate rounds ────────────────────────────────
 
