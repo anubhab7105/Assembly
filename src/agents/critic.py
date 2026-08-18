@@ -59,6 +59,7 @@ You MUST respond with a JSON object in this exact format:
         if context and context.get("mode") == "critique":
             other_outputs = context.get("other_outputs", [])
             round_num = context.get("round_number", 1)
+            valid_ids = context.get("valid_agent_ids", [])
 
             others_text = ""
             for o in other_outputs:
@@ -68,12 +69,17 @@ You MUST respond with a JSON object in this exact format:
                 others_text += f"Reasoning: {o.get('reasoning', 'N/A')}\n"
                 others_text += f"Evidence: {', '.join(o.get('evidence', []))}\n"
 
+            valid_ids_str = ", ".join(f'"{aid}"' for aid in valid_ids)
+
             return f"""CRITIQUE ROUND {round_num}
 
 Original question: {question}
 
 Other agents' conclusions:
 {others_text}
+
+VALID AGENT IDs you may reference: [{valid_ids_str}]
+You MUST use ONLY these exact IDs in your "supports" and "disagrees_with" arrays.
 
 As the Critic, you MUST:
 1. Identify the WEAKEST arguments and evidence among all agents.
