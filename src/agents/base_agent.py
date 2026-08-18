@@ -218,9 +218,18 @@ class BaseAgent:
         Review other agents' outputs and produce critique.
         Used during debate rounds.
         """
+        valid_agent_ids = [o.agent_id for o in other_outputs]
         context = {
             "round_number": round_number,
             "other_outputs": [o.to_dict() for o in other_outputs],
+            "valid_agent_ids": valid_agent_ids,
             "mode": "critique",
         }
-        return await self.run(question, context=context)
+        output = await self.run(question, context=context)
+
+        # Validate referential integrity: strip hallucinated agent IDs
+        all_valid = set(valid_agent_ids + [self.agent_id])
+        output.supports = [aid for aid in output.supports if aid in all_valid]
+        output.disagrees_with = [aid for aid in output.disagrees_with if aid in all_valid]
+
+        return output
