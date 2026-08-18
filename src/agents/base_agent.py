@@ -33,6 +33,7 @@ class AgentOutput:
     remaining_uncertainty: List[str] = field(default_factory=list)
     sources: List[Dict[str, str]] = field(default_factory=list)  # [{url, title, snippet}]
     raw_content: str = ""  # Full LLM response for debugging
+    tokens_used: int = 0  # Total tokens consumed by this agent call
 
     def to_dict(self) -> dict:
         return {
@@ -106,7 +107,11 @@ class BaseAgent:
         )
 
         output = self._parse_response(response)
-        logger.info(f"Agent   │ {self.agent_id} → confidence: {output.confidence:.0%}")
+        output.tokens_used = response.total_tokens
+        logger.info(
+            f"Agent   │ {self.agent_id} → confidence: {output.confidence:.0%}, "
+            f"tokens: {response.total_tokens}"
+        )
         return output
 
     def _parse_response(self, response: ProviderResponse) -> AgentOutput:

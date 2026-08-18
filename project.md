@@ -103,3 +103,7 @@
 - **Problem:** Every debate round fed the full position, reasoning, and evidence of all other agents to each agent — O(N²) context growth caused token cost spikes and potential overflows on small-context models.
 - **Fix:** Added `_compress_outputs()` to `DebateManager` which creates truncated copies before passing to critique: positions capped at 1500 chars, evidence at 3 items, reasoning at 500 chars, uncertainties at 2 items. Raw content is stripped. Original outputs remain intact for consensus evaluation.
 
+### Fix D — Silent Failure Handling (`debate.py`, `consensus.py`) ✅
+- **Problem:** When an API call failed during debate, the agent's previous output was silently re-inserted. This made the agent look "stubborn" (unchanged position), artificially lowering `new_info_rate` and prematurely triggering consensus finalization.
+- **Fix:** (1) `DebateManager` now tags failed agent outputs with `_failed_round` attribute. (2) `ConsensusEngine._calculate_new_information_rate()` now accepts `round_number` and excludes any agent whose `_failed_round` matches the current round from the stabilization calculation, with a warning log.
+
