@@ -86,7 +86,7 @@ class ConsensusEngine:
         agreement_score = self._calculate_agreement(outputs)
         confidence_score = self._calculate_confidence(outputs)
         evidence_score = self._calculate_evidence_quality(outputs)
-        new_info_rate = self._calculate_new_information_rate(outputs)
+        new_info_rate = self._calculate_new_information_rate(outputs, round_number)
         contradiction_score = self._calculate_contradictions(outputs)
 
         # ── Weighted composite score ─────────────────────────────────
@@ -181,12 +181,17 @@ class ConsensusEngine:
 
         return sum(scores) / len(scores)
 
-    def _calculate_new_information_rate(self, outputs: List[AgentOutput]) -> float:
+    def _calculate_new_information_rate(
+        self, outputs: List[AgentOutput], round_number: int = 0,
+    ) -> float:
         """
         Estimate how much new information was produced this round
         compared to previous rounds.
         
         Low rate = positions have stabilized = closer to consensus.
+        
+        Excludes agents whose API calls failed this round (their stale
+        output would artificially lower the rate and trigger premature consensus).
         """
         if not self._previous_positions:
             return 1.0  # First round — all info is new
@@ -195,6 +200,15 @@ class ConsensusEngine:
         total = 0
 
         for o in outputs:
+            # Skip agents that failed this round — their output is stale carry-forward
+            failed_round = getattr(o, '_failed_round', None)
+            if failed_round == round_number:
+                logger.warning(
+                    f"Consensus │ Excluding {o.agent_id} from new-info calculation "
+                    f"(API failure in round {round_number})"
+                )
+                continue
+
             total += 1
             prev = self._previous_positions.get(o.agent_id, "")
             if not prev or prev != o.position:
