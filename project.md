@@ -99,3 +99,7 @@
 - **Problem:** LLMs were expected to output exact `agent_id` strings in `supports`/`disagrees_with` arrays but prompts never listed the valid IDs, and no validation existed to filter hallucinated ones.
 - **Fix:** (1) `critique()` now passes `valid_agent_ids` list in context. (2) All three agent critique prompts (solver, critic, researcher) now explicitly list valid IDs with "You MUST use ONLY these exact IDs". (3) Post-parse validation in `critique()` strips any IDs not in the valid set.
 
+### Fix C — Context Window Compression (`debate.py`) ✅
+- **Problem:** Every debate round fed the full position, reasoning, and evidence of all other agents to each agent — O(N²) context growth caused token cost spikes and potential overflows on small-context models.
+- **Fix:** Added `_compress_outputs()` to `DebateManager` which creates truncated copies before passing to critique: positions capped at 1500 chars, evidence at 3 items, reasoning at 500 chars, uncertainties at 2 items. Raw content is stripped. Original outputs remain intact for consensus evaluation.
+
