@@ -86,3 +86,12 @@
 - [ ] Add Google OAuth
 - [ ] Add rate limiting and cost tracking
 - [ ] Migrate frontend to Next.js + TypeScript
+
+---
+
+## Audit Fixes Applied
+
+### Fix A — Robust JSON Parsing (`base_agent.py`) ✅
+- **Problem:** `_parse_response` used fragile `split("```json")` string splitting. Failed on raw JSON, non-standard code fences, or JSON embedded in text.
+- **Fix:** Replaced with `_extract_json()` — a regex + brace-depth-tracking extractor that strips any markdown fence, finds the first `{`, walks forward tracking nested braces/string escapes to find the matching `}`. Falls back gracefully with logging.
+
