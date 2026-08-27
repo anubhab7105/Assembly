@@ -30,5 +30,5 @@ Thumbs.db
 src/static/
 
 # ── Internal docs (optional, uncomment to keep private) ──
-# /audit.md
-# /project.md
+/audit.md
+/project.md
