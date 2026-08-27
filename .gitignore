@@ -1,14 +1,34 @@
+# ── Secrets & Local Data ────────────────────
 /.env
-/audit.md
+assembly.db
+
+# ── Python ──────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
-assembly.db
-venv/
-.venv/
 *.egg-info/
 dist/
 build/
+venv/
+.venv/
+
+# ── IDE ─────────────────────────────────────
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
+
+# ── Node (if any) ───────────────────────────
 node_modules/
+
+# ── OS Files ────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Deprecated ──────────────────────────────
+src/static/
+
+# ── Internal docs (optional, uncomment to keep private) ──
+# /audit.md
+# /project.md
