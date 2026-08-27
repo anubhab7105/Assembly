@@ -1,12 +1,18 @@
 services:
   - type: web
     name: assembly-backend
-    env: python
+    runtime: python
+    plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn src.main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "gunicorn src.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --graceful-timeout 30"
+    healthCheckPath: /health
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       - key: APP_ENV
         value: production
+      - key: DEBUG
+        value: "false"
       - key: FRONTEND_URL
         sync: false
       - key: DATABASE_URL
@@ -16,4 +22,12 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GROQ_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: HUGGINGFACE_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
         sync: false

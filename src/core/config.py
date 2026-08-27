@@ -66,13 +66,25 @@ class Settings(BaseSettings):
     }
 
     @property
+    def effective_database_url(self) -> str:
+        """Return the database URL with common fixes applied.
+        
+        Supabase and Heroku sometimes provide `postgres://` which
+        SQLAlchemy 2.x does not accept — it requires `postgresql://`.
+        """
+        url = self.database_url
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        return url
+
+    @property
     def is_production(self) -> bool:
         return self.app_env == "production"
 
     @property
     def is_postgres(self) -> bool:
         """Check if using PostgreSQL (Supabase) vs SQLite."""
-        return self.database_url.startswith("postgresql")
+        return self.effective_database_url.startswith("postgresql")
 
     @property
     def cors_origins(self) -> list[str]:
