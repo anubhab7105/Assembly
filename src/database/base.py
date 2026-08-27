@@ -15,6 +15,7 @@ from src.core.logging_config import logger
 # ── Engine ───────────────────────────────────────────────────────────
 # Auto-detect database type from URL and apply appropriate settings
 
+_db_url = settings.effective_database_url
 _connect_args = {}
 _engine_kwargs = {}
 
@@ -25,8 +26,11 @@ if settings.is_postgres:
         "max_overflow": 10,
         "pool_pre_ping": True,       # Verify connections before use
         "pool_recycle": 300,          # Recycle connections every 5 min
+        "pool_timeout": 30,           # Wait up to 30s for a connection
         "echo": False,
     }
+    # Supabase requires SSL; connect_args passes through to psycopg2
+    _connect_args = {"sslmode": "require", "connect_timeout": 10}
     logger.info("Database │ Using PostgreSQL (Supabase)")
 else:
     # SQLite — local development
@@ -37,7 +41,7 @@ else:
     logger.info("Database │ Using SQLite (local)")
 
 engine = create_engine(
-    settings.database_url,
+    _db_url,
     connect_args=_connect_args,
     **_engine_kwargs,
 )

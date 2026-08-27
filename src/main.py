@@ -5,6 +5,7 @@ FastAPI application entry point.
 Supports both local development and production deployment (Render).
 """
 
+import re
 import sys
 import os
 from pathlib import Path
@@ -31,6 +32,11 @@ from src.core.logging_config import logger
 # Lifespan (replaces deprecated @app.on_event)
 # ═════════════════════════════════════════════════════════════════════
 
+def _mask_db_url(url: str) -> str:
+    """Mask credentials in a database URL for safe logging."""
+    return re.sub(r"://([^:]+):([^@]+)@", r"://\1:****@", url)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database on startup."""
@@ -38,9 +44,11 @@ async def lifespan(app: FastAPI):
     logger.info("  Assembly -- Multi-Agent AI Consensus Platform")
     logger.info("====================================================")
     init_db()
+    db_type = "PostgreSQL (Supabase)" if settings.is_postgres else "SQLite (local)"
     logger.info(f"Server   │ Environment: {settings.app_env}")
     logger.info(f"Server   │ CORS origins: {settings.cors_origins}")
-    logger.info(f"Server   │ Database: {'PostgreSQL' if settings.is_postgres else 'SQLite'}")
+    logger.info(f"Server   │ Database: {db_type}")
+    logger.info(f"Server   │ DB URL: {_mask_db_url(settings.effective_database_url)}")
     logger.info("====================================================")
     yield
     logger.info("Server   │ Shutting down")
@@ -100,11 +108,28 @@ async def serve_frontend():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Render."""
+    """Health check endpoint for Render.
+    
+    Tests database connectivity and returns service status.
+    """
+    from src.database.base import SessionLocal
+    from sqlalchemy import text
+    db_ok = False
+    db_type = "postgresql" if settings.is_postgres else "sqlite"
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        db_ok = True
+    except Exception as e:
+        logger.error(f"Health check │ DB connection failed: {e}")
+
+    status = "healthy" if db_ok else "degraded"
     return {
-        "status": "healthy",
+        "status": status,
         "app": settings.app_name,
         "env": settings.app_env,
+        "database": {"type": db_type, "connected": db_ok},
     }
 
 
