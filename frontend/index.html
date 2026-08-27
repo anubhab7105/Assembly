@@ -15,9 +15,10 @@
     <!-- CONFIGURATION — Injected at deploy time            -->
     <!-- ═══════════════════════════════════════════════════ -->
     <script>
-        // Backend API URL — set this to your Render backend URL in production.
-        // For local development, leave empty (same-origin).
-        // Vercel: set VITE_API_URL env var, or hard-code your Render URL here.
+        // ── Deploy-time Configuration ──────────────────────────────
+        // LOCAL DEV:  Leave empty (same-origin, API served by FastAPI)
+        // PRODUCTION: Set to your Render backend URL (no trailing slash)
+        //   Example:  'https://assembly-backend.onrender.com'
         window.ASSEMBLY_API_URL = '';
     </script>
 
