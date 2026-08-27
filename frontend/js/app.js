@@ -19,7 +19,8 @@ const state = {
     isExecuting: false,
 };
 
-const API = '';  // Same origin
+// Use the injected backend URL (set in index.html), or fall back to same-origin for local dev.
+const API = (window.ASSEMBLY_API_URL || '').replace(/\/$/, '');
 
 // ═══════════════════════════════════════════════════════════════════
 // INITIALIZATION
@@ -433,8 +434,18 @@ function connectWebSocket(executionId) {
         state.ws.close();
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/executions/ws/${executionId}?token=${state.token}`;
+    // Build WebSocket URL from the backend API URL, not window.location
+    // (window.location points to Vercel, but the WS server is on Render)
+    let wsBase;
+    if (API) {
+        // Production: convert https://render-url → wss://render-url
+        wsBase = API.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
+    } else {
+        // Local dev: same-origin
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsBase = `${protocol}//${window.location.host}`;
+    }
+    const wsUrl = `${wsBase}/api/executions/ws/${executionId}?token=${state.token}`;
 
     state.ws = new WebSocket(wsUrl);
 
