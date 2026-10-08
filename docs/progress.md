@@ -82,7 +82,7 @@
 - [ ] Add API keys to `.env` (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, HUGGINGFACE_API_KEY — minimum 3 required)
 - [ ] End-to-end execution test (ask question → get AI answer)
 - [ ] Add Tavily API key for web search capability
-- [ ] Migrate to PostgreSQL for production
+- [x] Migrate to PostgreSQL for production
 - [ ] Add Google OAuth
 - [ ] Add rate limiting and cost tracking
 - [ ] Migrate frontend to Next.js + TypeScript
@@ -298,3 +298,11 @@
 - Fixed variable-shadowing bug (`sys` loop variable shadowing `import sys` module) during development.
 - Verification: `python bench/analyze.py --demo` exits 0; generates `bench/results/REPORT.md` (6430 B) and three PNG charts (`win_rate.png` 65 kB, `ablation.png` 52 kB, `calls_vs_acc.png` 57 kB). Console summary matches expectations.
 - Skipped (per DoD): pytest tests for `bench/analyze.py` — no mock-provider dependency; full live run skipped (no keys).
+
+## Database Portability & Ownership (2026-10-08)
+
+- Added `alembic` to `requirements.txt` and generated the baseline migration using `alembic init alembic` and `alembic revision --autogenerate -m "baseline"`.
+- Validated SQLite-specific code removal; ensured `sqlalchemy.types.JSON` was used for cross-compatibility between SQLite and Postgres, and conditionally enabled thread-check in `src/database/base.py`.
+- Added `user_id` column to `Execution` in `models.py` and modified `api/executions.py` to directly filter by `user_id` instead of checking the `Conversation` hierarchy. Also fixed `test_key_leak.py` and `test_time_controller.py` to properly expect HTTP 403 Forbidden on wrong user ownership.
+- Wrote `docker-compose.yml` for Postgres local testing and updated `.github/workflows/ci.yml` with a matrix testing pipeline targeting both `sqlite` and `postgres` DB engines.
+- Result: 325 backend tests passing.
