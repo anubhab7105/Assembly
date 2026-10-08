@@ -1,0 +1,164 @@
+"""
+Assembly — key management API (TECH_STACK.md section 5, BYOK).
+
+- POST /api/keys/test: one minimal provider call; reports validity
+  without ever echoing the key.
+- GET /api/providers/status: available providers, model families, and a
+  rough capacity estimate for the current APP_MODE key set.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, SecretStr
+
+from src.core.config import settings
+from src.core.keystore import get_keystore
+from src.core.security import get_current_user_id
+from src.providers.base import ChatMessage
+from src.providers.config import load_models_config
+from src.providers.errors import AuthError, BadResponse, ProviderDown, RateLimited
+from src.providers.registry import ProviderDisabledError, get_provider
+
+router = APIRouter(prefix="/api", tags=["keys"])
+
+
+class KeyTestRequest(BaseModel):
+    """A key to probe. SecretStr: never serialized, never logged."""
+
+    provider: str
+    key: SecretStr
+
+
+class KeyTestResponse(BaseModel):
+    provider: str
+    valid: bool
+    rate_limited: bool
+    error_code: str | None = None
+    model: str | None = None
+
+
+class ProviderStatus(BaseModel):
+    id: str
+    available: bool
+    models: list[str]
+    families: list[str]
+
+
+class ProvidersStatusResponse(BaseModel):
+    mode: str
+    providers: list[ProviderStatus]
+    families: list[str]
+    capacity_3min_estimate: int | None = None
+
+
+def _estimate_calls(rpm: int | None, rpd: int | None, minutes: int = 3) -> int | None:
+    """Rough affordable-call estimate (WORKFLOW capacity rule of thumb)."""
+    if rpm is None and rpd is None:
+        return None
+    budget = float("inf")
+    if rpm is not None:
+        budget = min(budget, rpm * minutes)
+    if rpd is not None:
+        budget = min(budget, rpd)
+    return int(budget * 0.7)  # 30% safety margin
+
+
+@router.post("/keys/test", response_model=KeyTestResponse)
+async def test_key(
+    req: KeyTestRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> KeyTestResponse:
+    """Make one tiny call with the given key; report validity, echo nothing."""
+    try:
+        provider = get_provider(req.provider, req.key)
+    except (KeyError, ProviderDisabledError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown or disabled provider: {req.provider}",
+        ) from exc
+
+    model = (
+        provider.get_available_models()[0] if provider.get_available_models() else ""
+    )
+    try:
+        response = await provider.generate(
+            messages=[ChatMessage(role="user", content="Reply with the word ok.")],
+            model=model or None,
+            temperature=0.0,
+            max_tokens=8,
+        )
+    except RateLimited:
+        return KeyTestResponse(
+            provider=req.provider,
+            valid=False,
+            rate_limited=True,
+            error_code="rate_limited",
+        )
+    except AuthError:
+        return KeyTestResponse(
+            provider=req.provider,
+            valid=False,
+            rate_limited=False,
+            error_code="auth_error",
+        )
+    except ProviderDown:
+        return KeyTestResponse(
+            provider=req.provider,
+            valid=False,
+            rate_limited=False,
+            error_code="provider_down",
+        )
+    except BadResponse:
+        return KeyTestResponse(
+            provider=req.provider,
+            valid=False,
+            rate_limited=False,
+            error_code="bad_response",
+        )
+    except Exception:  # noqa: BLE001 — key probe must answer, never 500 or echo
+        return KeyTestResponse(
+            provider=req.provider, valid=False, rate_limited=False, error_code="error"
+        )
+    return KeyTestResponse(
+        provider=req.provider,
+        valid=True,
+        rate_limited=False,
+        error_code=None,
+        model=response.model,
+    )
+
+
+@router.get("/providers/status", response_model=ProvidersStatusResponse)
+async def providers_status(
+    user_id: str = Depends(get_current_user_id),
+) -> ProvidersStatusResponse:
+    """Available providers, families, and rough capacity for this mode's keys."""
+    store = get_keystore()
+    held = set(store.providers())
+    catalog = load_models_config()
+
+    entries: list[ProviderStatus] = []
+    families: set[str] = set()
+    capacity: int | None = None
+    for provider_id, spec in catalog.providers.items():
+        available = spec.enabled and provider_id in held
+        provider_families = sorted({model.family for model in spec.models})
+        entries.append(
+            ProviderStatus(
+                id=provider_id,
+                available=available,
+                models=[model.id for model in spec.models],
+                families=provider_families,
+            )
+        )
+        if available:
+            families.update(provider_families)
+            estimate = _estimate_calls(spec.limits.rpm, spec.limits.rpd)
+            if estimate is not None:
+                capacity = (capacity or 0) + estimate
+
+    return ProvidersStatusResponse(
+        mode=settings.app_mode,
+        providers=entries,
+        families=sorted(families),
+        capacity_3min_estimate=capacity,
+    )

@@ -5,8 +5,8 @@ Request / response schemas for all API endpoints.
 """
 
 from datetime import datetime
-from typing import Optional, List
-from pydantic import BaseModel, EmailStr, Field
+
+from pydantic import BaseModel, Field
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -46,8 +46,8 @@ class MessageResponse(BaseModel):
     id: str
     role: str
     content: str
-    sources: Optional[list] = None
-    execution_id: Optional[str] = None
+    sources: list | None = None
+    execution_id: str | None = None
     created_at: datetime
 
     class Config:
@@ -58,8 +58,8 @@ class ConversationResponse(BaseModel):
     id: str
     title: str
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    messages: List[MessageResponse] = []
+    updated_at: datetime | None = None
+    messages: list[MessageResponse] = []
 
     class Config:
         from_attributes = True
@@ -69,7 +69,7 @@ class ConversationListItem(BaseModel):
     id: str
     title: str
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
     message_count: int = 0
 
     class Config:
@@ -82,7 +82,10 @@ class ConversationListItem(BaseModel):
 class ExecutionRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=10000)
     time_budget_minutes: int = Field(..., ge=3, le=15)
-    conversation_id: Optional[str] = None  # Attach to existing, or create new
+    conversation_id: str | None = None  # Attach to existing, or create new
+    # Web-mode BYOK keys (provider → key). In-memory for this run only:
+    # never written to the database, never logged, never returned.
+    provider_keys: dict[str, str] | None = None
 
 
 class ExecutionResponse(BaseModel):
@@ -91,16 +94,16 @@ class ExecutionResponse(BaseModel):
     question: str
     time_budget_minutes: int
     status: str
-    problem_type: Optional[str] = None
-    complexity: Optional[str] = None
-    final_answer: Optional[str] = None
-    final_sources: Optional[list] = None
-    consensus_score: Optional[float] = None
+    problem_type: str | None = None
+    complexity: str | None = None
+    final_answer: str | None = None
+    final_sources: list | None = None
+    consensus_score: float | None = None
     total_tokens_used: int = 0
     agent_count: int = 0
     debate_rounds: int = 0
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime
 
     class Config:
@@ -110,11 +113,11 @@ class ExecutionResponse(BaseModel):
 class AgentRunResponse(BaseModel):
     id: str
     agent_type: str
-    role_description: Optional[str] = None
+    role_description: str | None = None
     model: str
     provider: str
     status: str
-    confidence: Optional[float] = None
+    confidence: float | None = None
 
     class Config:
         from_attributes = True

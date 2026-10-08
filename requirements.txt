@@ -13,11 +13,12 @@ httpx>=0.28.0
 aiohttp>=3.9.0
 websockets>=12.0
 
-# AI Providers
-openai>=1.0.0              # Also used by Cerebras & OpenRouter (OpenAI-compatible API)
+# AI Providers (all OpenAI-compatible traffic goes through async httpx now;
+# no vendor SDKs except Gemini's; Hugging Face is optional/disabled by default)
 google-generativeai>=0.8.0
-groq>=0.4.0
 huggingface-hub>=0.20.0
+pyyaml>=6.0.0
+keyring>=25.0.0              # Desktop mode: Windows Credential Manager (needs pywin32 on Windows)
 
 # Database
 psycopg2-binary>=2.9.0     # PostgreSQL driver for Supabase

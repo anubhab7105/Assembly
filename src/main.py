@@ -24,6 +24,7 @@ from src.database.base import init_db
 from src.api.auth import router as auth_router
 from src.api.conversations import router as conversations_router
 from src.api.executions import router as executions_router
+from src.api.keys import router as keys_router
 from src.core.config import settings
 from src.core.logging_config import logger
 
@@ -83,6 +84,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(conversations_router)
 app.include_router(executions_router)
+app.include_router(keys_router)
 
 # ── Static Files (Frontend — local dev only) ─────────────────────────
 # In production, the frontend is served by Vercel separately.

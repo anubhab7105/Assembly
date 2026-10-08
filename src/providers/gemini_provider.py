@@ -4,14 +4,16 @@ Assembly — Google Gemini Provider
 Implements the AIProvider interface for Google Gemini models.
 """
 
-from typing import List, Optional
 import asyncio
+
 import google.generativeai as genai
+from pydantic import SecretStr
 
-from src.providers.base import AIProvider, ChatMessage, ProviderResponse
 from src.core.config import settings
+from src.core.keystore import reveal
 from src.core.logging_config import logger
-
+from src.providers.base import AIProvider, ChatMessage, ProviderResponse
+from src.providers.errors import classify_exception
 
 # Bound a single generation call: the legacy SDK has no timeout of its own,
 # and an unbounded await here freezes the whole execution past its budget.
@@ -19,19 +21,28 @@ GENERATION_TIMEOUT_SECONDS = 120.0
 
 
 class GeminiProvider(AIProvider):
-    """Google Gemini provider."""
+    """Google Gemini provider. Raises the shared errors.ProviderError types."""
 
     provider_name = "gemini"
 
-    def __init__(self):
-        if settings.gemini_api_key:
-            genai.configure(api_key=settings.gemini_api_key)
-        self.default_model = settings.gemini_default_model
+    def __init__(
+        self,
+        api_key: str | SecretStr = "",
+        default_model: str = "",
+        models: list[str] | None = None,
+    ) -> None:
+        if not default_model:
+            raise ValueError("GeminiProvider needs default_model (from models.yaml)")
+        key = reveal(api_key) or reveal(settings.gemini_api_key)
+        if key:
+            genai.configure(api_key=key)
+        self.default_model = default_model
+        self._models = list(models) if models else [default_model]
 
     async def generate(
         self,
-        messages: List[ChatMessage],
-        model: Optional[str] = None,
+        messages: list[ChatMessage],
+        model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 4096,
         **kwargs,
@@ -70,8 +81,12 @@ class GeminiProvider(AIProvider):
             input_tokens = 0
             output_tokens = 0
             if hasattr(response, "usage_metadata") and response.usage_metadata:
-                input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-                output_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+                input_tokens = (
+                    getattr(response.usage_metadata, "prompt_token_count", 0) or 0
+                )
+                output_tokens = (
+                    getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+                )
 
             return ProviderResponse(
                 content=response.text or "",
@@ -83,11 +98,12 @@ class GeminiProvider(AIProvider):
             )
 
         except Exception as e:
-            logger.error(f"Gemini  │ Error: {e}")
-            raise
+            structured = classify_exception(self.provider_name, e)
+            logger.error(f"Gemini  │ Error: {structured}")
+            raise structured from e
 
     def is_available(self) -> bool:
         return settings.has_provider("gemini")
 
-    def get_available_models(self) -> List[str]:
-        return ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-pro"]
+    def get_available_models(self) -> list[str]:
+        return list(self._models)

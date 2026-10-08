@@ -8,6 +8,7 @@ from typing import List, Dict, Optional
 import httpx
 
 from src.core.config import settings
+from src.core.keystore import reveal
 from src.core.logging_config import logger
 
 
@@ -20,8 +21,10 @@ class SearchEngine:
     """
 
     def __init__(self):
+        # Stored as SecretStr; revealed only inside the request body below.
         self.tavily_key = settings.tavily_api_key
-        self.has_tavily = bool(self.tavily_key) and not self.tavily_key.startswith("tvly-your")
+        key = reveal(self.tavily_key)
+        self.has_tavily = bool(key) and not key.startswith("tvly-your")
 
     async def search(
         self,
@@ -53,7 +56,7 @@ class SearchEngine:
                 response = await client.post(
                     "https://api.tavily.com/search",
                     json={
-                        "api_key": self.tavily_key,
+                        "api_key": reveal(self.tavily_key),
                         "query": query,
                         "max_results": max_results,
                         "search_depth": "basic",

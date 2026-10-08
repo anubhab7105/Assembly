@@ -5,10 +5,11 @@ Loads all environment variables via Pydantic Settings.
 Supports local development (SQLite) and production (Supabase PostgreSQL).
 """
 
-import os
 from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
-from pydantic import AliasChoices, Field
 
 # ── Resolve project root (two levels up from this file) ──────────────
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -23,12 +24,16 @@ class Settings(BaseSettings):
     debug: bool = True
     host: str = "0.0.0.0"
     port: int = 8000
+    # Key backend selector: dev (env keys) | web (per-request keys) |
+    # desktop (OS keyring). Env keys refuse to load when app_env=production.
+    app_mode: Literal["dev", "web", "desktop"] = "dev"
 
     # ── Frontend URL (for CORS in production) ────────────────────────
     frontend_url: str = ""  # e.g. "https://assembly-frontend.vercel.app"
 
     # ── Security ─────────────────────────────────────────────────────
-    jwt_secret_key: str = "change-me-to-a-random-secret-key-at-least-32-chars"
+    # SecretStr: repr/str show '**********'. Reveal only at the call site.
+    jwt_secret_key: SecretStr = Field(default=SecretStr(""))
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 1440  # 24 hours
 
@@ -39,21 +44,14 @@ class Settings(BaseSettings):
     )
 
     # ── AI Provider API Keys ─────────────────────────────────────────
-    gemini_api_key: str = ""
-    groq_api_key: str = ""
-    cerebras_api_key: str = ""
-    openrouter_api_key: str = ""
-    huggingface_api_key: str = ""
-
-    # ── Default Models ───────────────────────────────────────────────
-    gemini_default_model: str = "gemini-3.8-flash"
-    groq_default_model: str = "openai/gpt-oss-20b"
-    cerebras_default_model: str = "gpt-oss-120b"
-    openrouter_default_model: str = "google/gemma-4-26b-a4b-it:free"
-    huggingface_default_model: str = "meta-llama/Meta-Llama-3-8B-Instruct"
+    gemini_api_key: SecretStr = Field(default=SecretStr(""))
+    groq_api_key: SecretStr = Field(default=SecretStr(""))
+    cerebras_api_key: SecretStr = Field(default=SecretStr(""))
+    openrouter_api_key: SecretStr = Field(default=SecretStr(""))
+    huggingface_api_key: SecretStr = Field(default=SecretStr(""))
 
     # ── Research / Web Search ────────────────────────────────────────
-    tavily_api_key: str = ""
+    tavily_api_key: SecretStr = Field(default=SecretStr(""))
 
     # ── Budget Defaults ──────────────────────────────────────────────
     max_tokens_per_execution: int = 100_000
@@ -68,7 +66,7 @@ class Settings(BaseSettings):
     @property
     def effective_database_url(self) -> str:
         """Return the database URL with common fixes applied.
-        
+
         Supabase and Heroku sometimes provide `postgres://` which
         SQLAlchemy 2.x does not accept — it requires `postgresql://`.
         """
@@ -110,12 +108,19 @@ class Settings(BaseSettings):
             "openrouter": self.openrouter_api_key,
             "huggingface": self.huggingface_api_key,
         }
-        key = key_map.get(provider, "")
+        raw = key_map.get(provider)
+        key = raw.get_secret_value() if isinstance(raw, SecretStr) else (raw or "")
         # Reject placeholder values
-        placeholders = ("sk-your", "your-", "gsk_your", "hf_your", "csk_your", "xpl_your")
+        placeholders = (
+            "sk-your",
+            "your-",
+            "gsk_your",
+            "hf_your",
+            "csk_your",
+            "xpl_your",
+        )
         return bool(key) and not any(key.startswith(p) for p in placeholders)
 
 
 # ── Singleton ────────────────────────────────────────────────────────
 settings = Settings()
-

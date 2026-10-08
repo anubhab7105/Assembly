@@ -1,0 +1,145 @@
+# Assembly — model + provider catalog (single source of truth).
+#
+# RULE: switching a model id, family, role, limit, or endpoint means editing
+# THIS FILE ONLY. No model ids, limits, or families may be hard-coded in src/.
+# Model order inside each provider matters: list the fastest/cheapest model
+# first — the router tries candidates top-down, so tight time budgets get
+# the fast models without any code changes.
+#
+# FILLING PLACEHOLDERS: every `null` below must be replaced with the value
+# from your own provider dashboard (free tiers change often — re-check before
+# the demo). Each placeholder names the exact dashboard page to open.
+# Families must come from the KNOWN_FAMILIES set in src/providers/config.py
+# (gemini, llama, qwen, gpt-oss, deepseek, mistral, kimi, gemma, nemotron,
+# allam, phi). Unknown families fail startup loudly — that is intentional:
+# an unclassified model breaks the independence (diversity) accounting.
+# Roles: solver, researcher, critic, synthesizer, planner.
+
+providers:
+  gemini:
+    base: google-genai
+    key_url: https://aistudio.google.com/apikey
+    enabled: true
+    models:
+      - id: gemini-3.8-flash
+        family: gemini
+        roles: [solver, researcher, critic, synthesizer, planner]
+        # context_tokens: open aistudio.google.com → thoughtmodel docs → "context window"
+        context_tokens: null
+      - id: gemini-2.5-flash
+        family: gemini
+        roles: [solver, researcher, planner]
+        context_tokens: null
+      - id: gemini-2.5-pro
+        family: gemini
+        roles: [solver, critic, synthesizer]
+        context_tokens: null
+    # limits: aistudio.google.com → "Get API key" → rate limits for your tier
+    limits: {rpm: null, rpd: null, tpm: null}
+
+  groq:
+    base: openai-compatible
+    url: https://api.groq.com/openai/v1
+    key_url: https://console.groq.com/keys
+    enabled: true
+    models:
+      - id: openai/gpt-oss-20b
+        family: gpt-oss
+        roles: [solver, researcher, critic, planner]
+        # context_tokens: console.groq.com → Docs → Models → context window
+        context_tokens: null
+      - id: openai/gpt-oss-120b
+        family: gpt-oss
+        roles: [solver, critic, synthesizer]
+        context_tokens: null
+      - id: qwen/qwen3.8-27b
+        family: qwen
+        roles: [solver, researcher]
+        context_tokens: null
+    # limits: console.groq.com → Limits (requests/min and requests/day per model)
+    limits: {rpm: null, rpd: null, tpm: null}
+
+  cerebras:
+    base: openai-compatible
+    url: https://api.cerebras.ai/v1
+    key_url: https://cloud.cerebras.ai
+    enabled: true
+    models:
+      - id: gpt-oss-120b
+        family: gpt-oss
+        roles: [solver, critic, synthesizer]
+        # context_tokens: cloud.cerebras.ai → Docs → Models
+        context_tokens: null
+      - id: qwen-3.8-27b
+        family: qwen
+        roles: [solver, researcher]
+        context_tokens: null
+    # limits: cloud.cerebras.ai → billing/limits page for your key
+    limits: {rpm: null, rpd: null, tpm: null}
+
+  openrouter:
+    base: openai-compatible
+    url: https://openrouter.ai/api/v1
+    key_url: https://openrouter.ai/keys
+    enabled: true
+    # OpenRouter appreciates callers identifying themselves; fill yours in.
+    headers:
+      HTTP-Referer: https://localhost:8000
+      X-Title: Assembly
+    models:
+      - id: google/gemma-4-26b-a4b-it:free
+        family: gemma
+        roles: [solver, researcher, planner]
+        # context_tokens: openrouter.ai → model page → "Context"
+        context_tokens: null
+      - id: nvidia/nemotron-3-super-120b-a12b:free
+        family: nemotron
+        roles: [solver, critic, synthesizer]
+        context_tokens: null
+    # limits: openrouter.ai → Keys → your key → rate limit / credits
+    limits: {rpm: null, rpd: null, tpm: null}
+
+  mistral:
+    base: openai-compatible
+    url: https://api.mistral.ai/v1
+    key_url: https://console.mistral.ai
+    enabled: true
+    models:
+      # Verify the exact id in console.mistral.ai → Docs → Models (aliases
+      # like -latest move; pin the dated id once you confirm it works).
+      - id: mistral-small-latest
+        family: mistral
+        roles: [solver, critic]
+        # context_tokens: console.mistral.ai → Docs → Models
+        context_tokens: null
+    # limits: console.mistral.ai → Billing → rate limits for your tier
+    limits: {rpm: null, rpd: null, tpm: null}
+
+  nvidia:
+    base: openai-compatible
+    url: https://integrate.api.nvidia.com/v1
+    key_url: https://build.nvidia.com
+    enabled: true
+    # No models filled in yet: add the ones you enabled at build.nvidia.com
+    # (ids look like "vendor/model-name"), each with a valid family + roles.
+    models: []
+    # limits: build.nvidia.com → your key → quota page
+    limits: {rpm: null, rpd: null, tpm: null}
+
+  huggingface:
+    base: huggingface
+    key_url: https://huggingface.co/settings/tokens
+    # Disabled by default: free credit is tiny (~$0.10/mo), not enough for
+    # multi-agent runs. Set enabled: true only if you know what you are doing.
+    enabled: false
+    models:
+      # Verify ids at huggingface.co → model page → "Use this model" → Inference API.
+      - id: meta-llama/Meta-Llama-3-8B-Instruct
+        family: llama
+        roles: [solver, researcher]
+        context_tokens: null
+      - id: mistralai/Mistral-7B-Instruct-v0.3
+        family: mistral
+        roles: [solver, critic]
+        context_tokens: null
+    limits: {rpm: null, rpd: null, tpm: null}
