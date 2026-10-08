@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ToastProvider, useToast } from "@/components/ui/toast"
 import { ApiClient } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
@@ -43,6 +43,7 @@ interface ExecutionInfo {
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const { toast } = useToast()
   
@@ -76,7 +77,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
     setExecutions(prev => prev.filter(x => x.id !== id))
     toast({ title: "Deleted", description: "Execution removed from history." })
     
-    if (pathname === `/executions/${id}`) {
+    if (pathname === `/executions` && searchParams?.get("id") === id) {
       router.push("/")
       if (onClose) onClose()
     }
@@ -132,11 +133,11 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           </div>
         ) : (
           filtered.map(ex => {
-            const isActive = pathname === `/executions/${ex.id}`
+            const isActive = pathname === `/executions` && searchParams?.get("id") === ex.id
             return (
               <Link
                 key={ex.id}
-                href={`/executions/${ex.id}`}
+                href={`/executions?id=${ex.id}`}
                 onClick={onClose}
                 className={`group flex items-start gap-2 rounded-md px-2 py-2 text-sm transition-colors ${
                   isActive ? "bg-brand/10 text-brand" : "text-foreground hover:bg-muted"
