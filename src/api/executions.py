@@ -159,15 +159,14 @@ async def cancel_execution(
     settles to status "cancelled". Idempotent: already-terminal runs
     report their current status.
     """
-    execution = db.query(Execution).filter(
-        Execution.id == execution_id,
-        Execution.user_id == user_id,
-    ).first()
+    execution = db.query(Execution).filter(Execution.id == execution_id).first()
     if not execution:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution not found.",
         )
+    if execution.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     if execution.status in ("completed", "failed", "failed_partial", "cancelled"):
         return ExecutionCancelResponse(id=execution_id, status=execution.status)
@@ -258,15 +257,14 @@ async def get_execution(
     db: Session = Depends(get_db),
 ):
     """Get execution status and result."""
-    execution = db.query(Execution).filter(
-        Execution.id == execution_id,
-        Execution.user_id == user_id,
-    ).first()
+    execution = db.query(Execution).filter(Execution.id == execution_id).first()
     if not execution:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution not found.",
         )
+    if execution.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     return ExecutionResponse.model_validate(execution)
 
@@ -284,15 +282,14 @@ async def list_events(
     REST fallback for clients that cannot hold a socket: poll with the
     last seen seq. Ownership is enforced exactly like get_execution.
     """
-    execution = db.query(Execution).filter(
-        Execution.id == execution_id,
-        Execution.user_id == user_id,
-    ).first()
+    execution = db.query(Execution).filter(Execution.id == execution_id).first()
     if not execution:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution not found.",
         )
+    if execution.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     rows = fetch_events(db, execution_id, after_seq=after_seq, limit=limit)
     return EventListResponse(
@@ -339,11 +336,11 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
     # Verify ownership
     db = SessionLocal()
     try:
-        execution = db.query(Execution).filter(
-            Execution.id == execution_id,
-            Execution.user_id == user_id,
-        ).first()
+        execution = db.query(Execution).filter(Execution.id == execution_id).first()
         if not execution:
+            await websocket.close(code=4004, reason="Not found")
+            return
+        if execution.user_id != user_id:
             await websocket.close(code=4003, reason="Access denied")
             return
     finally:
