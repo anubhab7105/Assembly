@@ -237,3 +237,11 @@
 - Result: **242 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on the gate; diff secret-free.
 - Bugs found: none in implementation; test-only fixes (role-routing stub router since MockRouter routes everything to the first provider; footer test converted to async).
 - Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
+
+## ReplayProvider + record mode (2026-10-08)
+
+- Changed: new `src/providers/replay_provider.py` (versioned JSON format, `RecordingProvider` decorator, `ReplayProvider` shared-FIFO + `delay_scale` + `ReplayExhaustedError`, `RecordingRouter`/`ReplayRouter` shims with family preservation); `scripts/record_run.py` + `scripts/replay_run.py` thin CLIs.
+- Tests: `tests/test_replay.py` (16 tests: save/load round-trip + 5 corrupt-file rejections, response serialization, success/error capture, FIFO order + exhaustion, simulated delays, error replay, identity delegation, full record→replay answer equality, families, structural + env key-leak scan, CLI --help + in-process record/replay runs).
+- Result: **258 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on the gate; diff secret-free.
+- Bugs found: (1) `RecordingProvider` never wrote the `family` field that `ReplayRouter` reads — caught by the families test, fixed at the writer. (2) Test called `response_from_record` with the inner response dict instead of the full record — clarified API use. (3) TRY004 on isinstance-check raises + unused imports/noqa in new files — fixed per ruff.
+- Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
