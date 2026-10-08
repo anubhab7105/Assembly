@@ -5,11 +5,17 @@ Implements the AIProvider interface for Google Gemini models.
 """
 
 from typing import List, Optional
+import asyncio
 import google.generativeai as genai
 
 from src.providers.base import AIProvider, ChatMessage, ProviderResponse
 from src.core.config import settings
 from src.core.logging_config import logger
+
+
+# Bound a single generation call: the legacy SDK has no timeout of its own,
+# and an unbounded await here freezes the whole execution past its budget.
+GENERATION_TIMEOUT_SECONDS = 120.0
 
 
 class GeminiProvider(AIProvider):
@@ -55,7 +61,10 @@ class GeminiProvider(AIProvider):
                 ),
             )
 
-            response = await gen_model.generate_content_async(gemini_messages)
+            response = await asyncio.wait_for(
+                gen_model.generate_content_async(gemini_messages),
+                timeout=GENERATION_TIMEOUT_SECONDS,
+            )
 
             # Estimate token counts (Gemini SDK provides usage metadata)
             input_tokens = 0
@@ -81,4 +90,4 @@ class GeminiProvider(AIProvider):
         return settings.has_provider("gemini")
 
     def get_available_models(self) -> List[str]:
-        return ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"]
+        return ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-pro"]

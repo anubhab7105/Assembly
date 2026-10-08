@@ -159,72 +159,72 @@ class ModelRouter:
         # For tight time budgets, prefer fast models (Groq & Cerebras are ultra-fast)
         if time_budget_minutes <= 3:
             return [
-                ("groq", "llama-3.3-70b-versatile"),
-                ("cerebras", "llama-3.3-70b"),
-                ("gemini", "gemini-2.0-flash"),
-                ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+                ("groq", "openai/gpt-oss-120b"),
+                ("cerebras", "gpt-oss-120b"),
+                ("gemini", "gemini-3.8-flash"),
+                ("openrouter", "google/gemma-4-26b-a4b-it:free"),
                 ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
             ]
 
         if agent_type == "solver":
             if problem_type in ("math", "coding"):
                 return [
-                    ("gemini", "gemini-2.5-flash"),
-                    ("cerebras", "llama-3.3-70b"),
-                    ("groq", "llama-3.3-70b-versatile"),
-                    ("openrouter", "meta-llama/llama-3.1-70b-instruct"),
+                    ("gemini", "gemini-3.8-flash"),
+                    ("cerebras", "gpt-oss-120b"),
+                    ("groq", "openai/gpt-oss-120b"),
+                    ("openrouter", "nvidia/nemotron-3-super-120b-a12b:free"),
                     ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
                 ]
             else:
                 return [
-                    ("gemini", "gemini-2.0-flash"),
-                    ("cerebras", "llama-3.3-70b"),
-                    ("groq", "llama-3.3-70b-versatile"),
-                    ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+                    ("gemini", "gemini-3.8-flash"),
+                    ("cerebras", "gpt-oss-120b"),
+                    ("groq", "openai/gpt-oss-120b"),
+                    ("openrouter", "google/gemma-4-26b-a4b-it:free"),
                     ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
                 ]
 
         elif agent_type == "researcher":
             return [
-                ("gemini", "gemini-2.0-flash"),
-                ("groq", "llama-3.1-8b-instant"),
+                ("gemini", "gemini-3.8-flash"),
+                ("groq", "openai/gpt-oss-20b"),
                 ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
-                ("cerebras", "llama-3.1-8b"),
-                ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+                ("cerebras", "qwen-3.8-27b"),
+                ("openrouter", "google/gemma-4-26b-a4b-it:free"),
             ]
 
         elif agent_type == "critic":
             if complexity == "high":
                 return [
-                    ("cerebras", "llama-3.3-70b"),
-                    ("gemini", "gemini-2.5-flash"),
-                    ("groq", "llama-3.3-70b-versatile"),
-                    ("openrouter", "meta-llama/llama-3.1-70b-instruct"),
+                    ("cerebras", "gpt-oss-120b"),
+                    ("gemini", "gemini-3.8-flash"),
+                    ("groq", "openai/gpt-oss-120b"),
+                    ("openrouter", "nvidia/nemotron-3-super-120b-a12b:free"),
                     ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
                 ]
             return [
-                ("cerebras", "llama-3.3-70b"),
-                ("gemini", "gemini-2.0-flash"),
-                ("groq", "llama-3.3-70b-versatile"),
-                ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+                ("cerebras", "gpt-oss-120b"),
+                ("gemini", "gemini-3.8-flash"),
+                ("groq", "openai/gpt-oss-120b"),
+                ("openrouter", "google/gemma-4-26b-a4b-it:free"),
                 ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
             ]
 
         elif agent_type == "synthesizer":
             return [
-                ("gemini", "gemini-2.0-flash"),
-                ("groq", "llama-3.3-70b-versatile"),
-                ("cerebras", "llama-3.3-70b"),
-                ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+                ("gemini", "gemini-3.8-flash"),
+                ("groq", "openai/gpt-oss-120b"),
+                ("cerebras", "gpt-oss-120b"),
+                ("openrouter", "google/gemma-4-26b-a4b-it:free"),
                 ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
             ]
 
         # Default fallback
         return [
-            ("gemini", "gemini-2.0-flash"),
-            ("groq", "llama-3.1-8b-instant"),
-            ("cerebras", "llama-3.3-70b"),
-            ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+            ("gemini", "gemini-3.8-flash"),
+            ("groq", "openai/gpt-oss-20b"),
+            ("cerebras", "gpt-oss-120b"),
+            ("openrouter", "google/gemma-4-26b-a4b-it:free"),
             ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
         ]
 
@@ -233,10 +233,10 @@ class ModelRouter:
         self._enforce_minimum()
 
         routing = [
-            ("gemini", "gemini-2.0-flash"),
-            ("groq", "llama-3.3-70b-versatile"),
-            ("cerebras", "llama-3.3-70b"),
-            ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+            ("gemini", "gemini-3.8-flash"),
+            ("groq", "openai/gpt-oss-120b"),
+            ("cerebras", "gpt-oss-120b"),
+            ("openrouter", "google/gemma-4-26b-a4b-it:free"),
             ("huggingface", "meta-llama/Meta-Llama-3-8B-Instruct"),
         ]
         for provider_name, model in routing:
