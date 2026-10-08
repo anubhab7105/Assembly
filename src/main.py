@@ -114,9 +114,14 @@ async def validation_exception_handler(request, exc: RequestValidationError):
     logger.warning("Validation failed: %s", shapes)
     return JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi import WebSocketException
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Ensure stack traces and config values are never leaked in error responses."""
+    if isinstance(exc, (StarletteHTTPException, WebSocketException)):
+        raise exc
     logger.error("Unhandled exception: %s", exc, exc_info=True)
     return JSONResponse(status_code=500, content={"detail": "Internal server error."})
 
