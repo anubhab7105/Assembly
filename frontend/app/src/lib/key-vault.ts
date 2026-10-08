@@ -100,9 +100,9 @@ export class KeyVault {
     try {
       const key = await this.getMasterKey()
       const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: stored.iv },
+        { name: "AES-GCM", iv: stored.iv as BufferSource },
         key,
-        stored.ciphertext
+        stored.ciphertext as BufferSource
       )
       const decoded = new TextDecoder().decode(decrypted)
       this.inMemoryKeys = JSON.parse(decoded)
