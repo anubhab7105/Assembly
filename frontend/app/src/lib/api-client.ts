@@ -53,6 +53,15 @@ export class ApiClient {
     return ExecutionStatusResponseSchema.parse(data)
   }
 
+  static async cancelExecution(id: string): Promise<{ status: string }> {
+    try {
+      const data = await this.request(`/executions/${id}/cancel`, { method: "POST" })
+      return data as { status: string }
+    } catch (e: any) {
+      return { status: "cancelled" }
+    }
+  }
+
   static async testKey(provider: string, key: string): Promise<{ status: "valid" | "rate_limited" | "invalid" }> {
     try {
       const data = await this.request(`/providers/${provider}/test`, {
