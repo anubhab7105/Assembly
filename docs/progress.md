@@ -213,3 +213,11 @@
 - Result: **173 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on the gate; diff secret-free.
 - Bugs found: (1) two test-arithmetic slips (raw edge counts 6 not 3; round-1 evidence too thin for the 0.85 bar) — tests fixed, implementation untouched. (2) Unused imports/format in the new test file — `ruff --fix` + format.
 - Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
+
+## Time controller + cancel + explicit states (2026-10-08)
+
+- Changed: new `src/orchestration/time_controller.py` (`Deadline` w/ injectable clock + `FakeClock`, `TaskTracker`, `ExecState`/`StateMachine` per §2); orchestrator validates + publishes every transition, advisory CAPACITY_CHECK, `asyncio.timeout` on planner/synthesis/per-agent calls, deadline gates in debate loop, CancelledError → "cancelled" result; API `_run_tasks` + `POST /{id}/cancel` + cancelled/state persistence; `quota.acquire` cancel-hardened.
+- Tests: `tests/test_time_controller.py` (27 tests: fake-clock deadline math, full §2 path + debate loop + abnormal exits + illegal moves, tracker cancel/drain/leak-free, quota lease release on cancel, manager/debate per-call timeouts + carry-forward, orchestrator hard cutoff (no DEBATING state) + ordered states + live cancel + unknown-cancel + key-leak scan, API cancel/teardown-persistence/404/403/idempotency).
+- Result: **200 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on the gate; diff secret-free.
+- Bugs found: (1) Cutoff test expected `debate_rounds == 0` but round 1 is the initial evaluation (pre-existing semantics) — asserted == 1 + no DEBATING state instead. (2) Bare TestClient uses per-request portals so slow background tasks die at request teardown — implemented thread-safe `_cancel_task`, rewrote API cancel tests for portal reality (teardown-persistence + injected foreign task); real-pipeline cancel covered at orchestrator level. (3) Duplicate helper + unused-noqa + test imports — fixed per ruff.
+- Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
