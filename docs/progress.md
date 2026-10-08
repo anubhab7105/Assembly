@@ -229,3 +229,11 @@
 - Result: **220 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on the gate; diff secret-free.
 - Bugs found: (1) strict validation caught a real bug — mock sources carry `snippet` but the model lacked it (added with documented rationale). (2) Starlette `receive_text()` takes no `timeout` kwarg (the old canary WS drain was silently collecting nothing) — tests now use exact-count blocking receives + ping/pong silence probe. (3) Two time-controller tests read lifecycle `state` from `data` instead of the envelope — updated to the new contract.
 - Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
+
+## Final composer with verified citations (2026-10-08)
+
+- Changed: new `src/orchestration/composer.py` (pure; bands High ≥0.85/Moderate ≥0.60/Low, [n] collection + evidence refs, dense renumbering, orphan→[?] with warnings, uncertainty/alternatives notes with honest fallbacks, shared footer, `VerificationSummary`, `compose_final_answer`); synthesizer prompt cites numbered sources + Markdown (contract unchanged); orchestrator composes post-synthesis, counts resolved disagreements, wires answer + verification into result and `execution.completed` event.
+- Tests: `tests/test_composer.py` (22 tests: exact band edges + clamping, per-band section presence/absence, strongest-minority alternative, citation order/renumber/orphan/link-exclusion/evidence-refs, unreferenced exclusion, empty-sources omission, verification counts, footer rebuild + synthesizer parity, mock e2e composed shape, low-band orchestrator run, key-leak scan).
+- Result: **242 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on the gate; diff secret-free.
+- Bugs found: none in implementation; test-only fixes (role-routing stub router since MockRouter routes everything to the first provider; footer test converted to async).
+- Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
