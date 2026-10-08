@@ -1,5 +1,6 @@
 import { env } from "./env"
 import { z } from "zod"
+import { createClient } from "./supabase/client"
 
 // Zod schemas for backend responses
 export const StartExecutionResponseSchema = z.object({
@@ -20,10 +21,21 @@ export type ExecutionStatusResponse = z.infer<typeof ExecutionStatusResponseSche
 export class ApiClient {
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${env.apiUrl}${endpoint}`
+    let authHeader: Record<string, string> = {}
+    
+    if (env.NEXT_PUBLIC_APP_MODE === 'web') {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        authHeader['Authorization'] = `Bearer ${session.access_token}`
+      }
+    }
+
     const response = await fetch(url, {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...authHeader,
         ...options.headers,
       },
     })

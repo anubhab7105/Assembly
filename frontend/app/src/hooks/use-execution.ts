@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { env } from "@/lib/env"
+import { createClient } from "@/lib/supabase/client"
 import { ApiClient } from "@/lib/api-client"
 import type { 
   ProgressEvent, 
@@ -179,7 +180,7 @@ export function useExecution(executionId: string | null) {
     })
   }, [])
 
-  const connectWs = useCallback(() => {
+  const connectWs = useCallback(async () => {
     if (!executionId) return
 
     setState(p => ({ ...p, connectionState: reconnectAttemptsRef.current > 0 ? "reconnecting" : "connected" }))
@@ -188,6 +189,14 @@ export function useExecution(executionId: string | null) {
     wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:"
     if (lastSeqRef.current > 0) {
       wsUrl.searchParams.set("after_seq", lastSeqRef.current.toString())
+    }
+
+    if (env.NEXT_PUBLIC_APP_MODE === 'web') {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        wsUrl.searchParams.set("token", session.access_token)
+      }
     }
 
     const ws = new WebSocket(wsUrl.toString())
