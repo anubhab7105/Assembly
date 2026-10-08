@@ -128,7 +128,7 @@ describe("useExecution hook", () => {
       })
       // Fast forward the reconnect delay (2000ms * attempt)
       act(() => {
-        vi.runAllTimers()
+        vi.advanceTimersByTime(15000)
       })
       mockWs = (globalThis as any).mockWs as MockWebSocket
     }
