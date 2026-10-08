@@ -8,8 +8,11 @@ Supports both local development and production deployment (Render).
 import os
 import re
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+START_TIME = time.time()
 
 # Ensure the project root is on the Python path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -53,6 +56,15 @@ async def lifespan(app: FastAPI):
     logger.info("====================================================")
     yield
     logger.info("Server   │ Shutting down")
+    
+    # Gracefully cancel running executions
+    from src.api.executions import _run_tasks, _orchestrator
+    tasks = list(_run_tasks.items())
+    for exec_id, task in tasks:
+        logger.info(f"Server   │ Canceling execution {exec_id} for graceful shutdown")
+        _orchestrator.request_cancel(exec_id)
+        if not task.done():
+            task.cancel()
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -172,6 +184,16 @@ async def health_check():
         "app": settings.app_name,
         "env": settings.app_env,
         "database": {"type": db_type, "connected": db_ok},
+        "uptime_seconds": int(time.time() - START_TIME),
+    }
+
+
+@app.get("/ready")
+async def ready_check():
+    """Liveness/readiness probe for deployment orchestrators."""
+    return {
+        "status": "ready",
+        "uptime_seconds": int(time.time() - START_TIME),
     }
 
 
