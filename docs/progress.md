@@ -260,3 +260,11 @@
 - Result: **299 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on new/owned files (`consensus.py` pre-existing debt left untouched); diff secret-free.
 - Bugs found: one typo I introduced in an `except` clause, caught on first test run and fixed; ruff FURB188/PIE810/I001 in new code fixed via `--fix` + one manual tuple merge.
 - Skipped (per DoD): live real-key end-to-end run + key-leak scan — no live keys here and the module handles no secrets (pure URL/title logic).
+
+## Prompt-injection defense for web content (2026-10-08)
+
+- New: `src/research/sanitize.py` (strip → budget → delimit → detect); researcher/synthesizer prompts sanitized; standing `UNTRUSTED_CONTENT RULE` in all system prompts; orchestrator emits `agent.status` warning on tripwire hits (17-type event contract untouched); `docs/security.md` (defense + limits).
+- Tests: `tests/test_sanitize.py` (21 tests: 10-snippet adversarial set across 5 categories, benign controls, strip/budget/escape/bundle units, prompt wiring, MockProvider hostile-context run).
+- Result: **320 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on new/owned files; diff secret-free.
+- Bugs found: one attack snippet (`ignore the rules`) initially missed by the override regex — widened the middle-word set, all 10 flag correctly with benign controls still clean.
+- Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).

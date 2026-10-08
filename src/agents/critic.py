@@ -8,6 +8,7 @@ and prevents echo chambers (PRD Section 10).
 from typing import Optional, Dict, Any
 
 from src.agents.base_agent import BaseAgent, AgentOutput
+from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
 
 
 class CriticAgent(BaseAgent):
@@ -22,7 +23,7 @@ class CriticAgent(BaseAgent):
 
     def build_system_prompt(self) -> str:
         role = self.role_description or "Critical Analyst and Devil's Advocate"
-        return f"""You are an expert {role} on a multi-agent reasoning team called Assembly.
+        prompt = f"""You are an expert {role} on a multi-agent reasoning team called Assembly.
 
 Your CRITICAL role is to find flaws, challenge assumptions, and prevent groupthink.
 
@@ -55,6 +56,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
     "remaining_uncertainty": ["Critical unknowns that affect the answer"]
 }}
 ```"""
+        return prompt + "\n\n" + UNTRUSTED_SYSTEM_NOTE
 
     def build_user_prompt(self, question: str, context: Optional[Dict[str, Any]] = None) -> str:
         if context and context.get("mode") == "adversarial":

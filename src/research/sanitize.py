@@ -23,6 +23,7 @@ standing system-prompt note). Detection is a tripwire, not a proof.
 
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 #: Rough chars-per-token conversion used to size the budgets below.
 CHARS_PER_TOKEN: int = 4
@@ -61,7 +62,7 @@ INJECTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "instruction_override",
         re.compile(
             r"\b(ignore|disregard|forget|override|disobey)\b"
-            r"[^.]{0,60}\b(previous|prior|above|earlier|system|original|all|your)\b"
+            r"[^.]{0,60}\b(previous|prior|above|earlier|system|original|all|your|the)\b"
             r"[^.]{0,30}\b(instructions?|rules?|directives?|constraints?|prompt)\b",
             re.IGNORECASE,
         ),
@@ -209,16 +210,14 @@ def sanitize_source(
     )
 
 
-def format_untrusted_block(
-    index: int, title: str, url: str, text: str
-) -> str:
+def format_untrusted_block(index: int, title: str, url: str, text: str) -> str:
     """Render one delimited UNTRUSTED_WEB_CONTENT block."""
     heading = f"{UNTRUSTED_OPEN} [{index}] title={title or 'Untitled'}>"
     return f"{heading}\nURL: {url or 'unknown'}\n{text}\n{UNTRUSTED_CLOSE}"
 
 
 def sanitize_search_results(
-    results: list[dict[str, str]],
+    results: list[dict[str, Any]],
     per_source_chars: int = MAX_SNIPPET_CHARS,
     total_chars: int = MAX_PROMPT_WEB_CHARS,
 ) -> SanitizedBundle:

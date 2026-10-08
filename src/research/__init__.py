@@ -18,6 +18,7 @@ from src.research.sanitize import (
 from src.research.schemas import SearchResult
 
 __all__ = [
+    "UNTRUSTED_SYSTEM_NOTE",
     "ArxivSearchProvider",
     "DuckDuckGoSearchProvider",
     "SearchProvider",
@@ -27,7 +28,6 @@ __all__ = [
     "SearchRouter",
     "SemanticScholarSearchProvider",
     "TavilySearchProvider",
-    "UNTRUSTED_SYSTEM_NOTE",
     "WikipediaSearchProvider",
     "default_providers",
     "sanitize_search_results",
