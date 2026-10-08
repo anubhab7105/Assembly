@@ -214,6 +214,9 @@ export function useExecution(executionId: string | null) {
     ws.onopen = () => {
       reconnectAttemptsRef.current = 0
       setState(p => ({ ...p, connectionState: "connected" }))
+      if (env.NEXT_PUBLIC_APP_MODE === 'desktop' && env.desktopToken) {
+        ws.send(JSON.stringify({ type: "auth", token: env.desktopToken }))
+      }
     }
 
     ws.onclose = () => {

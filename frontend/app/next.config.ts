@@ -8,14 +8,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  async headers() {
-    return [
-      {
-        source: "/(.*)",
-        headers: securityHeaders,
-      },
-    ];
-  },
+  output: "export",
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
