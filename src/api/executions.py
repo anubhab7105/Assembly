@@ -328,7 +328,7 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
     """
     await websocket.accept()
 
-    # Authenticate via token query param
+    # Authenticate via token query param or first message
     from src.core.config import settings
     
     # Check WebSocket Origin
@@ -338,7 +338,19 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid Origin")
             return
 
-    if settings.app_mode in ("dev", "desktop"):
+    if settings.app_mode == "desktop":
+        try:
+            # Wait for first message to auth
+            data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            msg = json.loads(data)
+            if msg.get("type") != "auth" or msg.get("token") != settings.desktop_token:
+                await websocket.close(code=4001, reason="Authentication failed")
+                return
+        except Exception:
+            await websocket.close(code=4001, reason="Authentication failed")
+            return
+        user_id = "local-desktop-user"
+    elif settings.app_mode == "dev":
         user_id = "local-dev-user"
     else:
         token = websocket.query_params.get("token", "")

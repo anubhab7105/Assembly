@@ -11,6 +11,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+import signal
 
 START_TIME = time.time()
 
@@ -91,6 +92,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def desktop_token_middleware(request: Request, call_next):
+    if settings.app_mode == "desktop":
+        if request.url.path not in ["/health", "/ready", "/shutdown"] and not request.url.path.startswith("/ws/"):
+            token = request.headers.get("Authorization", "").removeprefix("Bearer ")
+            if not token:
+                token = request.headers.get("X-Assembly-Token", "")
+            if token != settings.desktop_token:
+                return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    return await call_next(request)
 
 @app.middleware("http")
 async def limit_upload_size(request: Request, call_next):
@@ -197,16 +209,46 @@ async def ready_check():
     }
 
 
+@app.post("/shutdown")
+async def shutdown(request: Request):
+    """Graceful shutdown for desktop app."""
+    if settings.app_mode == "desktop":
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ")
+        if not token:
+            token = request.headers.get("X-Assembly-Token", "")
+        if token != settings.desktop_token:
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        
+        logger.info("Server   │ Shutdown requested via API")
+        os.kill(os.getpid(), signal.SIGINT)
+        return {"detail": "Shutting down"}
+    return JSONResponse(status_code=404, content={"detail": "Not found"})
+
 # ── Run ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
+    import socket
 
-    # Use PORT from environment (Render provides this) or default
-    port = int(os.environ.get("PORT", settings.port))
+    if settings.app_mode == "desktop":
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        
+        print(f"ASSEMBLY_PORT={port}")
+        print(f"ASSEMBLY_TOKEN={settings.desktop_token}")
+        
+        host = "127.0.0.1"
+        reload = False
+    else:
+        # Use PORT from environment (Render provides this) or default
+        port = int(os.environ.get("PORT", settings.port))
+        host = "0.0.0.0"
+        reload = settings.debug
 
     uvicorn.run(
         "src.main:app",
-        host="0.0.0.0",
+        host=host,
         port=port,
-        reload=settings.debug,
+        reload=reload,
     )

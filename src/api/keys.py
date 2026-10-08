@@ -22,6 +22,14 @@ from src.core.rate_limit import rate_limiter
 router = APIRouter(prefix="/api", tags=["keys"])
 
 
+class KeySaveRequest(BaseModel):
+    provider: str
+    key: SecretStr
+
+class KeyMaskedResponse(BaseModel):
+    provider: str
+    masked_key: str
+
 class KeyTestRequest(BaseModel):
     """A key to probe. SecretStr: never serialized, never logged."""
 
@@ -169,3 +177,33 @@ async def providers_status(
         families=sorted(families),
         capacity_3min_estimate=capacity,
     )
+
+@router.post("/keys", response_model=KeyMaskedResponse)
+async def save_key(
+    req: KeySaveRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    if settings.app_mode != "desktop":
+        raise HTTPException(status_code=400, detail="Key saving is only supported in desktop mode")
+    store = get_keystore()
+    store.set_key(req.provider, req.key)
+    return KeyMaskedResponse(provider=req.provider, masked_key="***")
+
+@router.get("/keys", response_model=list[KeyMaskedResponse])
+async def list_keys(user_id: str = Depends(get_current_user_id)):
+    if settings.app_mode != "desktop":
+        raise HTTPException(status_code=400, detail="Key listing is only supported in desktop mode")
+    store = get_keystore()
+    keys = store.get_keys()
+    return [KeyMaskedResponse(provider=p, masked_key="***") for p in keys]
+
+@router.delete("/keys/{provider}")
+async def delete_key(provider: str, user_id: str = Depends(get_current_user_id)):
+    if settings.app_mode != "desktop":
+        raise HTTPException(status_code=400, detail="Key deletion is only supported in desktop mode")
+    store = get_keystore()
+    if hasattr(store, "delete"):
+        store.delete(provider)
+    else:
+        store.set_key(provider, None)
+    return {"detail": "Key deleted"}

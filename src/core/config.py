@@ -11,8 +11,14 @@ from typing import Literal
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 
+from pathlib import Path
+from typing import Literal
+import secrets
+
 # ── Resolve project root (two levels up from this file) ──────────────
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+DESKTOP_TOKEN = secrets.token_hex(32)
 
 
 class Settings(BaseSettings):
@@ -27,6 +33,7 @@ class Settings(BaseSettings):
     # Key backend selector: dev (env keys) | web (per-request keys) |
     # desktop (OS keyring). Env keys refuse to load when app_env=production.
     app_mode: Literal["dev", "web", "desktop"] = "dev"
+    desktop_token: str = DESKTOP_TOKEN
 
     # ── Frontend URL (for CORS in production) ────────────────────────
     frontend_url: str = ""  # e.g. "https://assembly-frontend.vercel.app"
@@ -82,6 +89,12 @@ class Settings(BaseSettings):
         Supabase and Heroku sometimes provide `postgres://` which
         SQLAlchemy 2.x does not accept — it requires `postgresql://`.
         """
+        if self.app_mode == "desktop":
+            import platformdirs
+            data_dir = Path(platformdirs.user_data_dir("Assembly", "Assembly"))
+            data_dir.mkdir(parents=True, exist_ok=True)
+            return f"sqlite:///{data_dir / 'assembly.db'}"
+
         url = self.database_url
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
