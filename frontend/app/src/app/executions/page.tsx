@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useExecution } from "@/hooks/use-execution"
 import { ApiClient } from "@/lib/api-client"
@@ -26,7 +26,7 @@ import {
 
 import { FinalAnswer } from "@/components/final-answer"
 
-export default function ExecutionPage() {
+function ExecutionContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const rawId = searchParams?.get("id")
@@ -331,5 +331,13 @@ export default function ExecutionPage() {
 
       </main>
     </div>
+  )
+}
+
+export default function ExecutionPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
+      <ExecutionContent />
+    </Suspense>
   )
 }
