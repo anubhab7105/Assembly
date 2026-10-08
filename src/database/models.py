@@ -233,7 +233,7 @@ class ConsensusEvent(Base):
     consensus_score = Column(Float, nullable=False)
     agreement_count = Column(Integer, default=0)
     disagreement_count = Column(Integer, default=0)
-    decision = Column(String, nullable=False)  # continue | finalize | timeout
+    decision = Column(String, nullable=False)  # FINALIZE | DEBATE | ADVERSARIAL | FORCE_FINALIZE
     reasoning = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utc_now)
 

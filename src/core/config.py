@@ -57,6 +57,18 @@ class Settings(BaseSettings):
     max_tokens_per_execution: int = 100_000
     max_searches_per_execution: int = 20
 
+    # ── Consensus scoring (docs/WORKFLOW.md section 6) ───────────────
+    # Starting weights — tune on the benchmark, never hard-code elsewhere.
+    consensus_w_agreement: float = 0.30
+    consensus_w_confidence: float = 0.20
+    consensus_w_evidence: float = 0.25
+    consensus_w_contradiction: float = 0.15
+    consensus_w_stability: float = 0.10
+    consensus_finalize_threshold: float = 0.85
+    consensus_new_info_threshold: float = 0.15
+    consensus_contradiction_limit: float = 0.20
+    consensus_evidence_floor: float = 0.50
+
     model_config = {
         "env_file": str(BASE_DIR / ".env"),
         "env_file_encoding": "utf-8",
