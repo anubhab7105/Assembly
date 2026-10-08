@@ -12,12 +12,12 @@ from pydantic import BaseModel, SecretStr
 
 from src.core.config import settings
 from src.core.keystore import get_keystore
+from src.core.rate_limit import rate_limiter
 from src.core.security import get_current_user_id
 from src.providers.base import ChatMessage
 from src.providers.config import load_models_config
 from src.providers.errors import AuthError, BadResponse, ProviderDown, RateLimited
 from src.providers.registry import ProviderDisabledError, get_provider
-from src.core.rate_limit import rate_limiter
 
 router = APIRouter(prefix="/api", tags=["keys"])
 

@@ -5,15 +5,12 @@ Loads all environment variables via Pydantic Settings.
 Supports local development (SQLite) and production (Supabase PostgreSQL).
 """
 
+import secrets
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
-
-from pathlib import Path
-from typing import Literal
-import secrets
 
 # ── Resolve project root (two levels up from this file) ──────────────
 BASE_DIR = Path(__file__).resolve().parent.parent.parent

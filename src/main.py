@@ -7,11 +7,11 @@ Supports both local development and production deployment (Render).
 
 import os
 import re
+import signal
 import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-import signal
 
 START_TIME = time.time()
 
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server   │ Shutting down")
     
     # Gracefully cancel running executions
-    from src.api.executions import _run_tasks, _orchestrator
+    from src.api.executions import _orchestrator, _run_tasks
     tasks = list(_run_tasks.items())
     for exec_id, task in tasks:
         logger.info(f"Server   │ Canceling execution {exec_id} for graceful shutdown")
@@ -138,8 +138,9 @@ async def validation_exception_handler(request, exc: RequestValidationError):
     logger.warning("Validation failed: %s", shapes)
     return JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi import WebSocketException
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -226,8 +227,9 @@ async def shutdown(request: Request):
 
 # ── Run ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    import uvicorn
     import socket
+
+    import uvicorn
 
     if settings.app_mode == "desktop":
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
