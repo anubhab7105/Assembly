@@ -10,9 +10,15 @@ This is the core of Assembly (PRD Section 9.2).
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 from src.agents.synthesizer import SynthesizerAgent
+from src.api.events import (
+    EventRecorder,
+    ProgressEventType,
+    confidence_label,
+    diff_disagreements,
+)
 from src.core.keystore import RequestKeyStore
 from src.core.logging_config import logger
 from src.orchestration.agent_manager import AgentManager
@@ -164,39 +170,114 @@ class Orchestrator:
 
         total_tokens = 0
         warnings: list[str] = []
+        recorder = EventRecorder(execution_id)
+        open_disagreement_keys: dict = {}
+        quota_warned = False
+
+        async def emit_event(
+            event_type: ProgressEventType | str,
+            payload: dict,
+        ) -> dict | None:
+            """Validate + sequence one §8 event, then forward it.
+
+            The current lifecycle state rides in the envelope so the API
+            can persist live phases. A contract violation here is an
+            orchestrator bug, never a reason to kill the run: log it
+            loudly (tests assert zero drops on mock runs) and continue
+            without the event.
+            """
+            try:
+                event = recorder.emit(
+                    event_type, payload, state=state_machine.state.value
+                )
+            except Exception as e:  # noqa: BLE001 — observability must not break runs
+                logger.error(f"Exec    │ Dropping invalid progress event: {e}")
+                return None
+            await self._send_event(on_progress, event)
+            return event
 
         async def transition(
             state: ExecState,
-            status: str | None = None,
-            message: str | None = None,
-        ) -> None:
+            event_type: ProgressEventType | str,
+            payload: dict,
+        ) -> dict | None:
             """Validate a lifecycle move and publish it as a progress event."""
             state_machine.transition(state)
-            data: dict = {"state": state.value}
-            if status is not None:
-                data["status"] = status
-            if message is not None:
-                data["message"] = message
-            await self._emit_progress(on_progress, execution_id, "status_update", data)
+            return await emit_event(event_type, payload)
+
+        async def emit_consensus(report, round_number: int) -> None:
+            """consensus.updated + timer.tick + disagreement deltas, in order."""
+            nonlocal open_disagreement_keys, quota_warned
+            await emit_event(
+                ProgressEventType.CONSENSUS_UPDATED,
+                {
+                    "score": report.score,
+                    "new_info_rate": report.new_info_rate,
+                    "decision": report.decision,
+                    "reason": report.reason,
+                    "round": round_number,
+                },
+            )
+            await emit_event(
+                ProgressEventType.TIMER_TICK,
+                {"seconds_remaining": budget.state.remaining_seconds},
+            )
+            deltas, open_disagreement_keys = diff_disagreements(
+                open_disagreement_keys, report.open_disagreements, round_number
+            )
+            for event_type, payload in deltas:
+                await emit_event(event_type, payload)
+            if budget.is_token_limited() and not quota_warned:
+                quota_warned = True
+                await emit_event(
+                    ProgressEventType.QUOTA_WARNING,
+                    {
+                        "provider": "token-budget",
+                        "remaining": float(
+                            max(0, budget.state.max_tokens - budget.state.tokens_used)
+                        ),
+                        "detail": "Execution token budget nearly exhausted.",
+                    },
+                )
 
         try:
+            await emit_event(
+                ProgressEventType.EXECUTION_STARTED,
+                {
+                    "tier_minutes": time_budget_minutes,
+                    "deadline_seconds": float(deadline.budget_seconds),
+                },
+            )
             # ════════════════════════════════════════════════════════════
             # PHASE 0: CAPACITY CHECK — What can we afford? (advisory)
             # ════════════════════════════════════════════════════════════
             await transition(
                 ExecState.CAPACITY_CHECK,
-                status="capacity_check",
-                message="Checking available capacity...",
+                ProgressEventType.AGENT_STATUS,
+                {
+                    "role": "system",
+                    "activity": "Checking available capacity...",
+                    "state": ExecState.CAPACITY_CHECK.value,
+                },
             )
-            warnings.extend(self._advisory_capacity_check(router, question))
+            warning_texts, quota_payload = self._advisory_capacity_check(
+                router, question
+            )
+            warnings.extend(warning_texts)
+            if quota_payload is not None:
+                await emit_event(ProgressEventType.QUOTA_WARNING, quota_payload)
 
             # ════════════════════════════════════════════════════════════
             # PHASE 1: PLANNING — Classify the problem
             # ════════════════════════════════════════════════════════════
             await transition(
                 ExecState.PLANNING,
-                status="planning",
-                message="Analyzing your question...",
+                ProgressEventType.AGENT_STATUS,
+                {
+                    "role": "planner",
+                    "activity": "Analyzing your question...",
+                    "state": ExecState.PLANNING.value,
+                },
             )
 
             async with asyncio.timeout(
@@ -204,30 +285,24 @@ class Orchestrator:
             ):
                 plan = await planner.plan(question, time_budget_minutes)
 
-            await self._emit_progress(
-                on_progress,
-                execution_id,
-                "status_update",
+            await emit_event(
+                ProgressEventType.PLAN_READY,
                 {
-                    "status": "planning",
-                    "state": ExecState.PLANNING.value,
-                    "message": f"Classified as {plan.complexity} complexity {plan.problem_type} problem",
                     "problem_type": plan.problem_type,
                     "complexity": plan.complexity,
+                    "agent_count": len(plan.team_composition),
                 },
             )
 
             # ════════════════════════════════════════════════════════════
             # PHASE 2: TEAM FORMATION — Create agents
             # ════════════════════════════════════════════════════════════
-            await self._emit_progress(
-                on_progress,
-                execution_id,
-                "status_update",
+            await emit_event(
+                ProgressEventType.AGENT_STATUS,
                 {
-                    "status": "forming_team",
+                    "role": "",
+                    "activity": f"Assembling a team of {len(plan.team_composition)} experts...",
                     "state": ExecState.PLANNING.value,
-                    "message": f"Assembling a team of {len(plan.team_composition)} experts...",
                 },
             )
 
@@ -251,14 +326,20 @@ class Orchestrator:
                 {a.get("provider_name", "unknown") for a in agent_info}
             )
 
-            await self._emit_progress(
-                on_progress,
-                execution_id,
-                "agent_update",
+            await emit_event(
+                ProgressEventType.TEAM_READY,
                 {
-                    "agents": agent_info,
-                    "state": ExecState.TEAM_READY.value,
-                    "message": "Team assembled",
+                    "roles": [
+                        {
+                            "agent_id": entry.get("agent_id", ""),
+                            "agent_type": entry.get("agent_type", ""),
+                            "model": entry.get("model", ""),
+                            "provider_name": entry.get("provider_name", ""),
+                            "role_description": entry.get("role_description", ""),
+                            "family": entry.get("family", ""),
+                        }
+                        for entry in agent_info
+                    ],
                 },
             )
 
@@ -267,31 +348,38 @@ class Orchestrator:
             # ════════════════════════════════════════════════════════════
             search_results = []
             if plan.needs_research and budget.can_search():
-                await self._emit_progress(
-                    on_progress,
-                    execution_id,
-                    "status_update",
+                await emit_event(
+                    ProgressEventType.AGENT_STATUS,
                     {
-                        "status": "researching",
-                        "message": "Searching for evidence...",
+                        "role": "researcher",
+                        "activity": "Searching for evidence...",
+                        "state": ExecState.TEAM_READY.value,
                     },
                 )
 
                 search_results = await self.search_engine.search(question)
                 budget.record_search(len(search_results))
+                for hit in search_results:
+                    url = str(hit.get("url", ""))
+                    await emit_event(
+                        ProgressEventType.SOURCE_FOUND,
+                        {
+                            "title": str(hit.get("title", "Untitled"))[:200],
+                            "domain": urlsplit(url).netloc,
+                            "url": url,
+                        },
+                    )
 
             # ════════════════════════════════════════════════════════════
             # PHASE 4: INDEPENDENT SOLVING — Each agent works alone
             # ════════════════════════════════════════════════════════════
-            await self._emit_progress(
-                on_progress,
-                execution_id,
-                "status_update",
+            state_machine.transition(ExecState.SOLVING)
+            await emit_event(
+                ProgressEventType.AGENT_STATUS,
                 {
-                    "status": "solving",
+                    "role": "",
+                    "activity": "Agents solving independently...",
                     "state": ExecState.SOLVING.value,
-                    "message": "Agents solving independently...",
-                    **budget.get_status(),
                 },
             )
 
@@ -300,7 +388,6 @@ class Orchestrator:
                 if hasattr(agent, "search_results"):
                     agent.search_results = search_results
 
-            state_machine.transition(ExecState.SOLVING)
             deadline.raise_if_cancelled()
             outputs = await agent_manager.run_all_independent(
                 agents,
@@ -329,19 +416,7 @@ class Orchestrator:
                 quota_ok=not budget.is_token_limited(),
             )
 
-            await self._emit_progress(
-                on_progress,
-                execution_id,
-                "consensus_update",
-                {
-                    "consensus_score": consensus_result.score,
-                    "round": round_number,
-                    "decision": consensus_result.decision,
-                    "reasoning": consensus_result.reason,
-                    "state": ExecState.EVALUATING.value,
-                    **budget.get_status(),
-                },
-            )
+            await emit_consensus(consensus_result, round_number)
 
             # Debate loop: DEBATE and ADVERSARIAL both mean "not done yet";
             # FINALIZE and FORCE_FINALIZE fall through to synthesis. The
@@ -373,8 +448,7 @@ class Orchestrator:
                         outputs,
                         round_number,
                         budget,
-                        on_progress,
-                        execution_id,
+                        emit_event,
                     )
                     if challenged is not None:
                         outputs, consensus_result, challenge_tokens = challenged
@@ -382,19 +456,7 @@ class Orchestrator:
                         budget.record_tokens(challenge_tokens)
                         budget.record_debate_round()
                         state_machine.transition(ExecState.EVALUATING)
-                        await self._emit_progress(
-                            on_progress,
-                            execution_id,
-                            "consensus_update",
-                            {
-                                "consensus_score": consensus_result.score,
-                                "round": round_number,
-                                "decision": consensus_result.decision,
-                                "reasoning": consensus_result.reason,
-                                "state": ExecState.EVALUATING.value,
-                                **budget.get_status(),
-                            },
-                        )
+                        await emit_consensus(consensus_result, round_number)
                         continue
                     # No eligible critic (or the strike failed):
                     # fall through to a normal debate round (already in
@@ -403,17 +465,9 @@ class Orchestrator:
                     state_machine.transition(ExecState.DEBATING)
                 round_number += 1
 
-                await self._emit_progress(
-                    on_progress,
-                    execution_id,
-                    "status_update",
-                    {
-                        "status": "debating",
-                        "state": ExecState.DEBATING.value,
-                        "message": f"Debate round {round_number}...",
-                        "round": round_number,
-                        **budget.get_status(),
-                    },
+                await emit_event(
+                    ProgressEventType.ROUND_STARTED,
+                    {"round": round_number, "goal": f"Debate round {round_number}"},
                 )
 
                 # Run debate round
@@ -444,37 +498,22 @@ class Orchestrator:
                     allow_adversarial=not adversarial_done,
                 )
 
-                await self._emit_progress(
-                    on_progress,
-                    execution_id,
-                    "consensus_update",
+                await emit_event(
+                    ProgressEventType.ROUND_FINISHED,
                     {
-                        "consensus_score": consensus_result.score,
                         "round": round_number,
-                        "decision": consensus_result.decision,
-                        "reasoning": consensus_result.reason,
-                        "state": ExecState.EVALUATING.value,
-                        **budget.get_status(),
+                        "outcome": f"Round {round_number} complete: "
+                        f"{consensus_result.decision}",
                     },
                 )
+                await emit_consensus(consensus_result, round_number)
 
             # ════════════════════════════════════════════════════════════
             # PHASE 6: FINAL SYNTHESIS — Produce the answer
             # ════════════════════════════════════════════════════════════
             deadline.raise_if_cancelled()
             state_machine.transition(ExecState.SYNTHESIZING)
-            await self._emit_progress(
-                on_progress,
-                execution_id,
-                "status_update",
-                {
-                    "status": "synthesizing",
-                    "state": ExecState.SYNTHESIZING.value,
-                    "message": "Synthesizing final answer...",
-                    "consensus_score": consensus_result.score,
-                    **budget.get_status(),
-                },
-            )
+            await emit_event(ProgressEventType.SYNTHESIS_STARTED, {})
 
             # Create synthesizer agent
             synthesizer = agent_manager.create_agent(
@@ -533,19 +572,36 @@ class Orchestrator:
             )
 
             state_machine.transition(ExecState.COMPLETED)
-            await self._emit_progress(
-                on_progress,
-                execution_id,
-                "answer_ready",
+            for source in sources:
+                url = str(source.get("url", ""))
+                await emit_event(
+                    ProgressEventType.SOURCE_VERIFIED,
+                    {
+                        "title": str(source.get("title", "Untitled"))[:200],
+                        "domain": urlsplit(url).netloc,
+                        "url": url,
+                    },
+                )
+            await emit_event(
+                ProgressEventType.EXECUTION_COMPLETED,
                 {
                     "status": "completed",
-                    "state": ExecState.COMPLETED.value,
                     "answer": result.answer,
-                    "sources": result.sources,
+                    "sources": [
+                        {
+                            "title": str(source.get("title", ""))[:200],
+                            "url": str(source.get("url", "")),
+                            "snippet": str(source.get("snippet", ""))[:500],
+                        }
+                        for source in sources
+                    ],
+                    "confidence_label": confidence_label(consensus_result.score),
                     "consensus_score": result.consensus_score,
                     "agent_count": result.agent_count,
                     "providers_used": result.providers_used,
-                    **budget.get_status(),
+                    "tokens_used": total_tokens,
+                    "debate_rounds": round_number,
+                    "elapsed_seconds": round(budget.state.elapsed_seconds, 1),
                 },
             )
 
@@ -579,14 +635,11 @@ class Orchestrator:
             if key_store is not None:
                 key_store.clear()
             try:
-                await self._emit_progress(
-                    on_progress,
-                    execution_id,
-                    "status_update",
+                await emit_event(
+                    ProgressEventType.EXECUTION_CANCELLED,
                     {
                         "status": "cancelled",
-                        "state": ExecState.CANCELLED.value,
-                        "message": "Execution cancelled by user.",
+                        "reason": "Execution cancelled by user.",
                     },
                 )
             except Exception as e:  # noqa: BLE001 — best-effort final event only
@@ -606,13 +659,12 @@ class Orchestrator:
             # Server side keeps the full (masked) error; clients get a
             # generic message — exception text may carry provider details.
             logger.error(f"═══ EXECUTION FAILED: {execution_id} — {e} ═══")
-            await self._emit_progress(
-                on_progress,
-                execution_id,
-                "error",
+            await emit_event(
+                ProgressEventType.EXECUTION_FAILED_PARTIAL,
                 {
                     "status": "failed",
-                    "message": "Execution failed; see server logs for details.",
+                    "reason": "Execution failed; see server logs for details.",
+                    "answer": "",
                 },
             )
             workspace.cleanup(execution_id)
@@ -635,16 +687,22 @@ class Orchestrator:
             self._deadlines.pop(execution_id, None)
 
     @staticmethod
-    def _advisory_capacity_check(router, question: str) -> list[str]:
+    def _advisory_capacity_check(
+        router, question: str
+    ) -> tuple[list[str], dict | None]:
         """WORKFLOW section 4 review: what can this run afford?
 
         Advisory only — findings become warnings on the result, never a
         veto. Anything failing here degrades to silence, never to a crash:
         the planner and consensus still do their jobs.
+
+        Returns (warnings, quota payload or None): a quota.warning event
+        goes out only when the verdict actually downgrades the tier or
+        finds nothing affordable.
         """
         snapshot = getattr(router, "quota_snapshot", None)
         if not callable(snapshot):
-            return []
+            return [], None
         try:
             keys = [
                 KeyBudget(
@@ -662,10 +720,19 @@ class Orchestrator:
                 f"Capacity │ Advisory check: {verdict.explanation} "
                 f"(affordable={verdict.affordable_calls})"
             )
-            return list(verdict.warnings)
+            quota_payload = None
+            if verdict.affordable_calls is not None and (
+                verdict.downgraded or not verdict.feasible
+            ):
+                quota_payload = {
+                    "provider": "aggregate",
+                    "remaining": float(verdict.affordable_calls),
+                    "detail": verdict.explanation[:200],
+                }
+            return list(verdict.warnings), quota_payload
         except Exception as e:  # noqa: BLE001 — advisory only, never break the run
             logger.warning(f"Capacity │ Advisory check skipped: {e}")
-            return []
+            return [], None
 
     async def _run_adversarial_round(
         self,
@@ -675,14 +742,14 @@ class Orchestrator:
         outputs,
         round_number: int,
         budget,
-        on_progress,
-        execution_id: str,
+        emit_event,
     ):
         """One WORKFLOW 5b strike: a different-family critic attacks the consensus.
 
         Returns (outputs, report, challenge_tokens), or None when there is
         no eligible critic or the strike itself fails — the caller then runs
-        a normal debate round instead.
+        a normal debate round instead. ``emit_event`` is the recorder-backed
+        emitter so the strike announcement keeps the run's dense sequence.
         """
         from src.orchestration.consensus import ConsensusEngine
 
@@ -695,17 +762,12 @@ class Orchestrator:
             )
             return None
 
-        await self._emit_progress(
-            on_progress,
-            execution_id,
-            "status_update",
+        await emit_event(
+            ProgressEventType.ROUND_STARTED,
             {
-                "status": "adversarial",
-                "state": ExecState.DEBATING.value,
-                "message": f"Adversarial challenge by {critic.agent_id} "
-                f"({critic.family}) — assuming the consensus is wrong...",
                 "round": round_number,
-                **budget.get_status(),
+                "goal": f"Adversarial challenge by {critic.agent_id} — "
+                "assuming the consensus is wrong",
             },
         )
         try:
@@ -725,23 +787,14 @@ class Orchestrator:
         )
         return new_outputs, report, challenge.tokens_used if challenge else 0
 
-    async def _emit_progress(
+    async def _send_event(
         self,
         callback: Callable[[dict], Awaitable[None]] | None,
-        execution_id: str,
-        event_type: str,
-        data: dict,
+        event: dict,
     ):
-        """Send a progress event to the frontend via callback."""
+        """Forward a recorder-built wire event to the frontend callback."""
         if callback:
             try:
-                await callback(
-                    {
-                        "event_type": event_type,
-                        "execution_id": execution_id,
-                        "data": data,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }
-                )
+                await callback(event)
             except Exception as e:  # noqa: BLE001 — a broken callback must not kill the run
                 logger.error(f"Orchestrator │ Progress callback error: {e}")

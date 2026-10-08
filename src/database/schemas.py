@@ -8,6 +8,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from src.api.events import ProgressEvent
+
 
 # ═════════════════════════════════════════════════════════════════════
 # AUTH
@@ -161,10 +163,10 @@ class PreflightResponse(BaseModel):
 
 
 # ═════════════════════════════════════════════════════════════════════
-# WEBSOCKET PROGRESS EVENTS
+# WEBSOCKET PROGRESS EVENTS (docs/WORKFLOW.md section 8)
 # ═════════════════════════════════════════════════════════════════════
-class ProgressEvent(BaseModel):
-    """Real-time progress event sent via WebSocket."""
-    event_type: str  # status_update | agent_update | consensus_update | timer_update | answer_ready | error
-    execution_id: str
-    data: dict = {}
+class EventListResponse(BaseModel):
+    """Replayable slice of an execution's event log."""
+
+    events: list[ProgressEvent] = []
+    latest_seq: int = 0

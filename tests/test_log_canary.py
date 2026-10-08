@@ -114,7 +114,7 @@ async def test_canary_absent_in_success_path(orchestrator, monkeypatch, caplog) 
     assert CANARY not in json.dumps(events)
     assert CANARY not in result.answer + json.dumps(result.sources)
     assert CANARY not in "".join(workspace_seen)
-    assert any(e["event_type"] == "answer_ready" for e in events)
+    assert any(e["event_type"] == "execution.completed" for e in events)
 
 
 async def test_canary_absent_in_failure_path_events(caplog) -> None:
@@ -143,9 +143,9 @@ async def test_canary_absent_in_failure_path_events(caplog) -> None:
     )
     assert CANARY not in caplog.text
     assert CANARY not in json.dumps(events)
-    error_events = [e for e in events if e["event_type"] == "error"]
+    error_events = [e for e in events if e["event_type"] == "execution.failed_partial"]
     assert error_events != []
-    assert all("server logs" in e["data"]["message"] for e in error_events)
+    assert all("server logs" in e["data"]["reason"] for e in error_events)
 
 
 # ── API canary (TestClient + SQLite FILE bytes) ───────────────────────
@@ -224,7 +224,10 @@ def test_canary_end_to_end_api_db_ws(monkeypatch, tmp_path, caplog) -> None:
                     break
                 ws_messages.append(message)
                 data = json.loads(message)
-                if data.get("event_type") in ("answer_ready", "error"):
+                if data.get("event_type") in (
+                    "execution.completed",
+                    "execution.failed_partial",
+                ):
                     break
     except Exception:  # noqa: BLE001, S110 — no socket yet means nothing to scan
         pass

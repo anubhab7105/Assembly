@@ -615,15 +615,15 @@ async def test_orchestrator_runs_adversarial_strike() -> None:
     adversarial_events = [
         e
         for e in events
-        if e["event_type"] == "status_update"
-        and e["data"].get("status") == "adversarial"
+        if e["event_type"] == "round.started"
+        and "Adversarial" in e["data"].get("goal", "")
     ]
-    assert adversarial_events, "expected an adversarial status event"
+    assert adversarial_events, "expected an adversarial round.started event"
     critic_calls = [
         c for c in router._providers["mock-c"].calls if c["script_key"] == "critic"
     ]
     assert len(critic_calls) >= 2  # independent solve + adversarial strike
     decisions = {
-        e["data"]["decision"] for e in events if e["event_type"] == "consensus_update"
+        e["data"]["decision"] for e in events if e["event_type"] == "consensus.updated"
     }
     assert decisions <= {FINALIZE, DEBATE, ADVERSARIAL, FORCE_FINALIZE}

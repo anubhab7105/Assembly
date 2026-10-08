@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -131,6 +132,12 @@ class Execution(Base):
     agent_runs = relationship(
         "AgentRun", back_populates="execution", cascade="all, delete-orphan"
     )
+    events = relationship(
+        "ExecutionEvent",
+        back_populates="execution",
+        cascade="all, delete-orphan",
+        order_by="ExecutionEvent.seq",
+    )
     debate_round_records = relationship(
         "DebateRound", back_populates="execution", cascade="all, delete-orphan"
     )
@@ -239,6 +246,39 @@ class ConsensusEvent(Base):
 
     # Relationships
     execution = relationship("Execution", back_populates="consensus_events")
+
+
+# ═════════════════════════════════════════════════════════════════════
+# EXECUTION EVENTS — Persisted progress-event log (WORKFLOW section 8)
+# ═════════════════════════════════════════════════════════════════════
+class ExecutionEvent(Base):
+    """One sequenced progress event per execution.
+
+    Written by the API layer as events broadcast (best-effort); powers
+    WebSocket replay (?after_seq=N) and GET /events. Payloads are short
+    human-readable summaries — never keys, never chain-of-thought
+    (see src/api/events.py sanitize_payload).
+    """
+
+    __tablename__ = "execution_events"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    execution_id = Column(
+        String, ForeignKey("executions.id"), nullable=False, index=True
+    )
+    seq = Column(Integer, nullable=False)  # dense per-execution order, starts at 1
+    type = Column(String, nullable=False, index=True)  # dotted §8 name
+    payload = Column(JSON, nullable=True)  # sanitized event data dict
+    created_at = Column(DateTime, default=utc_now)
+
+    __table_args__ = (
+        # One writer (the orchestrator recorder) assigns seqs, so this
+        # only guards against double-persist bugs, never normal traffic.
+        UniqueConstraint("execution_id", "seq"),
+    )
+
+    # Relationships
+    execution = relationship("Execution", back_populates="events")
 
 
 # ═════════════════════════════════════════════════════════════════════
