@@ -11,9 +11,10 @@ when teams are large or debates run for many rounds.
 import asyncio
 from typing import List, Dict, Optional
 
-from src.agents.base_agent import BaseAgent, AgentOutput
-from src.orchestration.workspace import workspace, WorkspaceEvent, EventType
+from src.agents.base_agent import AgentOutput, BaseAgent
 from src.core.logging_config import logger
+from src.orchestration.time_controller import TaskTracker
+from src.orchestration.workspace import EventType, WorkspaceEvent, workspace
 
 
 class DebateManager:
@@ -44,6 +45,8 @@ class DebateManager:
         current_outputs: List[AgentOutput],
         question: str,
         round_number: int,
+        timeout_s: float | None = None,
+        tracker: TaskTracker | None = None,
     ) -> List[AgentOutput]:
         """
         Run one debate round: all agents review each other's work in parallel.
@@ -53,6 +56,9 @@ class DebateManager:
             current_outputs: Each agent's latest output.
             question: Original user question.
             round_number: Current round number.
+            timeout_s: per-critique wall-clock bound (stragglers become
+                stale carry-forwards instead of hanging the run).
+            tracker: task registry for bulk cancel + leak detection.
         
         Returns:
             Updated list of AgentOutput after debate.
@@ -65,19 +71,37 @@ class DebateManager:
         # Compress outputs to prevent context window bloat
         compressed_outputs = self._compress_outputs(current_outputs)
 
+        own_tracker = (
+            tracker
+            if tracker is not None
+            else TaskTracker(owner=f"{self.execution_id}:debate-{round_number}")
+        )
+
         # Each agent critiques all others IN PARALLEL
         tasks = []
         for agent in agents:
             # Filter out this agent's own output — they review everyone else
             others = [o for o in compressed_outputs if o.agent_id != agent.agent_id]
             if others:
-                tasks.append(self._agent_critique(agent, question, others, round_number))
+                coro = self._agent_critique(
+                    agent, question, others, round_number, timeout_s
+                )
             else:
                 # No others to critique — re-run independently
-                tasks.append(agent.run(question))
+                coro = self._timed_run(agent, question, timeout_s)
+            tasks.append(
+                own_tracker.create(
+                    coro, name=f"assembly:{self.execution_id}:{agent.agent_id}"
+                )
+            )
 
         # Run all critiques concurrently
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            # No orphaned tasks: stragglers are awaited here even when this
+            # task itself is cancelled (user cancel / deadline).
+            await own_tracker.drain()
 
         # Collect valid results
         updated_outputs = []
@@ -158,7 +182,21 @@ class DebateManager:
         question: str,
         others: List[AgentOutput],
         round_number: int,
+        timeout_s: float | None = None,
     ) -> AgentOutput:
-        """Have a single agent critique others' work."""
-        return await agent.critique(question, others, round_number)
+        """Have a single agent critique others' work, optionally time-bounded."""
+        if timeout_s is None:
+            return await agent.critique(question, others, round_number)
+        async with asyncio.timeout(timeout_s):
+            return await agent.critique(question, others, round_number)
+
+    @staticmethod
+    async def _timed_run(
+        agent: BaseAgent, question: str, timeout_s: float | None
+    ) -> AgentOutput:
+        """Solo re-run for single-agent teams, optionally time-bounded."""
+        if timeout_s is None:
+            return await agent.run(question)
+        async with asyncio.timeout(timeout_s):
+            return await agent.run(question)
 

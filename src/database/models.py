@@ -109,7 +109,7 @@ class Execution(Base):
     time_budget_minutes = Column(Integer, nullable=False)
     status = Column(
         String, default="pending"
-    )  # pending | planning | solving | debating | synthesizing | completed | failed | timeout
+    )  # pending → section-2 lifecycle states (created … cancelled) → completed | failed | failed_partial | cancelled
     problem_type = Column(
         String, nullable=True
     )  # math | coding | research | general | multi-step

@@ -25,6 +25,7 @@ from src.core.security import decode_access_token, get_current_user_id
 from src.database.base import SessionLocal, get_db
 from src.database.models import AgentRun, Conversation, Execution, Message
 from src.database.schemas import (
+    ExecutionCancelResponse,
     ExecutionRequest,
     ExecutionResponse,
     PlannerSuggestionResponse,
@@ -41,6 +42,11 @@ router = APIRouter(prefix="/api/executions", tags=["executions"])
 
 # ── Active WebSocket connections per execution ───────────────────────
 _ws_connections: dict[str, list[WebSocket]] = {}
+
+# ── Background execution tasks per execution id ──────────────────────
+# Lets POST /{id}/cancel interrupt a running execution. Entries are
+# removed when the run settles (see _run_execution finally-block).
+_run_tasks: dict[str, asyncio.Task] = {}
 
 # ── Shared orchestrator instance ─────────────────────────────────────
 _orchestrator = Orchestrator()
@@ -112,7 +118,7 @@ async def create_execution(
     # Launch orchestrator in background. provider_keys (if any) travel only
     # in memory for this run and are wiped by the orchestrator afterwards —
     # they are never stored on the execution record below.
-    asyncio.get_event_loop().create_task(
+    _run_tasks[execution.id] = asyncio.get_event_loop().create_task(
         _run_execution(
             execution.id,
             req.question,
@@ -123,6 +129,49 @@ async def create_execution(
     )
 
     return ExecutionResponse.model_validate(execution)
+
+
+@router.post("/{execution_id}/cancel", response_model=ExecutionCancelResponse)
+async def cancel_execution(
+    execution_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Request cancellation of a running execution.
+
+    Flags the run in the orchestrator (checked at phase boundaries) and
+    cancels its background task so in-flight provider calls abort
+    promptly; quota leases release via their context managers. The run
+    settles to status "cancelled". Idempotent: already-terminal runs
+    report their current status.
+    """
+    execution = db.query(Execution).filter(Execution.id == execution_id).first()
+    if not execution:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution not found.",
+        )
+
+    # Verify ownership
+    conversation = db.query(Conversation).filter(
+        Conversation.id == execution.conversation_id,
+        Conversation.user_id == user_id,
+    ).first()
+    if not conversation:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    if execution.status in ("completed", "failed", "failed_partial", "cancelled"):
+        return ExecutionCancelResponse(id=execution_id, status=execution.status)
+
+    # Flag first (phase-boundary checks), then interrupt the task itself
+    # so a run stuck inside a long provider call aborts without waiting.
+    _orchestrator.request_cancel(execution_id)
+    task = _run_tasks.get(execution_id)
+    if task is not None and not task.done():
+        _cancel_task(task)
+        logger.info(f"Exec    │ Cancel delivered to {execution_id[:8]}...")
+
+    return ExecutionCancelResponse(id=execution_id, status="cancelling")
 
 
 @router.get("/preflight", response_model=PreflightResponse)
@@ -301,6 +350,11 @@ async def _run_execution(
 
     async def on_progress(event: dict):
         """Broadcast progress events to all connected WebSocket clients."""
+        # Persist lifecycle state so GET /{id} (and cancel polling) sees
+        # live phases, not just the terminal write at the end.
+        state = (event.get("data") or {}).get("state")
+        if event.get("event_type") == "status_update" and state:
+            _persist_state(execution_id, state)
         connections = _ws_connections.get(execution_id, [])
         message = json.dumps(event)
         dead = []
@@ -339,15 +393,18 @@ async def _run_execution(
                 execution.total_tokens_used = result.total_tokens
                 execution.completed_at = datetime.now(timezone.utc)
 
-                # Save assistant message to conversation
-                assistant_message = Message(
-                    conversation_id=conversation_id,
-                    role="assistant",
-                    content=result.answer,
-                    sources=result.sources,
-                    execution_id=execution_id,
-                )
-                db.add(assistant_message)
+                # Cancelled runs produce no answer: persist the terminal
+                # state but no assistant message.
+                if result.status != "cancelled":
+                    # Save assistant message to conversation
+                    assistant_message = Message(
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=result.answer,
+                        sources=result.sources,
+                        execution_id=execution_id,
+                    )
+                    db.add(assistant_message)
 
                 # Update conversation timestamp
                 conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -360,6 +417,12 @@ async def _run_execution(
         finally:
             db.close()
 
+    except asyncio.CancelledError:
+        # Cancellation landed outside execute() (or execute() re-raised):
+        # mark CANCELLED without an answer. Quota leases unwind via
+        # their own context managers; keys were wiped by the orchestrator.
+        logger.info(f"Exec    │ Background execution {execution_id[:8]}... cancelled")
+        _persist_state(execution_id, "cancelled", finished=True)
     except Exception as e:
         logger.error(f"Exec    │ Background execution failed: {e}")
         # Update status to failed
@@ -373,5 +436,51 @@ async def _run_execution(
         finally:
             db.close()
     finally:
-        # Cleanup WebSocket connections
+        # Cleanup WebSocket connections + task registry
         _ws_connections.pop(execution_id, None)
+        _run_tasks.pop(execution_id, None)
+
+
+def _cancel_task(task: asyncio.Task) -> None:
+    """Request cancellation of a background task from any thread.
+
+    The endpoint usually shares the task's loop (uvicorn), but callers on
+    another thread/loop (e.g. tests driving a foreign task) must route
+    through call_soon_threadsafe — direct cancel() would raise there.
+    """
+    try:
+        running: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+    try:
+        owner = task.get_loop()
+    except RuntimeError:
+        owner = None
+    if owner is not None and running is not None and owner is not running:
+        owner.call_soon_threadsafe(task.cancel)
+    else:
+        task.cancel()
+
+
+def _persist_state(execution_id: str, state: str, finished: bool = False) -> None:
+    """Write a lifecycle state to the execution row (best-effort).
+
+    Intermediate states make live progress visible to GET /{id}; terminal
+    states set completed_at. Never raises: persistence must not break the
+    run it reports on.
+    """
+    db = SessionLocal()
+    try:
+        execution = db.query(Execution).filter(Execution.id == execution_id).first()
+        if execution is None:
+            return
+        execution.status = state
+        if finished:
+            execution.completed_at = datetime.now(timezone.utc)
+        db.commit()
+    except Exception as e:  # noqa: BLE001 — reporting must not break execution
+        logger.warning(
+            f"Exec    │ State persist skipped for {execution_id[:8]}...: {e}"
+        )
+    finally:
+        db.close()

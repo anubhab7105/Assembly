@@ -13,6 +13,7 @@ from src.agents.researcher import ResearcherAgent
 from src.agents.solver import SolverAgent
 from src.agents.synthesizer import SynthesizerAgent
 from src.core.logging_config import logger
+from src.orchestration.time_controller import TaskTracker
 from src.orchestration.workspace import EventType, WorkspaceEvent, workspace
 from src.providers.errors import ProviderDown, RateLimited
 from src.providers.quota import QuotaExhausted
@@ -183,17 +184,42 @@ class AgentManager:
         self,
         agents: list[BaseAgent],
         question: str,
+        timeout_s: float | None = None,
+        tracker: TaskTracker | None = None,
     ) -> list[AgentOutput]:
         """
         Run all agents independently in parallel (Stage 1).
 
         Each agent works independently and cannot see others' answers yet,
         reducing early groupthink (PRD Section 6.1).
+
+        Args:
+            timeout_s: per-agent wall-clock bound (stragglers time out into
+                low-confidence fallback outputs instead of hanging the run).
+            tracker: task registry for bulk cancel + leak detection. A local
+                one is used when omitted; either way no task outlives this
+                call — the finally-drain awaits every straggler.
         """
         logger.info(f"AgentMgr │ Running {len(agents)} agents independently")
 
-        tasks = [self._run_with_retry(agent, question) for agent in agents]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        own_tracker = (
+            tracker
+            if tracker is not None
+            else TaskTracker(owner=f"{self.execution_id}:solve")
+        )
+        tasks = [
+            own_tracker.create(
+                self._run_one(agent, question, timeout_s),
+                name=f"assembly:{self.execution_id}:{agent.agent_id}",
+            )
+            for agent in agents
+        ]
+        try:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            # Stragglers (timed-out or cancelled) are awaited here so none
+            # leak past this phase, even when this task itself is cancelled.
+            await own_tracker.drain()
 
         outputs = []
         for i, result in enumerate(results):
@@ -224,6 +250,20 @@ class AgentManager:
                 )
 
         return outputs
+
+    async def _run_one(
+        self, agent: BaseAgent, question: str, timeout_s: float | None
+    ) -> AgentOutput:
+        """One agent run, bounded by the per-call timeout when given.
+
+        asyncio.timeout converts the expiry to TimeoutError (never
+        CancelledError), so user cancellation still propagates distinctly
+        and the manager's error-output path handles the timeout.
+        """
+        if timeout_s is None:
+            return await self._run_with_retry(agent, question)
+        async with asyncio.timeout(timeout_s):
+            return await self._run_with_retry(agent, question)
 
     async def _run_with_retry(self, agent: BaseAgent, question: str) -> AgentOutput:
         """Run one agent, retrying once on a fallback model after transient

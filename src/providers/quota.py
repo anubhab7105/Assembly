@@ -287,8 +287,16 @@ class QuotaLimiter:
             raise QuotaExhausted(provider, key_id, "cooling down", retry_after=left)
         slot = self._slot_for(provider)
         await slot.acquire()
-        self._in_flight[provider] = self._in_flight.get(provider, 0) + 1
-        self._record(provider, key_id, est_tokens)
+        try:
+            self._in_flight[provider] = self._in_flight.get(provider, 0) + 1
+            self._record(provider, key_id, est_tokens)
+        except BaseException:
+            # A cancellation landing here must not leak the semaphore permit
+            # or the in-flight counter (today: no await sits between acquire
+            # and return, so this is defense-in-depth for future edits).
+            self._in_flight[provider] = max(0, self._in_flight.get(provider, 1) - 1)
+            slot.release()
+            raise
         return QuotaLease(self, provider, slot)
 
     def report_429(

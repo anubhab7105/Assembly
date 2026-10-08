@@ -123,6 +123,13 @@ class AgentRunResponse(BaseModel):
         from_attributes = True
 
 
+class ExecutionCancelResponse(BaseModel):
+    """Reply to POST /api/executions/{id}/cancel."""
+
+    id: str
+    status: str  # "cancelling" while the run winds down, else current state
+
+
 class PlannerSuggestionResponse(BaseModel):
     roles: list[str] = []
     complexity: str = "medium"
