@@ -326,10 +326,28 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
     token = websocket.query_params.get("token", "")
     try:
         if token:
-            decode_access_token(token)
+            payload = decode_access_token(token)
+            user_id = payload.get("sub")
+            if not user_id:
+                raise ValueError("Invalid token")
+        else:
+            raise ValueError("No token")
     except Exception:
         await websocket.close(code=4001, reason="Authentication failed")
         return
+
+    # Verify ownership
+    db = SessionLocal()
+    try:
+        execution = db.query(Execution).filter(
+            Execution.id == execution_id,
+            Execution.user_id == user_id,
+        ).first()
+        if not execution:
+            await websocket.close(code=4003, reason="Access denied")
+            return
+    finally:
+        db.close()
 
     try:
         after_seq = int(websocket.query_params.get("after_seq", "0") or "0")
