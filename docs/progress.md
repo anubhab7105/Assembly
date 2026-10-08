@@ -245,3 +245,10 @@
 - Result: **258 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on the gate; diff secret-free.
 - Bugs found: (1) `RecordingProvider` never wrote the `family` field that `ReplayRouter` reads — caught by the families test, fixed at the writer. (2) Test called `response_from_record` with the inner response dict instead of the full record — clarified API use. (3) TRY004 on isinstance-check raises + unused imports/noqa in new files — fixed per ruff.
 - Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
+
+## Multi-provider research layer (2026-10-08)
+
+- New: `src/research/schemas.py` (`SearchResult` + legacy-dict helper), `src/research/providers.py` (interface + Tavily/Wikipedia/arXiv/Semantic Scholar/DuckDuckGo-unofficial + quota exceptions), `src/research/router.py` (type ordering, budget, fallback, in-run cache); `tests/test_research.py` (21 respx-mocked tests + key-leak scan).
+- Result: **279 passed, 1 skipped** (full suite, incl. untouched legacy search tests); `ruff check` + `format --check` green on all new files; diff secret-free.
+- Bugs found: none in implementation; test-only note — respx GET routes match on path regardless of query params, so one mock per provider covers all queries.
+- Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
