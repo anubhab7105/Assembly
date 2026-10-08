@@ -20,6 +20,7 @@ never printed by the default formatter, so exc_info is safe to keep.
 """
 
 import logging
+import json
 import re
 import sys
 
@@ -128,10 +129,27 @@ def setup_logging(level: str = "INFO") -> logging.Logger:
     if logger.handlers:
         return logger
 
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    import os
+    is_production = os.environ.get("APP_ENV", "development") == "production"
+
+    if is_production:
+        class JSONFormatter(logging.Formatter):
+            def format(self, record):
+                log_record = {
+                    "time": self.formatTime(record, self.datefmt),
+                    "level": record.levelname,
+                    "name": record.name,
+                    "message": record.getMessage()
+                }
+                if record.exc_info:
+                    log_record["exc_info"] = self.formatException(record.exc_info)
+                return json.dumps(log_record)
+        formatter = JSONFormatter()
+    else:
+        formatter = logging.Formatter(
+            fmt="%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s",
+            datefmt="%H:%M:%S",
+        )
 
     # Force UTF-8 encoding on Windows to avoid cp1252 issues
     import io
