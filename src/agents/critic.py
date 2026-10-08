@@ -7,7 +7,7 @@ and prevents echo chambers (PRD Section 10).
 
 from typing import Optional, Dict, Any
 
-from src.agents.base_agent import BaseAgent
+from src.agents.base_agent import BaseAgent, AgentOutput
 
 
 class CriticAgent(BaseAgent):
@@ -57,6 +57,13 @@ You MUST respond with a JSON object in this exact format (no extra keys):
 ```"""
 
     def build_user_prompt(self, question: str, context: Optional[Dict[str, Any]] = None) -> str:
+        if context and context.get("mode") == "adversarial":
+            return self._build_adversarial_prompt(
+                question,
+                context.get("other_outputs", []),
+                context.get("round_number", 1),
+                context.get("valid_agent_ids", []),
+            )
         if context and context.get("mode") == "critique":
             other_outputs = context.get("other_outputs", [])
             round_num = context.get("round_number", 1)
@@ -107,3 +114,71 @@ Consider:
 - What are the strongest counterarguments to the obvious answer?
 
 Respond with the JSON format specified in your instructions."""
+
+    @staticmethod
+    def _build_adversarial_prompt(
+        question: str,
+        other_outputs: list,
+        round_num: int,
+        valid_ids: list,
+    ) -> str:
+        """The WORKFLOW 6.4 strike: assume the consensus is wrong."""
+        others_text = ""
+        for o in other_outputs:
+            claims = "; ".join(
+                e.get("claim", "") if isinstance(e, dict) else str(e)
+                for e in o.get("evidence", [])
+            )
+            others_text += f"\n--- Agent {o['agent_id']} ({o['agent_type']}) ---\n"
+            others_text += f"Position: {o['position']}\n"
+            others_text += f"Confidence: {o['confidence']}\n"
+            others_text += f"Evidence: {claims}\n"
+
+        valid_ids_str = ", ".join(f'"{aid}"' for aid in valid_ids)
+
+        return f"""ADVERSARIAL CHALLENGE — round {round_num}
+
+Assume the current consensus is wrong. Give the strongest counterargument and what would prove it.
+
+Original question: {question}
+
+Current consensus positions:
+{others_text}
+
+VALID AGENT IDs you may reference: [{valid_ids_str}]
+You MUST use ONLY these exact IDs in your "supports" and "disagrees_with" arrays.
+
+You are attacking the consensus, not defending it:
+1. Steelman the opposite of the current consensus position.
+2. Name the single weakest assumption holding the consensus together.
+3. State exactly what evidence would prove the consensus wrong.
+4. Give your counter-position and honest confidence in it.
+
+Respond with JSON only, no extra keys, in the format specified in your instructions."""
+
+    async def adversarial_challenge(
+        self,
+        question: str,
+        other_outputs: list[AgentOutput],
+        round_number: int,
+    ) -> AgentOutput:
+        """Assume the consensus is wrong; counterargue (WORKFLOW 5b).
+
+        Same validation contract as critique (Fix B ID-stripping included).
+        """
+        valid_agent_ids = [o.agent_id for o in other_outputs]
+        context = {
+            "round_number": round_number,
+            "other_outputs": [o.to_dict() for o in other_outputs],
+            "valid_agent_ids": valid_agent_ids,
+            "mode": "adversarial",
+        }
+        output = await self.run(question, context=context)
+
+        all_valid = set(valid_agent_ids + [self.agent_id])
+        output.supports = [aid for aid in output.supports if aid in all_valid]
+        output.disagrees_with = [
+            aid for aid in output.disagrees_with if aid in all_valid
+        ]
+
+        return output

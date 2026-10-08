@@ -234,7 +234,15 @@ class Orchestrator:
             # PHASE 5: DEBATE — Cross-agent critique rounds
             # ════════════════════════════════════════════════════════════
             round_number = 1
-            consensus_result = consensus_engine.evaluate(outputs, round_number)
+            adversarial_done = False
+            consensus_result = consensus_engine.evaluate(
+                outputs,
+                round_number,
+                time_for_round=budget.has_time_for_debate(),
+                # Token budget is the only quota signal the budget
+                # controller owns; treat near-exhaustion as quota pressure.
+                quota_ok=not budget.is_token_limited(),
+            )
 
             await self._emit_progress(
                 on_progress,
@@ -244,16 +252,50 @@ class Orchestrator:
                     "consensus_score": consensus_result.score,
                     "round": round_number,
                     "decision": consensus_result.decision,
+                    "reasoning": consensus_result.reason,
                     **budget.get_status(),
                 },
             )
 
-            # Debate loop: continue while consensus is insufficient and budget allows
+            # Debate loop: DEBATE and ADVERSARIAL both mean "not done yet";
+            # FINALIZE and FORCE_FINALIZE fall through to synthesis.
             while (
-                consensus_result.decision == "continue"
+                consensus_result.decision in ("DEBATE", "ADVERSARIAL")
                 and budget.can_debate()
                 and not budget.should_force_synthesis()
             ):
+                if consensus_result.decision == "ADVERSARIAL" and not adversarial_done:
+                    adversarial_done = True
+                    challenged = await self._run_adversarial_round(
+                        consensus_engine,
+                        agents,
+                        question,
+                        outputs,
+                        round_number,
+                        budget,
+                        on_progress,
+                        execution_id,
+                    )
+                    if challenged is not None:
+                        outputs, consensus_result, challenge_tokens = challenged
+                        total_tokens += challenge_tokens
+                        budget.record_tokens(challenge_tokens)
+                        budget.record_debate_round()
+                        await self._emit_progress(
+                            on_progress,
+                            execution_id,
+                            "consensus_update",
+                            {
+                                "consensus_score": consensus_result.score,
+                                "round": round_number,
+                                "decision": consensus_result.decision,
+                                "reasoning": consensus_result.reason,
+                                **budget.get_status(),
+                            },
+                        )
+                        continue
+                    # No eligible critic (or the strike failed):
+                    # fall through to a normal debate round.
                 round_number += 1
 
                 await self._emit_progress(
@@ -288,6 +330,9 @@ class Orchestrator:
                     outputs,
                     round_number,
                     force_finalize=force,
+                    time_for_round=budget.has_time_for_debate(),
+                    quota_ok=not budget.is_token_limited(),
+                    allow_adversarial=not adversarial_done,
                 )
 
                 await self._emit_progress(
@@ -298,7 +343,7 @@ class Orchestrator:
                         "consensus_score": consensus_result.score,
                         "round": round_number,
                         "decision": consensus_result.decision,
-                        "reasoning": consensus_result.reasoning,
+                        "reasoning": consensus_result.reason,
                         **budget.get_status(),
                     },
                 )
@@ -428,6 +473,63 @@ class Orchestrator:
                 total_tokens=0,
                 status="failed",
             )
+
+    async def _run_adversarial_round(
+        self,
+        consensus_engine,
+        agents,
+        question: str,
+        outputs,
+        round_number: int,
+        budget,
+        on_progress,
+        execution_id: str,
+    ):
+        """One WORKFLOW 5b strike: a different-family critic attacks the consensus.
+
+        Returns (outputs, report, challenge_tokens), or None when there is
+        no eligible critic or the strike itself fails — the caller then runs
+        a normal debate round instead.
+        """
+        from src.orchestration.consensus import ConsensusEngine
+
+        critics = [a for a in agents if a.agent_type == "critic"]
+        critic = ConsensusEngine.select_adversarial_critic(critics, outputs)
+        if critic is None:
+            logger.info(
+                "Orchestrator │ No different-family critic for adversarial "
+                "round — debating normally"
+            )
+            return None
+
+        await self._emit_progress(
+            on_progress,
+            execution_id,
+            "status_update",
+            {
+                "status": "adversarial",
+                "message": f"Adversarial challenge by {critic.agent_id} "
+                f"({critic.family}) — assuming the consensus is wrong...",
+                "round": round_number,
+                **budget.get_status(),
+            },
+        )
+        try:
+            new_outputs, report = await consensus_engine.adversarial_round(
+                critic,
+                question,
+                outputs,
+                round_number,
+                time_for_round=budget.has_time_for_debate(),
+                quota_ok=not budget.is_token_limited(),
+            )
+        except Exception as e:  # noqa: BLE001 — a failed strike must not kill the run
+            logger.error(f"Orchestrator │ Adversarial round failed: {e}")
+            return None
+        challenge = next(
+            (o for o in new_outputs if o.agent_id == critic.agent_id), None
+        )
+        return new_outputs, report, challenge.tokens_used if challenge else 0
 
     async def _emit_progress(
         self,
