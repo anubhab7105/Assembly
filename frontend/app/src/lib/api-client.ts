@@ -74,6 +74,27 @@ export class ApiClient {
     }
   }
 
+  static async listExecutions(): Promise<{ id: string, question: string, status: string, created_at: string }[]> {
+    try {
+      const data = await this.request("/executions")
+      return data as { id: string, question: string, status: string, created_at: string }[]
+    } catch (e: any) {
+      // Mock data for UI development if backend is not ready
+      return [
+        { id: "exec-1", question: "Will quantum computing achieve commercial advantage before 2030?", status: "completed", created_at: new Date().toISOString() },
+        { id: "exec-2", question: "Timeline for AGI?", status: "failed", created_at: new Date(Date.now() - 86400000).toISOString() },
+      ]
+    }
+  }
+
+  static async deleteExecution(id: string): Promise<void> {
+    try {
+      await this.request(`/executions/${id}`, { method: "DELETE" })
+    } catch (e: any) {
+      console.warn("Mock delete", id)
+    }
+  }
+
   static async testKey(provider: string, key: string): Promise<{ status: "valid" | "rate_limited" | "invalid" }> {
     try {
       const data = await this.request(`/providers/${provider}/test`, {
