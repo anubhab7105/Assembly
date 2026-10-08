@@ -83,6 +83,13 @@ export interface ActivityFeedEntry {
   type: "info" | "warning" | "success" | "error"
 }
 
+export interface ExecutionCompletedData {
+  final_answer: string
+  confidence?: "High" | "Moderate" | "Low"
+  uncertainty_note?: string
+  question?: string
+}
+
 export interface ProgressEvent extends BaseEvent {
   data:
     | TeamReadyData
