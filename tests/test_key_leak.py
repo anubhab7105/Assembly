@@ -1,7 +1,7 @@
 """Key-leak scan: a sentinel secret must appear in no logs, DB rows, or responses."""
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,7 @@ from src.database.models import AgentRun, Conversation, Execution, Message, User
 from src.orchestration.orchestrator import Orchestrator
 
 
-def _string_values(obj: Any) -> List[str]:
+def _string_values(obj: Any) -> list[str]:
     return [str(v) for v in vars(obj).values() if isinstance(v, str)]
 
 
@@ -21,9 +21,9 @@ async def test_fake_key_absent_from_logs_result_and_db(
     caplog,
 ) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", fake_key)
-    events: List[Dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
 
-    async def on_progress(event: Dict[str, Any]) -> None:
+    async def on_progress(event: dict[str, Any]) -> None:
         events.append(event)
 
     with caplog.at_level(logging.INFO, logger="assembly"):
@@ -45,7 +45,9 @@ async def test_fake_key_absent_from_logs_result_and_db(
     assert set(result.providers_used) <= {"mock-a", "mock-b", "mock-c"}
 
     # Database rows written from the result carry no secret either.
-    user = User(email="leak@test.local", name="Leak Test", hashed_password="not-a-real-hash")
+    user = User(
+        email="leak@test.local", name="Leak Test", hashed_password="not-a-real-hash"
+    )
     db_session.add(user)
     db_session.flush()
     conversation = Conversation(user_id=user.id, title="leak scan")
@@ -87,7 +89,7 @@ async def test_fake_key_absent_from_logs_result_and_db(
     )
     db_session.commit()
 
-    rows: List[Any] = []
+    rows: list[Any] = []
     rows += db_session.query(User).all()
     rows += db_session.query(Conversation).all()
     rows += db_session.query(Execution).all()

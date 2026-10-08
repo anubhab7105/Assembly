@@ -65,4 +65,4 @@ class CerebrasProvider(AIProvider):
         return settings.has_provider("cerebras")
 
     def get_available_models(self) -> List[str]:
-        return ["llama-3.3-70b", "llama-3.1-8b"]
+        return ["gpt-oss-120b", "qwen-3.8-27b"]

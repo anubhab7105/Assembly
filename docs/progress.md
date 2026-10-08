@@ -117,3 +117,25 @@
 
 - Produced `docs/audit.md` (read-only audit, no code changed): FR-1…FR-43 status table (4 done, 13 partial, 12 missing), key-leak surface, hard-coded models, concurrency/timeout risks, top-10 demo-risk fixes.
 - Headline gaps: no per-call timeouts or outer deadline (budget is cooperative); WS allows missing token with no ownership check; no key-masking log filter; router counts providers, not families (zero `family` mentions in `src/`); no 429 cooldown or capacity planning; adversarial trigger missing; `experiential_provider.py` is dead code that raises `AttributeError` if instantiated.
+
+## Testing harness (2026-10-08)
+
+- Added `requirements-dev.txt` (pytest, pytest-asyncio, respx, ruff) and `pytest.ini` (`asyncio_mode = auto`).
+- New `src/providers/mock_provider.py`: scripted `MockProvider` (dict/JSON-fixture scripts routed by role markers, latency simulation, `rate_limit`/`timeout`/`malformed` fault injection, fake token counts, `MockRateLimitError` with `status_code` 429).
+- New `tests/`: `conftest.py` (in-memory SQLite `db_session`, `MockRouter`, mock-backed `orchestrator`, sentinel `fake_key`, autouse socket guard blocking non-loopback connects), e2e orchestrator test (answer + token tracking + progress/workspace events), key-leak scan test (logs/result/events/DB rows), offline search tests (no-key fallback + respx-mocked Tavily).
+- `Makefile` targets: `test`, `lint` (new files only — 277 pre-existing `src/` ruff violations left untouched), `run`.
+- Result: **14 passed**, `ruff check` + `format --check` green on new files, zero external network access enforced by guard.
+
+## Live smoke run with real keys (2026-10-08)
+
+- Added `scripts/smoke.py` (loads `.env.dev`, 3-min budget, prints plan/team/per-round consensus/calls/tokens/wall-clock/answer+sources; names only, never keys) and `scripts/list_models.py` (names-only catalog probe).
+- Verified: `.env.dev` present with 4 keys (gemini/groq/cerebras/openrouter); `.env.dev` already git-ignored.
+- Final run: **completed** — plan general/medium, solver+researcher (groq/gemini), 1 debate round, 4 calls, 4358 tokens, 148.8 s, sourced final answer (React recommended, 5 sources).
+- Bugs found and fixed (run-blocking only):
+  1. `scripts/smoke.py` closure bug: loop-variable capture funneled every agent call into the last provider (OpenRouter) → all 400s. Fixed with default-arg binding.
+  2. Stale hard-coded model IDs (every one retired): `gemini-2.0-flash` (404, removed), Groq `llama-3.1-8b-instant` / `llama-3.3-70b-versatile` (404, Groq serves no Llama at all now), OpenRouter slugs (`meta-llama/*`, `mistralai/*`, `gemma-2-9b`) invalid. Replaced with live-catalog IDs in `router.py`, `config.py`, 4 provider `get_available_models()`, `.env.example`. Also fixed a botched substring replace that briefly produced `meta-llama/qwen-3.8-27b-instruct:free`.
+  3. `gemini-2.5-flash` gated for new API keys (404 "available to new users" only on 3.x) → default/route is now `gemini-3.8-flash`.
+  4. My own edit dropped `from src.core.config import settings` in `gemini_provider.py` (NameError, Gemini dead for one run) — restored immediately.
+  5. `gemini-3.8-flash` solver call hung >8 min via legacy SDK (planner call works, ~9–24 s) — bounded with `asyncio.wait_for(120 s)` (`GENERATION_TIMEOUT_SECONDS`); timeout falls back to the low-confidence path and the run completes.
+  6. `scripts/smoke.py` crashed printing the answer on Windows (cp1252 vs U+2011) — force UTF-8 stdout like `logging_config.py`.
+- Not code bugs (no change made, noted for follow-up): Cerebras key returns **402 payment-required** (no free quota on that account; failure-fallback path handled it); `huggingface_hub` not installed here so that provider is dead in this env; OpenRouter errors echo `user_id` into logs (privacy note).

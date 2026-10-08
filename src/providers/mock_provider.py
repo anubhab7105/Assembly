@@ -15,7 +15,7 @@ Supports fault injection for testing failure paths:
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from src.providers.base import AIProvider, ChatMessage, ProviderResponse
 
@@ -38,10 +38,14 @@ _ROUTE_MARKERS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _default_scripts() -> Dict[str, Dict[str, Any]]:
+def _default_scripts() -> dict[str, dict[str, Any]]:
     """Baseline scripts: every role returns valid, mutually agreeing JSON."""
     position = "The mock answer is 42."
-    evidence = ["Mock evidence point 1.", "Mock evidence point 2.", "Mock evidence point 3."]
+    evidence = [
+        "Mock evidence point 1.",
+        "Mock evidence point 2.",
+        "Mock evidence point 3.",
+    ]
     source = {
         "title": "Mock Source",
         "url": "https://example.com/mock",
@@ -96,36 +100,36 @@ class MockProvider(AIProvider):
 
     def __init__(
         self,
-        scripts: Optional[Dict[str, Union[Dict[str, Any], str]]] = None,
+        scripts: dict[str, dict[str, Any] | str] | None = None,
         latency_seconds: float = 0.0,
         input_tokens: int = 10,
         output_tokens: int = 20,
-        fail_next: Optional[Dict[str, str]] = None,
-        always_fail: Optional[Dict[str, str]] = None,
+        fail_next: dict[str, str] | None = None,
+        always_fail: dict[str, str] | None = None,
         provider_name: str = "mock",
         model: str = "mock-model",
     ) -> None:
         self.provider_name = provider_name
         self._model = model
-        self._scripts: Dict[str, Union[Dict[str, Any], str]] = (
+        self._scripts: dict[str, dict[str, Any] | str] = (
             dict(scripts) if scripts else _default_scripts()
         )
         self.latency_seconds = latency_seconds
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
-        self.fail_next: Dict[str, str] = dict(fail_next or {})
-        self.always_fail: Dict[str, str] = dict(always_fail or {})
-        self.calls: List[Dict[str, Any]] = []
+        self.fail_next: dict[str, str] = dict(fail_next or {})
+        self.always_fail: dict[str, str] = dict(always_fail or {})
+        self.calls: list[dict[str, Any]] = []
 
     @classmethod
-    def from_fixture(cls, path: Union[str, Path], **kwargs: Any) -> "MockProvider":
+    def from_fixture(cls, path: str | Path, **kwargs: Any) -> "MockProvider":
         """Build a MockProvider from a JSON fixture file.
 
         Fixture shape: {"scripts": {...}, "latency_seconds": 0.0,
         "input_tokens": 10, "output_tokens": 20, "always_fail": {...}}.
         """
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        merged: Dict[str, Any] = {
+        merged: dict[str, Any] = {
             "scripts": data.get("scripts"),
             "latency_seconds": data.get("latency_seconds", 0.0),
             "input_tokens": data.get("input_tokens", 10),
@@ -146,7 +150,7 @@ class MockProvider(AIProvider):
             model=merged.get("model", "mock-model"),
         )
 
-    def select_script_key(self, messages: List[ChatMessage]) -> str:
+    def select_script_key(self, messages: list[ChatMessage]) -> str:
         """Pick a script key from request content (deterministic under concurrency)."""
         text = "\n".join(m.content for m in messages)
         for marker, key in _ROUTE_MARKERS:
@@ -156,8 +160,8 @@ class MockProvider(AIProvider):
 
     async def generate(
         self,
-        messages: List[ChatMessage],
-        model: Optional[str] = None,
+        messages: list[ChatMessage],
+        model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 4096,
         **kwargs: Any,
@@ -192,5 +196,5 @@ class MockProvider(AIProvider):
     def is_available(self) -> bool:
         return True
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         return [self._model]

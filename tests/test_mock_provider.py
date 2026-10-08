@@ -11,16 +11,27 @@ from src.providers.mock_provider import MockProvider, MockRateLimitError
 
 
 def _messages(system: str, user: str = "Test question?") -> list:
-    return [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)]
+    return [
+        ChatMessage(role="system", content=system),
+        ChatMessage(role="user", content=user),
+    ]
 
 
 async def test_scripts_selected_by_role_markers() -> None:
     provider = MockProvider()
     plan = await provider.generate(_messages("You are the Planner for Assembly."))
-    solver = await provider.generate(_messages("independently analyze and solve the problem."))
-    critic = await provider.generate(_messages("Your role is to find flaws in reasoning."))
-    researcher = await provider.generate(_messages("research the question thoroughly and gather evidence."))
-    synth = await provider.generate(_messages("You are the Final Synthesizer on a team."))
+    solver = await provider.generate(
+        _messages("independently analyze and solve the problem.")
+    )
+    critic = await provider.generate(
+        _messages("Your role is to find flaws in reasoning.")
+    )
+    researcher = await provider.generate(
+        _messages("research the question thoroughly and gather evidence.")
+    )
+    synth = await provider.generate(
+        _messages("You are the Final Synthesizer on a team.")
+    )
 
     assert json.loads(plan.content)["needs_research"] is False
     assert "42" in solver.content
@@ -37,7 +48,9 @@ async def test_scripts_selected_by_role_markers() -> None:
 
 
 async def test_scripts_from_dict_override() -> None:
-    provider = MockProvider(scripts={"solver": {"position": "Custom!", "confidence": 1.0}})
+    provider = MockProvider(
+        scripts={"solver": {"position": "Custom!", "confidence": 1.0}}
+    )
     response = await provider.generate(_messages("independently analyze and solve."))
     assert json.loads(response.content)["position"] == "Custom!"
 
@@ -60,7 +73,11 @@ async def test_from_json_fixture(tmp_path) -> None:
 async def test_fake_token_counts_reported() -> None:
     provider = MockProvider(input_tokens=11, output_tokens=22)
     response = await provider.generate(_messages("anything"))
-    assert (response.input_tokens, response.output_tokens, response.total_tokens) == (11, 22, 33)
+    assert (response.input_tokens, response.output_tokens, response.total_tokens) == (
+        11,
+        22,
+        33,
+    )
 
 
 async def test_latency_simulated_without_network() -> None:

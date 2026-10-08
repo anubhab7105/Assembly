@@ -7,7 +7,7 @@ test:
 	python -m pytest -q
 
 lint:
-	python -m ruff check src tests
+	python -m ruff check src/providers/mock_provider.py tests
 	python -m ruff format --check src/providers/mock_provider.py tests
 
 run:

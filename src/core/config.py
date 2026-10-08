@@ -46,10 +46,10 @@ class Settings(BaseSettings):
     huggingface_api_key: str = ""
 
     # ── Default Models ───────────────────────────────────────────────
-    gemini_default_model: str = "gemini-2.0-flash"
-    groq_default_model: str = "llama-3.1-8b-instant"
-    cerebras_default_model: str = "llama-3.3-70b"
-    openrouter_default_model: str = "meta-llama/llama-3.1-8b-instruct:free"
+    gemini_default_model: str = "gemini-3.8-flash"
+    groq_default_model: str = "openai/gpt-oss-20b"
+    cerebras_default_model: str = "gpt-oss-120b"
+    openrouter_default_model: str = "google/gemma-4-26b-a4b-it:free"
     huggingface_default_model: str = "meta-llama/Meta-Llama-3-8B-Instruct"
 
     # ── Research / Web Search ────────────────────────────────────────
