@@ -114,6 +114,12 @@ async def validation_exception_handler(request, exc: RequestValidationError):
     logger.warning("Validation failed: %s", shapes)
     return JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Ensure stack traces and config values are never leaked in error responses."""
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error."})
+
 # ── Static Files (Frontend — local dev only) ─────────────────────────
 # In production, the frontend is served by Vercel separately.
 STATIC_DIR = Path(__file__).parent / "static"
