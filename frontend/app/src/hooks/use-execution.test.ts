@@ -138,9 +138,10 @@ describe("useExecution hook", () => {
       vi.advanceTimersByTime(5000)
     })
 
-    await waitFor(() => {
-      expect(mockGetExecution).toHaveBeenCalledWith("exec_123")
-      expect(result.current.status).toBe("completed")
-    })
+    // Advance microtasks to resolve the mocked promise
+    await act(async () => {})
+
+    expect(mockGetExecution).toHaveBeenCalledWith("exec_123")
+    expect(result.current.status).toBe("completed")
   })
 })
