@@ -57,6 +57,22 @@ def init_db():
     """Create all tables. Called on application startup."""
     from src.database import models  # noqa: F401 — import to register models
     Base.metadata.create_all(bind=engine)
+
+    if settings.app_mode in ("dev", "desktop"):
+        db = SessionLocal()
+        from src.database.models import User
+        if not db.query(User).filter(User.id == "local-dev-user").first():
+            db.add(
+                User(
+                    id="local-dev-user",
+                    email="local@dev.local",
+                    name="Local Dev User",
+                    hashed_password="not-used",
+                )
+            )
+            db.commit()
+        db.close()
+
     logger.info("Database │ Tables created/verified")
 
 
