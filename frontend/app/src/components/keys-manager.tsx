@@ -93,7 +93,8 @@ export function KeysManager() {
         globalVault.setKey(p, k)
       })
     }
-  }, [remember, savedKeys])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remember])
 
   const handleSaveAndTest = async (providerId: string) => {
     const rawKey = inputs[providerId] || savedKeys[providerId]
