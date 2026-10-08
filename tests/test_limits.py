@@ -28,7 +28,7 @@ async def test_max_question_length():
             json={"question": "a" * 2001, "time_budget_minutes": 5},
         )
         assert response.status_code == 422
-        assert "String should have at most 2000 characters" in response.text or "too long" in response.text.lower()
+        assert "Invalid request." in response.text
 
 @pytest.mark.asyncio
 async def test_rate_limit_preflight():
@@ -45,7 +45,7 @@ async def test_rate_limit_preflight():
         assert "Rate limit exceeded" in res.json()["detail"]
 
 @pytest.mark.asyncio
-async def test_concurrent_execution_cap(mock_db, monkeypatch):
+async def test_concurrent_execution_cap(db_session, monkeypatch):
     """Test the concurrent execution cap."""
     # Fake acquiring 1 execution for the user
     await execution_tracker.acquire("test-user-id")
