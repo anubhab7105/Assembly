@@ -252,3 +252,11 @@
 - Result: **279 passed, 1 skipped** (full suite, incl. untouched legacy search tests); `ruff check` + `format --check` green on all new files; diff secret-free.
 - Bugs found: none in implementation; test-only note — respx GET routes match on path regardless of query params, so one mock per provider covers all queries.
 - Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
+
+## Citation quality: dedupe, ranking, cross-verification (2026-10-08)
+
+- Changed: rewrote `src/research/citation_manager.py` (canonical-URL + near-title dedupe, six-tier credibility rule table + ranking, claim→source tracking with `get_used_sources()`, 2+-domain cross-verification); added optional `verification` input to `ConsensusEngine.evaluate` / `_calculate_evidence_quality` (+0.15/verified claim, +0.3 cap, legacy scores unchanged by default).
+- Tests: `tests/test_citations.py` (20 offline tests: dedupe, ranking, cross-verification, consensus boost/parity, end-to-end map flow).
+- Result: **299 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on new/owned files (`consensus.py` pre-existing debt left untouched); diff secret-free.
+- Bugs found: one typo I introduced in an `except` clause, caught on first test run and fixed; ruff FURB188/PIE810/I001 in new code fixed via `--fix` + one manual tuple merge.
+- Skipped (per DoD): live real-key end-to-end run + key-leak scan — no live keys here and the module handles no secrets (pure URL/title logic).

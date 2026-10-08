@@ -117,6 +117,7 @@ class ConsensusEngine:
         time_for_round: bool = True,
         quota_ok: bool = True,
         allow_adversarial: bool = True,
+        verification: dict[str, bool] | None = None,
     ) -> ConsensusReport:
         """Score the outputs and return a stopping decision.
 
@@ -127,6 +128,8 @@ class ConsensusEngine:
             time_for_round: room for another round plus synthesis.
             quota_ok: quota not nearly exhausted.
             allow_adversarial: False once an adversarial round already ran.
+            verification: claim → cross-verified map from CitationManager
+                (claims backed by 2+ independent domains score higher).
         """
         factors: dict[str, float] = {}
         if not outputs:
@@ -145,7 +148,7 @@ class ConsensusEngine:
 
         agreement = self._calculate_agreement(outputs)
         calibrated_conf = self._calculate_confidence(outputs)
-        evidence_quality = self._calculate_evidence_quality(outputs)
+        evidence_quality = self._calculate_evidence_quality(outputs, verification)
         contradiction_ratio = self._calculate_contradiction_ratio(outputs)
         new_info_rate = self._calculate_new_information_rate(outputs, round_number)
         stability = 1.0 - new_info_rate
@@ -432,8 +435,17 @@ class ConsensusEngine:
             return 0.0
         return sum(o.calibrated_confidence for o in outputs) / len(outputs)
 
-    def _calculate_evidence_quality(self, outputs: list[AgentOutput]) -> float:
-        """Claims with sources score best; bare claims still count."""
+    def _calculate_evidence_quality(
+        self,
+        outputs: list[AgentOutput],
+        verification: dict[str, bool] | None = None,
+    ) -> float:
+        """Claims with sources score best; bare claims still count.
+
+        A claim the CitationManager cross-verified (2+ independent
+        domains) adds +0.15, capped at +0.3 per output. Without a
+        verification map the score is exactly the legacy value.
+        """
         if not outputs:
             return 0.0
         scores = []
@@ -441,7 +453,13 @@ class ConsensusEngine:
             evidence_score = min(1.0, len(o.evidence) / 3)
             sourced = sum(1 for e in o.evidence if e.source_id) + len(o.sources)
             source_bonus = min(0.2, sourced * 0.05)
-            scores.append(min(1.0, evidence_score + source_bonus))
+            cross_bonus = 0.0
+            if verification:
+                verified = sum(
+                    1 for e in o.evidence if verification.get(e.claim) is True
+                )
+                cross_bonus = min(0.3, verified * 0.15)
+            scores.append(min(1.0, evidence_score + source_bonus + cross_bonus))
         return sum(scores) / len(scores)
 
     def _calculate_new_information_rate(
