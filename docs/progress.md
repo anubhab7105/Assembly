@@ -275,3 +275,11 @@
 - Schema per line: `{id, category, question, answer_type: exact|numeric|rubric, reference_answer, rubric (non-null iff rubric type), difficulty}`. All 40 `reference_answer` values prefixed `NEEDS HUMAN VERIFICATION` — human review required before scoring use.
 - Verification: JSONL validated (40 lines, unique ids, 10/10/10/10 split, marker present on all 40, rubric iff rubric-type, exact key set); math/coding spot-checks executed (avg-speed 80, exponent 0, digit-9 count 20, last-digit 9, train 14.4 s, fib(20) 6765).
 - Skipped (per DoD): full pytest run — data-only change touching no `src/`/`tests/` code; live end-to-end run — no live keys here.
+
+## Benchmark runners + grader (2026-10-08)
+
+- New/updated: `bench/run_single.py`, `bench/run_vote.py`, `bench/run_assembly.py`, `bench/bench_common.py`, `bench/grade.py`, `bench/README.md`, and `tests/test_bench_grade.py`.
+- Runner behavior: all three runners write resumable `bench/results/<run_id>.jsonl` with `answer`, `calls`, `tokens`, `seconds`, `consensus_score`, and `errors`; all use local key-store routing, key redaction, and quota-aware sleeps. `run_vote.py` uses 3 family-distinct voters where available, majority vote first, voter-1 judge fallback for all-different answers. `run_assembly.py` runs the full orchestrator at tier 3/5/10/15 (default 5).
+- Grader behavior: exact/numeric auto-grade with normalization/ranges; rubric answers are shuffled behind A/B/C labels and judged via a different-family live model when possible; outputs `graded_<run_id>.csv`, `graded_<run_id>_spotcheck.csv`, and summary win/tie/loss + mean scores.
+- Verification: `python -m py_compile bench\grade.py bench\bench_common.py bench\run_single.py bench\run_vote.py bench\run_assembly.py`; `ruff check bench\grade.py tests\test_bench_grade.py`; `ruff check bench\grade.py bench\bench_common.py bench\run_single.py bench\run_vote.py bench\run_assembly.py`; `ruff format --check bench\grade.py tests\test_bench_grade.py bench\bench_common.py bench\run_single.py bench\run_vote.py bench\run_assembly.py`; `pytest tests\test_bench_grade.py` → 4 passed.
+- Skipped (per DoD): live real-key end-to-end run and full benchmark grading — live provider keys/quotas are user-local and were not exercised here.

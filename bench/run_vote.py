@@ -32,7 +32,7 @@ BENCH_DIR = Path(__file__).resolve().parent
 if str(BENCH_DIR.parent) not in sys.path:
     sys.path.insert(0, str(BENCH_DIR.parent))
 
-from bench.bench_common import (  # noqa: E402
+from bench.bench_common import (
     AbortRunError,
     AskOutcome,
     BenchResult,
@@ -54,8 +54,8 @@ from bench.bench_common import (  # noqa: E402
     print_summary,
     remaining_questions,
 )
-from src.core.logging_config import logger  # noqa: E402
-from src.providers.router import ModelRouter, RoutingDecision  # noqa: E402
+from src.core.logging_config import logger
+from src.providers.router import ModelRouter, RoutingDecision
 
 VOTER_COUNT = 3
 
@@ -72,9 +72,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
 
 
-def _vote_entry(
-    decision: RoutingDecision, outcome: AskOutcome
-) -> dict[str, Any]:
+def _vote_entry(decision: RoutingDecision, outcome: AskOutcome) -> dict[str, Any]:
     """Names-only vote record for one voter."""
     return {
         "provider": decision.provider_name,
@@ -116,7 +114,9 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
     router = build_router()
     live = router.get_available_providers()
     print(f"Live providers ({len(live)}): {', '.join(live)}")
-    team = [{"agent_type": "solver", "role_description": "Benchmark voter"}] * VOTER_COUNT
+    team = [
+        {"agent_type": "solver", "role_description": "Benchmark voter"}
+    ] * VOTER_COUNT
     routing = router.route_team(team)
     voters: list[RoutingDecision] = list(routing.decisions[:VOTER_COUNT])
     families = [v.family for v in voters]
@@ -238,7 +238,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         results = asyncio.run(run_all(args, run_id))
     except KeyboardInterrupt:
-        print(f"\nInterrupted — resume with: python bench/run_vote.py --run-id {run_id}")
+        print(
+            f"\nInterrupted — resume with: python bench/run_vote.py --run-id {run_id}"
+        )
         return 130
     print_summary("vote", results, time.monotonic() - started)
     if results and all(not r.answer for r in results):

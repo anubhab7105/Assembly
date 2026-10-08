@@ -8,8 +8,31 @@ free-tier model on the same question.
 
 - `questions.jsonl` — 40 draft questions, one JSON object per line.
 - `README.md` — this file.
-- Planned (not yet implemented): `run_single.py`, `run_assembly.py`,
-  (`run_vote.py` optional), `grade.py` → results CSV / slide.
+- `bench_common.py` — shared question loading, JSONL result writing, resume
+  support, quota-aware model calls, and key-safe redaction helpers.
+- `run_single.py` — asks one configurable free-tier model once per question.
+- `run_vote.py` — asks 3 routed models from distinct families once each, then
+  uses majority vote; when all answers differ, voter 1 is asked once to pick.
+- `run_assembly.py` — runs the full Assembly orchestrator at a configurable
+  tier (`3`, `5`, `10`, or `15` minutes; default `5`).
+- `grade.py` — writes graded CSV output and a manual rubric spot-check CSV.
+
+## Running
+
+```powershell
+python bench/run_single.py --run-id single-demo --limit 5
+python bench/run_vote.py --run-id vote-demo --limit 5
+python bench/run_assembly.py --run-id assembly-demo --tier 5 --limit 5
+python bench/grade.py single-demo vote-demo assembly-demo --output-run-id demo
+```
+
+Each runner writes `bench/results/<run_id>.jsonl` and resumes by skipping
+question IDs already present in that file. Result records include `answer`,
+`calls`, `tokens`, `seconds`, `consensus_score`, and `errors`.
+
+Keys come from the local key store selected by app mode (`dev` can load
+`.env.dev`; `desktop` uses the OS keyring). The scripts print provider/model
+names only, never key values.
 
 ## Schema (one JSON object per line)
 
@@ -30,15 +53,33 @@ free-tier model on the same question.
 - 10× `coding` (`code-01`–`code-10`): all `exact` with testable expectations embedded in `question` (function signature + input/output cases: 32-bit overflow, FizzBuzz, palindrome normalization, Fibonacci base cases, merge, bracket stack, distinct second-largest, nested flatten, Gregorian leap rule, order-preserving dedupe).
 - 10× `research` (`res-01`–`res-10`): all `rubric` with a short 4-criterion rubric each. Cover Tauri/Electron, citation hallucination, SQLite/Postgres, limit-verification methodology, prompt-injection defense, consensus-vs-vote, source comparison, BYOK handling, benchmark design, adversarial debate.
 
-## Grading guidance (for future `grade.py`)
+## Grading
 
 - `exact`: normalize (trim, case-fold, collapse whitespace/punctuation per
   question; accept listed equivalents, e.g. `2nd` ≡ `2`).
 - `numeric`: parse float; accept tolerance where the question states a range
   (e.g. `ms-05` accepts 6.9–7.0).
-- `rubric`: 1 point per rubric bullet; report per-criterion pass/fail plus total.
-- `coding`: run the embedded cases as pytest-style asserts against the
-  model's function (exact values in `reference_answer` drafts after review).
+- `rubric`: label answers A/B/C in random order per question, hide system
+  names from the judge, and ask a judge model from a different family than the
+  answerer when the live key set can provide one. Output is strict JSON with a
+  score and per-criterion pass/fail list.
+- Manual check: `grade.py` also writes
+  `bench/results/graded_<run_id>_spotcheck.csv` with at least 20% of rubric
+  answer rows selected for human audit.
+
+`grade.py` outputs `bench/results/graded_<run_id>.csv` and prints win/tie/loss
+counts plus mean score by system and by category.
+
+## Judge bias risks
+
+- LLM judges can prefer their own style, verbosity, or model-family habits even
+  when labels hide system names.
+- A judge from the same family as an answerer may share blind spots; the grader
+  tries to choose a different family and records a warning when it cannot.
+- Rubric wording can steer the judge toward surface coverage over correctness.
+- Randomized A/B/C labels reduce position bias but do not eliminate it.
+- The spot-check CSV is required for demo claims: manually inspect at least the
+  selected 20% before putting win rates on a slide.
 
 ## Verification status
 
