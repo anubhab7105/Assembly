@@ -71,6 +71,9 @@ export function KeysManager() {
   // Load from vault on mount
   useEffect(() => {
     async function load() {
+      // Wake up the backend in case it is sleeping on a free host
+      ApiClient.wakeup()
+      
       // By default vault is in-memory, but if we wanted to persist preference, we'd load it here.
       // For simplicity, we just check what's in the vault.
       const loaded: Record<string, string> = {}
