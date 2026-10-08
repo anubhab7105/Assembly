@@ -33,6 +33,9 @@ export interface ExecutionState {
   sources: SourceData[]
   timerSeconds: number | null
   finalAnswer: string | null
+  confidence: "High" | "Moderate" | "Low" | null
+  uncertaintyNote: string | null
+  question: string | null
   round: number
   degradedMode: boolean
   quotaWarning: string | null
@@ -53,6 +56,9 @@ export function useExecution(executionId: string | null) {
     sources: [],
     timerSeconds: null,
     finalAnswer: null,
+    confidence: null,
+    uncertaintyNote: null,
+    question: null,
     round: 0,
     degradedMode: false,
     quotaWarning: null,
@@ -151,10 +157,15 @@ export function useExecution(executionId: string | null) {
           next.timerSeconds = (event.data as TimerData).remaining_seconds
           break
 
-        case "execution.completed":
-          next.finalAnswer = (event.data as ExecutionCompletedData).final_answer
+        case "execution.completed": {
+          const compData = event.data as ExecutionCompletedData
+          next.finalAnswer = compData.final_answer
+          next.confidence = compData.confidence || "High"
+          next.uncertaintyNote = compData.uncertainty_note || null
+          next.question = compData.question || null
           pushFeed("Execution completed. Final answer synthesised.", "success")
           break
+        }
           
         case "execution.failed_partial":
           pushFeed("Execution failed partially. Some agents crashed.", "error")
