@@ -54,7 +54,7 @@ test.describe("Assembly End-to-End flow", () => {
     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
     await expect(groqCard.getByText("Valid")).toBeVisible()
 
-    await page.goto("/")
+    await page.getByRole("button", { name: /New Investigation/i }).click()
     
     await expect(page.getByText(/Insufficient Model Diversity/i)).not.toBeVisible()
     await page.getByText(/Will quantum computing achieve/i).click()
@@ -80,7 +80,7 @@ test.describe("Assembly End-to-End flow", () => {
     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
     await expect(groqCard.getByText("Valid")).toBeVisible()
 
-    await page.goto("/")
+    await page.getByRole("button", { name: /New Investigation/i }).click()
     await expect(page.getByText(/Insufficient Model Diversity/i)).not.toBeVisible()
     
     await page.getByText(/What are the most viable methods/i).click()
@@ -107,7 +107,7 @@ test.describe("Assembly End-to-End flow", () => {
     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
     await expect(groqCard.getByText("Valid")).toBeVisible()
 
-    await page.goto("/")
+    await page.getByRole("button", { name: /New Investigation/i }).click()
     await expect(page.getByText(/Insufficient Model Diversity/i)).not.toBeVisible()
     
     await page.getByText(/Analyse the timeline/i).click()

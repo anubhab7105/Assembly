@@ -17,11 +17,19 @@ const DB_KEY = "assembly_keys_encrypted"
 export class KeyVault {
   private inMemoryKeys: Record<string, string> = {}
   private masterKey: CryptoKey | null = null
+  public remember: boolean = false
 
-  constructor(private remember: boolean = false) {}
+  constructor() {
+    if (typeof window !== "undefined") {
+      this.remember = window.localStorage.getItem("assembly_remember_keys") === "true"
+    }
+  }
 
   setRemember(remember: boolean) {
     this.remember = remember
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("assembly_remember_keys", String(remember))
+    }
     if (!remember) {
       this.clearPersisted()
     }
