@@ -47,4 +47,19 @@ export class ApiClient {
     const data = await this.request(`/executions/${id}`)
     return ExecutionStatusResponseSchema.parse(data)
   }
+
+  static async testKey(provider: string, key: string): Promise<{ status: "valid" | "rate_limited" | "invalid" }> {
+    // In a real app this would call the backend.
+    // Assuming backend endpoint: POST /providers/{provider}/test with body { key }
+    try {
+      const data = await this.request(`/providers/${provider}/test`, {
+        method: "POST",
+        body: JSON.stringify({ key }),
+      })
+      return data as { status: "valid" | "rate_limited" | "invalid" }
+    } catch (e: any) {
+      if (e.message.includes("429")) return { status: "rate_limited" }
+      return { status: "invalid" }
+    }
+  }
 }
