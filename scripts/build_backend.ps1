@@ -13,6 +13,7 @@ Write-Host "Building Assembly Backend with PyInstaller..."
 # --hidden-import: include uvicorn, fastapi, sqlalchemy, pydantic, and other dynamic imports
 
 pyinstaller -y --name "assembly_backend" `
+    --paths "." `
     --add-data "models.yaml;." `
     --hidden-import "uvicorn.logging" `
     --hidden-import "uvicorn.loops" `
