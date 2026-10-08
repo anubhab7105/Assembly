@@ -55,6 +55,7 @@ async def test_fake_key_absent_from_logs_result_and_db(
     db_session.flush()
     execution = Execution(
         conversation_id=conversation.id,
+        user_id=user.id,
         question="What is the mock answer?",
         time_budget_minutes=3,
         status=result.status,
