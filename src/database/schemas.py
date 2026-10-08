@@ -82,7 +82,7 @@ class ConversationListItem(BaseModel):
 # EXECUTIONS
 # ═════════════════════════════════════════════════════════════════════
 class ExecutionRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=10000)
+    question: str = Field(..., min_length=1, max_length=2000)
     time_budget_minutes: int = Field(..., ge=3, le=15)
     conversation_id: str | None = None  # Attach to existing, or create new
     # Web-mode BYOK keys (provider → key). In-memory for this run only:

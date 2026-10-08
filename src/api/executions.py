@@ -44,6 +44,7 @@ from src.api.events import (
     fetch_latest_seq,
     persist_event,
 )
+from src.core.rate_limit import rate_limiter, execution_tracker
 
 router = APIRouter(prefix="/api/executions", tags=["executions"])
 
@@ -70,6 +71,7 @@ async def create_execution(
     req: ExecutionRequest,
     user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
+    _rate_limit: bool = Depends(rate_limiter("create_execution", 5, 60)),
 ):
     """
     Submit a question and start an execution.
