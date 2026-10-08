@@ -50,10 +50,18 @@ def create_access_token(
 def decode_access_token(token: str) -> dict:
     """Decode and validate a JWT token. Raises on failure."""
     try:
+        options = {}
+        audience = None
+        if settings.app_mode == "web":
+            options = {"verify_aud": True, "verify_iss": False}
+            audience = "authenticated"
+
         payload = jwt.decode(
             token,
             reveal(settings.jwt_secret_key),
             algorithms=[settings.jwt_algorithm],
+            audience=audience,
+            options=options,
         )
         return payload
     except JWTError as exc:
@@ -74,6 +82,9 @@ async def get_current_user_id(
     Extract user ID from the Bearer token.
     Returns user_id string or raises 401.
     """
+    if settings.app_mode in ("dev", "desktop"):
+        return "local-dev-user"
+
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

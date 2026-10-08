@@ -320,18 +320,23 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
     await websocket.accept()
 
     # Authenticate via token query param
-    token = websocket.query_params.get("token", "")
-    try:
-        if token:
-            payload = decode_access_token(token)
-            user_id = payload.get("sub")
-            if not user_id:
-                raise ValueError("Invalid token")
-        else:
-            raise ValueError("No token")
-    except Exception:
-        await websocket.close(code=4001, reason="Authentication failed")
-        return
+    from src.core.config import settings
+
+    if settings.app_mode in ("dev", "desktop"):
+        user_id = "local-dev-user"
+    else:
+        token = websocket.query_params.get("token", "")
+        try:
+            if token:
+                payload = decode_access_token(token)
+                user_id = payload.get("sub")
+                if not user_id:
+                    raise ValueError("Invalid token")
+            else:
+                raise ValueError("No token")
+        except Exception:
+            await websocket.close(code=4001, reason="Authentication failed")
+            return
 
     # Verify ownership
     db = SessionLocal()
