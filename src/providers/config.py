@@ -113,8 +113,12 @@ class ModelsConfig(BaseModel):
     providers: dict[str, ProviderSpec] = Field(min_length=1)
 
 
+import sys
+
 def default_catalog_path() -> Path:
-    """Repo-root models.yaml (src/providers/config.py → two levels up)."""
+    """Repo-root models.yaml (or PyInstaller bundle root)."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / "models.yaml"
     return Path(__file__).resolve().parent.parent.parent / "models.yaml"
 
 
