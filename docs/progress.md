@@ -268,3 +268,10 @@
 - Result: **320 passed, 1 skipped** (full suite); `ruff check` + `format --check` green on new/owned files; diff secret-free.
 - Bugs found: one attack snippet (`ignore the rules`) initially missed by the override regex — widened the middle-word set, all 10 flag correctly with benign controls still clean.
 - Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-provider suite is the verification).
+
+## Benchmark draft set (2026-10-08)
+
+- New: `bench/questions.jsonl` (40 lines: 10 math_science, 10 logic_reasoning, 10 coding with embedded test cases, 10 research with 4-bullet rubrics) + `bench/README.md` (schema, counts, grading guidance, verification status).
+- Schema per line: `{id, category, question, answer_type: exact|numeric|rubric, reference_answer, rubric (non-null iff rubric type), difficulty}`. All 40 `reference_answer` values prefixed `NEEDS HUMAN VERIFICATION` — human review required before scoring use.
+- Verification: JSONL validated (40 lines, unique ids, 10/10/10/10 split, marker present on all 40, rubric iff rubric-type, exact key set); math/coding spot-checks executed (avg-speed 80, exponent 0, digit-9 count 20, last-digit 9, train 14.4 s, fib(20) 6765).
+- Skipped (per DoD): full pytest run — data-only change touching no `src/`/`tests/` code; live end-to-end run — no live keys here.
