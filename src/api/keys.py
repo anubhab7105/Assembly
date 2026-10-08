@@ -17,6 +17,7 @@ from src.providers.base import ChatMessage
 from src.providers.config import load_models_config
 from src.providers.errors import AuthError, BadResponse, ProviderDown, RateLimited
 from src.providers.registry import ProviderDisabledError, get_provider
+from src.core.rate_limit import rate_limiter
 
 router = APIRouter(prefix="/api", tags=["keys"])
 
@@ -58,6 +59,7 @@ class ProvidersStatusResponse(BaseModel):
 async def test_key(
     req: KeyTestRequest,
     user_id: str = Depends(get_current_user_id),
+    _rate_limit: bool = Depends(rate_limiter("test_keys", 10, 60)),
 ) -> KeyTestResponse:
     """Make one tiny call with the given key; report validity, echo nothing."""
     try:

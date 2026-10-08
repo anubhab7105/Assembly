@@ -15,7 +15,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -79,6 +79,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    # 1MB size limit to prevent abuse
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > 1024 * 1024:
+        return JSONResponse(status_code=413, content={"detail": "Request body too large. Maximum size is 1MB."})
+    return await call_next(request)
 
 # ── API Routes ───────────────────────────────────────────────────────
 app.include_router(auth_router)
