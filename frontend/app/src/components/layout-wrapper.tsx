@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { ToastProvider, useToast } from "@/components/ui/toast"
@@ -195,7 +195,9 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         
         {/* Desktop Sidebar */}
         <aside className="hidden md:block w-72 shrink-0 h-full relative z-20">
-          <SidebarContent />
+          <Suspense fallback={<div className="p-4">Loading menu...</div>}>
+            <SidebarContent />
+          </Suspense>
         </aside>
 
         {/* Mobile Sidebar overlay */}
@@ -203,7 +205,9 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
           <div className="md:hidden fixed inset-0 z-50 flex">
             <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
             <div className="relative w-4/5 max-w-sm h-full shadow-2xl animate-in slide-in-from-left-full">
-              <SidebarContent onClose={() => setMobileMenuOpen(false)} />
+              <Suspense fallback={<div className="p-4">Loading menu...</div>}>
+                <SidebarContent onClose={() => setMobileMenuOpen(false)} />
+              </Suspense>
               <button 
                 onClick={() => setMobileMenuOpen(false)}
                 className="absolute top-4 right-4 p-2 bg-background/50 rounded-full hover:bg-muted transition-colors"
