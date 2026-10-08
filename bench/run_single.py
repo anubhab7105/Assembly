@@ -25,7 +25,7 @@ BENCH_DIR = Path(__file__).resolve().parent
 if str(BENCH_DIR.parent) not in sys.path:
     sys.path.insert(0, str(BENCH_DIR.parent))
 
-from bench.bench_common import (  # noqa: E402
+from bench.bench_common import (
     AbortRunError,
     BenchResult,
     QuotaPolicy,
@@ -42,8 +42,8 @@ from bench.bench_common import (  # noqa: E402
     print_summary,
     remaining_questions,
 )
-from src.core.logging_config import logger  # noqa: E402
-from src.providers.router import ModelRouter  # noqa: E402
+from src.core.logging_config import logger
+from src.providers.router import ModelRouter
 
 
 def build_router() -> ModelRouter:
@@ -53,9 +53,7 @@ def build_router() -> ModelRouter:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse run_single CLI flags."""
-    parser = add_common_args(
-        argparse.ArgumentParser(description=__doc__)
-    )
+    parser = add_common_args(argparse.ArgumentParser(description=__doc__))
     parser.add_argument("--provider", default=None)
     parser.add_argument("--model", default=None)
     return parser.parse_args(argv)
@@ -155,9 +153,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         results = asyncio.run(run_all(args, run_id))
     except KeyboardInterrupt:
-        print(f"\nInterrupted — resume with: python bench/run_single.py --run-id {run_id}")
+        print(
+            f"\nInterrupted — resume with: python bench/run_single.py --run-id {run_id}"
+        )
         return 130
-    except SystemExit as exc:
+    except SystemExit:
         raise
     print_summary("single", results, time.monotonic() - started)
     if results and all(not r.answer for r in results):

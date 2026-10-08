@@ -31,9 +31,9 @@ DEFAULT_RESULTS_DIR = PROJECT_ROOT / "bench" / "results"
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.core.logging_config import logger  # noqa: E402
-from src.providers.base import AIProvider, ChatMessage  # noqa: E402
-from src.providers.errors import (  # noqa: E402
+from src.core.logging_config import logger
+from src.providers.base import AIProvider, ChatMessage
+from src.providers.errors import (
     AuthError,
     BadResponse,
     ProviderDown,
@@ -41,7 +41,7 @@ from src.providers.errors import (  # noqa: E402
     RateLimited,
     classify_exception,
 )
-from src.providers.quota import QuotaExhausted  # noqa: E402
+from src.providers.quota import QuotaExhausted
 
 
 class BenchQuestion(BaseModel):
@@ -278,11 +278,38 @@ async def ask_once(
                 }
             )
             return outcome
-        except Exception as exc:  # noqa: BLE001 — classified below, never raw
+        except Exception as exc:
             if isinstance(exc, AuthError):
                 raise AbortRunError(
                     f"{name}: authentication failed — check the key, aborting run"
                 ) from exc
+            if isinstance(exc, QuotaExhausted):
+                reason = exc.reason.casefold()
+                if "daily" in reason or "spent" in reason:
+                    outcome.errors.append(
+                        {
+                            "phase": "quota",
+                            "type": "QuotaExhausted",
+                            "message": redact(f"{name}: daily quota spent", hidden),
+                        }
+                    )
+                    return outcome
+                wait = _cooldown_wait(exc.retry_after, policy)
+                if wait is not None and attempts <= policy.max_retries:
+                    logger.warning(
+                        f"Bench   │ {name} cooling down; "
+                        f"sleeping {wait:.0f}s (attempt {attempts})"
+                    )
+                    await _sleep(wait)
+                    continue
+                outcome.errors.append(
+                    {
+                        "phase": "quota",
+                        "type": "QuotaExhausted",
+                        "message": redact(f"{name}: quota exhausted", hidden),
+                    }
+                )
+                return outcome
             structured: Exception = (
                 exc if isinstance(exc, ProviderError) else classify_exception(name, exc)
             )
@@ -309,33 +336,6 @@ async def ask_once(
                         "phase": "generate",
                         "type": type(structured).__name__,
                         "message": redact(f"{name}: {structured.message}", hidden),
-                    }
-                )
-                return outcome
-            if isinstance(exc, QuotaExhausted):
-                reason = exc.reason.casefold()
-                if "daily" in reason or "spent" in reason:
-                    outcome.errors.append(
-                        {
-                            "phase": "quota",
-                            "type": "QuotaExhausted",
-                            "message": redact(f"{name}: daily quota spent", hidden),
-                        }
-                    )
-                    return outcome
-                wait = _cooldown_wait(exc.retry_after, policy)
-                if wait is not None and attempts <= policy.max_retries:
-                    logger.warning(
-                        f"Bench   │ {name} cooling down; "
-                        f"sleeping {wait:.0f}s (attempt {attempts})"
-                    )
-                    await _sleep(wait)
-                    continue
-                outcome.errors.append(
-                    {
-                        "phase": "quota",
-                        "type": "QuotaExhausted",
-                        "message": redact(f"{name}: quota exhausted", hidden),
                     }
                 )
                 return outcome
@@ -401,9 +401,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--max-retries", type=int, default=3)
     parser.add_argument("--sleep-between-seconds", type=float, default=1.0)
     parser.add_argument("--env-file", type=Path, default=None)
-    parser.add_argument(
-        "--app-mode", default=None, choices=["dev", "web", "desktop"]
-    )
+    parser.add_argument("--app-mode", default=None, choices=["dev", "web", "desktop"])
     return parser
 
 

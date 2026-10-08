@@ -23,34 +23,27 @@ BENCH_DIR = Path(__file__).resolve().parent
 if str(BENCH_DIR.parent) not in sys.path:
     sys.path.insert(0, str(BENCH_DIR.parent))
 
-from bench.bench_common import (  # noqa: E402
-    AbortRunError,
+from bench.bench_common import (
     BenchResult,
-    QuotaPolicy,
     ResultStore,
     add_common_args,
     apply_app_mode,
-    build_single_messages,
     default_run_id,
     force_utf8_stdout,
     load_env_file,
     load_questions,
-    load_secrets_best_effort,
     print_summary,
     remaining_questions,
 )
-from src.core.logging_config import logger  # noqa: E402
-from src.orchestration.orchestrator import Orchestrator  # noqa: E402
-
+from src.core.logging_config import logger
+from src.orchestration.orchestrator import Orchestrator
 
 VALID_TIERS = (3, 5, 10, 15)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse run_assembly CLI flags."""
-    parser = add_common_args(
-        argparse.ArgumentParser(description=__doc__)
-    )
+    parser = add_common_args(argparse.ArgumentParser(description=__doc__))
     parser.add_argument(
         "--tier",
         type=int,
@@ -81,16 +74,18 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
     print(f"Questions: {len(pending)} pending ({len(questions)} total)")
     print(f"Tier: {args.tier} minutes")
 
-    # Policy for internal calls (e.g., if orchestrator retries)
-    policy = QuotaPolicy(
-        max_retries=args.max_retries, max_wait_seconds=args.max_wait_seconds
-    )
-    secrets = load_secrets_best_effort()
     results: list[BenchResult] = []
 
     for i, item in enumerate(pending):
         started = time.monotonic()
         errors: list[dict[str, str]] = []
+        answer = ""
+        consensus = 0.0
+        calls = 0
+        tokens = 0
+        providers_used: list[str] = []
+        families: list[str] = []
+        debate_rounds = 0
         try:
             execution_id = f"{run_id}-{item.id}"
             result = await orchestrator.execute(
@@ -131,11 +126,7 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
                         {"phase": "orchestrator", "type": "Warning", "message": w}
                     )
             # Collect agent call/token counts from routing info
-            calls = 0
-            tokens = 0
-            families: list[str] = []
-            providers_used: list[str] = []
-            for agent_info in (result.routing or []):
+            for agent_info in result.routing or []:
                 calls += 1  # each agent represents at least one call
                 families.append(agent_info.get("family", "unknown"))
                 providers_used.append(agent_info.get("provider_name", "unknown"))
@@ -143,13 +134,14 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
             tokens = result.total_tokens
 
             answer = result.answer or ""
-            consensus = round(result.consensus_score, 3) if result.consensus_score is not None else 0.0
+            consensus = (
+                round(result.consensus_score, 3)
+                if result.consensus_score is not None
+                else 0.0
+            )
+            debate_rounds = result.debate_rounds
 
-        except AbortRunError as exc:
-            print(f"ABORT: {exc}")
-            break
         except Exception as exc:  # noqa: BLE001 — orchestrator must not crash the bench
-            elapsed = time.monotonic() - started
             errors.append(
                 {
                     "phase": "orchestrator",
@@ -163,6 +155,7 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
             tokens = 0
             providers_used = []
             families = []
+            debate_rounds = 0
         elapsed = time.monotonic() - started
 
         record = BenchResult(
@@ -175,10 +168,10 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
             method={
                 "name": "assembly",
                 "tier_minutes": args.tier,
-                "providers": list(set(providers_used)),
-                "families": list(set(families)),
+                "providers": sorted(set(providers_used)),
+                "families": sorted(set(families)),
                 "agent_count": len(set(families)),
-                "debate_rounds": getattr(result, "debate_rounds", 0) if 'result' in locals() else 0,
+                "debate_rounds": debate_rounds,
             },
             answer=answer,
             calls=calls,
@@ -190,7 +183,9 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
         store.append(record)
         results.append(record)
         status = "ok" if answer else f"errors={errors}"
-        print(f"[{i + 1}/{len(pending)}] {item.id}: {status} (consensus={consensus:.0%})")
+        print(
+            f"[{i + 1}/{len(pending)}] {item.id}: {status} (consensus={consensus:.0%})"
+        )
         logger.info(
             f"Bench   │ assembly {item.id}: consensus={consensus:.3f} "
             f"tokens={tokens} time={elapsed:.1f}s"
@@ -217,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
             f"python bench/run_assembly.py --run-id {run_id}"
         )
         return 130
-    except SystemExit as exc:
+    except SystemExit:
         raise
     print_summary("assembly", results, time.monotonic() - started)
     if results and all(not r.answer for r in results):
