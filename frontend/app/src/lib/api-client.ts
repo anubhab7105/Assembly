@@ -29,6 +29,8 @@ export class ApiClient {
       if (session?.access_token) {
         authHeader['Authorization'] = `Bearer ${session.access_token}`
       }
+    } else if (env.NEXT_PUBLIC_APP_MODE === 'desktop' && env.desktopToken) {
+      authHeader['X-Assembly-Token'] = env.desktopToken
     }
 
     const response = await fetch(url, {
