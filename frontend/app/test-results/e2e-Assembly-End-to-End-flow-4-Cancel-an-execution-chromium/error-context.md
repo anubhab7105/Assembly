@@ -7,78 +7,173 @@
 # Test info
 
 - Name: e2e.spec.ts >> Assembly End-to-End flow >> 4. Cancel an execution
-- Location: tests\e2e.spec.ts:110:7
+- Location: tests\e2e.spec.ts:96:7
 
 # Error details
 
 ```
-Test timeout of 30000ms exceeded.
+Error: expect(page).toHaveURL(expected) failed
+
+Expected pattern: /\/executions\/.+/
+Received string:  "http://localhost:3000/"
+Timeout: 5000ms
+
+Call log:
+  - Expect "toHaveURL" with timeout 5000ms
+    13 × locator resolved to <html lang="en" class="inter_8db6fa51-module__MMaAbG__variable jetbrains_mono_9a2f2d6c-module__wsyXyG__variable h-full antialiased">…</html>
+       - unexpected value "http://localhost:3000/"
+
 ```
 
-# Page snapshot
-
 ```yaml
-- generic [ref=f1e1]:
-  - generic [ref=f1e2]:
-    - complementary [ref=f1e3]:
-      - generic [ref=f1e4]:
-        - generic [ref=f1e5]:
-          - link "Assembly" [ref=f1e6] [cursor=pointer]:
-            - /url: /
-          - button "New Investigation" [ref=f1e11]
-        - generic [ref=f1e12]:
-          - generic [ref=f1e13]: History
-          - textbox "Search..." [ref=f1e23]
-          - link "Will quantum computing achieve commercial advantage before 2030? 10/8/2026 completed" [ref=f1e24] [cursor=pointer]:
-            - /url: /executions/exec-1
-            - generic [ref=f1e27]:
-              - paragraph [ref=f1e28]: Will quantum computing achieve commercial advantage before 2030?
-              - generic [ref=f1e29]:
-                - generic [ref=f1e30]: 10/8/2026
-                - generic [ref=f1e31]: completed
-            - button "Delete execution" [ref=f1e32]
-          - link "Timeline for AGI? 10/7/2026 failed" [ref=f1e36] [cursor=pointer]:
-            - /url: /executions/exec-2
-            - generic [ref=f1e39]:
-              - paragraph [ref=f1e40]: Timeline for AGI?
-              - generic [ref=f1e41]:
-                - generic [ref=f1e42]: 10/7/2026
-                - generic [ref=f1e43]: failed
-            - button "Delete execution" [ref=f1e44]
-        - link "Settings" [ref=f1e49] [cursor=pointer]:
-          - /url: /settings
-    - main [ref=f1e54]:
-      - main [ref=f1e56]:
-        - generic [ref=f1e57]:
-          - heading "Assembly" [level=1] [ref=f1e61]
-          - paragraph [ref=f1e62]: Turn one question into a temporary team of AI agents that reason, debate, and verify to find the best answer.
-        - generic [ref=f1e63]:
-          - generic [ref=f1e67]:
-            - paragraph [ref=f1e68]: Insufficient Model Diversity
-            - paragraph [ref=f1e69]: Assembly requires at least 2 distinct model families to function.
-          - button "Configure Keys" [ref=f1e70]
-        - generic [ref=f1e71]:
-          - generic [ref=f1e72]:
-            - textbox "What do you want the team to research?" [active] [ref=f1e73]: Analyse the timeline and economic impacts of AGI given current scaling laws.
-            - generic [ref=f1e74]:
-              - generic [ref=f1e75]:
-                - generic [ref=f1e76]: "Mode: Auto"
-                - generic [ref=f1e77]:
-                  - button "3m" [ref=f1e81]
-                  - button "5m" [ref=f1e82]
-                  - button "10m" [ref=f1e83]
-                  - button "15m" [ref=f1e84]
-                - generic "0 families configured" [ref=f1e85] [cursor=pointer]: 0 ready
-              - button "Launch Team" [disabled]
-          - generic [ref=f1e87]:
-            - generic [ref=f1e88]: Shift + Enter for new line
-            - generic [ref=f1e89]: Enter to send
-        - generic [ref=f1e90]:
-          - paragraph [ref=f1e96] [cursor=pointer]: Will quantum computing achieve commercial advantage before 2030?
-          - paragraph [ref=f1e102] [cursor=pointer]: What are the most viable methods for replicating room-temperature superconductors?
-          - paragraph [ref=f1e108] [cursor=pointer]: Analyse the timeline and economic impacts of AGI given current scaling laws.
-          - paragraph [ref=f1e114] [cursor=pointer]: Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?
-  - generic "Notifications"
-  - button "Open Next.js Dev Tools" [ref=f1e120] [cursor=pointer]
-  - alert [ref=f1e124]
+- complementary:
+  - link "Assembly":
+    - /url: /
+  - button "New Investigation"
+  - text: History
+  - textbox "Search..."
+  - link "Will quantum computing achieve commercial advantage before 2030? 10/8/2026 completed":
+    - /url: /executions/exec-1
+    - paragraph: Will quantum computing achieve commercial advantage before 2030?
+    - text: 10/8/2026 completed
+    - button "Delete execution"
+  - link "Timeline for AGI? 10/7/2026 failed":
+    - /url: /executions/exec-2
+    - paragraph: Timeline for AGI?
+    - text: 10/7/2026 failed
+    - button "Delete execution"
+  - link "Settings":
+    - /url: /settings
+- main:
+  - main:
+    - heading "Assembly" [level=1]
+    - paragraph: Turn one question into a temporary team of AI agents that reason, debate, and verify to find the best answer.
+    - textbox "What do you want the team to research?": Analyse the timeline and economic impacts of AGI given current scaling laws.
+    - text: "Mode: Auto"
+    - button "3m"
+    - button "5m"
+    - button "10m"
+    - button "15m"
+    - text: 3 ready
+    - button "Launch Team" [disabled]
+    - text: Shift + Enter for new line Enter to send
+    - paragraph: Will quantum computing achieve commercial advantage before 2030?
+    - paragraph: What are the most viable methods for replicating room-temperature superconductors?
+    - paragraph: Analyse the timeline and economic impacts of AGI given current scaling laws.
+    - paragraph: Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?
+- alert: Assembly
+```
+
+# Test source
+
+```ts
+  16  |     await page.goto("/setup")
+  17  |     
+  18  |     // Check "Remember on this device"
+  19  |     await page.getByLabel(/Remember on this device/i).check()
+  20  | 
+  21  |     const geminiCard = page.locator(".bg-card").filter({ hasText: "Google Gemini" })
+  22  |     await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
+  23  |     await geminiCard.getByRole("button", { name: /Save & Test/i }).click()
+  24  |     await expect(geminiCard.getByText("Valid")).toBeVisible()
+  25  | 
+  26  |     const groqCard = page.locator(".bg-card").filter({ hasText: "Groq" })
+  27  |     await groqCard.locator('input[type="password"]').fill("sk-groq-dummy")
+  28  |     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
+  29  |     await expect(groqCard.getByText("Valid")).toBeVisible()
+  30  | 
+  31  |     await expect(page.getByText(/3 of 3 recommended model families ready/i, { exact: false })).toBeVisible()
+  32  | 
+  33  |     for (const log of consoleLogs) {
+  34  |       expect(log).not.toContain(CANARY_KEY)
+  35  |     }
+  36  | 
+  37  |     const lsKeys = await page.evaluate(() => JSON.stringify(window.localStorage))
+  38  |     expect(lsKeys).not.toContain(CANARY_KEY)
+  39  | 
+  40  |     await expect(page.getByText(CANARY_KEY)).not.toBeVisible()
+  41  |   })
+  42  | 
+  43  |   test("2. Ask a question, watch progress, receive the answer", async ({ page }) => {
+  44  |     await page.goto("/setup")
+  45  |     await page.getByLabel(/Remember on this device/i).check()
+  46  | 
+  47  |     const geminiCard = page.locator(".bg-card").filter({ hasText: "Google Gemini" })
+  48  |     await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
+  49  |     await geminiCard.getByRole("button", { name: /Save & Test/i }).click()
+  50  |     await expect(geminiCard.getByText("Valid")).toBeVisible()
+  51  | 
+  52  |     const groqCard = page.locator(".bg-card").filter({ hasText: "Groq" })
+  53  |     await groqCard.locator('input[type="password"]').fill("sk-groq-dummy")
+  54  |     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
+  55  |     await expect(groqCard.getByText("Valid")).toBeVisible()
+  56  | 
+  57  |     await page.getByRole("button", { name: /New Investigation/i }).click()
+  58  |     
+  59  |     await expect(page.getByText(/Insufficient Model Diversity/i)).not.toBeVisible()
+  60  |     await page.getByText(/Will quantum computing achieve/i).click()
+  61  |     await page.getByRole("button", { name: /Launch Team/i }).click()
+  62  |     await expect(page).toHaveURL(/\/executions\/.+/)
+  63  | 
+  64  |     await expect(page.getByText(/Research Team/i)).toBeVisible()
+  65  |     await expect(page.getByText(/Consensus Meter/i)).toBeVisible()
+  66  |     await expect(page.getByText(/Event Log/i)).toBeVisible()
+  67  |   })
+  68  | 
+  69  |   test("3. Refresh mid-execution and confirm re-attach", async ({ page }) => {
+  70  |     await page.goto("/setup")
+  71  |     await page.getByLabel(/Remember on this device/i).check()
+  72  | 
+  73  |     const geminiCard = page.locator(".bg-card").filter({ hasText: "Google Gemini" })
+  74  |     await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
+  75  |     await geminiCard.getByRole("button", { name: /Save & Test/i }).click()
+  76  |     await expect(geminiCard.getByText("Valid")).toBeVisible()
+  77  | 
+  78  |     const groqCard = page.locator(".bg-card").filter({ hasText: "Groq" })
+  79  |     await groqCard.locator('input[type="password"]').fill("sk-groq")
+  80  |     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
+  81  |     await expect(groqCard.getByText("Valid")).toBeVisible()
+  82  | 
+  83  |     await page.getByRole("button", { name: /New Investigation/i }).click()
+  84  |     await expect(page.getByText(/Insufficient Model Diversity/i)).not.toBeVisible()
+  85  |     
+  86  |     await page.getByText(/What are the most viable methods/i).click()
+  87  |     await page.getByRole("button", { name: /Launch Team/i }).click()
+  88  |     
+  89  |     await expect(page).toHaveURL(/\/executions\/.+/)
+  90  |     await page.reload()
+  91  | 
+  92  |     await expect(page).toHaveURL(/\/executions\/.+/)
+  93  |     await expect(page.getByText(/Research Team/i)).toBeVisible()
+  94  |   })
+  95  | 
+  96  |   test("4. Cancel an execution", async ({ page }) => {
+  97  |     await page.goto("/setup")
+  98  |     await page.getByLabel(/Remember on this device/i).check()
+  99  | 
+  100 |     const geminiCard = page.locator(".bg-card").filter({ hasText: "Google Gemini" })
+  101 |     await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
+  102 |     await geminiCard.getByRole("button", { name: /Save & Test/i }).click()
+  103 |     await expect(geminiCard.getByText("Valid")).toBeVisible()
+  104 | 
+  105 |     const groqCard = page.locator(".bg-card").filter({ hasText: "Groq" })
+  106 |     await groqCard.locator('input[type="password"]').fill("sk-groq")
+  107 |     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
+  108 |     await expect(groqCard.getByText("Valid")).toBeVisible()
+  109 | 
+  110 |     await page.getByRole("button", { name: /New Investigation/i }).click()
+  111 |     await expect(page.getByText(/Insufficient Model Diversity/i)).not.toBeVisible()
+  112 |     
+  113 |     await page.getByText(/Analyse the timeline/i).click()
+  114 |     await page.getByRole("button", { name: /Launch Team/i }).click()
+  115 |     
+> 116 |     await expect(page).toHaveURL(/\/executions\/.+/)
+      |                        ^ Error: expect(page).toHaveURL(expected) failed
+  117 | 
+  118 |     page.on("dialog", dialog => dialog.accept())
+  119 |     await page.getByRole("button", { name: /Cancel/i }).click()
+  120 |     await expect(page).toHaveURL(/\/$/)
+  121 |   })
+  122 | })
+  123 | 
 ```
