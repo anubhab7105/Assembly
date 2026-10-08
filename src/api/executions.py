@@ -131,20 +131,26 @@ async def create_execution(
     db.commit()
     db.refresh(execution)
 
-    # Launch orchestrator in background. provider_keys (if any) travel only
-    # in memory for this run and are wiped by the orchestrator afterwards —
-    # they are never stored on the execution record below.
-    _run_tasks[execution.id] = asyncio.get_event_loop().create_task(
-        _run_execution(
-            execution.id,
-            req.question,
-            req.time_budget_minutes,
-            conversation.id,
-            req.provider_keys,
+    await execution_tracker.acquire(user_id)
+    try:
+        # Launch orchestrator in background. provider_keys (if any) travel only
+        # in memory for this run and are wiped by the orchestrator afterwards —
+        # they are never stored on the execution record below.
+        _run_tasks[execution.id] = asyncio.get_event_loop().create_task(
+            _run_execution(
+                execution.id,
+                req.question,
+                req.time_budget_minutes,
+                conversation.id,
+                req.provider_keys,
+                user_id,
+            )
         )
-    )
 
-    return ExecutionResponse.model_validate(execution)
+        return ExecutionResponse.model_validate(execution)
+    except Exception:
+        await execution_tracker.release(user_id)
+        raise
 
 
 @router.post("/{execution_id}/cancel", response_model=ExecutionCancelResponse)
@@ -186,9 +192,10 @@ async def cancel_execution(
 
 @router.get("/preflight", response_model=PreflightResponse)
 async def preflight(
-    question: str = Query(..., min_length=1, max_length=10000),
+    question: str = Query(..., min_length=1, max_length=2000),
     time_budget_minutes: int = Query(5, ge=3, le=15),
     user_id: str = Depends(get_current_user_id),
+    _rate_limit: bool = Depends(rate_limiter("preflight", 10, 60)),
 ):
     """Capacity verdict for a question + tier WITHOUT running an execution.
 
@@ -323,6 +330,13 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
 
     # Authenticate via token query param
     from src.core.config import settings
+    
+    # Check WebSocket Origin
+    origin = websocket.headers.get("origin")
+    if settings.app_mode == "web" and settings.frontend_url:
+        if origin and origin.rstrip('/') != settings.frontend_url.rstrip('/'):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid Origin")
+            return
 
     if settings.app_mode in ("dev", "desktop"):
         user_id = "local-dev-user"
@@ -433,6 +447,7 @@ async def _run_execution(
     time_budget_minutes: int,
     conversation_id: str,
     provider_keys: dict[str, str] | None = None,
+    user_id: str | None = None,
 ):
     """
     Run the orchestrator in the background and stream progress
@@ -542,6 +557,8 @@ async def _run_execution(
         # Cleanup WebSocket connections + task registry
         _ws_connections.pop(execution_id, None)
         _run_tasks.pop(execution_id, None)
+        if user_id:
+            await execution_tracker.release(user_id)
 
 
 def _cancel_task(task: asyncio.Task) -> None:
