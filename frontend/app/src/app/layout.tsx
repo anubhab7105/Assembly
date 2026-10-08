@@ -29,6 +29,8 @@ export const metadata: Metadata = {
   },
 }
 
+import { LayoutWrapper } from "@/components/layout-wrapper"
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
@@ -36,7 +38,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col bg-background text-foreground">{children}</body>
+      <body className="flex min-h-full flex-col bg-background text-foreground">
+        <LayoutWrapper>{children}</LayoutWrapper>
+      </body>
     </html>
   )
 }
