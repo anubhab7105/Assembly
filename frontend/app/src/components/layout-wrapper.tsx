@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { 
   Zap, Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare
 } from "lucide-react"
+import { SignOutButton } from "./sign-out-button"
 
 // A small hook to detect offline state
 function useOfflineStatus() {
@@ -168,7 +169,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Settings */}
-      <div className="p-4 border-t border-border mt-auto">
+      <div className="p-4 border-t border-border mt-auto flex flex-col gap-1">
         <Link 
           href="/settings" 
           onClick={onClose}
@@ -179,6 +180,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           <Settings className="size-4" />
           Settings
         </Link>
+        <SignOutButton />
       </div>
     </div>
   )
