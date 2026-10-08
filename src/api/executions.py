@@ -20,7 +20,14 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
+from src.api.events import (
+    event_to_wire,
+    fetch_events,
+    fetch_latest_seq,
+    persist_event,
+)
 from src.core.logging_config import logger
+from src.core.rate_limit import execution_tracker, rate_limiter
 from src.core.security import decode_access_token, get_current_user_id
 from src.database.base import SessionLocal, get_db
 from src.database.models import AgentRun, Conversation, Execution, Message
@@ -38,13 +45,6 @@ from src.orchestration.capacity import (
     plan_capacity,
 )
 from src.orchestration.orchestrator import Orchestrator
-from src.api.events import (
-    event_to_wire,
-    fetch_events,
-    fetch_latest_seq,
-    persist_event,
-)
-from src.core.rate_limit import rate_limiter, execution_tracker
 
 router = APIRouter(prefix="/api/executions", tags=["executions"])
 

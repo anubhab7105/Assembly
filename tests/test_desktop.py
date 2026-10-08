@@ -1,11 +1,11 @@
-import os
-import pytest
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
-from src.main import app
 from src.core.config import settings
+from src.main import app
+
 
 @pytest.fixture
 def desktop_mode():
