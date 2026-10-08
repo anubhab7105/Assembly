@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { useExecution } from "@/hooks/use-execution"
 import { ApiClient } from "@/lib/api-client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,10 +27,10 @@ import {
 import { FinalAnswer } from "@/components/final-answer"
 
 export default function ExecutionPage() {
-  const params = useParams()
+  const searchParams = useSearchParams()
   const router = useRouter()
-  const rawId = params?.id
-  const id: string | null = (Array.isArray(rawId) ? rawId[0] : rawId) || null
+  const rawId = searchParams?.get("id")
+  const id: string | null = rawId || null
   
   const state = useExecution(id)
   

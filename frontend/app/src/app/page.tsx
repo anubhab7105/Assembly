@@ -88,7 +88,7 @@ export default function Home() {
 
       // 2. Start Execution
       const exec = await ApiClient.startExecution(question, finalMinutes)
-      router.push(`/executions/${exec.id}`)
+      router.push(`/executions?id=${exec.id}`)
     } catch (err) {
       console.error(err)
       setLoading(false)
