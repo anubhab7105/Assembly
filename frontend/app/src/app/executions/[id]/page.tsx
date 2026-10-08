@@ -29,13 +29,14 @@ import { FinalAnswer } from "@/components/final-answer"
 export default function ExecutionPage() {
   const params = useParams()
   const router = useRouter()
-  const id = Array.isArray(params.id) ? params.id[0] : params.id
+  const rawId = params?.id
+  const id: string | null = (Array.isArray(rawId) ? rawId[0] : rawId) || null
   
   const state = useExecution(id)
   
   // Handlers
   const handleCancel = async () => {
-    if (confirm("Are you sure you want to cancel this execution?")) {
+    if (id && confirm("Are you sure you want to cancel this execution?")) {
       await ApiClient.cancelExecution(id)
       router.push("/")
     }

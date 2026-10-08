@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation"
 import { ToastProvider, useToast } from "@/components/ui/toast"
 import { ApiClient } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { 
   Zap, Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare
