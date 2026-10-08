@@ -5,10 +5,37 @@ const CANARY_KEY = "sk-CANARY-123456789-TEST-KEY"
 test.describe("Assembly End-to-End flow", () => {
   let consoleLogs: string[] = []
 
-  test.beforeEach(({ page }) => {
+  test.beforeEach(async ({ page }) => {
     consoleLogs = []
     page.on("console", msg => {
       consoleLogs.push(msg.text())
+    })
+
+    // Mock Backend API
+    await page.route("**/api/providers/*/test", async route => {
+      await route.fulfill({ json: { status: "valid" } })
+    })
+    await page.route("**/api/executions/preflight", async route => {
+      await route.fulfill({ json: { feasible: true } })
+    })
+    await page.route("**/api/executions", async (route, request) => {
+      if (request.method() === "POST") {
+        await route.fulfill({ json: { id: "exec-test", status: "running" } })
+      } else {
+        await route.fulfill({ json: [] })
+      }
+    })
+    await page.route("**/api/executions/*/cancel", async route => {
+      await route.fulfill({ json: { status: "cancelled" } })
+    })
+    await page.route("**/api/executions/*/events*", async route => {
+      await route.fulfill({ json: [
+        { 
+          event_type: "team.ready", 
+          seq: 1,
+          data: { agents: [{ id: "1", role: "Researcher", model_family: "gemini" }] } 
+        }
+      ]})
     })
   })
 
