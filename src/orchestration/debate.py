@@ -88,7 +88,7 @@ class DebateManager:
                 prev = output_map.get(agents[i].agent_id)
                 if prev:
                     # Mark this output as a stale carry-forward (used by consensus fix D)
-                    prev._failed_round = round_number
+                    prev.failed_round = round_number
                     updated_outputs.append(prev)
             else:
                 updated_outputs.append(result)
@@ -121,24 +121,35 @@ class DebateManager:
             # Limit evidence items
             evidence = o.evidence[:self.MAX_EVIDENCE_ITEMS]
 
-            # Truncate reasoning
-            reasoning = o.reasoning
-            if len(reasoning) > self.MAX_REASONING_CHARS:
-                reasoning = reasoning[:self.MAX_REASONING_CHARS] + "... [truncated]"
+            # Truncate reasoning summary
+            reasoning_summary = o.reasoning_summary
+            if len(reasoning_summary) > self.MAX_REASONING_CHARS:
+                reasoning_summary = (
+                    reasoning_summary[: self.MAX_REASONING_CHARS] + "... [truncated]"
+                )
 
-            compressed.append(AgentOutput(
-                agent_id=o.agent_id,
-                agent_type=o.agent_type,
-                position=position,
-                confidence=o.confidence,
-                evidence=evidence,
-                reasoning=reasoning,
-                supports=o.supports,
-                disagrees_with=o.disagrees_with,
-                remaining_uncertainty=o.remaining_uncertainty[:2],  # Cap uncertainties too
-                sources=o.sources,
-                raw_content="",  # Don't carry raw content into context
-            ))
+            compressed.append(
+                AgentOutput(
+                    agent_id=o.agent_id,
+                    agent_type=o.agent_type,
+                    position=position,
+                    reasoning_summary=reasoning_summary,
+                    confidence=o.confidence,
+                    confidence_raw=o.confidence_raw,
+                    evidence=evidence,
+                    supports=o.supports,
+                    disagrees_with=o.disagrees_with,
+                    remaining_uncertainty=o.remaining_uncertainty[:2],  # Cap uncertainties too
+                    sources=o.sources,
+                    provider=o.provider,
+                    model=o.model,
+                    family=o.family,
+                    tokens_used=o.tokens_used,
+                    latency_ms=o.latency_ms,
+                    failed_round=o.failed_round,
+                    raw_content="",  # Don't carry raw content into context
+                )
+            )
         return compressed
 
     async def _agent_critique(

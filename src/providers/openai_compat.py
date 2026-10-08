@@ -25,6 +25,7 @@ from src.providers.errors import (
     AuthError,
     BadResponse,
     ProviderDown,
+    RateLimited,
     classify_http_error,
     parse_retry_after,
 )
@@ -52,8 +53,11 @@ class OpenAICompatibleProvider(AIProvider):
         value = reveal(api_key)
         if not value:
             raise AuthError(provider_id, "missing API key")
+        from src.providers.quota import fingerprint_key
+
         self.provider_name = provider_id
         self._api_key = SecretStr(value)
+        self._fingerprint = fingerprint_key(value)
         self._base_url = base_url.rstrip("/")
         self._default_model = default_model
         self._models = list(models) if models else [default_model]
@@ -75,6 +79,8 @@ class OpenAICompatibleProvider(AIProvider):
         max_tokens: int = 4096,
         **kwargs: Any,
     ) -> ProviderResponse:
+        from src.providers.quota import get_limiter
+
         model_name = model or self._default_model
         logger.info(f"Provider │ {self.provider_name} generating with {model_name}")
         payload = {
@@ -83,7 +89,15 @@ class OpenAICompatibleProvider(AIProvider):
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        data = await self._post_with_retry(payload)
+        limiter = get_limiter()
+        try:
+            async with await limiter.acquire(
+                self.provider_name, self._fingerprint, est_tokens=max_tokens
+            ):
+                data = await self._post_with_retry(payload)
+        except RateLimited as exc:
+            limiter.report_429(self.provider_name, self._fingerprint, exc.retry_after)
+            raise
         return self._to_response(data, model_name)
 
     async def _post_with_retry(self, payload: dict[str, Any]) -> dict[str, Any]:

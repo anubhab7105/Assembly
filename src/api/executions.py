@@ -13,6 +13,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
     WebSocket,
     WebSocketDisconnect,
     status,
@@ -22,8 +23,18 @@ from sqlalchemy.orm import Session
 from src.core.logging_config import logger
 from src.core.security import decode_access_token, get_current_user_id
 from src.database.base import SessionLocal, get_db
-from src.database.models import Conversation, Execution, Message
-from src.database.schemas import ExecutionRequest, ExecutionResponse
+from src.database.models import AgentRun, Conversation, Execution, Message
+from src.database.schemas import (
+    ExecutionRequest,
+    ExecutionResponse,
+    PlannerSuggestionResponse,
+    PreflightResponse,
+)
+from src.orchestration.capacity import (
+    KeyBudget,
+    heuristic_suggestion,
+    plan_capacity,
+)
 from src.orchestration.orchestrator import Orchestrator
 
 router = APIRouter(prefix="/api/executions", tags=["executions"])
@@ -114,6 +125,74 @@ async def create_execution(
     return ExecutionResponse.model_validate(execution)
 
 
+@router.get("/preflight", response_model=PreflightResponse)
+async def preflight(
+    question: str = Query(..., min_length=1, max_length=10000),
+    time_budget_minutes: int = Query(5, ge=3, le=15),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Capacity verdict for a question + tier WITHOUT running an execution.
+
+    Uses a cheap heuristic suggestion (no LLM call, no quota spent) plus
+    live per-key quota counts. Keys never appear here: only counts and
+    provider/family names (BYOK rule). NOTE: this route must stay above
+    the `/{execution_id}` route so "preflight" is not read as an ID.
+    """
+    if time_budget_minutes not in (3, 5, 10, 15):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Time budget must be 3, 5, 10, or 15 minutes.",
+        )
+
+    suggestion = heuristic_suggestion(question)
+    router = _orchestrator.router
+    snapshot = router.quota_snapshot()
+    keys = [
+        KeyBudget(
+            provider=entry.get("provider", "unknown"),
+            rpm_limit=entry.get("rpm_limit"),
+            rpd_remaining=entry.get("rpd_remaining"),
+        )
+        for entry in snapshot
+    ]
+    plan = plan_capacity(keys, time_budget_minutes, suggestion)
+    warnings = list(plan.warnings)
+    for entry in snapshot:
+        if (entry.get("cooldown_seconds") or 0) > 0:
+            warnings.append(
+                f"Provider {entry.get('provider')} is cooling down "
+                f"({entry.get('cooldown_seconds')}s); "
+                "it may be unavailable at execution start."
+            )
+            break
+
+    return PreflightResponse(
+        question=question,
+        requested_tier=time_budget_minutes,
+        feasible_tier=plan.feasible_tier,
+        feasible=plan.feasible,
+        downgraded=plan.downgraded,
+        agents=plan.agents,
+        rounds=plan.rounds,
+        search_budget=plan.search_budget,
+        estimated_calls=plan.estimated_calls,
+        estimated_seconds=round(plan.estimated_seconds, 1),
+        affordable_calls=plan.affordable_calls,
+        synth_reserve_seconds=round(plan.synth_reserve_seconds, 1),
+        warnings=warnings,
+        explanation=plan.explanation,
+        planner_suggestion=PlannerSuggestionResponse(
+            roles=list(suggestion.roles),
+            complexity=suggestion.complexity,
+            needs_research=suggestion.needs_research,
+            estimated_rounds=suggestion.estimated_rounds,
+        ),
+        usable_keys=len(keys),
+        providers=[k.provider for k in keys],
+        families=router.available_families(),
+    )
+
+
 @router.get("/{execution_id}", response_model=ExecutionResponse)
 async def get_execution(
     execution_id: str,
@@ -192,6 +271,21 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
 # Background Execution Runner
 # ═════════════════════════════════════════════════════════════════════
 
+def _persist_agent_runs(db, execution_id: str, routing: list) -> None:
+    """Store one AgentRun row per agent: model/provider names only, never keys."""
+    for entry in routing or []:
+        db.add(
+            AgentRun(
+                execution_id=execution_id,
+                agent_type=entry.get("agent_type", "unknown"),
+                role_description=entry.get("role_description", ""),
+                model=entry.get("model", ""),
+                provider=entry.get("provider_name", ""),
+                status="completed",
+            )
+        )
+
+
 async def _run_execution(
     execution_id: str,
     question: str,
@@ -259,6 +353,8 @@ async def _run_execution(
                 conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
                 if conv:
                     conv.updated_at = datetime.now(timezone.utc)
+
+                _persist_agent_runs(db, execution_id, result.routing)
 
                 db.commit()
         finally:

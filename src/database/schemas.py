@@ -123,6 +123,36 @@ class AgentRunResponse(BaseModel):
         from_attributes = True
 
 
+class PlannerSuggestionResponse(BaseModel):
+    roles: list[str] = []
+    complexity: str = "medium"
+    needs_research: bool = False
+    estimated_rounds: int = 1
+
+
+class PreflightResponse(BaseModel):
+    """Capacity verdict for a question + tier, without running anything."""
+
+    question: str
+    requested_tier: int
+    feasible_tier: int
+    feasible: bool
+    downgraded: bool
+    agents: int
+    rounds: int
+    search_budget: int
+    estimated_calls: int
+    estimated_seconds: float
+    affordable_calls: int | None = None
+    synth_reserve_seconds: float
+    warnings: list[str] = []
+    explanation: str = ""
+    planner_suggestion: PlannerSuggestionResponse = PlannerSuggestionResponse()
+    usable_keys: int = 0
+    providers: list[str] = []
+    families: list[str] = []
+
+
 # ═════════════════════════════════════════════════════════════════════
 # WEBSOCKET PROGRESS EVENTS
 # ═════════════════════════════════════════════════════════════════════
