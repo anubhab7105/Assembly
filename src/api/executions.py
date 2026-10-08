@@ -25,6 +25,7 @@ from src.core.security import decode_access_token, get_current_user_id
 from src.database.base import SessionLocal, get_db
 from src.database.models import AgentRun, Conversation, Execution, Message
 from src.database.schemas import (
+    EventListResponse,
     ExecutionCancelResponse,
     ExecutionRequest,
     ExecutionResponse,
@@ -37,11 +38,23 @@ from src.orchestration.capacity import (
     plan_capacity,
 )
 from src.orchestration.orchestrator import Orchestrator
+from src.api.events import (
+    event_to_wire,
+    fetch_events,
+    fetch_latest_seq,
+    persist_event,
+)
 
 router = APIRouter(prefix="/api/executions", tags=["executions"])
 
 # ── Active WebSocket connections per execution ───────────────────────
 _ws_connections: dict[str, list[WebSocket]] = {}
+
+# ── Last seq delivered per connection (id() key) for live dedup ──────
+# A refreshed browser replays missed rows on connect; rows written while
+# the replay is in flight arrive live too, so the broadcast skips
+# anything at or below the connection's watermark instead of doubling it.
+_ws_seq: dict[int, int] = {}
 
 # ── Background execution tasks per execution id ──────────────────────
 # Lets POST /{id}/cancel interrupt a running execution. Entries are
@@ -267,6 +280,41 @@ async def get_execution(
     return ExecutionResponse.model_validate(execution)
 
 
+@router.get("/{execution_id}/events", response_model=EventListResponse)
+async def list_events(
+    execution_id: str,
+    after_seq: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=2000),
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Replayable event log with the same seq ordering as the WebSocket.
+
+    REST fallback for clients that cannot hold a socket: poll with the
+    last seen seq. Ownership is enforced exactly like get_execution.
+    """
+    execution = db.query(Execution).filter(Execution.id == execution_id).first()
+    if not execution:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution not found.",
+        )
+
+    # Verify ownership
+    conversation = db.query(Conversation).filter(
+        Conversation.id == execution.conversation_id,
+        Conversation.user_id == user_id,
+    ).first()
+    if not conversation:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    rows = fetch_events(db, execution_id, after_seq=after_seq, limit=limit)
+    return EventListResponse(
+        events=[event_to_wire(row) for row in rows],
+        latest_seq=fetch_latest_seq(db, execution_id),
+    )
+
+
 # ═════════════════════════════════════════════════════════════════════
 # WebSocket — Real-time Progress
 # ═════════════════════════════════════════════════════════════════════
@@ -275,10 +323,16 @@ async def get_execution(
 async def websocket_progress(websocket: WebSocket, execution_id: str):
     """
     WebSocket endpoint for real-time execution progress.
-    
+
     The frontend connects here after submitting a question
     to receive live updates: agent status, consensus score,
     timer, and the final answer.
+
+    `?after_seq=N` replays persisted events with seq > N first (in
+    order), so a refreshed browser re-attaches without missing history,
+    then streams live events. The connection registers BEFORE the replay
+    read, so rows written mid-replay still arrive live — and the per-
+    connection watermark dedups the overlap instead of doubling it.
     """
     await websocket.accept()
 
@@ -291,12 +345,36 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
         await websocket.close(code=4001, reason="Authentication failed")
         return
 
+    try:
+        after_seq = int(websocket.query_params.get("after_seq", "0") or "0")
+    except ValueError:
+        after_seq = 0
+    after_seq = max(0, after_seq)
+
     # Register connection
     if execution_id not in _ws_connections:
         _ws_connections[execution_id] = []
     _ws_connections[execution_id].append(websocket)
+    _ws_seq[id(websocket)] = after_seq
 
     logger.info(f"WS      │ Client connected for execution {execution_id[:8]}...")
+
+    # Replay missed history in seq order before going live.
+    db = SessionLocal()
+    try:
+        rows = fetch_events(db, execution_id, after_seq=after_seq)
+    finally:
+        db.close()
+    try:
+        for row in rows:
+            await websocket.send_text(json.dumps(event_to_wire(row)))
+            _ws_seq[id(websocket)] = max(
+                _ws_seq.get(id(websocket), after_seq), row.seq
+            )
+    except Exception:
+        # Client gone mid-replay: fall through to cleanup.
+        _cleanup_ws(execution_id, websocket)
+        return
 
     try:
         # Keep the connection alive
@@ -310,10 +388,16 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
     except Exception:
         pass
     finally:
-        if execution_id in _ws_connections:
-            _ws_connections[execution_id] = [
-                ws for ws in _ws_connections[execution_id] if ws != websocket
-            ]
+        _cleanup_ws(execution_id, websocket)
+
+
+def _cleanup_ws(execution_id: str, websocket: WebSocket) -> None:
+    """Unregister one socket and drop its replay watermark."""
+    if execution_id in _ws_connections:
+        _ws_connections[execution_id] = [
+            ws for ws in _ws_connections[execution_id] if ws != websocket
+        ]
+    _ws_seq.pop(id(websocket), None)
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -352,21 +436,32 @@ async def _run_execution(
         """Broadcast progress events to all connected WebSocket clients."""
         # Persist lifecycle state so GET /{id} (and cancel polling) sees
         # live phases, not just the terminal write at the end.
-        state = (event.get("data") or {}).get("state")
-        if event.get("event_type") == "status_update" and state:
+        state = event.get("state") or (event.get("data") or {}).get("state")
+        if state:
             _persist_state(execution_id, state)
+        # Append to the persisted event log (best-effort) BEFORE broadcast
+        # so WS replay (?after_seq=N) and GET /events can never miss an
+        # event the socket already delivered.
+        _persist_progress_event(execution_id, event)
         connections = _ws_connections.get(execution_id, [])
         message = json.dumps(event)
         dead = []
         for ws in connections:
             try:
+                watermark = _ws_seq.get(id(ws), 0)
+                seq = event.get("seq")
+                if isinstance(seq, int) and seq <= watermark:
+                    continue  # already delivered via replay; skip the double
                 await ws.send_text(message)
+                if isinstance(seq, int):
+                    _ws_seq[id(ws)] = max(watermark, seq)
             except Exception:
                 dead.append(ws)
         # Remove dead connections
         for ws in dead:
             if ws in connections:
                 connections.remove(ws)
+            _ws_seq.pop(id(ws), None)
 
     try:
         result = await _orchestrator.execute(
@@ -460,6 +555,26 @@ def _cancel_task(task: asyncio.Task) -> None:
         owner.call_soon_threadsafe(task.cancel)
     else:
         task.cancel()
+
+
+def _persist_progress_event(execution_id: str, event: dict) -> None:
+    """Append one recorder-built event to the execution_events log.
+
+    Best-effort: uses a short-lived session so a slow or locked DB never
+    stalls the broadcast loop. Missing seq/type (non-recorder callers in
+    tests) fall back to a live max()+1 assignment.
+    """
+    if not isinstance(event.get("event_type"), str):
+        return
+    db = SessionLocal()
+    try:
+        seq = event.get("seq")
+        if not isinstance(seq, int) or seq < 1:
+            seq = fetch_latest_seq(db, execution_id) + 1
+            event = {**event, "seq": seq}
+        persist_event(db, execution_id, event)
+    finally:
+        db.close()
 
 
 def _persist_state(execution_id: str, state: str, finished: bool = False) -> None:

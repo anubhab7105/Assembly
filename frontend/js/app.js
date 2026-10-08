@@ -17,6 +17,10 @@ const state = {
     selectedTimeBudget: 5,
     ws: null,
     isExecuting: false,
+    // Event-stream position for reconnect replay (?after_seq=).
+    lastSeq: 0,
+    seenSeqs: new Set(),
+    wsReconnects: 0,
 };
 
 // Use the injected backend URL (set in index.html), or fall back to same-origin for local dev.
@@ -400,8 +404,15 @@ async function submitQuestion() {
         state.currentExecutionId = execution.id;
         state.currentConversationId = execution.conversation_id;
 
+        // Fresh stream position (a refresh re-attaches via localStorage).
+        state.lastSeq = 0;
+        state.seenSeqs = new Set();
+        try {
+            state.lastSeq = parseInt(localStorage.getItem(`assembly:lastSeq:${execution.id}`) || '0', 10) || 0;
+        } catch (e) { /* private mode: start live */ }
+
         // Connect WebSocket for real-time progress
-        connectWebSocket(execution.id);
+        connectWebSocket(execution.id, state.lastSeq);
 
         // Start timer
         startTimer(state.selectedTimeBudget * 60);
@@ -429,10 +440,11 @@ function startNewChat() {
 // WEBSOCKET — Real-Time Progress
 // ═══════════════════════════════════════════════════════════════════
 
-function connectWebSocket(executionId) {
+function connectWebSocket(executionId, afterSeq = 0) {
     if (state.ws) {
         state.ws.close();
     }
+    state.wsReconnects = 0;
 
     // Build WebSocket URL from the backend API URL, not window.location
     // (window.location points to Vercel, but the WS server is on Render)
@@ -445,12 +457,14 @@ function connectWebSocket(executionId) {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         wsBase = `${protocol}//${window.location.host}`;
     }
-    const wsUrl = `${wsBase}/api/executions/ws/${executionId}?token=${state.token}`;
+    // after_seq replays anything missed (e.g. across a refresh) in order.
+    const wsUrl = `${wsBase}/api/executions/ws/${executionId}?token=${state.token}&after_seq=${afterSeq || 0}`;
 
     state.ws = new WebSocket(wsUrl);
 
     state.ws.onopen = () => {
         console.log('WebSocket connected');
+        state.wsReconnects = 0;
         // Send periodic pings
         state.wsPingInterval = setInterval(() => {
             if (state.ws && state.ws.readyState === WebSocket.OPEN) {
@@ -463,6 +477,17 @@ function connectWebSocket(executionId) {
         if (event.data === 'pong') return;
         try {
             const data = JSON.parse(event.data);
+            // Skip duplicates (replay/live overlap) and track progress.
+            if (typeof data.seq === 'number') {
+                if (state.seenSeqs.has(data.seq)) return;
+                state.seenSeqs.add(data.seq);
+                if (data.seq > state.lastSeq) {
+                    state.lastSeq = data.seq;
+                    try {
+                        localStorage.setItem(`assembly:lastSeq:${executionId}`, String(data.seq));
+                    } catch (e) { /* private mode: memory only */ }
+                }
+            }
             handleProgressEvent(data);
         } catch (err) {
             console.error('WS parse error:', err);
@@ -472,6 +497,16 @@ function connectWebSocket(executionId) {
     state.ws.onclose = () => {
         console.log('WebSocket disconnected');
         clearInterval(state.wsPingInterval);
+        // Re-attach with what we already have; the server replays the rest.
+        if (state.isExecuting && state.wsReconnects < 5) {
+            const attempt = ++state.wsReconnects;
+            const backoff = Math.min(1000 * 2 ** attempt, 8000);
+            setTimeout(() => {
+                if (state.isExecuting && state.currentExecutionId === executionId) {
+                    connectWebSocket(executionId, state.lastSeq);
+                }
+            }, backoff);
+        }
     };
 
     state.ws.onerror = (err) => {
@@ -483,6 +518,92 @@ function handleProgressEvent(event) {
     const { event_type, data } = event;
 
     switch (event_type) {
+        // ── WORKFLOW §8 canonical names ──
+        case 'execution.started':
+            addFeedItem('working', `Run started — ${data.tier_minutes || '?'} min budget`);
+            break;
+
+        case 'plan.ready':
+            addFeedItem('working', `Plan ready: ${data.complexity || '?'} ${data.problem_type || ''} · ${data.agent_count || '?'} agents`);
+            break;
+
+        case 'team.ready':
+            updateAgentCards(data.roles);
+            addFeedItem('solving', 'Team assembled');
+            break;
+
+        case 'agent.status':
+            setStatusText(data.activity || 'Working');
+            addFeedItem('working', data.activity || 'Working...');
+            break;
+
+        case 'round.started':
+            addFeedItem('debating', `Round ${data.round}: ${data.goal || ''}`);
+            break;
+
+        case 'round.finished':
+            addFeedItem('debating', data.outcome || `Round ${data.round} finished`);
+            break;
+
+        case 'disagreement.opened':
+        case 'disagreement.resolved':
+            addFeedItem('debating', data.description || '');
+            break;
+
+        case 'source.found':
+        case 'source.verified':
+            addFeedItem('solving', `Source: ${data.title || data.domain || ''}`);
+            break;
+
+        case 'consensus.updated':
+            updateConsensus(data.score);
+            addFeedItem('debating', `Consensus: ${Math.round((data.score || 0) * 100)}% — ${data.decision || ''}`);
+            break;
+
+        case 'quota.warning':
+            addFeedItem('error', `Quota warning (${data.provider || 'unknown'}): ${data.detail || data.remaining}`);
+            break;
+
+        case 'timer.tick': {
+            const secs = Math.max(0, Math.round(data.seconds_remaining || 0));
+            const mins = Math.floor(secs / 60);
+            document.getElementById('workspace-timer').textContent =
+                `${String(mins).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+            break;
+        }
+
+        case 'synthesis.started':
+            setStatusText('Synthesizing Answer');
+            addFeedItem('working', 'Synthesizing final answer...');
+            break;
+
+        case 'execution.completed':
+            handleAnswerReady(data);
+            break;
+
+        case 'execution.failed_partial':
+            addFeedItem('error', data.reason || 'An error occurred');
+            handleAnswerReady({
+                answer: data.answer || data.reason || 'An error occurred during execution.',
+                sources: [],
+                status: 'failed',
+                agent_count: 0,
+                providers_used: [],
+            });
+            break;
+
+        case 'execution.cancelled':
+            setStatusText('Cancelled');
+            addFeedItem('error', data.reason || 'Execution cancelled');
+            state.isExecuting = false;
+            clearInterval(state.timerInterval);
+            if (state.ws) {
+                state.ws.close();
+                state.ws = null;
+            }
+            break;
+
+        // ── Legacy names (pre-§8 wire format): tolerated, not emitted ──
         case 'status_update':
             updateWorkspaceStatus(data);
             addFeedItem(data.status || 'working', data.message);
@@ -521,6 +642,10 @@ function handleProgressEvent(event) {
             });
             break;
     }
+}
+
+function setStatusText(text) {
+    document.getElementById('workspace-status-text').textContent = text || 'Working';
 }
 
 // ═══════════════════════════════════════════════════════════════════

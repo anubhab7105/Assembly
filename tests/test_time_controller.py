@@ -389,7 +389,7 @@ async def test_deadline_cutoff_skips_debate(orchestrator) -> None:
     assert result.debate_rounds == 1
     assert "FINAL MOCK ANSWER" in result.answer
     assert elapsed < 30.0
-    states = [e["data"].get("state") for e in events if "state" in e["data"]]
+    states = [e.get("state") for e in events if e.get("state")]
     assert ExecState.SYNTHESIZING.value in states
     assert ExecState.DEBATING.value not in states
 
@@ -407,8 +407,9 @@ async def test_state_transitions_emitted_in_order(orchestrator) -> None:
         on_progress=on_progress,
     )
     assert result.status == "completed"
-    states = [e["data"]["state"] for e in events if "state" in e["data"]]
-    assert states[0] == ExecState.CAPACITY_CHECK.value
+    states = [e.get("state") for e in events if e.get("state")]
+    assert states[0] == ExecState.CREATED.value
+    assert states[1] == ExecState.CAPACITY_CHECK.value
     assert states[-1] == ExecState.COMPLETED.value
     for required in (
         ExecState.PLANNING.value,
@@ -446,10 +447,7 @@ async def test_orchestrator_cancel(orchestrator) -> None:
     result = await task
     assert result.status == "cancelled"
     assert "test-exec-cancel" not in orchestrator._deadlines
-    assert any(
-        e["event_type"] == "status_update" and e["data"].get("status") == "cancelled"
-        for e in events
-    )
+    assert any(e["event_type"] == "execution.cancelled" for e in events)
     leftovers = [
         t
         for t in asyncio.all_tasks()

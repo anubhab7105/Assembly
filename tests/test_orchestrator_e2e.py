@@ -37,15 +37,20 @@ async def test_full_execution_end_to_end(orchestrator: Orchestrator) -> None:
     # Events are published to the progress callback.
     event_types = {e["event_type"] for e in events}
     assert {
-        "status_update",
-        "agent_update",
-        "consensus_update",
-        "answer_ready",
+        "execution.started",
+        "plan.ready",
+        "team.ready",
+        "consensus.updated",
+        "execution.completed",
     } <= event_types
     assert all(e["execution_id"] == "test-exec-e2e" for e in events)
     assert any(
-        "answer" in e["data"] for e in events if e["event_type"] == "answer_ready"
+        "answer" in e["data"]
+        for e in events
+        if e["event_type"] == "execution.completed"
     )
+    # Sequence numbers are dense starting at 1.
+    assert [e["seq"] for e in events] == list(range(1, len(events) + 1))
 
     # Only mock providers were used.
     assert set(result.providers_used) <= {"mock-a", "mock-b", "mock-c"}
