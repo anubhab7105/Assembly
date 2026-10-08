@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from src.main import app
 from src.core.rate_limit import _rate_limit_history, _global_executions, _user_executions, execution_tracker
 from src.core.security import get_current_user_id
+from src.database.base import get_db
 
 @pytest.fixture(autouse=True)
 def reset_limits():
@@ -18,6 +19,7 @@ def reset_limits():
     app.dependency_overrides[get_current_user_id] = lambda: "test-user-id"
     yield
     app.dependency_overrides.pop(get_current_user_id, None)
+    app.dependency_overrides.pop(get_db, None)
 
 @pytest.mark.asyncio
 async def test_max_question_length():
@@ -47,6 +49,8 @@ async def test_rate_limit_preflight():
 @pytest.mark.asyncio
 async def test_concurrent_execution_cap(db_session, monkeypatch):
     """Test the concurrent execution cap."""
+    app.dependency_overrides[get_db] = lambda: db_session
+    
     # Fake acquiring 1 execution for the user
     await execution_tracker.acquire("test-user-id")
     
