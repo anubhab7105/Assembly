@@ -3,7 +3,7 @@
 
 a = Analysis(
     ['src/main.py'],
-    pathex=[],
+    pathex=['.'],
     binaries=[],
     datas=[('models.yaml', '.')],
     hiddenimports=['uvicorn.logging', 'uvicorn.loops', 'uvicorn.loops.auto', 'uvicorn.protocols', 'uvicorn.protocols.http', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.websockets', 'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan', 'uvicorn.lifespan.on', 'sqlalchemy.ext.asyncio', 'sqlalchemy.sql.default_comparator', 'pydantic', 'sqlite3', 'keyring.backends.Windows'],
