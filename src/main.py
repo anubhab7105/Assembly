@@ -5,29 +5,29 @@ FastAPI application entry point.
 Supports both local development and production deployment (Render).
 """
 
+import os
 import re
 import sys
-import os
-from pathlib import Path
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 # Ensure the project root is on the Python path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 
-from src.database.base import init_db
 from src.api.auth import router as auth_router
 from src.api.conversations import router as conversations_router
 from src.api.executions import router as executions_router
 from src.api.keys import router as keys_router
 from src.core.config import settings
 from src.core.logging_config import logger
-
+from src.database.base import init_db
 
 # ═════════════════════════════════════════════════════════════════════
 # Lifespan (replaces deprecated @app.on_event)
@@ -86,6 +86,18 @@ app.include_router(conversations_router)
 app.include_router(executions_router)
 app.include_router(keys_router)
 
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    """Generic 422: FastAPI's default body echoes offending input values,
+    which could include submitted keys. Log only shapes server-side
+    (masked), reply generic."""
+    shapes = [
+        {key: error.get(key) for key in ("type", "loc", "msg")} for error in exc.errors()
+    ]
+    logger.warning("Validation failed: %s", shapes)
+    return JSONResponse(status_code=422, content={"detail": "Invalid request."})
+
 # ── Static Files (Frontend — local dev only) ─────────────────────────
 # In production, the frontend is served by Vercel separately.
 STATIC_DIR = Path(__file__).parent / "static"
@@ -114,8 +126,9 @@ async def health_check():
     
     Tests database connectivity and returns service status.
     """
-    from src.database.base import SessionLocal
     from sqlalchemy import text
+
+    from src.database.base import SessionLocal
     db_ok = False
     db_type = "postgresql" if settings.is_postgres else "sqlite"
     try:
@@ -123,7 +136,7 @@ async def health_check():
         db.execute(text("SELECT 1"))
         db.close()
         db_ok = True
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — any DB failure means degraded, details stay server-side
         logger.error(f"Health check │ DB connection failed: {e}")
 
     status = "healthy" if db_ok else "degraded"

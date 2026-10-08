@@ -23,11 +23,30 @@ from src.providers.mock_provider import MockProvider
 
 @dataclass
 class MockAssignment:
-    """Duck-typed stand-in for providers.router.ModelAssignment."""
+    """Duck-typed stand-in for providers.router.RoutingDecision."""
 
     provider: MockProvider
     model: str
     provider_name: str
+    family: str = "mock"
+    role: str = ""
+    reason: str = "mock routing"
+
+
+@dataclass
+class MockTeamRouting:
+    """Duck-typed stand-in for providers.router.TeamRouting."""
+
+    decisions: list
+    warnings: list = None
+    degraded: bool = False
+    families: list = None
+
+    def __post_init__(self) -> None:
+        if self.warnings is None:
+            self.warnings = []
+        if self.families is None:
+            self.families = []
 
 
 class MockRouter:
@@ -62,10 +81,24 @@ class MockRouter:
             provider=provider,
             model=provider.get_available_models()[0],
             provider_name=name,
+            role=agent_type,
         )
 
     def route_for_planning(self) -> MockAssignment:
         return self.route("planner")
+
+    def route_team(
+        self,
+        team: list,
+        problem_type: str = "general",
+        complexity: str = "medium",
+        time_budget_minutes: int = 5,
+    ) -> MockTeamRouting:
+        decisions = [self.route(spec.get("agent_type", "solver")) for spec in team]
+        return MockTeamRouting(
+            decisions=decisions,
+            families=sorted({d.provider_name for d in decisions}),
+        )
 
 
 @pytest.fixture()
@@ -80,6 +113,8 @@ def _block_network(monkeypatch) -> None:
 
     Loopback is allowed: Windows asyncio builds its event loop on a
     127.0.0.1 socketpair, and respx intercepts HTTP without sockets.
+    DNS is blocked outright: against a blackholed resolver getaddrinfo
+    hangs for tens of seconds instead of failing fast.
     """
     import socket
 
@@ -93,7 +128,11 @@ def _block_network(monkeypatch) -> None:
             return real_connect(self, address, *args, **kwargs)
         raise RuntimeError(f"Network access is blocked in tests (tried {host})")
 
+    def _blocked_dns(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("DNS is blocked in tests")
+
     monkeypatch.setattr(socket.socket, "connect", _guarded)
+    monkeypatch.setattr(socket, "getaddrinfo", _blocked_dns)
 
 
 @pytest.fixture()

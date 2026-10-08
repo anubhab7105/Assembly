@@ -42,9 +42,9 @@ def _default_scripts() -> dict[str, dict[str, Any]]:
     """Baseline scripts: every role returns valid, mutually agreeing JSON."""
     position = "The mock answer is 42."
     evidence = [
-        "Mock evidence point 1.",
-        "Mock evidence point 2.",
-        "Mock evidence point 3.",
+        {"claim": "Mock evidence point 1.", "source_id": "s1"},
+        {"claim": "Mock evidence point 2.", "source_id": "s2"},
+        {"claim": "Mock evidence point 3.", "source_id": ""},
     ]
     source = {
         "title": "Mock Source",
@@ -54,8 +54,10 @@ def _default_scripts() -> dict[str, dict[str, Any]]:
     base = {
         "position": position,
         "confidence": 0.9,
-        "reasoning": "Mock reasoning trace.",
+        "reasoning_summary": "Mock reasoning summary.",
         "evidence": evidence,
+        "supports": [],
+        "disagrees_with": [],
         "remaining_uncertainty": ["Mock caveat."],
         "sources": [source],
     }
@@ -72,7 +74,7 @@ def _default_scripts() -> dict[str, dict[str, Any]]:
         },
         "solver": dict(base),
         "researcher": dict(base),
-        "critic": {**base, "supports": [], "disagrees_with": []},
+        "critic": dict(base),
         "synthesize": {
             **base,
             "position": "FINAL MOCK ANSWER: the mock answer is 42, verified by the team.",

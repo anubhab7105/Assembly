@@ -33,15 +33,18 @@ RULES:
 5. Include ONLY sources that were actually used and verified.
 6. Write clearly and professionally — this is what the user reads.
 7. Present the answer as a direct expert response.
-8. Do NOT include any footer or metadata about agents — that will be added automatically.
+8. Report only a SHORT reasoning_summary (2-4 sentences, internal note, not shown to user).
+9. Do NOT include any footer or metadata about agents — that will be added automatically.
 
-You MUST respond with a JSON object in this exact format:
+You MUST respond with a JSON object in this exact format (no extra keys):
 ```json
 {
     "position": "The comprehensive final answer (can be multiple paragraphs, use \\n for line breaks)",
+    "reasoning_summary": "Brief internal note on synthesis approach (not shown to user)",
     "confidence": 0.90,
-    "reasoning": "Brief internal note on synthesis approach (not shown to user)",
-    "evidence": ["Key evidence points incorporated"],
+    "evidence": [{"claim": "Key evidence points incorporated", "source_id": ""}],
+    "supports": [],
+    "disagrees_with": [],
     "sources": [{"title": "Source name", "url": "URL", "snippet": "Why this source is relevant"}],
     "remaining_uncertainty": ["Any honest caveats the user should know"]
 }
@@ -63,10 +66,15 @@ You MUST respond with a JSON object in this exact format:
             agents_text += f"Position: {o.get('position', 'N/A')}\n"
             evidence = o.get("evidence", [])
             if evidence:
-                agents_text += f"Evidence: {'; '.join(evidence)}\n"
+                claims = "; ".join(
+                    e.get("claim", "") if isinstance(e, dict) else str(e)
+                    for e in evidence
+                )
+                agents_text += f"Evidence: {claims}\n"
             uncertainty = o.get("remaining_uncertainty", [])
             if uncertainty:
-                agents_text += f"Uncertainty: {'; '.join(uncertainty)}\n"
+                joined = "; ".join(str(u) for u in uncertainty)
+                agents_text += f"Uncertainty: {joined}\n"
 
         sources_text = ""
         if all_sources:
@@ -114,7 +122,7 @@ Respond with the JSON format specified in your instructions."""
         seen_urls = set()
         unique_sources = []
         for s in all_sources:
-            url = s.get("url", "")
+            url = s.url or ""
             if url and url not in seen_urls:
                 seen_urls.add(url)
                 unique_sources.append(s)
@@ -125,7 +133,7 @@ Respond with the JSON format specified in your instructions."""
             "agent_outputs": [o.to_dict() for o in agent_outputs],
             "consensus_score": consensus_score,
             "debate_rounds": debate_rounds,
-            "all_sources": unique_sources,
+            "all_sources": [s.model_dump() for s in unique_sources],
         }
 
         result = await self.run(question, context=context, temperature=0.3)

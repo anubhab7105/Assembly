@@ -27,21 +27,23 @@ class SolverAgent(BaseAgent):
 Your job is to independently analyze and solve the given problem with rigorous reasoning.
 
 RULES:
-1. Think step-by-step and show your reasoning clearly.
-2. Provide evidence and justification for every claim.
-3. State your confidence level honestly (0.0 to 1.0).
+1. Think step-by-step, but report only a SHORT reasoning_summary (2-4 sentences) — never dump a long chain-of-thought.
+2. Provide evidence for every claim as objects with "claim" and "source_id" (source_id may be "" when unknown).
+3. State your confidence level honestly as a number 0.0 to 1.0.
 4. Identify any uncertainties or assumptions.
 5. If you're unsure, say so — don't fabricate confidence.
+6. In the independent round you have seen no other agents: leave "supports" and "disagrees_with" empty.
 
-You MUST respond with a JSON object in this exact format:
+You MUST respond with a JSON object in this exact format (no extra keys):
 ```json
 {{
     "position": "Your clear conclusion/answer to the question",
+    "reasoning_summary": "Brief summary of your key reasoning (2-4 sentences, no chain-of-thought)",
     "confidence": 0.85,
-    "reasoning": "Step-by-step explanation of how you arrived at your answer",
-    "evidence": ["Evidence point 1", "Evidence point 2"],
-    "remaining_uncertainty": ["What you're still unsure about"],
-    "sources": []
+    "evidence": [{{"claim": "Evidence point 1", "source_id": ""}}],
+    "supports": [],
+    "disagrees_with": [],
+    "remaining_uncertainty": ["What you're still unsure about"]
 }}
 ```"""
 
@@ -54,10 +56,14 @@ You MUST respond with a JSON object in this exact format:
 
             others_text = ""
             for o in other_outputs:
+                claims = "; ".join(
+                    e.get("claim", "") if isinstance(e, dict) else str(e)
+                    for e in o.get("evidence", [])
+                )
                 others_text += f"\n--- Agent {o['agent_id']} ({o['agent_type']}) ---\n"
                 others_text += f"Position: {o['position']}\n"
                 others_text += f"Confidence: {o['confidence']}\n"
-                others_text += f"Evidence: {', '.join(o.get('evidence', []))}\n"
+                others_text += f"Evidence: {claims}\n"
 
             valid_ids_str = ", ".join(f'"{aid}"' for aid in valid_ids)
 
@@ -77,13 +83,13 @@ Review the other agents' work. For each:
 3. Is their evidence sufficient?
 4. Are there better approaches?
 
-Update your own position based on this review. Respond with JSON:
+Update your own position based on this review. Respond with JSON only, no extra keys:
 ```json
 {{
     "position": "Your updated conclusion",
+    "reasoning_summary": "Brief summary of why you updated (or maintained) your position",
     "confidence": 0.0-1.0,
-    "reasoning": "Why you updated (or maintained) your position",
-    "evidence": ["Your evidence"],
+    "evidence": [{{"claim": "Your evidence", "source_id": ""}}],
     "supports": ["agent_ids you agree with"],
     "disagrees_with": ["agent_ids you disagree with"],
     "remaining_uncertainty": ["What's still unclear"]

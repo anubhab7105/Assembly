@@ -150,16 +150,16 @@ class ConsensusEngine:
 
         if total_relations == 0:
             # No explicit agreement/disagreement — estimate from confidence
-            avg_confidence = sum(o.confidence for o in outputs) / len(outputs)
+            avg_confidence = sum(o.calibrated_confidence for o in outputs) / len(outputs)
             return avg_confidence * 0.7  # Conservative estimate
 
         return agreements / total_relations
 
     def _calculate_confidence(self, outputs: List[AgentOutput]) -> float:
-        """Average confidence across all agents."""
+        """Average calibrated confidence across all agents."""
         if not outputs:
             return 0.0
-        return sum(o.confidence for o in outputs) / len(outputs)
+        return sum(o.calibrated_confidence for o in outputs) / len(outputs)
 
     def _calculate_evidence_quality(self, outputs: List[AgentOutput]) -> float:
         """
@@ -201,8 +201,7 @@ class ConsensusEngine:
 
         for o in outputs:
             # Skip agents that failed this round — their output is stale carry-forward
-            failed_round = getattr(o, '_failed_round', None)
-            if failed_round == round_number:
+            if o.failed_round == round_number:
                 logger.warning(
                     f"Consensus │ Excluding {o.agent_id} from new-info calculation "
                     f"(API failure in round {round_number})"

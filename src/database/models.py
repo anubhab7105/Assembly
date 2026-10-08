@@ -6,8 +6,17 @@ All ORM models per the PRD database design (Section 20).
 
 import uuid
 from datetime import datetime, timezone
+
 from sqlalchemy import (
-    Column, String, Text, Float, Integer, Boolean, DateTime, ForeignKey, JSON,
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 
@@ -36,7 +45,9 @@ class User(Base):
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
-    conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+    conversations = relationship(
+        "Conversation", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -53,18 +64,29 @@ class Conversation(Base):
 
     # Relationships
     user = relationship("User", back_populates="conversations")
-    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan", order_by="Message.created_at")
-    executions = relationship("Execution", back_populates="conversation", cascade="all, delete-orphan")
+    messages = relationship(
+        "Message",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="Message.created_at",
+    )
+    executions = relationship(
+        "Execution", back_populates="conversation", cascade="all, delete-orphan"
+    )
 
 
 class Message(Base):
     __tablename__ = "messages"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False, index=True)
+    conversation_id = Column(
+        String, ForeignKey("conversations.id"), nullable=False, index=True
+    )
     role = Column(String, nullable=False)  # "user" | "assistant"
     content = Column(Text, nullable=False)
-    sources = Column(JSON, nullable=True)  # List of source objects for assistant messages
+    sources = Column(
+        JSON, nullable=True
+    )  # List of source objects for assistant messages
     execution_id = Column(String, ForeignKey("executions.id"), nullable=True)
     created_at = Column(DateTime, default=utc_now)
 
@@ -80,11 +102,17 @@ class Execution(Base):
     __tablename__ = "executions"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False, index=True)
+    conversation_id = Column(
+        String, ForeignKey("conversations.id"), nullable=False, index=True
+    )
     question = Column(Text, nullable=False)
     time_budget_minutes = Column(Integer, nullable=False)
-    status = Column(String, default="pending")  # pending | planning | solving | debating | synthesizing | completed | failed | timeout
-    problem_type = Column(String, nullable=True)  # math | coding | research | general | multi-step
+    status = Column(
+        String, default="pending"
+    )  # pending | planning | solving | debating | synthesizing | completed | failed | timeout
+    problem_type = Column(
+        String, nullable=True
+    )  # math | coding | research | general | multi-step
     complexity = Column(String, nullable=True)  # low | medium | high
     final_answer = Column(Text, nullable=True)
     final_sources = Column(JSON, nullable=True)
@@ -100,9 +128,15 @@ class Execution(Base):
     # Relationships
     conversation = relationship("Conversation", back_populates="executions")
     message = relationship("Message", back_populates="execution", uselist=False)
-    agent_runs = relationship("AgentRun", back_populates="execution", cascade="all, delete-orphan")
-    debate_round_records = relationship("DebateRound", back_populates="execution", cascade="all, delete-orphan")
-    consensus_events = relationship("ConsensusEvent", back_populates="execution", cascade="all, delete-orphan")
+    agent_runs = relationship(
+        "AgentRun", back_populates="execution", cascade="all, delete-orphan"
+    )
+    debate_round_records = relationship(
+        "DebateRound", back_populates="execution", cascade="all, delete-orphan"
+    )
+    consensus_events = relationship(
+        "ConsensusEvent", back_populates="execution", cascade="all, delete-orphan"
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -112,11 +146,17 @@ class AgentRun(Base):
     __tablename__ = "agent_runs"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    execution_id = Column(String, ForeignKey("executions.id"), nullable=False, index=True)
-    agent_type = Column(String, nullable=False)  # solver | researcher | critic | synthesizer
+    execution_id = Column(
+        String, ForeignKey("executions.id"), nullable=False, index=True
+    )
+    agent_type = Column(
+        String, nullable=False
+    )  # solver | researcher | critic | synthesizer
     role_description = Column(String, nullable=True)
     model = Column(String, nullable=False)
-    provider = Column(String, nullable=False)  # gemini | groq | cerebras | openrouter | huggingface
+    provider = Column(
+        String, nullable=False
+    )  # gemini | groq | cerebras | openrouter | huggingface
     input_tokens = Column(Integer, default=0)
     output_tokens = Column(Integer, default=0)
     status = Column(String, default="active")  # active | completed | failed | timeout
@@ -126,7 +166,9 @@ class AgentRun(Base):
 
     # Relationships
     execution = relationship("Execution", back_populates="agent_runs")
-    agent_messages = relationship("AgentMessage", back_populates="agent_run", cascade="all, delete-orphan")
+    agent_messages = relationship(
+        "AgentMessage", back_populates="agent_run", cascade="all, delete-orphan"
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -136,9 +178,13 @@ class AgentMessage(Base):
     __tablename__ = "agent_messages"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    agent_run_id = Column(String, ForeignKey("agent_runs.id"), nullable=False, index=True)
+    agent_run_id = Column(
+        String, ForeignKey("agent_runs.id"), nullable=False, index=True
+    )
     round_number = Column(Integer, nullable=False)
-    message_type = Column(String, nullable=False)  # solution | critique | evidence | vote | synthesis
+    message_type = Column(
+        String, nullable=False
+    )  # solution | critique | evidence | vote | synthesis
     content = Column(Text, nullable=False)
     position = Column(Text, nullable=True)
     evidence = Column(JSON, nullable=True)
@@ -158,9 +204,13 @@ class DebateRound(Base):
     __tablename__ = "debate_rounds"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    execution_id = Column(String, ForeignKey("executions.id"), nullable=False, index=True)
+    execution_id = Column(
+        String, ForeignKey("executions.id"), nullable=False, index=True
+    )
     round_number = Column(Integer, nullable=False)
-    round_type = Column(String, nullable=False)  # independent | cross_examination | research | resolution | consensus
+    round_type = Column(
+        String, nullable=False
+    )  # independent | cross_examination | research | resolution | consensus
     summary = Column(Text, nullable=True)
     consensus_score = Column(Float, nullable=True)
     created_at = Column(DateTime, default=utc_now)
@@ -176,7 +226,9 @@ class ConsensusEvent(Base):
     __tablename__ = "consensus_events"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    execution_id = Column(String, ForeignKey("executions.id"), nullable=False, index=True)
+    execution_id = Column(
+        String, ForeignKey("executions.id"), nullable=False, index=True
+    )
     round_number = Column(Integer, nullable=False)
     consensus_score = Column(Float, nullable=False)
     agreement_count = Column(Integer, default=0)
@@ -190,13 +242,35 @@ class ConsensusEvent(Base):
 
 
 # ═════════════════════════════════════════════════════════════════════
+# QUOTA USAGE — Daily per-key counters (survive restarts)
+# ═════════════════════════════════════════════════════════════════════
+class QuotaUsage(Base):
+    """Calls/tokens spent per (provider, key fingerprint, day).
+
+    The fingerprint is a salted SHA-256 prefix (see providers/quota.py) —
+    raw keys are never stored here.
+    """
+
+    __tablename__ = "quota_usage"
+
+    provider = Column(String, primary_key=True)
+    key_fingerprint = Column(String, primary_key=True)
+    day = Column(String, primary_key=True)  # YYYY-MM-DD
+    count = Column(Integer, default=0)
+    tokens = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+# ═════════════════════════════════════════════════════════════════════
 # SOURCES & CITATIONS
 # ═════════════════════════════════════════════════════════════════════
 class Source(Base):
     __tablename__ = "sources"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    execution_id = Column(String, ForeignKey("executions.id"), nullable=False, index=True)
+    execution_id = Column(
+        String, ForeignKey("executions.id"), nullable=False, index=True
+    )
     url = Column(String, nullable=True)
     title = Column(String, nullable=True)
     snippet = Column(Text, nullable=True)

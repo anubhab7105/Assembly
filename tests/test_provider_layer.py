@@ -17,8 +17,16 @@ from src.providers.errors import (
 )
 from src.providers.gemini_provider import GeminiProvider
 from src.providers.openai_compat import OpenAICompatibleProvider
+from src.providers.quota import get_limiter
 from src.providers.registry import ProviderDisabledError, get_provider
 from src.providers.router import ModelRouter
+
+
+@pytest.fixture(autouse=True)
+def _fresh_quota_state() -> None:
+    """generate() reports 429s into the shared limiter; reset per test."""
+    get_limiter().reset()
+
 
 SUCCESS_BODY = {
     "id": "chatcmpl-test",

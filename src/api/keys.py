@@ -41,6 +41,10 @@ class ProviderStatus(BaseModel):
     available: bool
     models: list[str]
     families: list[str]
+    rpm_remaining: int | None = None
+    rpd_remaining: int | None = None
+    cooldown_seconds: float = 0.0
+    estimated_calls_3min: int | None = None
 
 
 class ProvidersStatusResponse(BaseModel):
@@ -48,18 +52,6 @@ class ProvidersStatusResponse(BaseModel):
     providers: list[ProviderStatus]
     families: list[str]
     capacity_3min_estimate: int | None = None
-
-
-def _estimate_calls(rpm: int | None, rpd: int | None, minutes: int = 3) -> int | None:
-    """Rough affordable-call estimate (WORKFLOW capacity rule of thumb)."""
-    if rpm is None and rpd is None:
-        return None
-    budget = float("inf")
-    if rpm is not None:
-        budget = min(budget, rpm * minutes)
-    if rpd is not None:
-        budget = min(budget, rpd)
-    return int(budget * 0.7)  # 30% safety margin
 
 
 @router.post("/keys/test", response_model=KeyTestResponse)
@@ -132,9 +124,13 @@ async def providers_status(
     user_id: str = Depends(get_current_user_id),
 ) -> ProvidersStatusResponse:
     """Available providers, families, and rough capacity for this mode's keys."""
+    from src.core.keystore import reveal
+    from src.providers.quota import fingerprint_key, get_limiter
+
     store = get_keystore()
-    held = set(store.providers())
+    held = store.get_keys()
     catalog = load_models_config()
+    limiter = get_limiter()
 
     entries: list[ProviderStatus] = []
     families: set[str] = set()
@@ -142,19 +138,28 @@ async def providers_status(
     for provider_id, spec in catalog.providers.items():
         available = spec.enabled and provider_id in held
         provider_families = sorted({model.family for model in spec.models})
-        entries.append(
-            ProviderStatus(
-                id=provider_id,
-                available=available,
-                models=[model.id for model in spec.models],
-                families=provider_families,
-            )
+        entry = ProviderStatus(
+            id=provider_id,
+            available=available,
+            models=[model.id for model in spec.models],
+            families=provider_families,
         )
+        entries.append(entry)
         if available:
             families.update(provider_families)
-            estimate = _estimate_calls(spec.limits.rpm, spec.limits.rpd)
-            if estimate is not None:
-                capacity = (capacity or 0) + estimate
+            fingerprint = fingerprint_key(reveal(held[provider_id]))
+            remaining = limiter.remaining(provider_id, fingerprint)
+            entry.rpm_remaining = remaining["rpm_remaining"]
+            entry.rpd_remaining = remaining["rpd_remaining"]
+            entry.cooldown_seconds = remaining["cooldown_seconds"]
+            known = [
+                value
+                for value in (entry.rpm_remaining, entry.rpd_remaining)
+                if value is not None
+            ]
+            if known:
+                entry.estimated_calls_3min = min(known)
+                capacity = (capacity or 0) + entry.estimated_calls_3min
 
     return ProvidersStatusResponse(
         mode=settings.app_mode,

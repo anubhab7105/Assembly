@@ -37,8 +37,11 @@ class ExecutionResult:
         agent_count: int,
         debate_rounds: int,
         total_tokens: int,
-        providers_used: list = None,
+        providers_used: list | None = None,
         status: str = "completed",
+        routing: list | None = None,
+        degraded: bool = False,
+        warnings: list | None = None,
     ):
         self.answer = answer
         self.sources = sources
@@ -50,12 +53,16 @@ class ExecutionResult:
         self.total_tokens = total_tokens
         self.providers_used = providers_used or []
         self.status = status
+        # Per-agent routing provenance (provider/model/family/reason/role).
+        self.routing = routing or []
+        self.degraded = degraded
+        self.warnings = warnings or []
 
 
 class Orchestrator:
     """
     The main orchestration engine for Assembly.
-    
+
     Lifecycle:
     1. Planner classifies the problem
     2. Agent Manager forms a temporary team
@@ -96,7 +103,9 @@ class Orchestrator:
         logger.info(f"Budget: {time_budget_minutes} minutes")
 
         # Per-request keys get an isolated in-memory store + router.
-        key_store = RequestKeyStore(provider_keys) if provider_keys is not None else None
+        key_store = (
+            RequestKeyStore(provider_keys) if provider_keys is not None else None
+        )
         router = ModelRouter(keys=key_store.get_keys()) if key_store else self.router
 
         # Initialize components
@@ -112,27 +121,42 @@ class Orchestrator:
             # ════════════════════════════════════════════════════════════
             # PHASE 1: PLANNING — Classify the problem
             # ════════════════════════════════════════════════════════════
-            await self._emit_progress(on_progress, execution_id, "status_update", {
-                "status": "planning",
-                "message": "Analyzing your question...",
-            })
+            await self._emit_progress(
+                on_progress,
+                execution_id,
+                "status_update",
+                {
+                    "status": "planning",
+                    "message": "Analyzing your question...",
+                },
+            )
 
             plan = await planner.plan(question, time_budget_minutes)
 
-            await self._emit_progress(on_progress, execution_id, "status_update", {
-                "status": "planning",
-                "message": f"Classified as {plan.complexity} complexity {plan.problem_type} problem",
-                "problem_type": plan.problem_type,
-                "complexity": plan.complexity,
-            })
+            await self._emit_progress(
+                on_progress,
+                execution_id,
+                "status_update",
+                {
+                    "status": "planning",
+                    "message": f"Classified as {plan.complexity} complexity {plan.problem_type} problem",
+                    "problem_type": plan.problem_type,
+                    "complexity": plan.complexity,
+                },
+            )
 
             # ════════════════════════════════════════════════════════════
             # PHASE 2: TEAM FORMATION — Create agents
             # ════════════════════════════════════════════════════════════
-            await self._emit_progress(on_progress, execution_id, "status_update", {
-                "status": "forming_team",
-                "message": f"Assembling a team of {len(plan.team_composition)} experts...",
-            })
+            await self._emit_progress(
+                on_progress,
+                execution_id,
+                "status_update",
+                {
+                    "status": "forming_team",
+                    "message": f"Assembling a team of {len(plan.team_composition)} experts...",
+                },
+            )
 
             agents = agent_manager.create_team(
                 team_composition=plan.team_composition,
@@ -148,22 +172,34 @@ class Orchestrator:
             agent_info = agent_manager.get_agent_info()
 
             # Track which providers are being used
-            providers_used = list(set(a.get("provider_name", "unknown") for a in agent_info))
+            providers_used = list(
+                {a.get("provider_name", "unknown") for a in agent_info}
+            )
 
-            await self._emit_progress(on_progress, execution_id, "agent_update", {
-                "agents": agent_info,
-                "message": "Team assembled",
-            })
+            await self._emit_progress(
+                on_progress,
+                execution_id,
+                "agent_update",
+                {
+                    "agents": agent_info,
+                    "message": "Team assembled",
+                },
+            )
 
             # ════════════════════════════════════════════════════════════
             # PHASE 3: WEB RESEARCH (if needed)
             # ════════════════════════════════════════════════════════════
             search_results = []
             if plan.needs_research and budget.can_search():
-                await self._emit_progress(on_progress, execution_id, "status_update", {
-                    "status": "researching",
-                    "message": "Searching for evidence...",
-                })
+                await self._emit_progress(
+                    on_progress,
+                    execution_id,
+                    "status_update",
+                    {
+                        "status": "researching",
+                        "message": "Searching for evidence...",
+                    },
+                )
 
                 search_results = await self.search_engine.search(question)
                 budget.record_search(len(search_results))
@@ -171,15 +207,20 @@ class Orchestrator:
             # ════════════════════════════════════════════════════════════
             # PHASE 4: INDEPENDENT SOLVING — Each agent works alone
             # ════════════════════════════════════════════════════════════
-            await self._emit_progress(on_progress, execution_id, "status_update", {
-                "status": "solving",
-                "message": "Agents solving independently...",
-                **budget.get_status(),
-            })
+            await self._emit_progress(
+                on_progress,
+                execution_id,
+                "status_update",
+                {
+                    "status": "solving",
+                    "message": "Agents solving independently...",
+                    **budget.get_status(),
+                },
+            )
 
             # Inject search results for researcher agents
             for agent in agents:
-                if hasattr(agent, 'search_results'):
+                if hasattr(agent, "search_results"):
                     agent.search_results = search_results
 
             outputs = await agent_manager.run_all_independent(agents, question)
@@ -195,12 +236,17 @@ class Orchestrator:
             round_number = 1
             consensus_result = consensus_engine.evaluate(outputs, round_number)
 
-            await self._emit_progress(on_progress, execution_id, "consensus_update", {
-                "consensus_score": consensus_result.score,
-                "round": round_number,
-                "decision": consensus_result.decision,
-                **budget.get_status(),
-            })
+            await self._emit_progress(
+                on_progress,
+                execution_id,
+                "consensus_update",
+                {
+                    "consensus_score": consensus_result.score,
+                    "round": round_number,
+                    "decision": consensus_result.decision,
+                    **budget.get_status(),
+                },
+            )
 
             # Debate loop: continue while consensus is insufficient and budget allows
             while (
@@ -210,12 +256,17 @@ class Orchestrator:
             ):
                 round_number += 1
 
-                await self._emit_progress(on_progress, execution_id, "status_update", {
-                    "status": "debating",
-                    "message": f"Debate round {round_number}...",
-                    "round": round_number,
-                    **budget.get_status(),
-                })
+                await self._emit_progress(
+                    on_progress,
+                    execution_id,
+                    "status_update",
+                    {
+                        "status": "debating",
+                        "message": f"Debate round {round_number}...",
+                        "round": round_number,
+                        **budget.get_status(),
+                    },
+                )
 
                 # Run debate round
                 outputs = await debate_manager.run_debate_round(
@@ -234,26 +285,38 @@ class Orchestrator:
                 # Re-evaluate consensus
                 force = budget.should_force_synthesis()
                 consensus_result = consensus_engine.evaluate(
-                    outputs, round_number, force_finalize=force,
+                    outputs,
+                    round_number,
+                    force_finalize=force,
                 )
 
-                await self._emit_progress(on_progress, execution_id, "consensus_update", {
-                    "consensus_score": consensus_result.score,
-                    "round": round_number,
-                    "decision": consensus_result.decision,
-                    "reasoning": consensus_result.reasoning,
-                    **budget.get_status(),
-                })
+                await self._emit_progress(
+                    on_progress,
+                    execution_id,
+                    "consensus_update",
+                    {
+                        "consensus_score": consensus_result.score,
+                        "round": round_number,
+                        "decision": consensus_result.decision,
+                        "reasoning": consensus_result.reasoning,
+                        **budget.get_status(),
+                    },
+                )
 
             # ════════════════════════════════════════════════════════════
             # PHASE 6: FINAL SYNTHESIS — Produce the answer
             # ════════════════════════════════════════════════════════════
-            await self._emit_progress(on_progress, execution_id, "status_update", {
-                "status": "synthesizing",
-                "message": "Synthesizing final answer...",
-                "consensus_score": consensus_result.score,
-                **budget.get_status(),
-            })
+            await self._emit_progress(
+                on_progress,
+                execution_id,
+                "status_update",
+                {
+                    "status": "synthesizing",
+                    "message": "Synthesizing final answer...",
+                    "consensus_score": consensus_result.score,
+                    **budget.get_status(),
+                },
+            )
 
             # Create synthesizer agent
             synthesizer = agent_manager.create_agent(
@@ -282,11 +345,11 @@ class Orchestrator:
             # ════════════════════════════════════════════════════════════
             # DONE — Return the result
             # ════════════════════════════════════════════════════════════
-            sources = final_output.sources
+            sources = [s.model_dump() for s in final_output.sources]
             if not sources:
                 # Collect sources from all agents
                 for o in outputs:
-                    sources.extend(o.sources)
+                    sources.extend(s.model_dump() for s in o.sources)
 
             result = ExecutionResult(
                 answer=final_output.position,
@@ -299,17 +362,27 @@ class Orchestrator:
                 total_tokens=total_tokens,
                 providers_used=providers_used,
                 status="completed",
+                routing=agent_manager.get_agent_info(),
+                degraded=getattr(agent_manager.last_routing, "degraded", False),
+                warnings=list(
+                    getattr(agent_manager.last_routing, "warnings", []) or []
+                ),
             )
 
-            await self._emit_progress(on_progress, execution_id, "answer_ready", {
-                "status": "completed",
-                "answer": result.answer,
-                "sources": result.sources,
-                "consensus_score": result.consensus_score,
-                "agent_count": result.agent_count,
-                "providers_used": result.providers_used,
-                **budget.get_status(),
-            })
+            await self._emit_progress(
+                on_progress,
+                execution_id,
+                "answer_ready",
+                {
+                    "status": "completed",
+                    "answer": result.answer,
+                    "sources": result.sources,
+                    "consensus_score": result.consensus_score,
+                    "agent_count": result.agent_count,
+                    "providers_used": result.providers_used,
+                    **budget.get_status(),
+                },
+            )
 
             logger.info(
                 f"═══ EXECUTION COMPLETE: {execution_id} ═══\n"
@@ -328,17 +401,24 @@ class Orchestrator:
 
             return result
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — execution must fail closed, never crash the worker
+            # Server side keeps the full (masked) error; clients get a
+            # generic message — exception text may carry provider details.
             logger.error(f"═══ EXECUTION FAILED: {execution_id} — {e} ═══")
-            await self._emit_progress(on_progress, execution_id, "error", {
-                "status": "failed",
-                "message": str(e),
-            })
+            await self._emit_progress(
+                on_progress,
+                execution_id,
+                "error",
+                {
+                    "status": "failed",
+                    "message": "Execution failed; see server logs for details.",
+                },
+            )
             workspace.cleanup(execution_id)
             if key_store is not None:
                 key_store.clear()
             return ExecutionResult(
-                answer=f"An error occurred while processing your question: {e!s}",
+                answer="An error occurred while processing your question. Please try again.",
                 sources=[],
                 consensus_score=0.0,
                 problem_type="unknown",
@@ -359,11 +439,13 @@ class Orchestrator:
         """Send a progress event to the frontend via callback."""
         if callback:
             try:
-                await callback({
-                    "event_type": event_type,
-                    "execution_id": execution_id,
-                    "data": data,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
-            except Exception as e:
+                await callback(
+                    {
+                        "event_type": event_type,
+                        "execution_id": execution_id,
+                        "data": data,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            except Exception as e:  # noqa: BLE001 — a broken callback must not kill the run
                 logger.error(f"Orchestrator │ Progress callback error: {e}")

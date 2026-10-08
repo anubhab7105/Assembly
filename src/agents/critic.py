@@ -39,19 +39,20 @@ RULES:
 4. Propose alternative perspectives that haven't been considered.
 5. If everyone agrees, try harder to find what they might all be wrong about.
 6. But if the evidence genuinely supports the consensus, say so honestly.
-7. State your confidence level honestly (0.0 to 1.0).
+7. State your confidence level honestly as a number 0.0 to 1.0.
+8. Report only a SHORT reasoning_summary (2-4 sentences) — never dump a long chain-of-thought.
+9. In the independent round you have seen no other agents: leave "supports" and "disagrees_with" empty.
 
-You MUST respond with a JSON object in this exact format:
+You MUST respond with a JSON object in this exact format (no extra keys):
 ```json
 {{
     "position": "Your critical assessment and conclusion",
+    "reasoning_summary": "Why you challenge or support the current positions (2-4 sentences)",
     "confidence": 0.75,
-    "reasoning": "Why you challenge or support the current positions",
-    "evidence": ["Counter-evidence or supporting evidence"],
+    "evidence": [{{"claim": "Counter-evidence or supporting evidence", "source_id": ""}}],
     "supports": ["agent_ids whose reasoning holds up"],
     "disagrees_with": ["agent_ids with flawed reasoning"],
-    "remaining_uncertainty": ["Critical unknowns that affect the answer"],
-    "sources": []
+    "remaining_uncertainty": ["Critical unknowns that affect the answer"]
 }}
 ```"""
 
@@ -63,11 +64,15 @@ You MUST respond with a JSON object in this exact format:
 
             others_text = ""
             for o in other_outputs:
+                claims = "; ".join(
+                    e.get("claim", "") if isinstance(e, dict) else str(e)
+                    for e in o.get("evidence", [])
+                )
                 others_text += f"\n--- Agent {o['agent_id']} ({o['agent_type']}) ---\n"
                 others_text += f"Position: {o['position']}\n"
                 others_text += f"Confidence: {o['confidence']}\n"
-                others_text += f"Reasoning: {o.get('reasoning', 'N/A')}\n"
-                others_text += f"Evidence: {', '.join(o.get('evidence', []))}\n"
+                others_text += f"Reasoning summary: {o.get('reasoning_summary', 'N/A')}\n"
+                others_text += f"Evidence: {claims}\n"
 
             valid_ids_str = ", ".join(f'"{aid}"' for aid in valid_ids)
 

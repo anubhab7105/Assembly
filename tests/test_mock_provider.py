@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+from src.agents.base_agent import AgentValidationError
 from src.agents.solver import SolverAgent
 from src.providers.base import ChatMessage
 from src.providers.mock_provider import MockProvider, MockRateLimitError
@@ -103,12 +104,14 @@ async def test_timeout_fault() -> None:
         await provider.generate(_messages("independently analyze and solve."))
 
 
-async def test_malformed_json_triggers_text_fallback() -> None:
+async def test_malformed_json_retries_once_then_raises() -> None:
+    """No silent text fallback: strict validation retries once, then raises
+    so AgentManager can build the error output (see tests/test_agents.py)."""
     provider = MockProvider(always_fail={"solver": "malformed"})
     agent = SolverAgent(agent_id="agent_01", provider=provider, model="mock-model")
-    output = await agent.run("What is the answer?")
-    assert output.confidence == 0.6
-    assert "not JSON" in output.position
+    with pytest.raises(AgentValidationError):
+        await agent.run("What is the answer?")
+    assert len(provider.calls) == 2
 
 
 async def test_is_available_and_models() -> None:
