@@ -1,5 +1,6 @@
 # ── Secrets & Local Data ────────────────────
 /.env
+.env.dev
 assembly.db
 
 # ── Python ──────────────────────────────────

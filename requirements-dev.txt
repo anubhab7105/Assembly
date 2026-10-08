@@ -1,0 +1,8 @@
+# Assembly — development / test dependencies.
+# Production deps live in requirements.txt; install both for local dev:
+#   pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+pytest>=8.0.0
+pytest-asyncio>=1.0.0
+respx>=0.22.0
+ruff>=0.8.0

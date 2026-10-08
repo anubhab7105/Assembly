@@ -8,7 +8,7 @@ Supports local development (SQLite) and production (Supabase PostgreSQL).
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 # ── Resolve project root (two levels up from this file) ──────────────
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -112,9 +112,10 @@ class Settings(BaseSettings):
         }
         key = key_map.get(provider, "")
         # Reject placeholder values
-        placeholders = ("sk-your", "your-", "gsk_your", "hf_your", "csk_your")
+        placeholders = ("sk-your", "your-", "gsk_your", "hf_your", "csk_your", "xpl_your")
         return bool(key) and not any(key.startswith(p) for p in placeholders)
 
 
 # ── Singleton ────────────────────────────────────────────────────────
 settings = Settings()
+
