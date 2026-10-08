@@ -30,6 +30,7 @@ pyinstaller -y --name "assembly_backend" `
     --hidden-import "pydantic" `
     --hidden-import "sqlite3" `
     --hidden-import "keyring.backends.Windows" `
+    --hidden-import "passlib.handlers.bcrypt" `
     src/main.py
 
 Write-Host "Build Complete!"
