@@ -86,7 +86,15 @@ async def limit_upload_size(request: Request, call_next):
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > 1024 * 1024:
         return JSONResponse(status_code=413, content={"detail": "Request body too large. Maximum size is 1MB."})
-    return await call_next(request)
+    
+    response = await call_next(request)
+    
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    
+    return response
 
 # ── API Routes ───────────────────────────────────────────────────────
 app.include_router(auth_router)
