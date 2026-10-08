@@ -40,6 +40,8 @@ def create_access_token(
         or timedelta(minutes=settings.jwt_access_token_expire_minutes)
     )
     to_encode.update({"exp": expire})
+    if settings.app_mode == "web":
+        to_encode.update({"aud": "authenticated"})
     return jwt.encode(
         to_encode,
         reveal(settings.jwt_secret_key),
