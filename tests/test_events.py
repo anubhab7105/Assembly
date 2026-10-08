@@ -384,9 +384,12 @@ def _authed_client(monkeypatch, db_path=None):
     from sqlalchemy.pool import StaticPool as _StaticPool
 
     import src.api.executions as exec_mod
+    from src.core.config import settings
     from src.database.base import Base as _Base
     from src.database.base import get_db as _get_db
     from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "web")
 
     if db_path is None:
         engine = _create_engine(
