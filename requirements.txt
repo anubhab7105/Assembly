@@ -22,6 +22,7 @@ keyring>=25.0.0              # Desktop mode: Windows Credential Manager (needs p
 
 # Database
 psycopg2-binary>=2.9.0     # PostgreSQL driver for Supabase
+alembic>=1.13.0
 
 # Utilities
 aiofiles>=24.0.0
