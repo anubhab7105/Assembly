@@ -135,4 +135,13 @@ export class ApiClient {
       return { feasible: true }
     }
   }
+
+  static async wakeup(): Promise<void> {
+    try {
+      const baseUrl = env.apiUrl.endsWith("/api") ? env.apiUrl.replace("/api", "") : env.apiUrl;
+      await fetch(`${baseUrl}/health`).catch(() => {});
+    } catch (e: any) {
+      // Ignore
+    }
+  }
 }
