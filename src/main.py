@@ -249,7 +249,7 @@ if __name__ == "__main__":
         reload = settings.debug
 
     uvicorn.run(
-        "src.main:app",
+        app if getattr(sys, "frozen", False) or not reload else "src.main:app",
         host=host,
         port=port,
         reload=reload,
