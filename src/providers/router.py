@@ -4,7 +4,7 @@ Assembly — Model Router
 Selects the best provider + model for each agent role based on
 task type, complexity, cost, latency, and time budget (PRD Section 22).
 
-Supports 5 providers: Gemini, Groq, Cerebras, OpenRouter, Hugging Face.
+Supports 6 providers: Gemini, Groq, Cerebras, OpenRouter, Hugging Face, Experiential.
 Enforces a minimum of 3 live providers before accepting any work.
 """
 
@@ -253,3 +253,4 @@ class ModelRouter:
             model=first_provider.get_available_models()[0],
             provider_name=first_name,
         )
+
