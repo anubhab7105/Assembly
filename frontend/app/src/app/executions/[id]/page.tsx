@@ -24,6 +24,8 @@ import {
   Zap,
 } from "lucide-react"
 
+import { FinalAnswer } from "@/components/final-answer"
+
 export default function ExecutionPage() {
   const params = useParams()
   const router = useRouter()
@@ -211,19 +213,7 @@ export default function ExecutionPage() {
 
         {/* ─── Final Answer (Only shows when done) ───────────────────────────── */}
         {state.finalAnswer && (
-          <Card className="border-success/30 bg-success-subtle shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-success flex items-center gap-2 text-xl">
-                <CheckCircle2 className="size-6" />
-                Final Synthesis
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-lg leading-relaxed text-foreground whitespace-pre-wrap">
-                {state.finalAnswer}
-              </p>
-            </CardContent>
-          </Card>
+          <FinalAnswer state={state} />
         )}
 
         {/* ─── Middle Row: Disagreements & Sources ───────────────────────────── */}
@@ -277,9 +267,10 @@ export default function ExecutionPage() {
                 {state.sources.length === 0 ? (
                   <div className="p-6 text-center text-sm text-muted-foreground">No external sources cited yet.</div>
                 ) : (
-                  state.sources.map((s) => (
+                  state.sources.map((s, index) => (
                     <a 
                       key={s.id} 
+                      id={`source-${index + 1}`}
                       href={s.url} 
                       target="_blank" 
                       rel="noreferrer"
