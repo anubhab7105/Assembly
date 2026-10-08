@@ -8,22 +8,20 @@ Debate → Consensus → Synthesis → Final Answer
 This is the core of Assembly (PRD Section 9.2).
 """
 
-import asyncio
-import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
-from typing import Optional, Callable, Awaitable, List, Dict
 
-from src.orchestration.planner import Planner, PlanResult
-from src.orchestration.agent_manager import AgentManager
-from src.orchestration.consensus import ConsensusEngine, ConsensusResult
-from src.orchestration.debate import DebateManager
-from src.orchestration.budget_controller import BudgetController
-from src.orchestration.workspace import workspace
-from src.agents.base_agent import AgentOutput
 from src.agents.synthesizer import SynthesizerAgent
+from src.core.keystore import RequestKeyStore
+from src.core.logging_config import logger
+from src.orchestration.agent_manager import AgentManager
+from src.orchestration.budget_controller import BudgetController
+from src.orchestration.consensus import ConsensusEngine
+from src.orchestration.debate import DebateManager
+from src.orchestration.planner import Planner
+from src.orchestration.workspace import workspace
 from src.providers.router import ModelRouter
 from src.research.search import SearchEngine
-from src.core.logging_config import logger
 
 
 class ExecutionResult:
@@ -78,26 +76,34 @@ class Orchestrator:
         execution_id: str,
         question: str,
         time_budget_minutes: int,
-        on_progress: Optional[Callable[[dict], Awaitable[None]]] = None,
+        on_progress: Callable[[dict], Awaitable[None]] | None = None,
+        provider_keys: dict[str, str] | None = None,
     ) -> ExecutionResult:
         """
         Run the full orchestration pipeline.
-        
+
         Args:
             execution_id: Unique execution identifier.
             question: User's question.
             time_budget_minutes: Time budget (3/5/10/15 minutes).
             on_progress: Async callback for real-time progress events.
+            provider_keys: Per-request BYOK keys (web mode). Held in memory
+                for this run only via RequestKeyStore and wiped afterwards;
+                when None, the router's own (mode) key set is used.
         """
         logger.info(f"═══ EXECUTION START: {execution_id} ═══")
         logger.info(f"Question: {question[:100]}...")
         logger.info(f"Budget: {time_budget_minutes} minutes")
 
+        # Per-request keys get an isolated in-memory store + router.
+        key_store = RequestKeyStore(provider_keys) if provider_keys is not None else None
+        router = ModelRouter(keys=key_store.get_keys()) if key_store else self.router
+
         # Initialize components
         budget = BudgetController(time_budget_minutes)
         consensus_engine = ConsensusEngine()
-        planner = Planner(self.router)
-        agent_manager = AgentManager(self.router, execution_id)
+        planner = Planner(router)
+        agent_manager = AgentManager(router, execution_id)
         debate_manager = DebateManager(execution_id)
 
         total_tokens = 0
@@ -316,6 +322,10 @@ class Orchestrator:
             # Cleanup workspace
             workspace.cleanup(execution_id)
 
+            # Drop per-request keys: they must not outlive this run.
+            if key_store is not None:
+                key_store.clear()
+
             return result
 
         except Exception as e:
@@ -325,8 +335,10 @@ class Orchestrator:
                 "message": str(e),
             })
             workspace.cleanup(execution_id)
+            if key_store is not None:
+                key_store.clear()
             return ExecutionResult(
-                answer=f"An error occurred while processing your question: {str(e)}",
+                answer=f"An error occurred while processing your question: {e!s}",
                 sources=[],
                 consensus_score=0.0,
                 problem_type="unknown",
@@ -339,7 +351,7 @@ class Orchestrator:
 
     async def _emit_progress(
         self,
-        callback: Optional[Callable[[dict], Awaitable[None]]],
+        callback: Callable[[dict], Awaitable[None]] | None,
         execution_id: str,
         event_type: str,
         data: dict,

@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env.dev", override=True)
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.orchestration.orchestrator import Orchestrator  # noqa: E402
+from src.orchestration.orchestrator import Orchestrator
 
 QUESTION = (
     "Is React better than Vue for a large cybersecurity platform? "
@@ -31,7 +31,7 @@ async def main() -> int:
     # (e.g. U+2011). Force UTF-8 like src/core/logging_config.py does.
     try:
         sys.stdout.reconfigure(encoding="utf-8")
-    except Exception:
+    except (AttributeError, OSError):
         pass
     orch = Orchestrator()
     live = orch.router.get_available_providers()
@@ -69,7 +69,9 @@ async def main() -> int:
             round_no = event["data"].get("round", "?")
             decision = event["data"].get("decision", "?")
             consensus_rounds.append((round_no, score, decision))
-        elif event["event_type"] == "status_update" and event["data"].get("problem_type"):
+        elif event["event_type"] == "status_update" and event["data"].get(
+            "problem_type"
+        ):
             print(
                 f"Plan: type={event['data']['problem_type']} "
                 f"complexity={event['data']['complexity']}"
@@ -92,8 +94,10 @@ async def main() -> int:
     print(f"\nTotal provider calls: {calls['count']}")
     print(f"Total tokens: {result.total_tokens}")
     print(f"Wall-clock: {elapsed:.1f}s (budget 180s)")
-    print(f"Status: {result.status} | agents={result.agent_count} "
-          f"rounds={result.debate_rounds} providers={result.providers_used}")
+    print(
+        f"Status: {result.status} | agents={result.agent_count} "
+        f"rounds={result.debate_rounds} providers={result.providers_used}"
+    )
     print("\n===== FINAL ANSWER =====")
     print(result.answer)
     print("\n===== SOURCES =====")

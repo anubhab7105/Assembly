@@ -8,21 +8,28 @@ real-time progress streaming.
 import asyncio
 import json
 from datetime import datetime, timezone
-from typing import Dict
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from sqlalchemy.orm import Session
 
-from src.database.base import get_db, SessionLocal
-from src.database.models import Execution, Conversation, Message
+from src.core.logging_config import logger
+from src.core.security import decode_access_token, get_current_user_id
+from src.database.base import SessionLocal, get_db
+from src.database.models import Conversation, Execution, Message
 from src.database.schemas import ExecutionRequest, ExecutionResponse
 from src.orchestration.orchestrator import Orchestrator
-from src.core.security import get_current_user_id, decode_access_token
-from src.core.logging_config import logger
 
 router = APIRouter(prefix="/api/executions", tags=["executions"])
 
 # ── Active WebSocket connections per execution ───────────────────────
-_ws_connections: Dict[str, list[WebSocket]] = {}
+_ws_connections: dict[str, list[WebSocket]] = {}
 
 # ── Shared orchestrator instance ─────────────────────────────────────
 _orchestrator = Orchestrator()
@@ -91,9 +98,17 @@ async def create_execution(
     db.commit()
     db.refresh(execution)
 
-    # Launch orchestrator in background
+    # Launch orchestrator in background. provider_keys (if any) travel only
+    # in memory for this run and are wiped by the orchestrator afterwards —
+    # they are never stored on the execution record below.
     asyncio.get_event_loop().create_task(
-        _run_execution(execution.id, req.question, req.time_budget_minutes, conversation.id)
+        _run_execution(
+            execution.id,
+            req.question,
+            req.time_budget_minutes,
+            conversation.id,
+            req.provider_keys,
+        )
     )
 
     return ExecutionResponse.model_validate(execution)
@@ -182,6 +197,7 @@ async def _run_execution(
     question: str,
     time_budget_minutes: int,
     conversation_id: str,
+    provider_keys: dict[str, str] | None = None,
 ):
     """
     Run the orchestrator in the background and stream progress
@@ -210,6 +226,7 @@ async def _run_execution(
             question=question,
             time_budget_minutes=time_budget_minutes,
             on_progress=on_progress,
+            provider_keys=provider_keys,
         )
 
         # Update database with results

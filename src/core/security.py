@@ -5,14 +5,14 @@ JWT token management, password hashing, and FastAPI auth dependencies.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from src.core.config import settings
+from src.core.keystore import reveal
 
 # ── Password Hashing ────────────────────────────────────────────────
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -31,7 +31,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # ── JWT Tokens ───────────────────────────────────────────────────────
 def create_access_token(
     data: dict,
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Create a signed JWT access token."""
     to_encode = data.copy()
@@ -42,7 +42,7 @@ def create_access_token(
     to_encode.update({"exp": expire})
     return jwt.encode(
         to_encode,
-        settings.jwt_secret_key,
+        reveal(settings.jwt_secret_key),
         algorithm=settings.jwt_algorithm,
     )
 
@@ -52,7 +52,7 @@ def decode_access_token(token: str) -> dict:
     try:
         payload = jwt.decode(
             token,
-            settings.jwt_secret_key,
+            reveal(settings.jwt_secret_key),
             algorithms=[settings.jwt_algorithm],
         )
         return payload
@@ -68,7 +68,7 @@ security_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user_id(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
 ) -> str:
     """
     Extract user ID from the Bearer token.

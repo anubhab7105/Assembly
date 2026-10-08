@@ -12,16 +12,17 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env.dev", override=True)
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import httpx  # noqa: E402
+import httpx
 
-from src.core.config import settings  # noqa: E402
+from src.core.config import settings
+from src.core.keystore import reveal
 
 
 def openai_compatible_models(label: str, base_url: str, key: str) -> None:
     try:
         response = httpx.get(
             f"{base_url}/models",
-            headers={"Authorization": f"Bearer {key}"},
+            headers={"Authorization": f"Bearer {reveal(key)}"},
             timeout=30.0,
         )
         response.raise_for_status()
@@ -29,7 +30,7 @@ def openai_compatible_models(label: str, base_url: str, key: str) -> None:
         print(f"{label} ({len(ids)}):")
         for model_id in ids:
             print(f"  {model_id}")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — probe must report FAILED, never crash
         print(f"{label}: FAILED ({type(exc).__name__})")
 
 
@@ -55,7 +56,7 @@ def main() -> None:
         print(f"openrouter free ({len(free)}):")
         for model_id in free:
             print(f"  {model_id}")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — probe must report FAILED, never crash
         print(f"openrouter: FAILED ({type(exc).__name__})")
 
     # Gemini via SDK model listing.
@@ -63,7 +64,7 @@ def main() -> None:
         try:
             import google.generativeai as genai
 
-            genai.configure(api_key=settings.gemini_api_key)
+            genai.configure(api_key=reveal(settings.gemini_api_key))
             ids = sorted(
                 m.name.replace("models/", "")
                 for m in genai.list_models()
@@ -72,7 +73,7 @@ def main() -> None:
             print(f"gemini ({len(ids)}):")
             for model_id in ids:
                 print(f"  {model_id}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — probe must report FAILED, never crash
             print(f"gemini: FAILED ({type(exc).__name__})")
 
 
