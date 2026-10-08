@@ -42,6 +42,7 @@ from src.orchestration.time_controller import (
 )
 from src.orchestration.workspace import workspace
 from src.providers.router import ModelRouter
+from src.research.sanitize import sanitize_search_results, summarize_flags
 from src.research.search import SearchEngine
 
 
@@ -367,6 +368,23 @@ class Orchestrator:
 
                 search_results = await self.search_engine.search(question)
                 budget.record_search(len(search_results))
+                scan = sanitize_search_results(search_results)
+                if scan.flags:
+                    logger.warning(
+                        f"Exec    │ Web search tripwire: {summarize_flags(scan.flags)}"
+                    )
+                    await emit_event(
+                        ProgressEventType.AGENT_STATUS,
+                        {
+                            "role": "researcher",
+                            "activity": (
+                                f"Flagged {len(scan.flags)} suspicious web "
+                                f"snippet(s) ({summarize_flags(scan.flags)}) — "
+                                "sanitized before use."
+                            )[:500],
+                            "state": ExecState.TEAM_READY.value,
+                        },
+                    )
                 for hit in search_results:
                     url = str(hit.get("url", ""))
                     await emit_event(

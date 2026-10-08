@@ -8,6 +8,7 @@ with reasoning and evidence before seeing other agents' work.
 from typing import Optional, Dict, Any
 
 from src.agents.base_agent import BaseAgent
+from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
 
 
 class SolverAgent(BaseAgent):
@@ -22,7 +23,7 @@ class SolverAgent(BaseAgent):
 
     def build_system_prompt(self) -> str:
         role = self.role_description or "Problem Solver and Analyst"
-        return f"""You are an expert {role} on a multi-agent reasoning team called Assembly.
+        prompt = f"""You are an expert {role} on a multi-agent reasoning team called Assembly.
 
 Your job is to independently analyze and solve the given problem with rigorous reasoning.
 
@@ -46,6 +47,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
     "remaining_uncertainty": ["What you're still unsure about"]
 }}
 ```"""
+        return prompt + "\n\n" + UNTRUSTED_SYSTEM_NOTE
 
     def build_user_prompt(self, question: str, context: Optional[Dict[str, Any]] = None) -> str:
         if context and context.get("mode") == "critique":
