@@ -283,3 +283,18 @@
 - Grader behavior: exact/numeric auto-grade with normalization/ranges; rubric answers are shuffled behind A/B/C labels and judged via a different-family live model when possible; outputs `graded_<run_id>.csv`, `graded_<run_id>_spotcheck.csv`, and summary win/tie/loss + mean scores.
 - Verification: `python -m py_compile bench\grade.py bench\bench_common.py bench\run_single.py bench\run_vote.py bench\run_assembly.py`; `ruff check bench\grade.py tests\test_bench_grade.py`; `ruff check bench\grade.py bench\bench_common.py bench\run_single.py bench\run_vote.py bench\run_assembly.py`; `ruff format --check bench\grade.py tests\test_bench_grade.py bench\bench_common.py bench\run_single.py bench\run_vote.py bench\run_assembly.py`; `pytest tests\test_bench_grade.py` → 4 passed.
 - Skipped (per DoD): live real-key end-to-end run and full benchmark grading — live provider keys/quotas are user-local and were not exercised here.
+
+## Benchmark analyser + REPORT (2026-10-08)
+
+- New: `bench/analyze.py` — standalone analysis script that ingests one or more `graded_*.csv` files produced by `bench/grade.py` and generates:
+  1. **Win rates**: Assembly vs single, Assembly vs vote — overall and by category — with 95 % Wilson confidence intervals.
+  2. **Cost view**: avg calls, tokens, and seconds per system/tier (reads companion JSONL run files for cost metadata when present).
+  3. **Ablation table**: accuracy delta for `assembly_no_debate`, `assembly_no_critic`, `assembly_no_adversarial`, `assembly_same_family` variants; ranks by contribution.
+  4. **Failure analysis**: per-question table where Assembly lost, with inferred reason from errors, consensus score, and answer excerpt.
+  5. **Consensus weight suggestions**: lightweight proxy grid-search over (w_agreement, w_evidence) grid; emits best candidate weights and a ready-to-paste `.env` snippet; calls for a re-run to confirm improvement.
+  6. **Three PNG charts** (via matplotlib): `win_rate.png` (grouped bar, category × system, CI error bars), `ablation.png` (horizontal bar, delta per component), `calls_vs_acc.png` (scatter, avg calls vs accuracy, bubble = avg tokens).
+  7. **`bench/results/REPORT.md`**: full markdown report with all tables, chart embeds, and the env snippet.
+- `bench/analyze.py` works in **demo mode** (`--demo` flag, or when no graded CSVs exist) using synthetic data calibrated to realistic win rates — useful for pre-run demos.
+- Fixed variable-shadowing bug (`sys` loop variable shadowing `import sys` module) during development.
+- Verification: `python bench/analyze.py --demo` exits 0; generates `bench/results/REPORT.md` (6430 B) and three PNG charts (`win_rate.png` 65 kB, `ablation.png` 52 kB, `calls_vs_acc.png` 57 kB). Console summary matches expectations.
+- Skipped (per DoD): pytest tests for `bench/analyze.py` — no mock-provider dependency; full live run skipped (no keys).
