@@ -493,8 +493,11 @@ def _authed_client(monkeypatch):
     from sqlalchemy.pool import StaticPool
 
     import src.api.executions as exec_mod
+    from src.core.config import settings
     from src.database.base import Base, get_db
     from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "web")
 
     engine = create_engine(
         "sqlite://",
