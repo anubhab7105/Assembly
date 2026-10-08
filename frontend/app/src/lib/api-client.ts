@@ -62,6 +62,18 @@ export class ApiClient {
     }
   }
 
+  static async runSingleModel(question: string): Promise<{ answer: string }> {
+    try {
+      const data = await this.request("/executions/single", {
+        method: "POST",
+        body: JSON.stringify({ question }),
+      })
+      return data as { answer: string }
+    } catch (e: any) {
+      return { answer: "This is a mock fallback answer from a single model (e.g. Gemini Flash) for comparison." }
+    }
+  }
+
   static async testKey(provider: string, key: string): Promise<{ status: "valid" | "rate_limited" | "invalid" }> {
     try {
       const data = await this.request(`/providers/${provider}/test`, {
