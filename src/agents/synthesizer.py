@@ -8,6 +8,7 @@ The user never sees the debate — only this agent's output.
 from typing import Optional, Dict, Any, List
 
 from src.agents.base_agent import BaseAgent, AgentOutput
+from src.orchestration.composer import attribution_footer
 
 
 class SynthesizerAgent(BaseAgent):
@@ -30,11 +31,17 @@ RULES:
 2. Prioritize positions with strong evidence and high confidence.
 3. If agents disagreed, present the strongest position while acknowledging alternatives.
 4. If consensus is weak, honestly state the uncertainty.
-5. Include ONLY sources that were actually used and verified.
-6. Write clearly and professionally — this is what the user reads.
-7. Present the answer as a direct expert response.
-8. Report only a SHORT reasoning_summary (2-4 sentences, internal note, not shown to user).
-9. Do NOT include any footer or metadata about agents — that will be added automatically.
+5. Cite sources INLINE with numbered markers [1], [2], ... matching the
+   numbered AVAILABLE SOURCES list below. Never invent a marker: every [n]
+   must point at a real numbered source.
+6. Write the answer in Markdown (short paragraphs, ## headings where they
+   help, - bullets for lists).
+7. Write clearly and professionally — this is what the user reads.
+8. Present the answer as a direct expert response.
+9. Report only a SHORT reasoning_summary (2-4 sentences, internal note, not shown to user).
+10. Do NOT include any footer or metadata about agents — that will be added automatically.
+11. Do NOT add your own "Sources" section; the final composer builds the
+    numbered list from your [n] citations.
 
 You MUST respond with a JSON object in this exact format (no extra keys):
 ```json
@@ -78,9 +85,9 @@ You MUST respond with a JSON object in this exact format (no extra keys):
 
         sources_text = ""
         if all_sources:
-            sources_text = "\n\nAVAILABLE SOURCES:\n"
-            for s in all_sources:
-                sources_text += f"- {s.get('title', 'Unknown')}: {s.get('url', 'N/A')} — {s.get('snippet', '')}\n"
+            sources_text = "\n\nAVAILABLE SOURCES (cite these with [n] markers):\n"
+            for i, s in enumerate(all_sources, start=1):
+                sources_text += f"[{i}] {s.get('title', 'Unknown')}: {s.get('url', 'N/A')} — {s.get('snippet', '')}\n"
 
         return f"""SYNTHESIZE THE FINAL ANSWER
 
@@ -138,20 +145,10 @@ Respond with the JSON format specified in your instructions."""
 
         result = await self.run(question, context=context, temperature=0.3)
 
-        # Append attribution footer
-        agent_count = len(agent_outputs)
-        providers = providers_used or []
-        provider_names = {
-            "gemini": "Gemini",
-            "groq": "Groq",
-            "cerebras": "Cerebras",
-            "openrouter": "OpenRouter",
-            "huggingface": "Hugging Face",
-        }
-        display_names = [provider_names.get(p, p.title()) for p in providers]
-        providers_str = ", ".join(display_names) if display_names else "multiple providers"
-
-        footer = f"\n\n---\n\U0001F916 This answer was assembled by {agent_count} AI agents powered by {providers_str}."
-        result.position = result.position + footer
+        # Append attribution footer (shared format with the final composer,
+        # which lifts it off and re-attaches it after its own sections).
+        result.position = result.position + attribution_footer(
+            len(agent_outputs), providers_used
+        )
 
         return result

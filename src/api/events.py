@@ -160,6 +160,7 @@ class ExecutionCompletedPayload(_Strict):
     tokens_used: int = Field(default=0, ge=0)
     debate_rounds: int = Field(default=0, ge=0)
     elapsed_seconds: float = Field(default=0.0, ge=0.0)
+    verification: dict = Field(default_factory=dict)
 
 
 class ExecutionFailedPartialPayload(_Strict):

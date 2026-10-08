@@ -30,6 +30,7 @@ from src.orchestration.capacity import (
     heuristic_suggestion,
     plan_capacity,
 )
+from src.orchestration.composer import compose_final_answer
 from src.orchestration.consensus import ConsensusEngine
 from src.orchestration.debate import DebateManager
 from src.orchestration.planner import Planner
@@ -62,6 +63,7 @@ class ExecutionResult:
         routing: list | None = None,
         degraded: bool = False,
         warnings: list | None = None,
+        verification: dict | None = None,
     ):
         self.answer = answer
         self.sources = sources
@@ -77,6 +79,9 @@ class ExecutionResult:
         self.routing = routing or []
         self.degraded = degraded
         self.warnings = warnings or []
+        # Verification summary from the final composer (agents, families,
+        # rounds, disagreements resolved, sources verified).
+        self.verification = verification or {}
 
 
 class Orchestrator:
@@ -172,6 +177,7 @@ class Orchestrator:
         warnings: list[str] = []
         recorder = EventRecorder(execution_id)
         open_disagreement_keys: dict = {}
+        disagreements_resolved = 0
         quota_warned = False
 
         async def emit_event(
@@ -207,7 +213,7 @@ class Orchestrator:
 
         async def emit_consensus(report, round_number: int) -> None:
             """consensus.updated + timer.tick + disagreement deltas, in order."""
-            nonlocal open_disagreement_keys, quota_warned
+            nonlocal open_disagreement_keys, quota_warned, disagreements_resolved
             await emit_event(
                 ProgressEventType.CONSENSUS_UPDATED,
                 {
@@ -227,6 +233,8 @@ class Orchestrator:
             )
             for event_type, payload in deltas:
                 await emit_event(event_type, payload)
+                if event_type == ProgressEventType.DISAGREEMENT_RESOLVED:
+                    disagreements_resolved += 1
             if budget.is_token_limited() and not quota_warned:
                 quota_warned = True
                 await emit_event(
@@ -544,16 +552,32 @@ class Orchestrator:
             budget.record_tokens(final_output.tokens_used)
 
             # ════════════════════════════════════════════════════════════
-            # DONE — Return the result
+            # DONE — Compose the final answer and return the result
             # ════════════════════════════════════════════════════════════
-            sources = [s.model_dump() for s in final_output.sources]
-            if not sources:
+            candidate_sources = list(final_output.sources)
+            if not candidate_sources:
                 # Collect sources from all agents
                 for o in outputs:
-                    sources.extend(s.model_dump() for s in o.sources)
+                    candidate_sources.extend(o.sources)
+
+            composed = compose_final_answer(
+                agent_outputs=outputs,
+                consensus_score=consensus_result.score,
+                open_disagreements=consensus_result.open_disagreements,
+                sources_pool=candidate_sources,
+                debate_rounds=round_number,
+                disagreements_resolved=disagreements_resolved,
+                agent_count=len(agents),
+                providers_used=providers_used,
+                synth_position=final_output.position,
+                synth_uncertainty=list(final_output.remaining_uncertainty),
+                synth_evidence=list(final_output.evidence),
+            )
+            warnings.extend(composed.warnings)
+            sources = [s.model_dump() for s in composed.sources]
 
             result = ExecutionResult(
-                answer=final_output.position,
+                answer=composed.answer_markdown,
                 sources=sources,
                 consensus_score=consensus_result.score,
                 problem_type=plan.problem_type,
@@ -569,6 +593,7 @@ class Orchestrator:
                     getattr(agent_manager.last_routing, "warnings", []) or []
                 )
                 + warnings,
+                verification=composed.verification.to_dict(),
             )
 
             state_machine.transition(ExecState.COMPLETED)
@@ -602,6 +627,7 @@ class Orchestrator:
                     "tokens_used": total_tokens,
                     "debate_rounds": round_number,
                     "elapsed_seconds": round(budget.state.elapsed_seconds, 1),
+                    "verification": result.verification,
                 },
             )
 
