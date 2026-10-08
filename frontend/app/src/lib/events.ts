@@ -60,8 +60,27 @@ export interface TimerData {
   remaining_seconds: number
 }
 
-export interface ExecutionCompletedData {
-  final_answer: string
+export interface AgentStatusData {
+  agent_id: string
+  state: "idle" | "working" | "done" | "failed-replaced"
+  activity: string
+}
+
+export interface QuotaWarningData {
+  provider: string
+  message: string
+  degraded: boolean
+}
+
+export interface RoundData {
+  round: number
+}
+
+export interface ActivityFeedEntry {
+  id: string
+  timestamp: string
+  message: string
+  type: "info" | "warning" | "success" | "error"
 }
 
 export interface ProgressEvent extends BaseEvent {
@@ -72,5 +91,8 @@ export interface ProgressEvent extends BaseEvent {
     | ConsensusData
     | TimerData
     | ExecutionCompletedData
+    | AgentStatusData
+    | QuotaWarningData
+    | RoundData
     | Record<string, unknown>
 }
