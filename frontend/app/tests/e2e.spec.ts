@@ -19,18 +19,19 @@ test.describe("Assembly End-to-End flow", () => {
     await page.getByLabel(/Remember on this device/i).check()
 
     // Find the Gemini input and enter the canary key
-    // The input has placeholder "sk-..." or similar. We can target it inside the Gemini card.
     const geminiCard = page.locator(".bg-card").filter({ hasText: "Google Gemini" })
     await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
     await geminiCard.getByRole("button", { name: /Save & Test/i }).click()
+    await expect(geminiCard.getByText("Valid")).toBeVisible()
 
-    // Also add another dummy key to reach capacity (2 families needed)
+    // Add Groq to reach 3 families
     const groqCard = page.locator(".bg-card").filter({ hasText: "Groq" })
     await groqCard.locator('input[type="password"]').fill("sk-groq-dummy")
     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
+    await expect(groqCard.getByText("Valid")).toBeVisible()
 
-    // Wait for Team Readiness to say at least 2
-    await expect(page.getByText(/2 of 3 recommended model families ready/i, { exact: false })).toBeVisible()
+    // Wait for Team Readiness to say at least 3
+    await expect(page.getByText(/3 of 3 recommended model families ready/i, { exact: false })).toBeVisible()
 
     // Verify CANARY_KEY does not appear in console
     for (const log of consoleLogs) {
@@ -43,26 +44,23 @@ test.describe("Assembly End-to-End flow", () => {
 
     // Verify CANARY_KEY is masked in the UI
     await expect(page.getByText(CANARY_KEY)).not.toBeVisible()
-    
-    // Note: It might be stored in IndexedDB encrypted via WebCrypto, which is safe.
   })
 
   test("2. Ask a question, watch progress, receive the answer", async ({ page }) => {
-    await page.goto("/")
-    
-    // In order for Launch to be enabled, we might need keys if state isn't preserved across tests.
-    // Playwright isolates contexts, so let's set it up quickly again.
     await page.goto("/setup")
     const geminiCard = page.locator(".bg-card").filter({ hasText: "Google Gemini" })
     await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
     await geminiCard.getByRole("button", { name: /Save & Test/i }).click()
+    await expect(geminiCard.getByText("Valid")).toBeVisible()
+
     const groqCard = page.locator(".bg-card").filter({ hasText: "Groq" })
     await groqCard.locator('input[type="password"]').fill("sk-groq-dummy")
     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
+    await expect(groqCard.getByText("Valid")).toBeVisible()
 
     await page.goto("/")
     
-    // Wait for the capacity indicator to disappear (meaning we are ready)
+    // Wait for the capacity indicator to disappear
     await expect(page.getByText(/Insufficient Model Diversity/i)).not.toBeVisible()
 
     // Click an example question
@@ -83,12 +81,19 @@ test.describe("Assembly End-to-End flow", () => {
   test("3. Refresh mid-execution and confirm re-attach", async ({ page }) => {
     // Setup keys and start
     await page.goto("/setup")
-    await page.locator(".bg-card").filter({ hasText: "Google Gemini" }).locator('input[type="password"]').fill(CANARY_KEY)
-    await page.locator(".bg-card").filter({ hasText: "Google Gemini" }).getByRole("button", { name: /Save & Test/i }).click()
-    await page.locator(".bg-card").filter({ hasText: "Groq" }).locator('input[type="password"]').fill("sk-groq")
-    await page.locator(".bg-card").filter({ hasText: "Groq" }).getByRole("button", { name: /Save & Test/i }).click()
+    const geminiCard = page.locator(".bg-card").filter({ hasText: "Google Gemini" })
+    await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
+    await geminiCard.getByRole("button", { name: /Save & Test/i }).click()
+    await expect(geminiCard.getByText("Valid")).toBeVisible()
+
+    const groqCard = page.locator(".bg-card").filter({ hasText: "Groq" })
+    await groqCard.locator('input[type="password"]').fill("sk-groq")
+    await groqCard.getByRole("button", { name: /Save & Test/i }).click()
+    await expect(groqCard.getByText("Valid")).toBeVisible()
 
     await page.goto("/")
+    await expect(page.getByText(/Insufficient Model Diversity/i)).not.toBeVisible()
+    
     await page.getByText(/What are the most viable methods/i).click()
     await page.getByRole("button", { name: /Launch Team/i }).click()
     
@@ -105,12 +110,19 @@ test.describe("Assembly End-to-End flow", () => {
   test("4. Cancel an execution", async ({ page }) => {
     // Setup keys and start
     await page.goto("/setup")
-    await page.locator(".bg-card").filter({ hasText: "Google Gemini" }).locator('input[type="password"]').fill(CANARY_KEY)
-    await page.locator(".bg-card").filter({ hasText: "Google Gemini" }).getByRole("button", { name: /Save & Test/i }).click()
-    await page.locator(".bg-card").filter({ hasText: "Groq" }).locator('input[type="password"]').fill("sk-groq")
-    await page.locator(".bg-card").filter({ hasText: "Groq" }).getByRole("button", { name: /Save & Test/i }).click()
+    const geminiCard = page.locator(".bg-card").filter({ hasText: "Google Gemini" })
+    await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
+    await geminiCard.getByRole("button", { name: /Save & Test/i }).click()
+    await expect(geminiCard.getByText("Valid")).toBeVisible()
+
+    const groqCard = page.locator(".bg-card").filter({ hasText: "Groq" })
+    await groqCard.locator('input[type="password"]').fill("sk-groq")
+    await groqCard.getByRole("button", { name: /Save & Test/i }).click()
+    await expect(groqCard.getByText("Valid")).toBeVisible()
 
     await page.goto("/")
+    await expect(page.getByText(/Insufficient Model Diversity/i)).not.toBeVisible()
+    
     await page.getByText(/Analyse the timeline/i).click()
     await page.getByRole("button", { name: /Launch Team/i }).click()
     
