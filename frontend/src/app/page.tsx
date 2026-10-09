@@ -50,74 +50,78 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
-        <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-subtle px-4 py-1.5 text-xs font-medium text-brand">
-          <Sparkles className="size-3.5" />
-          Multi-agent AI research
-        </div>
-
-        <h1 className="animate-fade-up mt-8 max-w-3xl text-5xl font-bold leading-[1.1] tracking-tight sm:text-7xl" style={{ animationDelay: "0.1s" }}>
-          One question.
-          <br />
-          <span className="bg-gradient-to-r from-brand via-[#e8a020] to-[#c8860a] bg-clip-text text-transparent">
-            A team of minds.
-          </span>
-        </h1>
-
-        <p className="animate-fade-up mt-6 max-w-xl text-lg text-muted-foreground sm:text-xl" style={{ animationDelay: "0.2s" }}>
-          Assembly forms a temporary team of AI agents that reason independently, cross-examine, verify with live sources, and synthesise a single high-confidence answer.
-        </p>
-
-        <div className="animate-fade-up mt-10 flex flex-col items-center gap-4 sm:flex-row" style={{ animationDelay: "0.3s" }}>
-          <a
-            href="/chat"
-            className="group inline-flex h-12 items-center gap-2 rounded-xl bg-brand px-8 text-base font-semibold text-brand-foreground shadow-xl shadow-brand/30 transition-all hover:bg-brand-hover hover:shadow-2xl hover:shadow-brand/40 hover:-translate-y-0.5"
-          >
-            <Zap className="size-5" />
-            Start Researching
-            <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
-          </a>
-          <a
-            href="/setup"
-            className="inline-flex h-12 items-center gap-2 rounded-xl border border-border bg-card px-8 text-base font-semibold text-foreground transition-all hover:border-brand/50 hover:text-brand hover:-translate-y-0.5"
-          >
-            Configure Keys
-          </a>
-        </div>
-
-        {/* Agent orbit visual */}
-        <div className="animate-fade-up relative mt-20 flex items-center justify-center" style={{ animationDelay: "0.4s" }}>
-          <div className="relative flex h-72 w-72 items-center justify-center sm:h-80 sm:w-80">
-            {/* Orbit rings */}
-            <div className="animate-spin-slower absolute inset-0 rounded-full border border-border/50" />
-            <div className="animate-spin-reverse absolute inset-8 rounded-full border border-border/30" />
-            <div className="animate-spin-slow absolute inset-16 rounded-full border border-border/20" />
-
-            {/* Center */}
-            <div className="animate-pulse-glow relative z-10 flex h-24 w-24 items-center justify-center rounded-3xl bg-brand text-brand-foreground shadow-2xl shadow-brand/40">
-              <Zap className="size-10" />
+      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-12 lg:py-20">
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-12 lg:gap-8">
+          <div className="flex flex-1 flex-col items-start text-left">
+            <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-subtle px-4 py-1.5 text-xs font-medium text-brand">
+              <Sparkles className="size-3.5" />
+              Multi-agent AI research
             </div>
 
-            {/* Agent nodes */}
-            {agents.map((agent) => {
-              const Icon = agent.icon
-              const angle = agents.indexOf(agent) * 90
-              return (
-                <div
-                  key={agent.label}
-                  className="animate-orbit absolute"
-                  style={{ animationDelay: agent.delay, transform: `rotate(${angle}deg)` }}
-                >
+            <h1 className="animate-fade-up mt-8 max-w-2xl text-5xl font-bold leading-[1.1] tracking-tight sm:text-7xl" style={{ animationDelay: "0.1s" }}>
+              One question.
+              <br />
+              <span className="bg-gradient-to-r from-brand via-[#e8a020] to-[#c8860a] bg-clip-text text-transparent">
+                A team of minds.
+              </span>
+            </h1>
+
+            <p className="animate-fade-up mt-6 max-w-xl text-lg text-muted-foreground sm:text-xl" style={{ animationDelay: "0.2s" }}>
+              Assembly forms a temporary team of AI agents that reason independently, cross-examine, verify with live sources, and synthesise a single high-confidence answer.
+            </p>
+
+            <div className="animate-fade-up mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center" style={{ animationDelay: "0.3s" }}>
+              <a
+                href="/chat"
+                className="group inline-flex h-12 items-center gap-2 rounded-xl bg-brand px-8 text-base font-semibold text-brand-foreground shadow-xl shadow-brand/30 transition-all hover:bg-brand-hover hover:shadow-2xl hover:shadow-brand/40 hover:-translate-y-0.5"
+              >
+                <Zap className="size-5" />
+                Start Researching
+                <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
+              </a>
+              <a
+                href="/setup"
+                className="inline-flex h-12 items-center gap-2 rounded-xl border border-border bg-card px-8 text-base font-semibold text-foreground transition-all hover:border-brand/50 hover:text-brand hover:-translate-y-0.5"
+              >
+                Configure Keys
+              </a>
+            </div>
+          </div>
+
+          {/* Agent orbit visual */}
+          <div className="animate-fade-up relative flex flex-shrink-0 items-center justify-center py-8 lg:py-0" style={{ animationDelay: "0.4s" }}>
+            <div className="relative flex h-72 w-72 items-center justify-center sm:h-80 sm:w-80">
+              {/* Orbit rings */}
+              <div className="animate-spin-slower absolute inset-0 rounded-full border border-border/50" />
+              <div className="animate-spin-reverse absolute inset-8 rounded-full border border-border/30" />
+              <div className="animate-spin-slow absolute inset-16 rounded-full border border-border/20" />
+
+              {/* Center */}
+              <div className="animate-pulse-glow relative z-10 flex h-24 w-24 items-center justify-center rounded-3xl bg-brand text-brand-foreground shadow-2xl shadow-brand/40">
+                <Zap className="size-10" />
+              </div>
+
+              {/* Agent nodes */}
+              {agents.map((agent) => {
+                const Icon = agent.icon
+                const angle = agents.indexOf(agent) * 90
+                return (
                   <div
-                    className="animate-counter-orbit flex h-16 w-16 flex-col items-center justify-center gap-0.5 rounded-2xl border bg-card shadow-lg transition-all hover:scale-110 hover:shadow-xl"
-                    style={{ borderColor: agent.color + "40", animationDelay: agent.delay }}
+                    key={agent.label}
+                    className="animate-orbit absolute"
+                    style={{ animationDelay: agent.delay, transform: `rotate(${angle}deg)` }}
                   >
-                    <Icon className="size-5" style={{ color: agent.color }} />
-                    <span className="text-[10px] font-semibold text-muted-foreground">{agent.label}</span>
+                    <div
+                      className="animate-counter-orbit flex h-16 w-16 flex-col items-center justify-center gap-0.5 rounded-2xl border bg-card shadow-lg transition-all hover:scale-110 hover:shadow-xl"
+                      style={{ borderColor: agent.color + "40", animationDelay: agent.delay }}
+                    >
+                      <Icon className="size-5" style={{ color: agent.color }} />
+                      <span className="text-[10px] font-semibold text-muted-foreground">{agent.label}</span>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
 
