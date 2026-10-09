@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Assembly</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        background-color: #0f172a;
+        color: #f8fafc;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      .loader {
+        border: 4px solid #334155;
+        border-top: 4px solid #3b82f6;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      #status {
+        margin-bottom: 10px;
+        font-size: 1.1rem;
+      }
+      #error {
+        color: #ef4444;
+        display: none;
+        max-width: 80%;
+        text-align: center;
+        word-wrap: break-word;
+      }
+      .log-link {
+        color: #60a5fa;
+        text-decoration: underline;
+        cursor: pointer;
+        margin-top: 10px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loader" id="loader"></div>
+    <div id="status">Starting backend...</div>
+    <div id="error"></div>
+    <div id="log-link" class="log-link">Show Logs</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
