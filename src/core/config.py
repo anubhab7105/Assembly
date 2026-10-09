@@ -133,10 +133,22 @@ class Settings(BaseSettings):
         """Desktop/dev SQLite URL. Web mode has no database — raises."""
         if self.is_web:
             raise RuntimeError("Web mode is stateless: no database URL.")
+        import os
+        import tempfile
+
         import platformdirs
 
         data_dir = Path(platformdirs.user_data_dir("Assembly", "Assembly"))
-        data_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # Containers often run as a user with no writable home
+            # (e.g. Render/Docker non-root). Fall back to the system temp
+            # dir so local-history boot never kills startup.
+            data_dir = Path(tempfile.gettempdir()) / "assembly"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            if not os.access(data_dir, os.W_OK):
+                raise
         return f"sqlite:///{data_dir / 'assembly.db'}"
 
     @property
