@@ -130,6 +130,7 @@ class Orchestrator:
         on_progress: Callable[[dict], Awaitable[None]] | None = None,
         provider_keys: dict[str, str] | None = None,
         deadline: Deadline | None = None,
+        router_override = None,
     ) -> ExecutionResult:
         """
         Run the full orchestration pipeline.
@@ -144,6 +145,8 @@ class Orchestrator:
                 when None, the router's own (mode) key set is used.
             deadline: Wall-clock budget. Built from time_budget_minutes when
                 omitted; tests inject short/fake-clock deadlines directly.
+            router_override: Optional router instance to use instead of the default.
+                Used for injecting ReplayRouter during demo mode.
 
         State transitions follow docs/WORKFLOW.md section 2 and are
         validated by StateMachine (CREATED → CAPACITY_CHECK → PLANNING →
@@ -161,7 +164,10 @@ class Orchestrator:
         key_store = (
             RequestKeyStore(provider_keys) if provider_keys is not None else None
         )
-        router = ModelRouter(keys=key_store.get_keys()) if key_store else self.router
+        if router_override is not None:
+            router = router_override
+        else:
+            router = ModelRouter(keys=key_store.get_keys()) if key_store else self.router
 
         # Initialize components
         budget = BudgetController(time_budget_minutes)

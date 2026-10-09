@@ -185,6 +185,14 @@
                     </div>
                     <div class="workspace-timer" id="workspace-timer">--:--</div>
                 </div>
+                
+                <div id="demo-fallback-container" style="display: none; text-align: center; margin-bottom: 1rem;">
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Live providers are taking too long or unavailable.</p>
+                    <button id="play-demo-btn" style="background: #6366f1; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 500; font-family: inherit;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: -2px; margin-right: 4px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Play recorded run
+                    </button>
+                </div>
 
                 <div class="workspace-agents" id="workspace-agents">
                     <!-- Agent cards populated dynamically -->
@@ -215,6 +223,16 @@
                             <button class="time-option" data-minutes="10">10m</button>
                             <button class="time-option" data-minutes="15">15m</button>
                         </div>
+                    </div>
+                    <div class="demo-toggle" id="demo-toggle-container" style="display: none; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <span class="time-label" style="display: flex; align-items: center; gap: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                            Recorded demo
+                        </span>
+                        <label class="switch">
+                            <input type="checkbox" id="demo-mode-checkbox">
+                            <span class="slider round"></span>
+                        </label>
                     </div>
                     <div class="input-row">
                         <textarea id="question-input" placeholder="Ask Assembly anything..." rows="1"></textarea>
