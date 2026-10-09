@@ -91,6 +91,20 @@ def _tpm_providers() -> dict:
     return providers
 
 
+def _tpd_providers() -> dict:
+    """alpha with a tiny token-per-day budget (tracked like rpd)."""
+    providers = _quota_providers()
+    providers["alpha"] = [
+        {
+            "id": "solo-tpd",
+            "family": "gpt-oss",
+            "roles": ["solver", "planner"],
+            "limits": {"rpm": 1000, "rpd": "unlimited", "tpm": "unlimited", "tpd": 200},
+        }
+    ]
+    return providers
+
+
 def _factory():
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
@@ -296,6 +310,46 @@ async def test_status_reflects_limiter_remaining() -> None:
         assert entry.cooldown_seconds >= 0
 
 
+def test_account_scope_counts_one_shared_pool(tmp_path) -> None:
+    """OpenRouter-style: two account-scope models share ONE rpd pool —
+    the snapshot lists it once and capacity counts it once (35, not 70)."""
+    from src.orchestration.capacity import KeyBudget, affordable_calls
+
+    providers = {
+        "or": [
+            {
+                "id": "free-a",
+                "family": "gemma",
+                "roles": ["solver"],
+                "scope": "account",
+                "limits": {"rpm": 20, "rpd": 50, "tpm": "unlimited"},
+            },
+            {
+                "id": "free-b",
+                "family": "nemotron",
+                "roles": ["solver"],
+                "scope": "account",
+                "limits": {"rpm": 20, "rpd": 50, "tpm": "unlimited"},
+            },
+        ],
+    }
+    limiter, config = _limiter(tmp_path, providers=providers)
+    router = ModelRouter(config=config, keys={"or": "k1"}, limiter=limiter)
+    entries = [e for e in router.quota_snapshot() if e["provider"] == "or"]
+    assert len(entries) == 1
+    keys = [
+        KeyBudget(
+            provider=e["provider"],
+            rpm_limit=e["rpm_limit"],
+            rpd_remaining=e["rpd_remaining"],
+            tpm_limit=e.get("tpm_limit"),
+            tpd_remaining=e.get("tpd_remaining"),
+        )
+        for e in entries
+    ]
+    assert affordable_calls(keys, 5) == int(min(100, 50) * 0.7) == 35
+
+
 def test_shared_singleton_exists() -> None:
     assert get_limiter() is get_limiter()
 
@@ -386,6 +440,38 @@ async def test_tpm_pre_reject_uses_model_window(tmp_path) -> None:
         await limiter.acquire("alpha", fingerprint, "solo-tpm", est_tokens=101)
 
 
+async def test_tpd_tracked_like_rpd(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path, providers=_tpd_providers())
+    fingerprint = fingerprint_key("k-tpd")
+    for _ in range(4):
+        async with await limiter.acquire(
+            "alpha", fingerprint, "solo-tpd", est_tokens=50
+        ):
+            pass
+    assert limiter.remaining("alpha", fingerprint, "solo-tpd")["tpd_remaining"] == 0
+    assert limiter.is_exhausted("alpha", fingerprint, "solo-tpd")
+    with pytest.raises(QuotaExhausted, match="daily token budget spent"):
+        await limiter.acquire("alpha", fingerprint, "solo-tpd", est_tokens=50)
+
+
+async def test_tpd_pre_reject_before_sending(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path, providers=_tpd_providers(), max_wait_seconds=0.5)
+    fingerprint = fingerprint_key("k-tpd2")
+    with pytest.raises(QuotaExhausted, match="daily token budget of 200"):
+        await limiter.acquire("alpha", fingerprint, "solo-tpd", est_tokens=500)
+
+
+async def test_tpd_absent_is_not_enforced(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path)
+    fingerprint = fingerprint_key("k-notpd")
+    async with await limiter.acquire(
+        "alpha", fingerprint, "alpha-fast", est_tokens=10**6
+    ):
+        pass
+    remaining = limiter.remaining("alpha", fingerprint, "alpha-fast")
+    assert remaining["tpd_limit"] is None and remaining["tpd_remaining"] is None
+
+
 async def test_unknown_model_fails_open(tmp_path) -> None:
     """Quota must never break runs: uncatalogued pairs get no windows."""
     limiter, _ = _limiter(tmp_path)
@@ -393,6 +479,24 @@ async def test_unknown_model_fails_open(tmp_path) -> None:
     async with await limiter.acquire("test", fingerprint, "m", est_tokens=10**9):
         pass
     assert limiter.remaining("test", fingerprint, "m")["rpd_remaining"] is None
+
+
+async def test_unknown_pair_warns_once_per_pair(tmp_path, caplog) -> None:
+    import logging
+
+    limiter, _ = _limiter(tmp_path)
+    fingerprint = fingerprint_key("k-warn")
+    with caplog.at_level(logging.WARNING, logger="assembly"):
+        for _ in range(3):
+            async with await limiter.acquire("nope", fingerprint, "ghost"):
+                pass
+    warnings = [
+        line
+        for line in caplog.text.splitlines()
+        if "unknown (provider, model) pair" in line
+    ]
+    assert len(warnings) == 1
+    assert "nope/ghost" in warnings[0]
 
 
 async def test_unlimited_fields_are_not_enforced(tmp_path) -> None:

@@ -143,6 +143,21 @@ def test_unlimited_literal_accepted(tmp_path) -> None:
     assert config.limits_of("groq", "groq-custom-fast").tpm == "unlimited"
 
 
+def test_tpd_optional_forms_accepted(tmp_path) -> None:
+    """tpd accepts int / "unlimited" / absent / null — none fail validation."""
+    from src.providers.config import validate_limits_filled
+
+    providers = _custom_providers()
+    providers["groq"][0]["limits"] = {"tpd": 50000}
+    providers["cerebras"][0]["limits"] = {"tpd": "unlimited"}
+    providers["openrouter"][0]["limits"] = {"tpd": None}
+    config = load_models_config(make_models_yaml(tmp_path, providers))
+    assert config.limits_of("groq", "groq-custom-fast").tpd == 50000
+    assert config.limits_of("cerebras", "cerebras-custom-strong").tpd == "unlimited"
+    assert config.limits_of("openrouter", "or-custom-research").tpd is None
+    validate_limits_filled(config)  # tpd never blocks enabled providers
+
+
 def test_limit_scope_defaults_to_model(tmp_path) -> None:
     config = load_models_config(make_models_yaml(tmp_path, _custom_providers()))
     assert config.scope_of("groq", "groq-custom-fast") == "model"

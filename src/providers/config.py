@@ -75,17 +75,19 @@ def _valid_limit(value: LimitValue, field: str) -> LimitValue:
 
 
 class ModelLimits(BaseModel):
-    """Per-model rate limits. All four fields must be filled (int or
-    "unlimited") for models on enabled providers."""
+    """Per-model rate limits. rpm/rpd/tpm/context_tokens must be filled
+    (int or "unlimited") for models on enabled providers; tpd is optional
+    (absent/null/"unlimited" = not enforced, never fails validation)."""
 
     model_config = ConfigDict(extra="forbid")
 
     rpm: LimitValue = Field(default=None, description="Requests per minute")
     rpd: LimitValue = Field(default=None, description="Requests per day")
     tpm: LimitValue = Field(default=None, description="Tokens per minute")
+    tpd: LimitValue = Field(default=None, description="Tokens per day (optional)")
     context_tokens: LimitValue = Field(default=None, description="Context window")
 
-    @field_validator("rpm", "rpd", "tpm", "context_tokens")
+    @field_validator("rpm", "rpd", "tpm", "tpd", "context_tokens")
     @classmethod
     def _valid_fields(cls, value: LimitValue, info: Any) -> LimitValue:
         return _valid_limit(value, str(info.field_name))
