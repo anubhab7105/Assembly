@@ -3,9 +3,13 @@ import {
   Bot,
   Brain,
   CheckCircle2,
+  Code,
   Compass,
   Cpu,
   GitBranch,
+  Image as ImageIcon,
+  MessageSquare,
+  Palette,
   Search,
   Sparkles,
   Users,
@@ -22,6 +26,12 @@ const agents = [
   { icon: Wind, label: "Mistral", role: "Strategist", color: "#F97316" },
   { icon: Search, label: "Qwen", role: "Researcher", color: "#059669" },
   { icon: Compass, label: "Grok", role: "Explorer", color: "#E11D48" },
+  { icon: Brain, label: "Perplexity", role: "Searcher", color: "#14B8A6" },
+  { icon: Code, label: "Copilot", role: "Assistant", color: "#10B981" },
+  { icon: ImageIcon, label: "Midjourney", role: "Artist", color: "#EC4899" },
+  { icon: MessageSquare, label: "Cohere", role: "Generator", color: "#6366F1" },
+  { icon: Users, label: "Hugging Face", role: "Hub", color: "#FBBF24" },
+  { icon: Palette, label: "DALL-E", role: "Creator", color: "#F43F5E" },
 ]
 
 const steps = [
