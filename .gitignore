@@ -36,3 +36,10 @@ src/static/
 
 # Tauri Binaries
 desktop/src-tauri/binaries/
+
+# Desktop build output
+desktop/public/
+
+# Playwright Test Artifacts
+playwright-report/
+test-results/
