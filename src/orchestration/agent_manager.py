@@ -20,7 +20,7 @@ from src.providers.quota import QuotaExhausted
 from src.providers.router import ModelRouter
 
 # Failures worth one retry on a fallback model (transient by nature).
-RETRYABLE_ERRORS = (RateLimited, QuotaExhausted, ProviderDown)
+RETRYABLE_ERRORS = (RateLimited, QuotaExhausted, ProviderDown, TimeoutError)
 
 
 # Agent type → class mapping
