@@ -75,6 +75,7 @@ async def test_websocket_origin_check(monkeypatch):
     
     client = TestClient(app)
     
-    with pytest.raises(Exception):
-        with client.websocket_connect("/api/executions/ws/test_id", headers={"origin": "https://evil.com"}):
-            pass
+    from starlette.websockets import WebSocketDisconnect
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/api/executions/ws/test_id", headers={"origin": "https://evil.com"}) as ws:
+            ws.receive_text()

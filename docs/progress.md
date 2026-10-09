@@ -306,3 +306,16 @@
 - Added `user_id` column to `Execution` in `models.py` and modified `api/executions.py` to directly filter by `user_id` instead of checking the `Conversation` hierarchy. Also fixed `test_key_leak.py` and `test_time_controller.py` to properly expect HTTP 403 Forbidden on wrong user ownership.
 - Wrote `docker-compose.yml` for Postgres local testing and updated `.github/workflows/ci.yml` with a matrix testing pipeline targeting both `sqlite` and `postgres` DB engines.
 - Result: 325 backend tests passing.
+
+## Security Threat Model & Audit Remediation (2026-10-09)
+
+- Completed a STRIDE-style threat model (`docs/threat-model.md`) covering web and desktop modes, trust boundaries, and assets.
+- **GAP-1 (Missing Rate Limits on Unauthenticated APIs):** Added `unauth_rate_limiter` dependency in `src/core/rate_limit.py` and applied to `POST /api/auth/login` and `POST /api/auth/signup` in `src/api/auth.py`.
+- **GAP-2 (WebSocket Token in URL):** Moved WebSocket authentication from query parameters (`?token=...`) to a first-message JSON payload (`{"type": "auth", "token": "..."}`) in `src/api/executions.py` to prevent token leakage in CDN logs. Fixed all associated `TestClient` uses in `tests/test_events.py`, `tests/test_limits.py`, and `tests/test_log_canary.py`.
+- **GAP-4 (JWT Secret Reuse for Quota Salt):** Added an explicit `quota_salt` field in `src/core/config.py` (via `QUOTA_SALT` env var). Updated `src/providers/quota.py` to use `quota_salt`, falling back to a dev random salt rather than the JWT signing key.
+- **GAP-5 (WebSocket DoS via Connection Exhaustion):** Added `MAX_WS_CONNECTIONS_PER_EXEC = 20` cap per execution ID in `src/api/executions.py`.
+- **GAP-6 (Tauri OS Execution Risk):** Restricted Tauri desktop permissions in `desktop/src-tauri/capabilities/default.json` by replacing `shell:default` with `shell:allow-open` to prevent JS from executing arbitrary system commands.
+- **GAP-7 (Prompt Injection via User Question):** Integrated `scan_for_injection` from the research module into `src/api/executions.py` at execution submission. Flags are logged for operator abuse monitoring without blocking valid use cases.
+- **GAP-9 (Weak Default JWT Secret):** Added a startup configuration check in `src/main.py` lifespan that immediately refuses to start the server in production web mode if `jwt_secret_key` matches the default insecure placeholder.
+- Added `clear_rate_limits` fixture to `tests/conftest.py` to prevent `429 Too Many Requests` masking test failures. Fixed blocked DNS in tests for `test_exe.py` by whitelisting localhost loopbacks in `socket.getaddrinfo`.
+- Result: **333 passed, 41 warnings**; `ruff check` green. Security gaps addressed (except manual key rotation for GAP-8 and accepted risks).
