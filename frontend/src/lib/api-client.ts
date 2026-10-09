@@ -148,6 +148,10 @@ export class ApiClient {
     }
   }
 
+  static async clearAllKeys(): Promise<void> {
+    await this.request("/api/keys", { method: "DELETE" })
+  }
+
   static async wakeup(): Promise<void> {
     try {
       const baseUrl = env.apiUrl.endsWith("/api") ? env.apiUrl.replace("/api", "") : env.apiUrl

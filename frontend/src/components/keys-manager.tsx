@@ -79,12 +79,17 @@ export function KeysManager() {
 
   const handleClearAll = async () => {
     await globalVault.clearAll()
+    try {
+      await ApiClient.clearAllKeys()
+    } catch {
+      // Backend may not be reachable; frontend vault is already cleared.
+    }
     setRemember(false)
     setSavedKeys({})
     setInputs({})
     setStatuses({})
     setPassphrase("")
-    toast({ title: "Keys cleared", description: "All API keys removed from memory and disk." })
+    toast({ title: "Keys cleared", description: "All API keys removed from memory, disk, and system keyring." })
   }
 
   const readyFamilies = new Set<string>()
