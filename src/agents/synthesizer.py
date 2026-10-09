@@ -152,7 +152,35 @@ Respond with the JSON format specified in your instructions."""
             "all_sources": [s.model_dump() for s in unique_sources],
         }
 
-        result = await self.run(question, context=context, temperature=0.3)
+        from src.providers.errors import ProviderDown, RateLimited
+        from src.providers.quota import QuotaExhausted
+        from src.core.logging_config import logger
+        
+        RETRYABLE_ERRORS = (RateLimited, QuotaExhausted, ProviderDown, TimeoutError)
+        
+        try:
+            result = await self.run(question, context=context, temperature=0.3)
+        except RETRYABLE_ERRORS as e:
+            router_fallback = getattr(self.router, "fallback_for", None)
+            fallback = None
+            if self.routing is not None and router_fallback is not None:
+                try:
+                    fallback = router_fallback(self.routing, e)
+                except Exception:
+                    pass
+            if fallback is None:
+                raise
+            
+            logger.info(
+                f"Synthesizer │ retrying on {fallback.provider_name}/{fallback.model} "
+                f"after {type(e).__name__}"
+            )
+            self.provider = fallback.provider
+            self.model = fallback.model
+            self.routing = fallback
+            self.family = getattr(fallback, "family", "")
+            
+            result = await self.run(question, context=context, temperature=0.3)
 
         # Append attribution footer (shared format with the final composer,
         # which lifts it off and re-attaches it after its own sections).

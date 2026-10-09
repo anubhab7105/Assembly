@@ -20,11 +20,13 @@ from typing import Any
 from src.providers.base import AIProvider, ChatMessage, ProviderResponse
 
 
-class MockRateLimitError(Exception):
+from src.providers.errors import RateLimited
+
+class MockRateLimitError(RateLimited):
     """Simulated HTTP 429 rate-limit error (carries a status_code like httpx)."""
 
     def __init__(self, message: str = "Mock 429 rate limit exceeded") -> None:
-        super().__init__(message)
+        super().__init__("mock", message)
         self.status_code = 429
 
 
