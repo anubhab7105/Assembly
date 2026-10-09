@@ -1,9 +1,10 @@
+import os
 import subprocess
 import time
-import requests
-import json
-import os
 from pathlib import Path
+
+import requests
+
 
 def test_executable():
     exe_path = Path("dist/assembly_backend/assembly_backend.exe")

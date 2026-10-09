@@ -4,7 +4,6 @@ Assembly — Research / Web Search Engine
 Web search integration for research-heavy questions (PRD Section 11).
 """
 
-from typing import List, Dict, Optional
 import httpx
 
 from src.core.config import settings
@@ -30,7 +29,7 @@ class SearchEngine:
         self,
         query: str,
         max_results: int = 5,
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """
         Search the web and return structured results.
         
@@ -47,7 +46,7 @@ class SearchEngine:
         self,
         query: str,
         max_results: int = 5,
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """Search using Tavily API."""
         logger.info(f"Search  │ Tavily search: {query[:80]}...")
 

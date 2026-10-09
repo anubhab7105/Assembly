@@ -5,9 +5,9 @@ Produces the final answer from the team's consensus.
 The user never sees the debate — only this agent's output.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Any
 
-from src.agents.base_agent import BaseAgent, AgentOutput
+from src.agents.base_agent import AgentOutput, BaseAgent
 from src.orchestration.composer import attribution_footer
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE, sanitize_search_results
 
@@ -59,7 +59,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
 ```"""
         return prompt + "\n\n" + UNTRUSTED_SYSTEM_NOTE
 
-    def build_user_prompt(self, question: str, context: Optional[Dict[str, Any]] = None) -> str:
+    def build_user_prompt(self, question: str, context: dict[str, Any] | None = None) -> str:
         if not context:
             return question
 
@@ -120,10 +120,10 @@ Respond with the JSON format specified in your instructions."""
     async def synthesize(
         self,
         question: str,
-        agent_outputs: List[AgentOutput],
+        agent_outputs: list[AgentOutput],
         consensus_score: float,
         debate_rounds: int,
-        providers_used: List[str] = None,
+        providers_used: list[str] = None,
     ) -> AgentOutput:
         """
         Convenience method for final synthesis.

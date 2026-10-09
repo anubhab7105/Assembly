@@ -1,11 +1,12 @@
-import asyncio
 import pytest
-from httpx import AsyncClient, ASGITransport
 from fastapi.testclient import TestClient
-from src.main import app
-from src.core.rate_limit import _rate_limit_history, _global_executions, _user_executions, execution_tracker
+from httpx import ASGITransport, AsyncClient
+
+from src.core.rate_limit import _rate_limit_history, _user_executions, execution_tracker
 from src.core.security import get_current_user_id
 from src.database.base import get_db
+from src.main import app
+
 
 @pytest.fixture(autouse=True)
 def reset_limits():

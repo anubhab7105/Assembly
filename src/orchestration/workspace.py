@@ -6,10 +6,11 @@ others' conclusions (PRD Section 26/30).
 """
 
 import asyncio
-from typing import List, Dict, Any, Optional, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any
 
 from src.core.logging_config import logger
 
@@ -30,7 +31,7 @@ class WorkspaceEvent:
     agent_id: str
     execution_id: str
     round_number: int
-    data: Dict[str, Any]
+    data: dict[str, Any]
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict:
@@ -60,8 +61,8 @@ class SharedWorkspace:
     """
 
     def __init__(self):
-        self._events: Dict[str, List[WorkspaceEvent]] = {}  # execution_id → events
-        self._listeners: Dict[str, List[Callable]] = {}  # execution_id → callbacks
+        self._events: dict[str, list[WorkspaceEvent]] = {}  # execution_id → events
+        self._listeners: dict[str, list[Callable]] = {}  # execution_id → callbacks
         self._lock = asyncio.Lock()
 
     async def publish(self, event: WorkspaceEvent):
@@ -87,10 +88,10 @@ class SharedWorkspace:
     def get_events(
         self,
         execution_id: str,
-        event_type: Optional[EventType] = None,
-        round_number: Optional[int] = None,
-        exclude_agent: Optional[str] = None,
-    ) -> List[WorkspaceEvent]:
+        event_type: EventType | None = None,
+        round_number: int | None = None,
+        exclude_agent: str | None = None,
+    ) -> list[WorkspaceEvent]:
         """
         Read events from the workspace, optionally filtered.
         
@@ -111,11 +112,11 @@ class SharedWorkspace:
 
         return events
 
-    def get_latest_solutions(self, execution_id: str) -> List[WorkspaceEvent]:
+    def get_latest_solutions(self, execution_id: str) -> list[WorkspaceEvent]:
         """Get the most recent solution from each agent."""
         events = self.get_events(execution_id, EventType.SOLUTION)
         # Keep only the latest per agent
-        latest: Dict[str, WorkspaceEvent] = {}
+        latest: dict[str, WorkspaceEvent] = {}
         for e in events:
             latest[e.agent_id] = e
         return list(latest.values())

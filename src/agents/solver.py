@@ -5,7 +5,7 @@ Independent problem-solving agent that produces a solution
 with reasoning and evidence before seeing other agents' work.
 """
 
-from typing import Optional, Dict, Any
+from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
@@ -49,7 +49,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
 ```"""
         return prompt + "\n\n" + UNTRUSTED_SYSTEM_NOTE
 
-    def build_user_prompt(self, question: str, context: Optional[Dict[str, Any]] = None) -> str:
+    def build_user_prompt(self, question: str, context: dict[str, Any] | None = None) -> str:
         if context and context.get("mode") == "critique":
             # Debate mode: review others' work
             other_outputs = context.get("other_outputs", [])

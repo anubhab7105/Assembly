@@ -911,7 +911,7 @@ def build_report(
         cat_tbl.append(f"| {cat} | {vals} |")
     p("\n".join(cat_tbl))
     if HAS_MPL:
-        p(f"\n![Win rate chart](charts/win_rate.png)\n")
+        p("\n![Win rate chart](charts/win_rate.png)\n")
 
     # 2. Cost
     h(2, "2. Cost View — Calls, Tokens & Seconds per Tier")
@@ -933,7 +933,7 @@ def build_report(
         "questions at the cost of latency."
     )
     if HAS_MPL:
-        p(f"\n![Calls vs Accuracy](charts/calls_vs_acc.png)\n")
+        p("\n![Calls vs Accuracy](charts/calls_vs_acc.png)\n")
 
     # 3. Ablations
     h(2, "3. Ablation Analysis")
@@ -962,7 +962,7 @@ def build_report(
             "Keep this component even under tight time budgets."
         )
     if HAS_MPL:
-        p(f"\n![Ablation chart](charts/ablation.png)\n")
+        p("\n![Ablation chart](charts/ablation.png)\n")
 
     # 4. Failures
     h(2, "4. Failure Analysis — Questions Where Assembly Lost")

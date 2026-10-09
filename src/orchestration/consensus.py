@@ -16,8 +16,8 @@ are excluded from stabilization (Fix D, WORKFLOW 6.6).
 """
 
 from collections import Counter
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any
 
 from src.agents.base_agent import AgentOutput
 from src.core.config import settings
@@ -103,7 +103,7 @@ class ConsensusEngine:
     call reset() between executions.
     """
 
-    def __init__(self, config: Optional[ConsensusConfig] = None):
+    def __init__(self, config: ConsensusConfig | None = None):
         self.config = config or ConsensusConfig.from_settings()
         self._previous_positions: dict[str, str] = {}  # agent_id → previous position
 

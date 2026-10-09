@@ -9,7 +9,6 @@ when teams are large or debates run for many rounds.
 """
 
 import asyncio
-from typing import List, Dict, Optional
 
 from src.agents.base_agent import AgentOutput, BaseAgent
 from src.core.logging_config import logger
@@ -41,13 +40,13 @@ class DebateManager:
 
     async def run_debate_round(
         self,
-        agents: List[BaseAgent],
-        current_outputs: List[AgentOutput],
+        agents: list[BaseAgent],
+        current_outputs: list[AgentOutput],
         question: str,
         round_number: int,
         timeout_s: float | None = None,
         tracker: TaskTracker | None = None,
-    ) -> List[AgentOutput]:
+    ) -> list[AgentOutput]:
         """
         Run one debate round: all agents review each other's work in parallel.
         
@@ -128,7 +127,7 @@ class DebateManager:
         logger.info(f"Debate  │ Round {round_number} complete — {len(updated_outputs)} outputs")
         return updated_outputs
 
-    def _compress_outputs(self, outputs: List[AgentOutput]) -> List[AgentOutput]:
+    def _compress_outputs(self, outputs: list[AgentOutput]) -> list[AgentOutput]:
         """
         Create compressed copies of agent outputs to reduce context window usage.
         
@@ -180,7 +179,7 @@ class DebateManager:
         self,
         agent: BaseAgent,
         question: str,
-        others: List[AgentOutput],
+        others: list[AgentOutput],
         round_number: int,
         timeout_s: float | None = None,
     ) -> AgentOutput:

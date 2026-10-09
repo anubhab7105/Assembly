@@ -4,19 +4,19 @@ Assembly — Conversations API Routes
 Manages conversation history for authenticated users.
 """
 
-from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from src.core.security import get_current_user_id
 from src.database.base import get_db
 from src.database.models import Conversation, Message
-from src.database.schemas import ConversationResponse, ConversationListItem
-from src.core.security import get_current_user_id
+from src.database.schemas import ConversationListItem, ConversationResponse
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
 
-@router.get("/", response_model=List[ConversationListItem])
+@router.get("/", response_model=list[ConversationListItem])
 def list_conversations(
     user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),

@@ -55,6 +55,19 @@ async def lifespan(app: FastAPI):
     logger.info(f"Server   │ Database: {db_type}")
     logger.info(f"Server   │ DB URL: {_mask_db_url(settings.effective_database_url)}")
     logger.info("====================================================")
+
+    # ── Startup Security Checks (GAP-9, GAP-4) ───────────────────────
+    if settings.app_mode == "web" and settings.is_production:
+        from src.core.keystore import reveal
+        jwt_key = reveal(settings.jwt_secret_key)
+        if jwt_key == "change-me-to-a-random-secret-key-at-least-32-chars" or not jwt_key:
+            logger.error("CRITICAL: Default or empty JWT_SECRET_KEY detected in production!")
+            raise RuntimeError("Refusing to start in production web mode with an insecure JWT secret.")
+            
+        quota_salt = reveal(settings.quota_salt)
+        if not quota_salt:
+            logger.warning("Server   │ No explicit QUOTA_SALT set in production; falling back to ephemeral random salt.")
+
     yield
     logger.info("Server   │ Shutting down")
     
@@ -244,7 +257,6 @@ if __name__ == "__main__":
         reload = False
 
         # Watcher thread to exit if parent dies (for shell crash safety)
-        import threading
         def watch_parent():
             parent_pid = os.getppid()
             while True:

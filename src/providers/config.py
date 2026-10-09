@@ -115,6 +115,7 @@ class ModelsConfig(BaseModel):
 
 import sys
 
+
 def default_catalog_path() -> Path:
     """Repo-root models.yaml (or PyInstaller bundle root)."""
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
