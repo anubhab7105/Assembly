@@ -319,3 +319,11 @@
 - **GAP-9 (Weak Default JWT Secret):** Added a startup configuration check in `src/main.py` lifespan that immediately refuses to start the server in production web mode if `jwt_secret_key` matches the default insecure placeholder.
 - Added `clear_rate_limits` fixture to `tests/conftest.py` to prevent `429 Too Many Requests` masking test failures. Fixed blocked DNS in tests for `test_exe.py` by whitelisting localhost loopbacks in `socket.getaddrinfo`.
 - Result: **333 passed, 41 warnings**; `ruff check` green. Security gaps addressed (except manual key rotation for GAP-8 and accepted risks).
+
+## Model verifier script (2026-10-09)
+
+- New: `scripts/verify_models.py` (async httpx, per enabled provider: list-endpoint existence check + one tiny probe per catalog model printing HTTP status and `x-ratelimit-*`/`retry-after` headers + plan/quota/not-found classification; Gemini via header-auth REST so headers are visible; keys revealed only at call site, output is names/counts/statuses, snippets masked). No `models.yaml` values invented — script only reports observed headers/errors for manual fill-in.
+- Tests: `tests/test_verify_models.py` (8 respx-mocked tests: header filter, error taxonomy, list-missing detection, ok-probe headers, Gemini list+probe, no-key skip, unknown-provider exit code, plus fake-key leak scan over report JSON/stdout/logs).
+- `--save` flag writes a limit-headers-only markdown report to `.local/verify_report.md` (git-ignored; status + classification + `x-ratelimit-limit-*` only, no keys/remaining/reset); covered by 3 extra tests (limit filter, file content scan, `--save` CLI path).
+- Result: **11 passed** in new file; `ruff check` + `format --check` green on both new files.
+- Skipped (per DoD): live real-key run — user runs `python scripts/verify_models.py` locally; no live calls made here. Per-model limits schema change proposed separately, not applied.
