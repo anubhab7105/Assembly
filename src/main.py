@@ -169,7 +169,6 @@ STATIC_DIR = Path(__file__).parent / "static"
 if not settings.frontend_url and STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-
 @app.get("/")
 async def serve_frontend():
     """Serve the main frontend page (local dev) or API info (production)."""
