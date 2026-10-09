@@ -128,10 +128,13 @@ def _block_network(monkeypatch) -> None:
             return real_connect(self, address, *args, **kwargs)
         raise RuntimeError(f"Network access is blocked in tests (tried {host})")
 
-    def _blocked_dns(*args: object, **kwargs: object) -> object:
-        raise RuntimeError("DNS is blocked in tests")
+    def _blocked_dns(host, *args: object, **kwargs: object) -> object:
+        if host in ("127.0.0.1", "::1", "localhost"):
+            return socket._real_getaddrinfo(host, *args, **kwargs)
+        raise RuntimeError(f"DNS is blocked in tests (tried {host})")
 
     monkeypatch.setattr(socket.socket, "connect", _guarded)
+    socket._real_getaddrinfo = socket.getaddrinfo
     monkeypatch.setattr(socket, "getaddrinfo", _blocked_dns)
 
 
