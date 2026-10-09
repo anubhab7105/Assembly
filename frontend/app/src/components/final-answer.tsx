@@ -7,12 +7,9 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import rehypeHighlight from "rehype-highlight"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Copy, Download, Layers, ShieldAlert, Sparkles, Scale, Info, CheckCircle2 } from "lucide-react"
+import { Copy, Download, Layers, ShieldAlert, Sparkles, Info, CheckCircle2 } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
-import { ApiClient } from "@/lib/api-client"
 import { ExecutionState } from "@/hooks/use-execution"
 import "katex/dist/katex.min.css"
 import "highlight.js/styles/github-dark.css" // Or any other style
@@ -23,9 +20,6 @@ interface FinalAnswerProps {
 
 export function FinalAnswer({ state }: FinalAnswerProps) {
   const { toast } = useToast()
-  const [comparing, setComparing] = useState(false)
-  const [singleModelAnswer, setSingleModelAnswer] = useState<string | null>(null)
-  const [compareLoading, setCompareLoading] = useState(false)
   const [verificationOpen, setVerificationOpen] = useState(false)
 
   const handleCopy = () => {
@@ -44,20 +38,6 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
     a.download = `assembly-answer-${Date.now()}.md`
     a.click()
     URL.revokeObjectURL(url)
-  }
-
-  const handleCompare = async () => {
-    if (!state.question) {
-      toast({ title: "Cannot compare", description: "Original question is missing.", variant: "danger" })
-      return
-    }
-    setComparing(true)
-    if (!singleModelAnswer) {
-      setCompareLoading(true)
-      const res = await ApiClient.runSingleModel(state.question)
-      setSingleModelAnswer(res.answer)
-      setCompareLoading(false)
-    }
   }
 
   const confidenceColors = {
@@ -94,10 +74,6 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleCompare} className="h-8">
-              <Scale className="size-4 mr-2" />
-              Compare
-            </Button>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleCopy} title="Copy Markdown">
               <Copy className="size-4" />
             </Button>
@@ -175,53 +151,6 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
         </CardContent>
       </Card>
 
-      {/* Compare Dialog */}
-      <Dialog open={comparing} onOpenChange={setComparing}>
-        <DialogContent className="max-w-6xl w-full max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Compare with Single Model</DialogTitle>
-            <DialogDescription>
-              Comparing Assembly's multi-agent synthesis against a single zero-shot model (e.g. Gemini 1.5 Flash).
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="grid grid-cols-2 gap-6 mt-4 flex-1 overflow-hidden min-h-[500px]">
-            {/* Single Model */}
-            <div className="flex flex-col rounded-xl border bg-muted/20 overflow-hidden">
-              <div className="bg-muted p-3 border-b flex items-center justify-between">
-                <span className="font-semibold text-sm">Single Model (Zero-shot)</span>
-                <Badge variant="secondary">Baseline</Badge>
-              </div>
-              <div className="p-6 overflow-y-auto flex-1 prose prose-sm prose-invert max-w-none">
-                {compareLoading ? (
-                  <div className="flex items-center justify-center h-full text-muted-foreground animate-pulse">
-                    Running model...
-                  </div>
-                ) : (
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
-                    {singleModelAnswer || ""}
-                  </ReactMarkdown>
-                )}
-              </div>
-            </div>
-
-            {/* Assembly */}
-            <div className="flex flex-col rounded-xl border border-brand/30 bg-brand/5 overflow-hidden shadow-lg">
-              <div className="bg-brand/10 p-3 border-b border-brand/20 flex items-center justify-between">
-                <span className="font-semibold text-brand text-sm flex items-center gap-2">
-                  <Sparkles className="size-4" /> Assembly Synthesis
-                </span>
-                <Badge className="bg-brand text-white hover:bg-brand/90">Multi-Agent</Badge>
-              </div>
-              <div className="p-6 overflow-y-auto flex-1 prose prose-sm prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
-                  {state.finalAnswer || ""}
-                </ReactMarkdown>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

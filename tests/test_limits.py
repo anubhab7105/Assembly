@@ -2,25 +2,24 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
-from src.core.rate_limit import _rate_limit_history, _user_executions, execution_tracker
-from src.core.security import get_current_user_id
+from src.core.config import settings
+from src.core.rate_limit import _ip_executions, _rate_limit_history
 from src.database.base import get_db
 from src.main import app
 
 
 @pytest.fixture(autouse=True)
 def reset_limits():
-    """Reset all limits before each test."""
+    """Reset all limits before each test (per-IP, no accounts)."""
     _rate_limit_history.clear()
-    global _global_executions
-    _global_executions = 0
-    _user_executions.clear()
-    
-    # Override auth for all tests here
-    app.dependency_overrides[get_current_user_id] = lambda: "test-user-id"
-    yield
-    app.dependency_overrides.pop(get_current_user_id, None)
+    import src.core.rate_limit as rl
+
+    rl._global_executions = 0
+    _ip_executions.clear()
     app.dependency_overrides.pop(get_db, None)
+    yield
+    app.dependency_overrides.pop(get_db, None)
+
 
 @pytest.mark.asyncio
 async def test_max_question_length():
@@ -33,49 +32,52 @@ async def test_max_question_length():
         assert response.status_code == 422
         assert "Invalid request." in response.text
 
+
 @pytest.mark.asyncio
 async def test_rate_limit_preflight():
     """Test the rate limit for preflight endpoint."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        # Limit is 10
         for _ in range(10):
             res = await client.get("/api/executions/preflight?question=test&time_budget_minutes=5")
             assert res.status_code in (200, 422)
-        
-        # 11th should be rate limited
+
         res = await client.get("/api/executions/preflight?question=test&time_budget_minutes=5")
         assert res.status_code == 429
         assert "Rate limit exceeded" in res.json()["detail"]
 
+
 @pytest.mark.asyncio
 async def test_concurrent_execution_cap(db_session, monkeypatch):
-    """Test the concurrent execution cap."""
+    """Test the per-IP concurrent execution cap (no accounts)."""
+    import src.core.rate_limit as rl
+
     app.dependency_overrides[get_db] = lambda: db_session
-    
-    # Fake acquiring 1 execution for the user
-    await execution_tracker.acquire("test-user-id")
-    
-    try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            res = await client.post(
-                "/api/executions/",
-                json={"question": "test", "time_budget_minutes": 5},
-            )
-            assert res.status_code == 429
-            assert "Concurrent execution limit reached" in res.json()["detail"]
-    finally:
-        await execution_tracker.release("test-user-id")
+    monkeypatch.setattr(rl, "MAX_RUNS_PER_IP", 0)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        res = await client.post(
+            "/api/executions/",
+            json={"question": "test", "time_budget_minutes": 5},
+        )
+        assert res.status_code == 429
+        assert "Concurrent execution limit" in res.json()["detail"] or "Global" in res.json()["detail"]
+
 
 @pytest.mark.asyncio
 async def test_websocket_origin_check(monkeypatch):
     """Test WebSocket origin checks."""
-    from src.core.config import settings
     monkeypatch.setattr(settings, "app_mode", "web")
     monkeypatch.setattr(settings, "frontend_url", "https://assembly.example.com")
-    
+    monkeypatch.setattr(settings, "cors_allow_list", "https://assembly.example.com")
+
     client = TestClient(app)
-    
+
     from starlette.websockets import WebSocketDisconnect
-    with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect("/api/executions/ws/test_id", headers={"origin": "https://evil.com"}) as ws:
-            ws.receive_text()
+
+    with (
+        pytest.raises(WebSocketDisconnect),
+        client.websocket_connect(
+            "/api/executions/ws/test_id", headers={"origin": "https://evil.com"}
+        ) as ws,
+    ):
+        ws.receive_text()

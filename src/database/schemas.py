@@ -1,99 +1,86 @@
-"""
-Assembly — Pydantic Schemas
-
-Request / response schemas for all API endpoints.
-"""
+"""Assembly — Pydantic Schemas (stateless web + desktop local)."""
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.events import ProgressEvent
 
 
 # ═════════════════════════════════════════════════════════════════════
-# AUTH
+# STATELESS RUN (web: POST /api/run, SSE)
 # ═════════════════════════════════════════════════════════════════════
-class SignupRequest(BaseModel):
-    email: str = Field(..., min_length=5)
-    password: str = Field(..., min_length=6)
-    name: str = Field(..., min_length=1)
+class UsageSnapshotEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = Field(min_length=1)
+    model: str = Field(default="")
+    count: int = Field(default=0, ge=0)
+    tokens: int = Field(default=0, ge=0)
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
+class ModelSelection(BaseModel):
+    """Frontend model picker output. Empty selected = Auto."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    selected: list[str] = Field(default_factory=list, max_length=50)
+    pins: dict[str, str] = Field(default_factory=dict)
 
 
-class AuthResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: "UserResponse"
+class RunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-
-class UserResponse(BaseModel):
-    id: str
-    email: str
-    name: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-# ═════════════════════════════════════════════════════════════════════
-# CONVERSATIONS
-# ═════════════════════════════════════════════════════════════════════
-class MessageResponse(BaseModel):
-    id: str
-    role: str
-    content: str
-    sources: list | None = None
-    execution_id: str | None = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ConversationResponse(BaseModel):
-    id: str
-    title: str
-    created_at: datetime
-    updated_at: datetime | None = None
-    messages: list[MessageResponse] = []
-
-    class Config:
-        from_attributes = True
-
-
-class ConversationListItem(BaseModel):
-    id: str
-    title: str
-    created_at: datetime
-    updated_at: datetime | None = None
-    message_count: int = 0
-
-    class Config:
-        from_attributes = True
-
-
-# ═════════════════════════════════════════════════════════════════════
-# EXECUTIONS
-# ═════════════════════════════════════════════════════════════════════
-class ExecutionRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     time_budget_minutes: int = Field(..., ge=3, le=15)
-    conversation_id: str | None = None  # Attach to existing, or create new
     # Web-mode BYOK keys (provider → key). In-memory for this run only:
-    # never written to the database, never logged, never returned.
+    # never written to disk or database, never logged, never returned.
+    provider_keys: dict[str, str] = Field(default_factory=dict, max_length=20)
+    model_selection: ModelSelection = Field(default_factory=ModelSelection)
+    usage_snapshot: list[UsageSnapshotEntry] = Field(default_factory=list, max_length=200)
+
+
+class UsageCounters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = ""
+    model: str = ""
+    count: int = 0
+    tokens: int = 0
+
+
+class RunResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    status: str
+    answer: str = ""
+    sources: list = Field(default_factory=list)
+    consensus_score: float | None = None
+    agent_count: int = 0
+    debate_rounds: int = 0
+    total_tokens_used: int = 0
+    usage: list[UsageCounters] = Field(default_factory=list)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# EXECUTIONS (desktop local history)
+# ═════════════════════════════════════════════════════════════════════
+class ExecutionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(..., min_length=1, max_length=2000)
+    time_budget_minutes: int = Field(..., ge=3, le=15)
     provider_keys: dict[str, str] | None = None
+    model_selection: ModelSelection = Field(default_factory=ModelSelection)
+    usage_snapshot: list[UsageSnapshotEntry] = Field(default_factory=list)
     is_demo: bool = False
 
 
 class ExecutionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
-    conversation_id: str
     question: str
     time_budget_minutes: int
     status: str
@@ -109,11 +96,10 @@ class ExecutionResponse(BaseModel):
     completed_at: datetime | None = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class AgentRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     agent_type: str
     role_description: str | None = None
@@ -122,15 +108,12 @@ class AgentRunResponse(BaseModel):
     status: str
     confidence: float | None = None
 
-    class Config:
-        from_attributes = True
-
 
 class ExecutionCancelResponse(BaseModel):
     """Reply to POST /api/executions/{id}/cancel."""
 
     id: str
-    status: str  # "cancelling" while the run winds down, else current state
+    status: str
 
 
 class PlannerSuggestionResponse(BaseModel):

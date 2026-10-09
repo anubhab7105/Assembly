@@ -1,15 +1,6 @@
 /**
- * Typed environment configuration.
- * Throws at startup if required variables are missing.
+ * Typed environment configuration (no accounts, no Supabase).
  */
-
-function require_env(key: string): string {
-  const value = process.env[key]
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`)
-  }
-  return value
-}
 
 export const env = {
   /** Base URL for the Assembly FastAPI backend. No trailing slash. */
@@ -31,6 +22,4 @@ export const env = {
     }
     return process.env.NEXT_PUBLIC_APP_MODE || "dev";
   },
-  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dummy.supabase.co",
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy-anon-key",
 }

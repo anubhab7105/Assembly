@@ -6,6 +6,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV APP_ENV=production
+ENV APP_MODE=web
 
 # Create a non-root user and group
 RUN groupadd -r assembly && useradd -r -g assembly assembly
@@ -13,14 +14,14 @@ RUN groupadd -r assembly && useradd -r -g assembly assembly
 # Set the working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (no Postgres: web is stateless, desktop uses SQLite)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libpq-dev curl \
+    && apt-get install -y --no-install-recommends gcc curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt uvicorn psycopg2-binary
+RUN pip install --no-cache-dir -r requirements.txt uvicorn
 
 # Copy the application code
 COPY . .

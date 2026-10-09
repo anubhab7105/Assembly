@@ -157,7 +157,7 @@ class Orchestrator:
         whatever positions exist.
         """
         logger.info(f"═══ EXECUTION START: {execution_id} ═══")
-        logger.info(f"Question: {question[:100]}...")
+        logger.info(f"Question chars: {len(question)}")
         logger.info(f"Budget: {time_budget_minutes} minutes")
 
         # Per-request keys get an isolated in-memory store + router.

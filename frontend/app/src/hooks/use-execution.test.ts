@@ -2,23 +2,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { useExecution } from "./use-execution"
 import type { ProgressEvent } from "@/lib/events"
-import { ApiClient } from "@/lib/api-client"
 
 // Mock WebSocket
 class MockWebSocket {
   url: string
   onmessage: ((event: { data: string }) => void) | null = null
   onclose: (() => void) | null = null
+  onopen: (() => void) | null = null
   readyState: number = WebSocket.OPEN
-  
+
   constructor(url: string) {
     this.url = url
     // Expose the mock instance globally for tests to emit messages
     ;(globalThis as any).mockWs = this
   }
-  
+
   close() {}
-  
+  send(_data: string) {}
+
   // Test helper to simulate server sending a message
   mockMessage(event: ProgressEvent) {
     if (this.onmessage) {
@@ -28,7 +29,14 @@ class MockWebSocket {
 }
 
 vi.mock("@/lib/env", () => ({
-  env: { apiUrl: "http://localhost:8000" }
+  env: { apiUrl: "http://localhost:8000", NEXT_PUBLIC_APP_MODE: "dev", desktopToken: "" },
+}))
+
+vi.mock("@/lib/storage", () => ({
+  storage: {
+    getHistory: vi.fn().mockResolvedValue(null),
+    listHistory: vi.fn().mockResolvedValue([]),
+  },
 }))
 
 describe("useExecution hook", () => {
@@ -55,10 +63,10 @@ describe("useExecution hook", () => {
 
   it("connects to websocket and updates state on team.ready", () => {
     const { result } = renderHook(() => useExecution("exec_123"))
-    
+
     const mockWs = (globalThis as any).mockWs as MockWebSocket
     expect(mockWs).toBeDefined()
-    expect(mockWs.url).toContain("ws://localhost:8000/executions/exec_123/ws")
+    expect(mockWs.url).toContain("ws://localhost:8000/api/executions/ws/exec_123")
 
     act(() => {
       mockWs.mockMessage({
@@ -100,7 +108,7 @@ describe("useExecution hook", () => {
       mockWs.mockMessage({
         event_type: "execution.started",
         execution_id: "exec_123",
-        seq: 1, 
+        seq: 1,
         state: "starting",
         timestamp: new Date().toISOString(),
         data: {}
@@ -111,37 +119,26 @@ describe("useExecution hook", () => {
     expect(result.current.status).toBe("running")
   })
 
-  it("falls back to REST API polling when WebSocket fails repeatedly", async () => {
-    const mockGetExecution = vi.spyOn(ApiClient, "getExecution").mockResolvedValue({
-      id: "exec_123",
+  it("loads local stateless runs from device storage without a socket", async () => {
+    vi.useRealTimers()
+    const { storage } = await import("@/lib/storage")
+    vi.mocked(storage.getHistory).mockResolvedValue({
+      id: "local-1",
+      question: "What is stored?",
+      answer: "Stored answer",
       status: "completed",
-      events: []
+      created_at: new Date().toISOString(),
+      minutes: 3,
+      consensus: 0.9,
     })
 
-    const { result } = renderHook(() => useExecution("exec_123"))
-    let mockWs = (globalThis as any).mockWs as MockWebSocket
+    const { result } = renderHook(() => useExecution("local-1"))
 
-    // Simulate 5 connection failures (WS_RECONNECT_MAX_ATTEMPTS)
-    for (let i = 0; i <= 5; i++) {
-      act(() => {
-        if (mockWs.onclose) mockWs.onclose()
-      })
-      // Fast forward the reconnect delay (2000ms * attempt)
-      act(() => {
-        vi.advanceTimersByTime(15000)
-      })
-      mockWs = (globalThis as any).mockWs as MockWebSocket
-    }
-
-    // After 5 failures, it should start polling (every 5 seconds)
-    act(() => {
-      vi.advanceTimersByTime(5000)
+    await waitFor(() => {
+      expect(result.current.question).toBe("What is stored?")
     })
-
-    // Advance microtasks to resolve the mocked promise
-    await act(async () => {})
-
-    expect(mockGetExecution).toHaveBeenCalledWith("exec_123")
-    expect(result.current.status).toBe("completed")
+    expect(result.current.finalAnswer).toBe("Stored answer")
+    // No websocket for local runs.
+    expect((globalThis as any).mockWs).toBeUndefined()
   })
 })

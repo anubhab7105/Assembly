@@ -301,7 +301,7 @@ async def test_planner_without_capacity_support(mock_router) -> None:
 async def test_status_reflects_limiter_remaining() -> None:
     from src.api.keys import providers_status
 
-    response = await providers_status(user_id="test-user")
+    response = await providers_status()
     assert response.providers != []
     for entry in response.providers:
         assert set(entry.families) <= set(KNOWN_FAMILIES)
