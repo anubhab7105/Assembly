@@ -248,3 +248,42 @@ def test_providers_status_names_only(monkeypatch) -> None:
         value = reveal(getattr(settings, attr, ""))
         if value:
             assert value not in text
+
+
+def test_delete_all_keys_clears_keyring(monkeypatch, fake_key: str) -> None:
+    """DELETE /api/keys wipes every key from the keyring (desktop mode)."""
+    from src.core.config import settings as _settings
+    from src.main import app
+
+    monkeypatch.setattr(_settings, "app_mode", "desktop")
+    monkeypatch.setitem(sys.modules, "keyring", _FakeKeyring)
+    _FakeKeyring._vault.clear()
+
+    # Use the same default service name as the API endpoint's get_keystore()
+    store = KeyringKeyStore()
+    store.set_key("groq", fake_key)
+    store.set_key("gemini", fake_key)
+    assert store.has("groq") and store.has("gemini")
+
+    # Desktop mode requires the X-Assembly-Token header (see main.py middleware)
+    client = TestClient(app)
+    headers = {"X-Assembly-Token": _settings.desktop_token}
+    response = client.delete("/api/keys", headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json() == {"detail": "All keys deleted"}
+    assert not store.has("groq")
+    assert not store.has("gemini")
+    assert fake_key not in response.text
+
+
+def test_delete_all_keys_rejects_non_desktop(monkeypatch) -> None:
+    """DELETE /api/keys only works in desktop mode."""
+    from src.core.config import settings as _settings
+    from src.main import app
+
+    monkeypatch.setattr(_settings, "app_mode", "web")
+    client = TestClient(app)
+    headers = {"X-Assembly-Token": _settings.desktop_token}
+    response = client.delete("/api/keys", headers=headers)
+    assert response.status_code == 400
+    assert "desktop" in response.json()["detail"]

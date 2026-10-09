@@ -381,3 +381,18 @@
 - Docs: `docs/privacy.md` (exact server-sees/stores statement), `docs/decisions.md` entry. Config: `APP_MODE=web|desktop|dev`, CORS allow-list, run TTL/cap/heartbeat, per-IP limits; `render.yaml`/`Dockerfile` webless of DB/JWT/provider keys; `python-jose/passlib/bcrypt/psycopg2` dropped (+`platformdirs`).
 - Skipped (per DoD): live real-key end-to-end run — no live keys in this environment (mock-router SSE e2e is the verification); Playwright browsers not launched here (spec file updated, CI runs it).
 - Merged into `main` with `feat/tier-scaling` (merged first): kept tier-scaling's measured-token divisor, TeamPlan token estimates, round ceilings and preflight ceiling/expected fields; stateless usage_snapshot subtracts inside the same divisor math. Suite re-run on the merge (see below).
+
+## 2026-10-09 — Key persistence + clear-all endpoint
+
+- **Problem:** Keys were safe at rest (Windows Credential Manager / AES-GCM IndexedDB) but there was no single "clear all" operation — the backend only supported per-provider deletion (`DELETE /api/keys/{provider}`), and the frontend "Clear all keys" button only wiped the frontend vault, not the backend keyring.
+- **Changes:**
+  - `src/api/keys.py`: Added `DELETE /api/keys` endpoint that calls `store.clear()` to wipe every key from the keyring in one call (desktop mode only).
+  - `frontend/src/lib/api-client.ts`: Added `ApiClient.clearAllKeys()` method.
+  - `frontend/src/components/keys-manager.tsx`: `handleClearAll()` now calls both `globalVault.clearAll()` (frontend) and `ApiClient.clearAllKeys()` (backend keyring), with a toast confirming removal from "memory, disk, and system keyring."
+  - `tests/test_key_handling.py`: Added `test_delete_all_keys_clears_keyring` (verifies all keys wiped, no key material in response) and `test_delete_all_keys_rejects_non_desktop` (400 in web mode).
+- **Result:** 14 passed in key-handling + key-leak suites; `ruff check` clean on touched files; diff secret-free.
+- **Key persistence model (unchanged, now fully documented):**
+  - **Desktop:** Keys in Windows Credential Manager (OS-encrypted via DPAPI). Persist until user clicks "Clear all keys" or deletes via Windows Credential Manager.
+  - **Frontend "remember" mode:** Keys in IndexedDB, AES-GCM encrypted with PBKDF2-derived key from user passphrase. Persist until "Clear all keys."
+  - **Web mode:** Keys in-memory only, wiped after each run (ephemeral by design — most secure).
+  - **Dev mode:** Keys in `.env` file (git-ignored). Persist until user removes from `.env`.

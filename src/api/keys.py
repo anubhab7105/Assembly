@@ -218,3 +218,15 @@ async def delete_key(provider: str):
     else:
         store.set_key(provider, None)
     return {"detail": "Key deleted"}
+
+
+@router.delete("/keys")
+async def delete_all_keys():
+    """Clear every key from the local keyring. Keys persist until this is called."""
+    if settings.app_mode != "desktop":
+        raise HTTPException(
+            status_code=400, detail="Key deletion is only supported in desktop mode"
+        )
+    store = get_keystore()
+    store.clear()
+    return {"detail": "All keys deleted"}
