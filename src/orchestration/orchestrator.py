@@ -130,7 +130,7 @@ class Orchestrator:
         on_progress: Callable[[dict], Awaitable[None]] | None = None,
         provider_keys: dict[str, str] | None = None,
         deadline: Deadline | None = None,
-        router_override = None,
+        router_override=None,
     ) -> ExecutionResult:
         """
         Run the full orchestration pipeline.
@@ -167,7 +167,9 @@ class Orchestrator:
         if router_override is not None:
             router = router_override
         else:
-            router = ModelRouter(keys=key_store.get_keys()) if key_store else self.router
+            router = (
+                ModelRouter(keys=key_store.get_keys()) if key_store else self.router
+            )
 
         # Initialize components
         budget = BudgetController(time_budget_minutes)
@@ -178,7 +180,7 @@ class Orchestrator:
         consensus_engine = ConsensusEngine()
         planner = Planner(router)
         agent_manager = AgentManager(router, execution_id)
-        debate_manager = DebateManager(execution_id)
+        debate_manager = DebateManager(execution_id, getattr(router, "config", None))
 
         total_tokens = 0
         warnings: list[str] = []
@@ -295,9 +297,7 @@ class Orchestrator:
                 },
             )
 
-            async with asyncio.timeout(
-                deadline.timeout_for_call(PLANNER_CALL_SECONDS)
-            ):
+            async with asyncio.timeout(deadline.timeout_for_call(PLANNER_CALL_SECONDS)):
                 plan = await planner.plan(question, time_budget_minutes)
 
             await emit_event(
@@ -613,9 +613,7 @@ class Orchestrator:
                 status="completed",
                 routing=agent_manager.get_agent_info(),
                 degraded=getattr(agent_manager.last_routing, "degraded", False),
-                warnings=list(
-                    getattr(agent_manager.last_routing, "warnings", []) or []
-                )
+                warnings=list(getattr(agent_manager.last_routing, "warnings", []) or [])
                 + warnings,
                 verification=composed.verification.to_dict(),
             )

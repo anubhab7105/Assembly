@@ -254,7 +254,7 @@ async def test_quota_lease_released_on_cancel(tmp_path) -> None:
     limiter = QuotaLimiter(max_in_flight=1)
 
     async def hold_lease() -> None:
-        async with await limiter.acquire("lease-test-p", "k1"):
+        async with await limiter.acquire("lease-test-p", "k1", "m"):
             await asyncio.sleep(30.0)
 
     first = asyncio.create_task(hold_lease(), name="assembly:test:holder")
@@ -272,7 +272,7 @@ async def test_quota_lease_released_on_cancel(tmp_path) -> None:
     assert limiter._in_flight.get("lease-test-p", 0) == 0
     assert limiter._slot_for("lease-test-p")._value == 1
     # And the limiter is immediately reusable (no leaked permit).
-    async with await limiter.acquire("lease-test-p", "k1"):
+    async with await limiter.acquire("lease-test-p", "k1", "m"):
         pass
     assert limiter._in_flight.get("lease-test-p", 0) == 0
 

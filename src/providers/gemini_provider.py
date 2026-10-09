@@ -38,6 +38,9 @@ class GeminiProvider(AIProvider):
             genai.configure(api_key=key)
         self.default_model = default_model
         self._models = list(models) if models else [default_model]
+        from src.providers.quota import fingerprint_key
+
+        self._fingerprint = fingerprint_key(key) if key else ""
 
     async def generate(
         self,
@@ -47,9 +50,36 @@ class GeminiProvider(AIProvider):
         max_tokens: int = 4096,
         **kwargs,
     ) -> ProviderResponse:
+        from src.providers.errors import RateLimited
+        from src.providers.quota import get_limiter
+
         model_name = model or self.default_model
         logger.info(f"Gemini  │ Generating with {model_name}")
 
+        limiter = get_limiter()
+        try:
+            async with await limiter.acquire(
+                self.provider_name,
+                self._fingerprint,
+                model_name,
+                est_tokens=max_tokens,
+            ):
+                return await self._generate_inner(
+                    messages, model_name, temperature, max_tokens
+                )
+        except RateLimited as exc:
+            limiter.report_429(
+                self.provider_name, self._fingerprint, model_name, exc.retry_after
+            )
+            raise
+
+    async def _generate_inner(
+        self,
+        messages: list[ChatMessage],
+        model_name: str,
+        temperature: float,
+        max_tokens: int,
+    ) -> ProviderResponse:
         try:
             # Convert ChatMessage format to Gemini's format
             # Gemini uses 'user' and 'model' roles, and system goes into system_instruction

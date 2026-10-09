@@ -19,93 +19,42 @@ from src.providers.errors import RateLimited
 from src.providers.mock_provider import MockProvider
 from src.providers.quota import QuotaLimiter, fingerprint_key
 from src.providers.router import ModelRouter, RoutingDecision
+from tests.conftest import make_models_yaml
 
-FAM4_YAML = """
-providers:
-  pa:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pa-fast, family: gpt-oss, roles: [solver, critic, researcher, synthesizer, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-  pb:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pb-strong, family: qwen, roles: [solver, critic, researcher, synthesizer, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-  pc:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pc-flash, family: gemini, roles: [solver, critic, researcher, synthesizer, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-  pd:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pd-chat, family: mistral, roles: [solver, critic, researcher, synthesizer, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-"""
-
-FAM2_YAML = """
-providers:
-  pa:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pa-fast, family: gpt-oss, roles: [solver, critic, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-  pb:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pb-strong, family: gpt-oss, roles: [solver, critic, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-  pc:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pc-flash, family: qwen, roles: [solver, critic, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-"""
-
-FAM1_YAML = """
-providers:
-  pa:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pa-fast, family: gpt-oss, roles: [solver, critic, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-  pb:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pb-strong, family: gpt-oss, roles: [solver, critic, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-  pc:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: pc-flash, family: gpt-oss, roles: [solver, critic, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-"""
+ALL_ROLES = ["solver", "critic", "researcher", "synthesizer", "planner"]
+SOLVER_ROLES = ["solver", "critic", "planner"]
 
 
-def _router(tmp_path, yaml_text, keys, **kwargs):
-    path = tmp_path / "models.yaml"
-    path.write_text(yaml_text, encoding="utf-8")
+def _fam4() -> dict:
+    """Four providers, four distinct families (all limits filled)."""
+    return {
+        "pa": [{"id": "pa-fast", "family": "gpt-oss", "roles": list(ALL_ROLES)}],
+        "pb": [{"id": "pb-strong", "family": "qwen", "roles": list(ALL_ROLES)}],
+        "pc": [{"id": "pc-flash", "family": "gemini", "roles": list(ALL_ROLES)}],
+        "pd": [{"id": "pd-chat", "family": "mistral", "roles": list(ALL_ROLES)}],
+    }
+
+
+def _fam2() -> dict:
+    """Two families across three providers (all limits filled)."""
+    return {
+        "pa": [{"id": "pa-fast", "family": "gpt-oss", "roles": list(SOLVER_ROLES)}],
+        "pb": [{"id": "pb-strong", "family": "gpt-oss", "roles": list(SOLVER_ROLES)}],
+        "pc": [{"id": "pc-flash", "family": "qwen", "roles": list(SOLVER_ROLES)}],
+    }
+
+
+def _fam1() -> dict:
+    """One family everywhere (all limits filled)."""
+    return {
+        "pa": [{"id": "pa-fast", "family": "gpt-oss", "roles": list(SOLVER_ROLES)}],
+        "pb": [{"id": "pb-strong", "family": "gpt-oss", "roles": list(SOLVER_ROLES)}],
+        "pc": [{"id": "pc-flash", "family": "gpt-oss", "roles": list(SOLVER_ROLES)}],
+    }
+
+
+def _router(tmp_path, providers, keys, **kwargs):
+    path = make_models_yaml(tmp_path, providers)
     config = load_models_config(path)
     limiter = QuotaLimiter(config=config, **kwargs)
     return ModelRouter(config=config, keys=keys, limiter=limiter), limiter
@@ -122,7 +71,7 @@ def _team(*agent_types):
 
 def test_solvers_spread_across_distinct_families(tmp_path) -> None:
     router, _ = _router(
-        tmp_path, FAM4_YAML, {"pa": "k1", "pb": "k2", "pc": "k3", "pd": "k4"}
+        tmp_path, _fam4(), {"pa": "k1", "pb": "k2", "pc": "k3", "pd": "k4"}
     )
     routing = router.route_team(_team("solver", "solver", "solver"))
     assert not routing.degraded and routing.warnings == []
@@ -132,7 +81,7 @@ def test_solvers_spread_across_distinct_families(tmp_path) -> None:
 
 
 def test_fourth_solver_reuses_with_warning(tmp_path) -> None:
-    router, _ = _router(tmp_path, FAM4_YAML, {"pa": "k1", "pb": "k2", "pc": "k3"})
+    router, _ = _router(tmp_path, _fam4(), {"pa": "k1", "pb": "k2", "pc": "k3"})
     routing = router.route_team(_team("solver", "solver", "solver", "solver"))
     families = [d.family for d in routing.decisions]
     assert len(set(families[:3])) == 3
@@ -142,7 +91,7 @@ def test_fourth_solver_reuses_with_warning(tmp_path) -> None:
 
 def test_critic_avoids_solver_families(tmp_path) -> None:
     router, _ = _router(
-        tmp_path, FAM4_YAML, {"pa": "k1", "pb": "k2", "pc": "k3", "pd": "k4"}
+        tmp_path, _fam4(), {"pa": "k1", "pb": "k2", "pc": "k3", "pd": "k4"}
     )
     routing = router.route_team(_team("solver", "solver", "critic"))
     solver_families = {d.family for d in routing.decisions[:2]}
@@ -151,7 +100,7 @@ def test_critic_avoids_solver_families(tmp_path) -> None:
 
 
 def test_critic_forced_when_no_spare_family(tmp_path) -> None:
-    router, _ = _router(tmp_path, FAM2_YAML, {"pa": "k1", "pb": "k2", "pc": "k3"})
+    router, _ = _router(tmp_path, _fam2(), {"pa": "k1", "pb": "k2", "pc": "k3"})
     routing = router.route_team(_team("solver", "solver", "critic"))
     solver_families = {d.family for d in routing.decisions[:2]}
     assert solver_families == {"gpt-oss", "qwen"}
@@ -164,7 +113,7 @@ def test_critic_forced_when_no_spare_family(tmp_path) -> None:
 
 
 def test_two_families_warn_but_proceed(tmp_path) -> None:
-    router, _ = _router(tmp_path, FAM2_YAML, {"pa": "k1", "pb": "k2", "pc": "k3"})
+    router, _ = _router(tmp_path, _fam2(), {"pa": "k1", "pb": "k2", "pc": "k3"})
     routing = router.route_team(_team("solver", "critic"))
     assert not routing.degraded
     assert routing.warnings != []
@@ -172,7 +121,7 @@ def test_two_families_warn_but_proceed(tmp_path) -> None:
 
 
 def test_single_family_returns_degraded_flag(tmp_path) -> None:
-    router, _ = _router(tmp_path, FAM1_YAML, {"pa": "k1", "pb": "k2", "pc": "k3"})
+    router, _ = _router(tmp_path, _fam1(), {"pa": "k1", "pb": "k2", "pc": "k3"})
     routing = router.route_team(_team("solver", "critic"))
     assert routing.degraded
     assert routing.warnings != []
@@ -184,7 +133,7 @@ def test_single_family_returns_degraded_flag(tmp_path) -> None:
 
 def test_fallback_prefers_different_family(tmp_path) -> None:
     router, _ = _router(
-        tmp_path, FAM4_YAML, {"pa": "k1", "pb": "k2", "pc": "k3", "pd": "k4"}
+        tmp_path, _fam4(), {"pa": "k1", "pb": "k2", "pc": "k3", "pd": "k4"}
     )
     first = router.route("solver")
     assert (first.provider_name, first.family) == ("pa", "gpt-oss")
@@ -197,10 +146,10 @@ def test_fallback_prefers_different_family(tmp_path) -> None:
 
 
 def test_fallback_same_family_other_provider_when_only_option(tmp_path) -> None:
-    router, limiter = _router(tmp_path, FAM2_YAML, {"pa": "k1", "pb": "k2", "pc": "k3"})
+    router, limiter = _router(tmp_path, _fam2(), {"pa": "k1", "pb": "k2", "pc": "k3"})
     first = router.route("solver")
     assert first.provider_name == "pa"
-    limiter.report_429("pc", fingerprint_key("k3"), retry_after=60.0)
+    limiter.report_429("pc", fingerprint_key("k3"), "pc-flash", retry_after=60.0)
     fallback = router.fallback_for(first, RateLimited("pa", "slow"))
     assert fallback is not None
     assert fallback.provider_name == "pb"
@@ -209,11 +158,15 @@ def test_fallback_same_family_other_provider_when_only_option(tmp_path) -> None:
 
 def test_fallback_none_when_everything_exhausted(tmp_path) -> None:
     router, limiter = _router(
-        tmp_path, FAM4_YAML, {"pa": "k1", "pb": "k2", "pc": "k3", "pd": "k4"}
+        tmp_path, _fam4(), {"pa": "k1", "pb": "k2", "pc": "k3", "pd": "k4"}
     )
     first = router.route("solver")
-    for pid, key in (("pb", "k2"), ("pc", "k3"), ("pd", "k4")):
-        limiter.report_429(pid, fingerprint_key(key), retry_after=60.0)
+    for pid, key, model in (
+        ("pb", "k2", "pb-strong"),
+        ("pc", "k3", "pc-flash"),
+        ("pd", "k4", "pd-chat"),
+    ):
+        limiter.report_429(pid, fingerprint_key(key), model, retry_after=60.0)
     assert router.fallback_for(first, RateLimited("pa", "slow")) is None
 
 
@@ -228,11 +181,9 @@ def test_quota_spent_provider_skipped(tmp_path, monkeypatch) -> None:
     )
     Base.metadata.create_all(bind=engine)
     factory = sessionmaker(bind=engine)
-    yaml_text = FAM4_YAML.replace(
-        "{rpm: null, rpd: null, tpm: null}", "{rpm: 100, rpd: 1, tpm: null}", 1
-    )
-    path = tmp_path / "models.yaml"
-    path.write_text(yaml_text, encoding="utf-8")
+    providers = _fam4()
+    providers["pa"][0]["limits"] = {"rpm": 100, "rpd": 1}
+    path = make_models_yaml(tmp_path, providers)
     config = load_models_config(path)
     limiter = QuotaLimiter(config=config, session_factory=factory)
     router = ModelRouter(
@@ -248,6 +199,7 @@ def test_quota_spent_provider_skipped(tmp_path, monkeypatch) -> None:
             provider="pa",
             key_fingerprint=fingerprint_key("k1"),
             day="2099-01-01",
+            model_id="pa-fast",
             count=1,
         )
     )
