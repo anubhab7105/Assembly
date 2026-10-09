@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "copy:frontend": "node -e \"const fs = require('fs'); fs.mkdirSync('public', {recursive: true}); fs.cpSync('../frontend', 'public/frontend', {recursive: true})\"",
+    "predev": "npm run copy:frontend",
     "dev": "vite",
+    "build:backend": "cd .. && pyinstaller assembly_backend.spec && node -e \"require('fs').mkdirSync('desktop/src-tauri/binaries', {recursive: true}); require('fs').copyFileSync('dist/assembly_backend.exe', 'desktop/src-tauri/binaries/backend-x86_64-pc-windows-msvc.exe')\"",
+    "prebuild": "npm run build:backend && npm run copy:frontend",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"

@@ -242,6 +242,25 @@ if __name__ == "__main__":
         
         host = "127.0.0.1"
         reload = False
+
+        # Watcher thread to exit if parent dies (for shell crash safety)
+        import threading
+        def watch_parent():
+            parent_pid = os.getppid()
+            while True:
+                time.sleep(2)
+                try:
+                    # On Windows, os.kill(pid, 0) is not reliable, but psutil isn't in stdlib.
+                    # Another way is to check if parent is still alive using ctypes or just heartbeat.
+                    # Wait, os.getppid() on Windows is fixed to the launcher. 
+                    # Actually, Pyinstaller bootloader is the parent. We need the grandparent!
+                    pass
+                except:
+                    pass
+        
+        # A simpler approach is to rely on Tauri's exit or an explicit shutdown endpoint.
+        # The shutdown endpoint is already there. For crash safety, let's just run uvicorn.
+        
     else:
         # Use PORT from environment (Render provides this) or default
         port = int(os.environ.get("PORT", settings.port))

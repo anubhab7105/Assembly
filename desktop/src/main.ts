@@ -1,5 +1,4 @@
 import { Command } from '@tauri-apps/plugin-shell';
-import { fetch } from '@tauri-apps/plugin-http';
 
 async function startBackend() {
   const statusEl = document.getElementById('status')!;
@@ -100,6 +99,18 @@ async function startBackend() {
     // We want to navigate to the static frontend.
     // Assuming the frontend files are copied into a directory we can access.
     // If we use standard Tauri, we can navigate to the local URL.
+    
+    // Make sure we kill the backend on normal exit.
+    window.addEventListener('beforeunload', () => {
+      fetch(`http://127.0.0.1:${port}/shutdown`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        keepalive: true
+      }).catch(console.error);
+    });
+
     window.location.href = `/frontend/index.html?port=${port}&token=${token}`;
 
   } catch (err: any) {
