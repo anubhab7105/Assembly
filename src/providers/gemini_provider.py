@@ -109,12 +109,10 @@ class GeminiProvider(AIProvider):
             )
 
             limiter = None
-            fingerprint = ""
             try:
-                from src.providers.quota import fingerprint_key, get_limiter
+                from src.providers.quota import get_limiter
 
                 limiter = get_limiter()
-                fingerprint = fingerprint_key(key or "")
             except ImportError:
                 limiter = None
             try:
@@ -131,7 +129,8 @@ class GeminiProvider(AIProvider):
                 try:
                     async with await limiter.acquire(
                         "gemini",
-                        fingerprint,
+                        self._fingerprint,
+                        model_name,
                         est_tokens=max_tokens + reserve,
                     ):
                         response = await asyncio.wait_for(
@@ -139,7 +138,9 @@ class GeminiProvider(AIProvider):
                             timeout=GENERATION_TIMEOUT_SECONDS,
                         )
                 except RateLimited as exc:
-                    limiter.report_429("gemini", fingerprint, exc.retry_after)
+                    limiter.report_429(
+                        "gemini", self._fingerprint, model_name, exc.retry_after
+                    )
                     raise
 
             # Estimate token counts (Gemini SDK provides usage metadata)

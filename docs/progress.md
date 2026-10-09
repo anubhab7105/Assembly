@@ -363,3 +363,11 @@
 - Breaker: CrossRunHealth (30-min TTL singleton) wired into fallback skip (warning log) + reroute (should_avoid); 4 new tests incl. TTL-expiry and skip-log; per-file autouse reset keeps suite hermetic.
 - Groq docs: no disable option exists; probes proved prompt-dependent 400s (exact prompt 3/3 fail, short prompts pass) -> failover stands.
 - Result: full suite 392 passed, 1 skipped; ruff clean on touched files; chaos still green from prior run (mock-only, unaffected). Branch NOT merged - merge/rebase plan below awaits OK.
+
+## 2026-10-09 - Merge + rebase + live-run blocked (no merge of tier branch)
+- Merged feat/per-model-limits into main (dry-run clean, committed 783e1f0): full suite on main 378 passed, 1 skipped.
+- Committed tier work (b6349d5) and rebased onto main: 4 true conflicts (openai_compat acquire args, gemini lease structure, docs appends) resolved; capacity/orchestrator/planner/debate/executions/test_capacity auto-merged and audited. Rebase tooling stalled on continue with clean tree, finished via staged manual commit 360f936 (reflog-safe path, content verified).
+- Rebase follow-ups: AVG_TOKENS_PER_CALL replaced by measured tpm_tokens_per_call() (max stage avg) with back-compat alias; per-model token tests rewritten to the divisor; single Gemini lease (model_name + reserve); DebateManager config wired; acquire-count tests pass model_name.
+- alembic heads: exactly one (c41a9e2f7b3d). Copy of assembly.db (unstamped, no model_id) stamped db244319c60b + upgraded to head: model_id present, tables intact. Migration tests green (no new DB columns from tier work).
+- quota_report baseline: no usage recorded today; window resets in ~11h. Live 5-min research run ABORTED pre-execution: 0 LLM calls made. Post-merge LimitsNotFilledError skips Gemini (null limits pending re-probe) and cerebras is catalog-disabled, leaving groq+openrouter = 2 < 3 minimum. No 429 involved. Awaiting user: fill Gemini limits (needs authorized re-probe), enable a third provider, or authorize another path. No exploratory probes run.
+- Result: rebased suite 432 passed, 1 skipped; chaos 11/11 green; ruff clean on touched files (consensus/time_controller/workspace/quota hits pre-date both branches).
