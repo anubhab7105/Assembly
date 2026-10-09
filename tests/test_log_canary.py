@@ -214,8 +214,9 @@ def test_canary_end_to_end_api_db_ws(monkeypatch, tmp_path, caplog) -> None:
     ws_messages: list[str] = []
     try:
         with client.websocket_connect(
-            f"/api/executions/ws/{execution_id}?token={token}"
+            f"/api/executions/ws/{execution_id}"
         ) as ws:
+            ws.send_text(json.dumps({"type": "auth", "token": token}))
             deadline = time.monotonic() + 8.0
             while time.monotonic() < deadline:
                 try:

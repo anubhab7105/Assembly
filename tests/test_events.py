@@ -468,8 +468,9 @@ def _ws_collect(client, token, execution_id, after_seq, want_count):
     """
     messages: list[dict[str, Any]] = []
     with client.websocket_connect(
-        f"/api/executions/ws/{execution_id}?token={token}&after_seq={after_seq}"
+        f"/api/executions/ws/{execution_id}?after_seq={after_seq}"
     ) as ws:
+        ws.send_text(json.dumps({"type": "auth", "token": token}))
         for _ in range(want_count):
             messages.append(json.loads(ws.receive_text()))
     return messages
@@ -478,8 +479,9 @@ def _ws_collect(client, token, execution_id, after_seq, want_count):
 def _ws_expect_silence(client, token, execution_id, after_seq) -> None:
     """Prove an empty replay: the next message must be our pong, not a row."""
     with client.websocket_connect(
-        f"/api/executions/ws/{execution_id}?token={token}&after_seq={after_seq}"
+        f"/api/executions/ws/{execution_id}?after_seq={after_seq}"
     ) as ws:
+        ws.send_text(json.dumps({"type": "auth", "token": token}))
         ws.send_text("ping")
         assert ws.receive_text() == "pong"
 

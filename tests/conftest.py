@@ -169,3 +169,12 @@ def db_session() -> Session:
     finally:
         session.close()
         Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def clear_rate_limits() -> None:
+    """Reset the global rate limit history between tests."""
+    from src.core.rate_limit import _rate_limit_history, execution_tracker, _global_executions, _user_executions
+    _rate_limit_history.clear()
+    _global_executions = 0
+    _user_executions.clear()
