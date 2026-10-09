@@ -28,7 +28,7 @@ async def test_scripts_selected_by_role_markers() -> None:
         _messages("Your role is to find flaws in reasoning.")
     )
     researcher = await provider.generate(
-        _messages("research the question thoroughly and gather evidence.")
+        _messages("You have NO web browsing tools; analyze provided sources.")
     )
     synth = await provider.generate(
         _messages("You are the Final Synthesizer on a team.")

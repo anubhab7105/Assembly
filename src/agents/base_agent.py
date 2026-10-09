@@ -93,6 +93,9 @@ class AgentOutput(BaseModel):
     model: str = ""
     family: str = ""
     tokens_used: int = Field(default=0, ge=0)
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    reasoning_tokens: int = Field(default=0, ge=0)
     latency_ms: float = Field(default=0.0, ge=0.0)
     confidence_raw: float | None = None
     raw_content: str = ""
@@ -248,11 +251,16 @@ class BaseAgent:
             output.model = response.model or model
             output.family = family
         output.tokens_used = response.total_tokens
+        output.input_tokens = response.input_tokens
+        output.output_tokens = response.output_tokens
+        output.reasoning_tokens = getattr(response, "reasoning_tokens", 0) or 0
         output.latency_ms = latency_ms
         output.raw_content = response.content
         logger.info(
             f"Agent   │ {self.agent_id} → confidence: {output.confidence:.0%} "
-            f"(raw {output.confidence_raw}), tokens: {output.tokens_used}"
+            f"(raw {output.confidence_raw}), tokens: {output.tokens_used} "
+            f"(in={output.input_tokens} out={output.output_tokens} "
+            f"reason={output.reasoning_tokens})"
         )
         return output
 

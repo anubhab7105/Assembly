@@ -13,14 +13,25 @@ from src.agents.researcher import ResearcherAgent
 from src.agents.solver import SolverAgent
 from src.agents.synthesizer import SynthesizerAgent
 from src.core.logging_config import logger
+from src.orchestration.circuit_breaker import CircuitBreaker, cross_run_health
 from src.orchestration.time_controller import TaskTracker
 from src.orchestration.workspace import EventType, WorkspaceEvent, workspace
-from src.providers.errors import ProviderDown, RateLimited
+from src.providers.errors import ProviderDown, RateLimited, ToolCallError
 from src.providers.quota import QuotaExhausted
 from src.providers.router import ModelRouter
 
-# Failures worth one retry on a fallback model (transient by nature).
-RETRYABLE_ERRORS = (RateLimited, QuotaExhausted, ProviderDown, TimeoutError)
+# Failures worth one retry on a fallback model: transient by nature
+# (rate limit, quota, outage) plus tool-capability mismatches (a model
+# that insists on native tool calls fails over to another family instead
+# of retrying itself). Plain BadResponse stays non-retryable: a malformed
+# payload says nothing about model health.
+RETRYABLE_ERRORS = (
+    RateLimited,
+    QuotaExhausted,
+    ProviderDown,
+    TimeoutError,
+    ToolCallError,
+)
 
 
 # Agent type → class mapping
@@ -49,6 +60,9 @@ class AgentManager:
         self._decisions: dict[str, object] = {}
         self.last_routing: object = None
         self._agent_counter = 0
+        # Per-run health: trips never leak across executions because the
+        # orchestrator builds a fresh AgentManager per execute().
+        self.breaker = CircuitBreaker()
 
     def create_agent(
         self,
@@ -267,19 +281,18 @@ class AgentManager:
 
     async def _run_with_retry(self, agent: BaseAgent, question: str) -> AgentOutput:
         """Run one agent, retrying once on a fallback model after transient
-        provider failures (rate limit, quota, outage). The agent id stays
-        stable so supports/disagrees_with references keep working."""
+        provider failures (rate limit, quota, outage) or tool-capability
+        mismatches. The agent id stays stable so supports/disagrees_with
+        references keep working. Failures feed the per-run circuit breaker;
+        models it has opened for this role are skipped when picking the
+        fallback (bounded: at most two fallback candidates are examined)."""
         try:
             return await agent.run(question)
         except RETRYABLE_ERRORS as e:
+            self.breaker.record_failure(agent.model, agent.agent_type)
+            cross_run_health().record_failure(agent.model, agent.agent_type)
             decision = self._decisions.get(agent.agent_id)
-            fallback = None
-            router_fallback = getattr(self.router, "fallback_for", None)
-            if decision is not None and router_fallback is not None:
-                try:
-                    fallback = router_fallback(decision, e)
-                except Exception:  # noqa: BLE001 — fall through to the error path
-                    fallback = None
+            fallback = self._fallback_skipping_open(decision, e, agent.agent_type)
             if fallback is None:
                 raise
             logger.info(
@@ -299,7 +312,98 @@ class AgentManager:
                 retry_agent.search_results = agent.search_results
             self.agents[agent.agent_id] = retry_agent
             self._decisions[agent.agent_id] = fallback
-            return await retry_agent.run(question)
+            try:
+                return await retry_agent.run(question)
+            except RETRYABLE_ERRORS as retry_error:
+                self.breaker.record_failure(fallback.model, agent.agent_type)
+                cross_run_health().record_failure(fallback.model, agent.agent_type)
+                raise retry_error from e
+
+    def should_avoid(self, model: str, role: str) -> bool:
+        """True when (model, role) is unhealthy this run or recently.
+
+        Disjunction of the per-run breaker and the cross-run memory, so
+        mid-run reroutes also respect failures from earlier executions.
+        """
+        return self.breaker.is_open(model, role) or cross_run_health().is_avoided(
+            model, role
+        )
+
+    def _fallback_skipping_open(
+        self, decision: object | None, error: Exception, role: str
+    ) -> object | None:
+        """First fallback whose (model, role) is healthy here and recently.
+
+        Skips models the per-run breaker opened AND models the cross-run
+        memory avoids (logged: cross-run skips name the model, role, and
+        window). Walks the router's fallback chain (each step excludes the
+        previous pair, so it terminates) and returns the first healthy
+        candidate. None when routing is unavailable, no candidate exists,
+        every candidate is unhealthy, or the chain cycles.
+        """
+        router_fallback = getattr(self.router, "fallback_for", None)
+        if decision is None or not callable(router_fallback):
+            return None
+        memory = cross_run_health()
+        current = decision
+        seen: set[tuple[str, str]] = set()
+        for _ in range(3):
+            try:
+                candidate = router_fallback(current, error)
+            except Exception:  # noqa: BLE001 — fall through to the error path
+                return None
+            if candidate is None:
+                return None
+            pair = (
+                str(getattr(candidate, "provider_name", "")),
+                str(getattr(candidate, "model", "")),
+            )
+            if pair in seen:
+                return None
+            seen.add(pair)
+            candidate_model = str(getattr(candidate, "model", ""))
+            if self.breaker.is_open(candidate_model, role):
+                current = candidate
+                continue
+            if memory.is_avoided(candidate_model, role):
+                logger.warning(
+                    f"AgentMgr │ Skipping {candidate_model} for {role}: "
+                    "cross-run health memory holds recent failures "
+                    "(30-minute window)."
+                )
+                current = candidate
+                continue
+            return candidate
+        return None
+
+    def reroute_open_circuit(self, agent: BaseAgent) -> str | None:
+        """Swap an open-circuited agent onto a healthy model, same agent_id.
+
+        Returns the new "provider/model" label, or None when no closed
+        fallback exists (the caller keeps the original agent and logs it).
+        """
+        decision = self._decisions.get(agent.agent_id)
+        fallback = self._fallback_skipping_open(
+            decision, RuntimeError("circuit breaker open"), agent.agent_type
+        )
+        if fallback is None:
+            return None
+        spec = {
+            "agent_type": agent.agent_type,
+            "role_description": agent.role_description,
+        }
+        pending_results = (
+            agent.search_results if hasattr(agent, "search_results") else []
+        )
+        fresh = self._instantiate(spec, fallback, agent_id=agent.agent_id)
+        if pending_results:
+            fresh.search_results = pending_results
+        label = f"{fallback.provider_name}/{fallback.model}"
+        logger.info(
+            f"AgentMgr │ {agent.agent_id} rerouted to {label} "
+            f"(circuit breaker open for {agent.model} on {agent.agent_type})"
+        )
+        return label
 
     def get_agent_info(self) -> list[dict]:
         """Get summary info about all created agents, incl. routing provenance."""

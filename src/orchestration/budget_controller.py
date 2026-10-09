@@ -70,38 +70,56 @@ class BudgetController:
             max_searches=budget_config["max_searches"],
         )
 
+    @staticmethod
+    def token_cap_for_tier(minutes: int) -> int:
+        """Max execution tokens for a tier (single source for the cap).
+
+        The capacity planner imports this (no cycle: this module depends
+        only on the stdlib) so p90 token estimates gate tier selection.
+        """
+        if minutes <= 3:
+            return 50_000
+        if minutes <= 5:
+            return 80_000
+        if minutes <= 10:
+            return 150_000
+        return 250_000
+
     def _get_budget_config(self, minutes: int) -> dict:
         """
         Determine budget allocations based on time budget.
         
         These are illustrative strategies, not hard-coded rules (PRD Section 7.4).
+        max_debate_rounds is a CEILING: the consensus engine stops early via
+        FINALIZE as soon as agreement is strong; extra rounds run only while
+        consensus says DEBATE/ADVERSARIAL and time/quota remain.
         """
         if minutes <= 3:
             return {
-                "max_tokens": 50_000,
+                "max_tokens": BudgetController.token_cap_for_tier(3),
                 "max_agents": 3,
                 "max_debate_rounds": 1,
                 "max_searches": 5,
             }
         elif minutes <= 5:
             return {
-                "max_tokens": 80_000,
+                "max_tokens": BudgetController.token_cap_for_tier(5),
                 "max_agents": 4,
-                "max_debate_rounds": 2,
+                "max_debate_rounds": 3,
                 "max_searches": 10,
             }
         elif minutes <= 10:
             return {
-                "max_tokens": 150_000,
+                "max_tokens": BudgetController.token_cap_for_tier(10),
                 "max_agents": 5,
-                "max_debate_rounds": 4,
+                "max_debate_rounds": 5,
                 "max_searches": 20,
             }
         else:  # 15 minutes
             return {
-                "max_tokens": 250_000,
+                "max_tokens": BudgetController.token_cap_for_tier(15),
                 "max_agents": 6,
-                "max_debate_rounds": 6,
+                "max_debate_rounds": 8,
                 "max_searches": 30,
             }
 

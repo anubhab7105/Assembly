@@ -208,6 +208,10 @@ class VerificationSummary:
     sources_verified: int = 0
     citations_checked: int = 0
     citations_dropped: int = 0
+    research_degraded: bool = False
+    research_failures: int = 0
+    circuit_breaker_trips: tuple[str, ...] = ()
+    external_sources_used: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -218,6 +222,10 @@ class VerificationSummary:
             "sources_verified": self.sources_verified,
             "citations_checked": self.citations_checked,
             "citations_dropped": self.citations_dropped,
+            "research_degraded": self.research_degraded,
+            "research_failures": self.research_failures,
+            "circuit_breaker_trips": list(self.circuit_breaker_trips),
+            "external_sources_used": self.external_sources_used,
         }
 
 
@@ -247,6 +255,9 @@ def compose_final_answer(
     synth_position: str = "",
     synth_uncertainty: list[str] | None = None,
     synth_evidence: list | None = None,
+    research_degraded: bool = False,
+    research_failures: int = 0,
+    circuit_breaker_trips: list[str] | tuple[str, ...] | None = None,
 ) -> ComposedAnswer:
     """Assemble the final Markdown answer with validated citations.
 
@@ -265,6 +276,10 @@ def compose_final_answer(
         synth_position: synthesizer answer text (may carry its footer).
         synth_uncertainty: synthesizer remaining_uncertainty items.
         synth_evidence: synthesizer evidence items (source_ids count as refs).
+        research_degraded: the researcher role produced no usable output;
+            the answer carries an explicit reduced-research caveat.
+        research_failures: researcher-role call failures this run.
+        circuit_breaker_trips: "model on role" labels that tripped.
     """
     score = min(1.0, max(0.0, consensus_score or 0.0))
     label = confidence_label_for_score(score)
@@ -295,8 +310,21 @@ def compose_final_answer(
     final_sources = [pool[index - 1] for index in valid_old]
 
     uncertainties = [str(item) for item in (synth_uncertainty or [])]
-    if label == LABEL_HIGH:
+    if research_degraded:
+        uncertainties.append(
+            "Web research was degraded: the researcher role produced no "
+            "usable output this run, so factual claims lack independent "
+            "research verification — treat them with extra caution."
+        )
+        warnings.append(
+            "Research degraded: no usable researcher output "
+            f"({max(0, research_failures)} failed researcher call(s)); "
+            "the answer reports reduced research."
+        )
+    if label == LABEL_HIGH and not uncertainties:
         uncertainty_note = ""
+    elif label == LABEL_HIGH:
+        uncertainty_note = "\n".join(f"- {line}" for line in uncertainties)
     else:
         confidences = [o.confidence or 0.0 for o in agent_outputs or []]
         average = sum(confidences) / len(confidences) if confidences else 0.0
@@ -311,6 +339,7 @@ def compose_final_answer(
 
     families = {o.family for o in agent_outputs or [] if o.family}
     resolved = max(0, disagreements_resolved or 0)
+    external_sources_used = bool(final_sources)
     verification = VerificationSummary(
         agents=len(agent_outputs or []),
         families=len(families),
@@ -319,6 +348,10 @@ def compose_final_answer(
         sources_verified=len(final_sources),
         citations_checked=len(referenced),
         citations_dropped=len(dropped),
+        research_degraded=bool(research_degraded),
+        research_failures=max(0, int(research_failures or 0)),
+        circuit_breaker_trips=tuple(circuit_breaker_trips or ()),
+        external_sources_used=external_sources_used,
     )
 
     sections = [rewritten_body] if rewritten_body else []
@@ -335,6 +368,10 @@ def compose_final_answer(
             for number, source in enumerate(final_sources, start=1)
         ]
         sections.append("### Sources\n" + "\n".join(lines))
+    else:
+        # Say so explicitly: silence about sources reads as an omission,
+        # not as honesty. (Pool empty means nothing was even retrieved.)
+        sections.append("### Sources\nNo external sources were used.")
 
     if agent_count is None:
         agent_count = len(agent_outputs or [])

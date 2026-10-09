@@ -42,6 +42,20 @@ class BadResponse(ProviderError):
     malformed JSON, empty choices). Never retry blindly."""
 
 
+class ToolCallError(BadResponse):
+    """The model tried to call a native tool (e.g. web search) that the
+    request did not define, so the provider refused the turn.
+
+    Observed live on Groq gpt-oss (HTTP 400, code ``tool_use_failed``:
+    "Tool choice is none, but model called a tool") when the researcher
+    prompt asks for web research: the model emits ``browser.search`` and
+    Groq rejects the call because no tools were supplied. Assembly never
+    sends tools/tool_choice (providers/unified JSON contract), so this is
+    a model-capability mismatch, not a transient outage: unlike other
+    BadResponse cases it IS worth one fallback to another family via the
+    circuit-breaker path, never a blind retry of the same model."""
+
+
 def parse_retry_after(value: str | None) -> float | None:
     """Parse a Retry-After header (delta-seconds or HTTP-date) to seconds."""
     if not value:

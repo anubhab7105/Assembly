@@ -239,6 +239,9 @@ class DebateManager:
                     model=o.model,
                     family=o.family,
                     tokens_used=o.tokens_used,
+                    input_tokens=o.input_tokens,
+                    output_tokens=o.output_tokens,
+                    reasoning_tokens=o.reasoning_tokens,
                     latency_ms=o.latency_ms,
                     failed_round=o.failed_round,
                     raw_content="",  # Don't carry raw content into context

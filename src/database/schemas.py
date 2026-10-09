@@ -161,6 +161,17 @@ class PreflightResponse(BaseModel):
     usable_keys: int = 0
     providers: list[str] = []
     families: list[str] = []
+    # Tier ceilings + median vs worst case (task 3): rounds are a ceiling,
+    # consensus stops early. median = planned rounds (typical early-stop);
+    # worst = ceiling rounds (consensus never reached, all rounds run).
+    ceiling_agents: int = 0
+    ceiling_rounds: int = 0
+    expected_calls_median: int = 0
+    expected_calls_worst: int = 0
+    # Token estimates at measured per-stage rates (avg for median, p90 for
+    # worst, including one adversarial strike in worst case).
+    expected_tokens_median: int = 0
+    expected_tokens_worst: int = 0
 
 
 # ═════════════════════════════════════════════════════════════════════

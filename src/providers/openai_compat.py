@@ -26,6 +26,7 @@ from src.providers.errors import (
     BadResponse,
     ProviderDown,
     RateLimited,
+    ToolCallError,
     classify_http_error,
     parse_retry_after,
 )
@@ -34,6 +35,46 @@ from src.providers.errors import (
 # server-side side effects, so a retry cannot double-apply anything.
 RETRYABLE_STATUSES = frozenset({429, 502, 503, 504})
 MAX_BACKOFF_SECONDS = 60.0
+
+
+def _reasoning_reserve_tokens() -> int:
+    """Extra headroom added to the tpm lease for unreported reasoning.
+
+    Reasoning/thinking tokens are billed against per-minute token windows
+    but are only known AFTER the call. Reserve the measured average so
+    the pre-send tpm guard stays conservative. Fail-open: any trouble
+    reading config yields 0 (leases behave exactly as before).
+    """
+    try:
+        from src.core.config import settings
+
+        return max(0, int(settings.tokens_reasoning_reserve))
+    except (AttributeError, TypeError, ValueError):
+        return 0
+
+
+def _tool_use_failure_message(
+    status: int, body: Any, fallback_message: str
+) -> str | None:
+    """Detect a refused native tool-call turn (Groq gpt-oss browser.search).
+
+    Returns the provider's message when the body carries a tool-use
+    failure (code ``tool_use_failed`` or the "tool choice is none"
+    wording), else None. Pure: safe to unit-test with canned bodies.
+    """
+    if status != 400 or not isinstance(body, dict):
+        return None
+    error = body.get("error")
+    if not isinstance(error, dict):
+        return None
+    code = str(error.get("code", ""))
+    message = str(error.get("message", "") or fallback_message)
+    if code == "tool_use_failed" or "tool choice is none" in message.casefold():
+        return message[:500]
+    nested = str(error.get("failed_generation", ""))
+    if "tool choice is none" in (message + nested).casefold():
+        return message[:500]
+    return None
 
 
 class OpenAICompatibleProvider(AIProvider):
@@ -83,6 +124,14 @@ class OpenAICompatibleProvider(AIProvider):
 
         model_name = model or self._default_model
         logger.info(f"Provider │ {self.provider_name} generating with {model_name}")
+        # NOTE: no tools/tool_choice are ever sent. Groq documents built-in
+        # browser search as opt-in (tools=[{"type": "browser_search"}] +
+        # tool_choice) with no disable flag, so omitting tools is already
+        # the correct posture — yet gpt-oss still emits native browser.search
+        # turns on research-flavored prompts (live: exact production
+        # researcher prompt 400s 3/3 with code tool_use_failed; shorter
+        # prompts usually pass). Those turns surface as ToolCallError below
+        # and fail over to another family instead of retrying the same model.
         payload = {
             "model": model_name,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
@@ -95,7 +144,7 @@ class OpenAICompatibleProvider(AIProvider):
                 self.provider_name,
                 self._fingerprint,
                 model_name,
-                est_tokens=max_tokens,
+                est_tokens=max_tokens + _reasoning_reserve_tokens(),
             ):
                 data = await self._post_with_retry(payload)
         except RateLimited as exc:
@@ -138,6 +187,20 @@ class OpenAICompatibleProvider(AIProvider):
                     ):
                         await asyncio.sleep(self._backoff_seconds(response, attempt))
                         continue
+                    body: Any = None
+                    try:
+                        parsed: Any = response.json()
+                        if isinstance(parsed, dict):
+                            body = parsed
+                    except ValueError:
+                        body = None
+                    tool_message = _tool_use_failure_message(
+                        response.status_code,
+                        body,
+                        self._error_message(response),
+                    )
+                    if tool_message is not None:
+                        raise ToolCallError(self.provider_name, tool_message)
                     raise classify_http_error(
                         self.provider_name,
                         response.status_code,
@@ -191,6 +254,19 @@ class OpenAICompatibleProvider(AIProvider):
             raise BadResponse(self.provider_name, "response has no choices")
         message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
         content = message.get("content") or ""
+        if not str(content).strip() and isinstance(message.get("tool_calls"), list):
+            tools = [
+                str(call.get("function", {}).get("name", "?"))
+                for call in message["tool_calls"]
+                if isinstance(call, dict)
+            ]
+            if tools:
+                raise ToolCallError(
+                    self.provider_name,
+                    "Model called native tools "
+                    f"({', '.join(tools)}) with no tools defined; "
+                    "reply carries no usable content.",
+                )
         finish = (
             choices[0].get("finish_reason", "stop")
             if isinstance(choices[0], dict)
@@ -202,6 +278,7 @@ class OpenAICompatibleProvider(AIProvider):
         total_tokens = int(usage.get("total_tokens", 0) or 0) or (
             prompt_tokens + completion_tokens
         )
+        reasoning_tokens = self._extract_reasoning_tokens(usage)
         return ProviderResponse(
             content=content,
             model=model_name,
@@ -209,5 +286,31 @@ class OpenAICompatibleProvider(AIProvider):
             input_tokens=prompt_tokens,
             output_tokens=completion_tokens,
             total_tokens=total_tokens,
+            reasoning_tokens=reasoning_tokens,
             finish_reason=finish or "stop",
         )
+
+    @staticmethod
+    def _extract_reasoning_tokens(usage: dict[str, Any]) -> int:
+        """Best-effort reasoning/thinking tokens from OpenAI-style usage.
+
+        Providers report this in different places: usage.reasoning_tokens,
+        usage.completion_tokens_details.reasoning_tokens, or
+        usage.completion_tokens_details.reasoning. Missing or malformed
+        values read as 0. Reported values are informational per call; the
+        tpm lease instead reserves a measured average up front (see
+        _reasoning_reserve_tokens) because actuals are known too late.
+        """
+        try:
+            direct = usage.get("reasoning_tokens")
+            if isinstance(direct, (int, float)) and direct:
+                return int(direct)
+            details = usage.get("completion_tokens_details") or {}
+            if isinstance(details, dict):
+                for key in ("reasoning_tokens", "reasoning"):
+                    value = details.get(key)
+                    if isinstance(value, (int, float)) and value:
+                        return int(value)
+        except (AttributeError, TypeError, ValueError):
+            pass
+        return 0

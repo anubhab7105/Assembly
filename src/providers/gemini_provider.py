@@ -13,7 +13,7 @@ from src.core.config import settings
 from src.core.keystore import reveal
 from src.core.logging_config import logger
 from src.providers.base import AIProvider, ChatMessage, ProviderResponse
-from src.providers.errors import classify_exception
+from src.providers.errors import RateLimited, classify_exception
 
 # Bound a single generation call: the legacy SDK has no timeout of its own,
 # and an unbounded await here freezes the whole execution past its budget.
@@ -36,6 +36,9 @@ class GeminiProvider(AIProvider):
         key = reveal(api_key) or reveal(settings.gemini_api_key)
         if key:
             genai.configure(api_key=key)
+        # SecretStr so the value never renders in logs/repr; revealed only
+        # for the quota fingerprint at the call site below.
+        self._api_key = SecretStr(key)
         self.default_model = default_model
         self._models = list(models) if models else [default_model]
         from src.providers.quota import fingerprint_key
@@ -50,7 +53,6 @@ class GeminiProvider(AIProvider):
         max_tokens: int = 4096,
         **kwargs,
     ) -> ProviderResponse:
-        from src.providers.errors import RateLimited
         from src.providers.quota import get_limiter
 
         model_name = model or self.default_model
@@ -58,11 +60,15 @@ class GeminiProvider(AIProvider):
 
         limiter = get_limiter()
         try:
+            reserve = max(0, int(settings.tokens_reasoning_reserve))
+        except (AttributeError, TypeError, ValueError):
+            reserve = 0
+        try:
             async with await limiter.acquire(
                 self.provider_name,
                 self._fingerprint,
                 model_name,
-                est_tokens=max_tokens,
+                est_tokens=max_tokens + reserve,
             ):
                 return await self._generate_inner(
                     messages, model_name, temperature, max_tokens
@@ -102,20 +108,53 @@ class GeminiProvider(AIProvider):
                 ),
             )
 
-            response = await asyncio.wait_for(
-                gen_model.generate_content_async(gemini_messages),
-                timeout=GENERATION_TIMEOUT_SECONDS,
-            )
+            limiter = None
+            fingerprint = ""
+            try:
+                from src.providers.quota import fingerprint_key, get_limiter
+
+                limiter = get_limiter()
+                fingerprint = fingerprint_key(key or "")
+            except ImportError:
+                limiter = None
+            try:
+                reserve = max(0, int(settings.tokens_reasoning_reserve))
+            except (AttributeError, TypeError, ValueError):
+                reserve = 0
+            if limiter is None:
+                # Fail-open: no quota guard when the limiter is unavailable.
+                response = await asyncio.wait_for(
+                    gen_model.generate_content_async(gemini_messages),
+                    timeout=GENERATION_TIMEOUT_SECONDS,
+                )
+            else:
+                try:
+                    async with await limiter.acquire(
+                        "gemini",
+                        fingerprint,
+                        est_tokens=max_tokens + reserve,
+                    ):
+                        response = await asyncio.wait_for(
+                            gen_model.generate_content_async(gemini_messages),
+                            timeout=GENERATION_TIMEOUT_SECONDS,
+                        )
+                except RateLimited as exc:
+                    limiter.report_429("gemini", fingerprint, exc.retry_after)
+                    raise
 
             # Estimate token counts (Gemini SDK provides usage metadata)
             input_tokens = 0
             output_tokens = 0
+            reasoning_tokens = 0
             if hasattr(response, "usage_metadata") and response.usage_metadata:
                 input_tokens = (
                     getattr(response.usage_metadata, "prompt_token_count", 0) or 0
                 )
                 output_tokens = (
                     getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+                )
+                reasoning_tokens = self._extract_reasoning_tokens(
+                    response.usage_metadata
                 )
 
             return ProviderResponse(
@@ -125,6 +164,7 @@ class GeminiProvider(AIProvider):
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 total_tokens=input_tokens + output_tokens,
+                reasoning_tokens=reasoning_tokens,
             )
 
         except Exception as e:
@@ -137,3 +177,42 @@ class GeminiProvider(AIProvider):
 
     def get_available_models(self) -> list[str]:
         return list(self._models)
+
+    @staticmethod
+    def _extract_reasoning_tokens(usage_metadata: object) -> int:
+        """Best-effort thinking/reasoning tokens from Gemini usage metadata.
+
+        The surface varies by SDK and API version: the legacy
+        ``google.generativeai`` SDK exposes snake_case attributes while the
+        REST API (and newer SDKs) use camelCase ``thoughtsTokenCount``.
+        Every known equivalent is probed; unknown shapes read as 0.
+        Informational per call; the tpm lease instead reserves a measured
+        average up front because actuals are known too late.
+        """
+        names = (
+            "thoughts_token_count",
+            "thoughtsTokenCount",
+            "thought_token_count",
+            "thoughtTokenCount",
+            "reasoning_token_count",
+            "reasoningTokenCount",
+            "reasoning_tokens",
+            "reasoningTokens",
+        )
+        if isinstance(usage_metadata, dict):
+            for name in names:
+                try:
+                    value = usage_metadata.get(name, 0) or 0
+                except (AttributeError, TypeError, ValueError):
+                    continue
+                if isinstance(value, (int, float)) and value:
+                    return int(value)
+            return 0
+        for attr in names:
+            try:
+                value = getattr(usage_metadata, attr, 0) or 0
+            except (AttributeError, TypeError, ValueError):
+                continue
+            if isinstance(value, (int, float)) and value:
+                return int(value)
+        return 0

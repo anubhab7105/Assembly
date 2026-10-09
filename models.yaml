@@ -54,7 +54,13 @@ providers:
     models:
       - id: openai/gpt-oss-20b
         family: gpt-oss
-        roles: [solver, researcher, critic, planner]
+        # No researcher role: the model emits native browser.search turns on
+        # research-flavored prompts and Groq 400s them (tool_use_failed) when
+        # no tools are defined — and Assembly never defines tools.
+        # source: live probes 2026-10-09 (exact researcher prompt 3/3 HTTP 400)
+        # + console.groq.com/docs/tool-use/built-in-tools/browser-search (opt-in only);
+        # checked: 2026-10-09
+        roles: [solver, critic, planner]
         scope: model
         limits:
           rpm: 30 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09

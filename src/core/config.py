@@ -65,6 +65,49 @@ class Settings(BaseSettings):
     max_tokens_per_execution: int = 100_000
     max_searches_per_execution: int = 20
 
+    # ── Reasoning-token reserve for pre-send tpm leases ────────────────
+    # Reasoning/thinking tokens bill against per-minute token windows but
+    # are only reported AFTER the call, so the quota lease reserves this
+    # measured average up front (fail-safe direction: over-reserving only
+    # waits, under-reserving trips 429s). Measured on live runs:
+    # OpenRouter nemotron critic calls reported 294–1196 reasoning tokens;
+    # Gemini reported 0. Re-measure with the per-stage stats when the
+    # benchmark grows the sample.
+    tokens_reasoning_reserve: int = 700
+
+    # ── Per-stage measured token usage (replaces the AVG_TOKENS_PER_CALL=2000
+    # guess from feat/per-model-limits) ─────────────────────────────────
+    # Measured on a real 5-minute-tier run (see source_run_id/date below).
+    # Values are total tokens per LLM call (input + output as reported by
+    # the provider; reasoning tokens are included in output/total when the
+    # provider reports them, e.g. OpenRouter nemotron reported 294–1196
+    # reasoning tokens per critic call; Gemini reported 0).
+    # Breakdown (avg in/out/total, successful calls only):
+    #   planner:   325/73/398    (n=1, gemini-3.8-flash)
+    #   solve:     513/613/1126  (n=2: solver 440/443/883, critic 586/782/1368)
+    #   debate:    876/607/1484  (n=3: 791/412/1203, 791/379/1170, 1047/1031/2078)
+    #   synthesis: 1043/1202/2245 (n=1, gemini-3.8-flash)
+    # Averages drive capacity math (tpm/tpd → calls); p90 drives worst-case
+    # preflight. n=1 run (small sample — re-measure after the benchmark).
+    # Source run: question "Is React better than Vue for a large
+    # cybersecurity platform?", 3 agents (solver/critic/researcher),
+    # researcher (groq gpt-oss-20b) failed all calls with
+    # "Tool choice is none, but model called a tool" (0 tokens, excluded
+    # from averages); no adversarial round triggered (consensus never hit
+    # the early-agreement tripwire), so adversarial reuses debate values.
+    token_stats_source_run_id: str = "debug-5m-001"
+    token_stats_source_date: str = "2026-10-09"
+    tokens_planner_avg: int = 398
+    tokens_planner_p90: int = 398
+    tokens_solve_avg: int = 1126
+    tokens_solve_p90: int = 1368
+    tokens_debate_avg: int = 1484
+    tokens_debate_p90: int = 2078
+    tokens_adversarial_avg: int = 1484
+    tokens_adversarial_p90: int = 2078
+    tokens_synthesis_avg: int = 2245
+    tokens_synthesis_p90: int = 2245
+
     # ── Consensus scoring (docs/WORKFLOW.md section 6) ───────────────
     # Starting weights — tune on the benchmark, never hard-code elsewhere.
     consensus_w_agreement: float = 0.30
