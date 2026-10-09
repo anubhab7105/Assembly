@@ -58,6 +58,13 @@ def test_mask_leaves_benign_text_alone() -> None:
     assert mask_text(uid) == uid  # UUIDs (36 chars) are not key-shaped
 
 
+def test_mask_leaves_git_commit_shas_alone() -> None:
+    sha = "0123456789abcdef0123456789abcdef01234567"
+    line = f"git log --oneline {sha}"
+    assert sha in mask_text(line)
+    assert "git log --oneline" in mask_text(line)
+
+
 def test_filter_applies_to_assembly_logs(caplog) -> None:
     with caplog.at_level(logging.INFO, logger="assembly"):
         logger.info("provider error for api_key=%s", CANARY)

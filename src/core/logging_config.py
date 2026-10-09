@@ -58,9 +58,14 @@ _PREFIX_RE = re.compile(
     r"|sk-[A-Za-z0-9\-_]{10,}"
 )
 
-# Long opaque blobs (JWT segments, hex digests). Floor of 40 keeps UUIDs
-# (36 chars) and ordinary words untouched.
-_LONG_TOKEN_RE = re.compile(r"\b[A-Za-z0-9_\-+/=]{40,}\b")
+# Long opaque blobs (JWT segments, signed payloads). Ignore hex-only object IDs
+# such as Git commit SHAs (40-char hex) and other non-secret hash values.
+_LONG_TOKEN_RE = re.compile(
+    r"(?<![A-Fa-f0-9])"
+    r"(?![A-Fa-f0-9]{40,64}\b)"
+    r"(?=[A-Za-z0-9_\-+/=]{40,}\b)"
+    r"[A-Za-z0-9_\-+/=]{40,}\b"
+)
 
 
 def mask_text(text: str) -> str:
