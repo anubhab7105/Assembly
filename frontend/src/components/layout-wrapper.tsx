@@ -200,16 +200,22 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const isOffline = useOfflineStatus()
+  const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // The landing page renders its own nav; hide the app sidebar there.
+  const isLandingPage = pathname === "/"
 
   return (
     <ToastProvider>
       <div className="flex h-screen overflow-hidden bg-background">
-        <aside className="hidden md:block w-72 shrink-0 h-full relative z-20">
-          <Suspense fallback={<div className="p-4">Loading menu...</div>}>
-            <SidebarContent />
-          </Suspense>
-        </aside>
+        {!isLandingPage && (
+          <aside className="hidden md:block w-72 shrink-0 h-full relative z-20">
+            <Suspense fallback={<div className="p-4">Loading menu...</div>}>
+              <SidebarContent />
+            </Suspense>
+          </aside>
+        )}
 
         {mobileMenuOpen && (
           <div className="md:hidden fixed inset-0 z-50 flex">
@@ -229,15 +235,17 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         )}
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          <header className="md:hidden sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Zap className="size-5 text-brand" />
-              <span className="font-bold tracking-tight">Assembly</span>
-            </div>
-            <button onClick={() => setMobileMenuOpen(true)} className="p-1 -mr-1 rounded hover:bg-muted">
-              <Menu className="size-6" />
-            </button>
-          </header>
+          {!isLandingPage && (
+            <header className="md:hidden sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Zap className="size-5 text-brand" />
+                <span className="font-bold tracking-tight">Assembly</span>
+              </div>
+              <button onClick={() => setMobileMenuOpen(true)} className="p-1 -mr-1 rounded hover:bg-muted">
+                <Menu className="size-6" />
+              </button>
+            </header>
+          )}
 
           {isOffline && (
             <div className="bg-danger/90 text-white px-4 py-1.5 text-center text-sm font-medium flex items-center justify-center gap-2">
