@@ -19,6 +19,10 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.core.config import settings
+
+if settings.is_web:
+    raise RuntimeError("Alembic is desktop SQLite only; web mode is stateless.")
+
 from src.database.base import Base
 from src.database.models import *
 

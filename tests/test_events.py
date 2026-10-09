@@ -379,6 +379,7 @@ def test_persist_fetch_order_and_dedup(db_session) -> None:
 
 
 def _authed_client(monkeypatch, db_path=None):
+    """Desktop local-history client (no accounts, no auth headers)."""
     from sqlalchemy import create_engine as _create_engine
     from sqlalchemy.orm import sessionmaker as _sessionmaker
     from sqlalchemy.pool import StaticPool as _StaticPool
@@ -389,7 +390,7 @@ def _authed_client(monkeypatch, db_path=None):
     from src.database.base import get_db as _get_db
     from src.main import app
 
-    monkeypatch.setattr(settings, "app_mode", "web")
+    monkeypatch.setattr(settings, "app_mode", "dev")
 
     if db_path is None:
         engine = _create_engine(
@@ -414,18 +415,7 @@ def _authed_client(monkeypatch, db_path=None):
     app.dependency_overrides[_get_db] = override_get_db
     monkeypatch.setattr(exec_mod, "SessionLocal", testing_session)
     client = TestClient(app)
-    signup = client.post(
-        "/api/auth/signup",
-        json={
-            "email": "events@test.local",
-            "name": "Events",
-            "password": "password123",
-        },
-    )
-    assert signup.status_code == 200, signup.text
-    client.headers.update({"Authorization": f"Bearer {signup.json()['access_token']}"})
-    token = signup.json()["access_token"]
-    return client, token
+    return client, ""
 
 
 def _seed_execution(monkeypatch, question="What is the mock answer?"):
@@ -466,11 +456,13 @@ def _ws_collect(client, token, execution_id, after_seq, want_count):
     event can interleave. (This starlette's receive_text takes no timeout
     kwarg — a timeout would raise TypeError, not wait.)
     """
+    from src.core.config import settings as _settings
+
     messages: list[dict[str, Any]] = []
     with client.websocket_connect(
         f"/api/executions/ws/{execution_id}?after_seq={after_seq}"
     ) as ws:
-        ws.send_text(json.dumps({"type": "auth", "token": token}))
+        ws.send_text(json.dumps({"type": "auth", "token": _settings.desktop_token}))
         for _ in range(want_count):
             messages.append(json.loads(ws.receive_text()))
     return messages
@@ -478,10 +470,12 @@ def _ws_collect(client, token, execution_id, after_seq, want_count):
 
 def _ws_expect_silence(client, token, execution_id, after_seq) -> None:
     """Prove an empty replay: the next message must be our pong, not a row."""
+    from src.core.config import settings as _settings
+
     with client.websocket_connect(
         f"/api/executions/ws/{execution_id}?after_seq={after_seq}"
     ) as ws:
-        ws.send_text(json.dumps({"type": "auth", "token": token}))
+        ws.send_text(json.dumps({"type": "auth", "token": _settings.desktop_token}))
         ws.send_text("ping")
         assert ws.receive_text() == "pong"
 
@@ -515,20 +509,10 @@ def test_rest_events_order_limit_and_latest(monkeypatch) -> None:
     assert tail["latest_seq"] == max(seqs)
 
 
-def test_rest_events_auth(monkeypatch) -> None:
-    client, _, execution_id = _seed_execution(monkeypatch)
+def test_rest_events_missing_is_404(monkeypatch) -> None:
+    client, _, _ = _seed_execution(monkeypatch)
     missing = client.get("/api/executions/does-not-exist/events")
     assert missing.status_code == 404
-
-    # Second user must not read the first user's log.
-    other = client.post(
-        "/api/auth/signup",
-        json={"email": "other@test.local", "name": "Other", "password": "password123"},
-    )
-    assert other.status_code == 200
-    client.headers.update({"Authorization": f"Bearer {other.json()['access_token']}"})
-    forbidden = client.get(f"/api/executions/{execution_id}/events")
-    assert forbidden.status_code == 403
 
 
 def test_ws_replay_after_seq_and_reconnect(monkeypatch) -> None:

@@ -25,6 +25,7 @@ raw API keys — so plans cannot leak key material by construction.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 # ── Constants ─────────────────────────────────────────────────────────
 
@@ -197,7 +198,9 @@ def synth_reserve_seconds(budget_minutes: int) -> float:
 
 
 def affordable_calls(
-    keys: tuple[KeyBudget, ...] | list[KeyBudget], minutes: int
+    keys: tuple[KeyBudget, ...] | list[KeyBudget],
+    minutes: int,
+    usage_snapshot: Any = None,
 ) -> int | None:
     """Quota-affordable calls after the 30% safety margin.
 
@@ -208,21 +211,51 @@ def affordable_calls(
     (fail-open, like the router). Returns None when every bucket is
     unlimited, i.e. quota does not constrain the plan. An empty bucket
     list means zero affordable calls.
+
+    usage_snapshot (optional): client daily usage [{provider, model,
+    count, tokens}]. Takes max(client, server) per provider by reducing
+    rpd_remaining/tpd_remaining — the client can only shrink capacity.
     """
     if not list(keys):
         return 0
     divisor = tpm_tokens_per_call()
+    snapshot_by_provider: dict[str, int] = {}
+    snapshot_tokens_by_provider: dict[str, int] = {}
+    for entry in usage_snapshot or []:
+        if isinstance(entry, dict):
+            provider = str(entry.get("provider", ""))
+            try:
+                count = max(0, int(entry.get("count", 0) or 0))
+            except (TypeError, ValueError):
+                count = 0
+            try:
+                tokens = max(0, int(entry.get("tokens", 0) or 0))
+            except (TypeError, ValueError):
+                tokens = 0
+        else:
+            provider = str(getattr(entry, "provider", ""))
+            count = max(0, int(getattr(entry, "count", 0) or 0))
+            tokens = max(0, int(getattr(entry, "tokens", 0) or 0))
+        if provider:
+            snapshot_by_provider[provider] = snapshot_by_provider.get(provider, 0) + count
+            snapshot_tokens_by_provider[provider] = (
+                snapshot_tokens_by_provider.get(provider, 0) + tokens
+            )
     known: list[int] = []
     for key in keys:
         options: list[int] = []
         if key.rpm_limit is not None:
             options.append(max(0, key.rpm_limit) * max(0, minutes))
         if key.rpd_remaining is not None:
-            options.append(max(0, key.rpd_remaining))
+            # max(server remaining, limit - snapshot) would need the limit;
+            # without it, conservatively subtract snapshot counts.
+            snap = snapshot_by_provider.get(key.provider, 0)
+            options.append(max(0, key.rpd_remaining - snap))
         if key.tpm_limit is not None:
             options.append(max(0, key.tpm_limit) * max(0, minutes) // divisor)
         if key.tpd_remaining is not None:
-            options.append(max(0, key.tpd_remaining) // divisor)
+            snap_t = snapshot_tokens_by_provider.get(key.provider, 0)
+            options.append(max(0, key.tpd_remaining - snap_t) // divisor)
         if options:
             known.append(min(options))
     if not known:
@@ -404,6 +437,7 @@ def plan_capacity(
     requested_tier: int,
     suggestion: PlannerSuggestion,
     avg_call_seconds: float = AGENT_CALL_SECONDS,
+    usage_snapshot: Any = None,
 ) -> TeamPlan:
     """Pure capacity verdict: the largest plan the quota/time budget affords.
 
@@ -420,7 +454,7 @@ def plan_capacity(
             f"Unknown time tier {requested_tier!r}; expected one of {list(VALID_TIERS)}."
         )
     key_list = list(keys)
-    affordable = affordable_calls(key_list, requested_tier)
+    affordable = affordable_calls(key_list, requested_tier, usage_snapshot)
     reserve = synth_reserve_seconds(requested_tier)
     budget_seconds = requested_tier * 60
     warnings: list[str] = []

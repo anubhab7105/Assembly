@@ -487,6 +487,7 @@ async def test_provider_keys_never_leak(orchestrator, fake_key, caplog) -> None:
 
 
 def _authed_client(monkeypatch):
+    """Desktop local-history client (no accounts)."""
     from fastapi.testclient import TestClient
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
@@ -497,7 +498,7 @@ def _authed_client(monkeypatch):
     from src.database.base import Base, get_db
     from src.main import app
 
-    monkeypatch.setattr(settings, "app_mode", "web")
+    monkeypatch.setattr(settings, "app_mode", "dev")
 
     engine = create_engine(
         "sqlite://",
@@ -517,16 +518,6 @@ def _authed_client(monkeypatch):
     app.dependency_overrides[get_db] = override_get_db
     monkeypatch.setattr(exec_mod, "SessionLocal", testing_session)
     client = TestClient(app)
-    signup = client.post(
-        "/api/auth/signup",
-        json={
-            "email": "cancel@test.local",
-            "name": "Cancel",
-            "password": "password123",
-        },
-    )
-    assert signup.status_code == 200, signup.text
-    client.headers.update({"Authorization": f"Bearer {signup.json()['access_token']}"})
     return client
 
 
@@ -618,37 +609,3 @@ def test_api_cancel_unknown_is_404(monkeypatch) -> None:
     client = _authed_client(monkeypatch)
     response = client.post("/api/executions/does-not-exist/cancel")
     assert response.status_code == 404
-
-
-def test_api_cancel_forbidden_for_other_user(monkeypatch) -> None:
-    import src.api.executions as exec_mod
-
-    client = _authed_client(monkeypatch)
-    monkeypatch.setattr(exec_mod._orchestrator, "router", _slow_router())
-
-    created = client.post(
-        "/api/executions/",
-        json={"question": "What is the mock answer?", "time_budget_minutes": 3},
-    )
-    execution_id = created.json()["id"]
-
-    other = client.post(
-        "/api/auth/signup",
-        json={"email": "other@test.local", "name": "Other", "password": "password123"},
-    )
-    assert other.status_code == 200
-    client.headers.update({"Authorization": f"Bearer {other.json()['access_token']}"})
-    forbidden = client.post(f"/api/executions/{execution_id}/cancel")
-    assert forbidden.status_code == 403
-
-    # Cleanup: cancel as the owner so no background task lingers.
-    owner_token = client.post(
-        "/api/auth/login",
-        json={"email": "cancel@test.local", "password": "password123"},
-    )
-    assert owner_token.status_code == 200, owner_token.text
-    client.headers.update(
-        {"Authorization": f"Bearer {owner_token.json()['access_token']}"}
-    )
-    client.post(f"/api/executions/{execution_id}/cancel")
-    assert _poll_status(client, execution_id) == "cancelled"

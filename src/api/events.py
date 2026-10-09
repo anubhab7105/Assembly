@@ -430,9 +430,17 @@ def diff_disagreements(
 def persist_event(db: Session, execution_id: str, event: dict[str, Any]) -> bool:
     """Append one recorder-built event row. Best-effort: never raises.
 
+    Web mode is stateless: no-op returning False (in-memory replay only).
     Returns True when stored. Duplicate (execution_id, seq) rows are
     ignored so re-delivery can never corrupt the log order.
     """
+    try:
+        from src.core.config import settings
+
+        if settings.is_web:
+            return False
+    except Exception:  # noqa: BLE001 — settings trouble means no-op
+        return False
     try:
         timestamp = datetime.now(timezone.utc)
         raw_timestamp = event.get("timestamp")

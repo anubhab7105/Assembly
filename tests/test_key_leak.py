@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from src.database.models import AgentRun, Conversation, Execution, Message, User
+from src.database.models import AgentRun, Execution
 from src.orchestration.orchestrator import Orchestrator
 
 
@@ -45,17 +45,7 @@ async def test_fake_key_absent_from_logs_result_and_db(
     assert set(result.providers_used) <= {"mock-a", "mock-b", "mock-c"}
 
     # Database rows written from the result carry no secret either.
-    user = User(
-        email="leak@test.local", name="Leak Test", hashed_password="not-a-real-hash"
-    )
-    db_session.add(user)
-    db_session.flush()
-    conversation = Conversation(user_id=user.id, title="leak scan")
-    db_session.add(conversation)
-    db_session.flush()
     execution = Execution(
-        conversation_id=conversation.id,
-        user_id=user.id,
         question="What is the mock answer?",
         time_budget_minutes=3,
         status=result.status,
@@ -79,23 +69,11 @@ async def test_fake_key_absent_from_logs_result_and_db(
             confidence=0.9,
         )
     )
-    db_session.add(
-        Message(
-            conversation_id=conversation.id,
-            role="assistant",
-            content=result.answer,
-            sources=result.sources,
-            execution_id=execution.id,
-        )
-    )
     db_session.commit()
 
     rows: list[Any] = []
-    rows += db_session.query(User).all()
-    rows += db_session.query(Conversation).all()
     rows += db_session.query(Execution).all()
     rows += db_session.query(AgentRun).all()
-    rows += db_session.query(Message).all()
     assert rows != []
     for row in rows:
         for value in _string_values(row):

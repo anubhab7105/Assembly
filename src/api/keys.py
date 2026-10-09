@@ -1,5 +1,4 @@
-"""
-Assembly — key management API (TECH_STACK.md section 5, BYOK).
+"""Assembly — key management API (BYOK, no accounts).
 
 - POST /api/keys/test: one minimal provider call; reports validity
   without ever echoing the key.
@@ -7,13 +6,12 @@ Assembly — key management API (TECH_STACK.md section 5, BYOK).
   rough capacity estimate for the current APP_MODE key set.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, SecretStr
+from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 from src.core.config import settings
 from src.core.keystore import get_keystore
-from src.core.rate_limit import rate_limiter
-from src.core.security import get_current_user_id
+from src.core.rate_limit import check_rate_limit
 from src.providers.base import ChatMessage
 from src.providers.config import load_models_config
 from src.providers.errors import AuthError, BadResponse, ProviderDown, RateLimited
@@ -23,15 +21,21 @@ router = APIRouter(prefix="/api", tags=["keys"])
 
 
 class KeySaveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     provider: str
     key: SecretStr
+
 
 class KeyMaskedResponse(BaseModel):
     provider: str
     masked_key: str
 
+
 class KeyTestRequest(BaseModel):
     """A key to probe. SecretStr: never serialized, never logged."""
+
+    model_config = ConfigDict(extra="forbid")
 
     provider: str
     key: SecretStr
@@ -64,12 +68,12 @@ class ProvidersStatusResponse(BaseModel):
 
 
 @router.post("/keys/test", response_model=KeyTestResponse)
-async def test_key(
-    req: KeyTestRequest,
-    user_id: str = Depends(get_current_user_id),
-    _rate_limit: bool = Depends(rate_limiter("test_keys", 10, 60)),
-) -> KeyTestResponse:
+async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
     """Make one tiny call with the given key; report validity, echo nothing."""
+    ip = request.client.host if request.client else "unknown"
+    await check_rate_limit(
+        f"ip:{ip}", "test_keys", settings.rate_limit_key_test_per_min_per_ip, 60
+    )
     try:
         provider = get_provider(req.provider, req.key)
     except (KeyError, ProviderDisabledError, ValueError) as exc:
@@ -78,9 +82,7 @@ async def test_key(
             detail=f"Unknown or disabled provider: {req.provider}",
         ) from exc
 
-    model = (
-        provider.get_available_models()[0] if provider.get_available_models() else ""
-    )
+    model = provider.get_available_models()[0] if provider.get_available_models() else ""
     try:
         response = await provider.generate(
             messages=[ChatMessage(role="user", content="Reply with the word ok.")],
@@ -90,17 +92,11 @@ async def test_key(
         )
     except RateLimited:
         return KeyTestResponse(
-            provider=req.provider,
-            valid=False,
-            rate_limited=True,
-            error_code="rate_limited",
+            provider=req.provider, valid=False, rate_limited=True, error_code="rate_limited"
         )
     except AuthError:
         return KeyTestResponse(
-            provider=req.provider,
-            valid=False,
-            rate_limited=False,
-            error_code="auth_error",
+            provider=req.provider, valid=False, rate_limited=False, error_code="auth_error"
         )
     except ProviderDown:
         return KeyTestResponse(
@@ -130,9 +126,7 @@ async def test_key(
 
 
 @router.get("/providers/status", response_model=ProvidersStatusResponse)
-async def providers_status(
-    user_id: str = Depends(get_current_user_id),
-) -> ProvidersStatusResponse:
+async def providers_status() -> ProvidersStatusResponse:
     """Available providers, families, and rough capacity for this mode's keys."""
     from src.core.keystore import reveal
     from src.providers.quota import fingerprint_key, get_limiter
@@ -189,29 +183,35 @@ async def providers_status(
         capacity_3min_estimate=capacity,
     )
 
+
 @router.post("/keys", response_model=KeyMaskedResponse)
-async def save_key(
-    req: KeySaveRequest,
-    user_id: str = Depends(get_current_user_id),
-):
+async def save_key(req: KeySaveRequest):
     if settings.app_mode != "desktop":
-        raise HTTPException(status_code=400, detail="Key saving is only supported in desktop mode")
+        raise HTTPException(
+            status_code=400, detail="Key saving is only supported in desktop mode"
+        )
     store = get_keystore()
     store.set_key(req.provider, req.key)
     return KeyMaskedResponse(provider=req.provider, masked_key="***")
 
+
 @router.get("/keys", response_model=list[KeyMaskedResponse])
-async def list_keys(user_id: str = Depends(get_current_user_id)):
+async def list_keys():
     if settings.app_mode != "desktop":
-        raise HTTPException(status_code=400, detail="Key listing is only supported in desktop mode")
+        raise HTTPException(
+            status_code=400, detail="Key listing is only supported in desktop mode"
+        )
     store = get_keystore()
     keys = store.get_keys()
     return [KeyMaskedResponse(provider=p, masked_key="***") for p in keys]
 
+
 @router.delete("/keys/{provider}")
-async def delete_key(provider: str, user_id: str = Depends(get_current_user_id)):
+async def delete_key(provider: str):
     if settings.app_mode != "desktop":
-        raise HTTPException(status_code=400, detail="Key deletion is only supported in desktop mode")
+        raise HTTPException(
+            status_code=400, detail="Key deletion is only supported in desktop mode"
+        )
     store = get_keystore()
     if hasattr(store, "delete"):
         store.delete(provider)
