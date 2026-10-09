@@ -96,32 +96,27 @@ The router must pick at least **3 distinct families** when available. With only 
 
 ```yaml
 providers:
-  gemini:
-    base: google-genai
-    key_url: https://aistudio.google.com/apikey
-    models:
-      - id: <check current Flash model id>
-        family: gemini
-        roles: [solver, researcher, synthesizer]
-        context_tokens: <fill from dashboard>
-    limits: {rpm: <fill>, rpd: <fill>, tpm: <fill>}   # read from AI Studio
   groq:
     base: openai-compatible
     url: https://api.groq.com/openai/v1
+    enabled: true
     models:
-      - {id: <llama 3.3 70b id>, family: llama, roles: [solver, critic]}
-      - {id: <gpt-oss id>, family: gpt-oss, roles: [critic, solver]}
-    limits: {rpm: <fill>, rpd: <fill>}
-  cerebras:
-    base: openai-compatible
-    url: https://api.cerebras.ai/v1
-  openrouter:
-    base: openai-compatible
-    url: https://openrouter.ai/api/v1
-  mistral:
-    base: openai-compatible
-    url: https://api.mistral.ai/v1
+      - id: <gpt-oss id>
+        family: gpt-oss
+        roles: [critic, solver]
+        scope: model   # or `account` when the cap is shared across models
+        limits:
+          rpm: <fill>             # or `unlimited` / null (unknown)
+          rpd: <fill>             # null on an enabled model fails startup
+          tpm: <fill>
+          context_tokens: <fill>  # source + checked-date comment on each
 ```
+
+One shape only: limits live under each model (`rpm/rpd/tpm/context_tokens`,
+each an int, `unlimited`, or null) with a `scope` (`model` = per key+model
+bucket, `account` = shared bucket). There is no provider-level `limits:`.
+Null on an enabled provider fails startup loudly (`validate_limits_filled`);
+unfilled providers stay `enabled: false`.
 
 Most providers above expose an OpenAI-compatible endpoint, so **one generic provider class plus config** covers most of them. Gemini keeps its own class.
 

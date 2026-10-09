@@ -290,10 +290,11 @@ class ExecutionEvent(Base):
 # QUOTA USAGE — Daily per-key counters (survive restarts)
 # ═════════════════════════════════════════════════════════════════════
 class QuotaUsage(Base):
-    """Calls/tokens spent per (provider, key fingerprint, day).
+    """Calls/tokens spent per (provider, key fingerprint, model, day).
 
     The fingerprint is a salted SHA-256 prefix (see providers/quota.py) —
-    raw keys are never stored here.
+    raw keys are never stored here. model_id is the catalog model id for
+    model-scoped limits, or "" for the shared account-scope bucket.
     """
 
     __tablename__ = "quota_usage"
@@ -301,6 +302,7 @@ class QuotaUsage(Base):
     provider = Column(String, primary_key=True)
     key_fingerprint = Column(String, primary_key=True)
     day = Column(String, primary_key=True)  # YYYY-MM-DD
+    model_id = Column(String, primary_key=True, default="")
     count = Column(Integer, default=0)
     tokens = Column(Integer, default=0)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
