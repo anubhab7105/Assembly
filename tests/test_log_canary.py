@@ -65,6 +65,12 @@ def test_mask_leaves_git_commit_shas_alone() -> None:
     assert "git log --oneline" in mask_text(line)
 
 
+def test_mask_keeps_secret_hex_outside_git_context() -> None:
+    secret = "0123456789abcdef0123456789abcdef01234567"
+    assert secret not in mask_text(f'api_key={secret}')
+    assert "***" in mask_text(f'api_key={secret}')
+
+
 def test_filter_applies_to_assembly_logs(caplog) -> None:
     with caplog.at_level(logging.INFO, logger="assembly"):
         logger.info("provider error for api_key=%s", CANARY)
