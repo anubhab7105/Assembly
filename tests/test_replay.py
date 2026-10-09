@@ -382,6 +382,7 @@ async def test_recording_carries_no_keys(
         "input_tokens",
         "output_tokens",
         "total_tokens",
+        "reasoning_tokens",
         "finish_reason",
     }
     for record in recorder.records:

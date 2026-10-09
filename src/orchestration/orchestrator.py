@@ -30,6 +30,7 @@ from src.orchestration.capacity import (
     heuristic_suggestion,
     plan_capacity,
 )
+from src.orchestration.circuit_breaker import cross_run_health
 from src.orchestration.composer import compose_final_answer
 from src.orchestration.consensus import ConsensusEngine
 from src.orchestration.debate import DebateManager
@@ -65,6 +66,7 @@ class ExecutionResult:
         degraded: bool = False,
         warnings: list | None = None,
         verification: dict | None = None,
+        call_log: list | None = None,
     ):
         self.answer = answer
         self.sources = sources
@@ -83,6 +85,35 @@ class ExecutionResult:
         # Verification summary from the final composer (agents, families,
         # rounds, disagreements resolved, sources verified).
         self.verification = verification or {}
+        # Per-LLM-call token log for measurement (stage, role,
+        # provider/model/family, input/output/reasoning/total). Names and
+        # counts only — never keys or prompt content.
+        self.call_log = call_log or []
+
+
+def _research_degraded(agents: list, call_log: list[dict]) -> bool:
+    """True when the team has a researcher but none answered successfully.
+
+    A successful researcher call is a solve/debate/adversarial log entry
+    with role "researcher" and total_tokens > 0 (failed calls log 0).
+    Pure helper: easy to unit-test without running an execution.
+    """
+    if not any(getattr(a, "agent_type", "") == "researcher" for a in agents):
+        return False
+    for entry in call_log or []:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("role") != "researcher":
+            continue
+        if entry.get("stage") not in ("solve", "debate", "adversarial"):
+            continue
+        try:
+            total = int(entry.get("total_tokens", 0) or 0)
+        except (TypeError, ValueError):
+            total = 0
+        if total > 0:
+            return False
+    return True
 
 
 class Orchestrator:
@@ -99,7 +130,6 @@ class Orchestrator:
     7. Synthesizer produces the final answer
     8. User receives answer + sources
     """
-
     def __init__(self):
         self.router = ModelRouter()
         self.search_engine = SearchEngine()
@@ -184,10 +214,46 @@ class Orchestrator:
 
         total_tokens = 0
         warnings: list[str] = []
+        call_log: list[dict] = []
         recorder = EventRecorder(execution_id)
         open_disagreement_keys: dict = {}
         disagreements_resolved = 0
         quota_warned = False
+
+        def _record_call(
+            stage: str,
+            role: str,
+            agent_id: str,
+            provider: str,
+            model: str,
+            family: str,
+            input_tokens: int,
+            output_tokens: int,
+            reasoning_tokens: int,
+            total: int,
+            round_no: int = 0,
+        ) -> None:
+            """Append one LLM-call record (names + counts only, never keys)."""
+            entry = {
+                "stage": stage,
+                "round": round_no,
+                "role": role,
+                "agent_id": agent_id,
+                "provider": provider or "unknown",
+                "model": model or "unknown",
+                "family": family or "unknown",
+                "input_tokens": int(input_tokens or 0),
+                "output_tokens": int(output_tokens or 0),
+                "reasoning_tokens": int(reasoning_tokens or 0),
+                "total_tokens": int(total or 0),
+            }
+            call_log.append(entry)
+            logger.info(
+                f"Tokens  │ {stage} r{round_no} {role} {agent_id} "
+                f"{entry['provider']}/{entry['model']} "
+                f"in={entry['input_tokens']} out={entry['output_tokens']} "
+                f"reason={entry['reasoning_tokens']} total={entry['total_tokens']}"
+            )
 
         async def emit_event(
             event_type: ProgressEventType | str,
@@ -257,6 +323,32 @@ class Orchestrator:
                     },
                 )
 
+        breaker_trips_seen = 0
+
+        async def emit_breaker_trips() -> None:
+            """agent.status events for newly tripped (model, role) pairs.
+
+            The circuit breaker itself only counts; surfacing each trip as
+            a visible progress event keeps reroutes auditable in the UI
+            and the event log (no new event types: trips ride agent.status).
+            """
+            nonlocal breaker_trips_seen
+            trips = agent_manager.breaker.trips[breaker_trips_seen:]
+            breaker_trips_seen = len(agent_manager.breaker.trips)
+            for trip in trips:
+                await emit_event(
+                    ProgressEventType.AGENT_STATUS,
+                    {
+                        "role": str(trip.get("role", "")),
+                        "activity": (
+                            f"Circuit breaker OPEN for {trip.get('model')} on "
+                            f"{trip.get('role')} after {trip.get('failures')} "
+                            "failures; further calls rerouted to a healthy model."
+                        )[:500],
+                        "state": state_machine.state.value,
+                    },
+                )
+
         try:
             await emit_event(
                 ProgressEventType.EXECUTION_STARTED,
@@ -299,6 +391,26 @@ class Orchestrator:
 
             async with asyncio.timeout(deadline.timeout_for_call(PLANNER_CALL_SECONDS)):
                 plan = await planner.plan(question, time_budget_minutes)
+
+            if plan.planner_provider or plan.planner_total_tokens:
+                _record_call(
+                    "planner",
+                    "planner",
+                    "planner",
+                    plan.planner_provider,
+                    plan.planner_model,
+                    plan.planner_family,
+                    plan.planner_input_tokens,
+                    plan.planner_output_tokens,
+                    plan.planner_reasoning_tokens,
+                    plan.planner_total_tokens,
+                    0,
+                )
+                # The planner is a real LLM call against quota: count it in
+                # the execution total and the token budget (previously it
+                # was logged but excluded, undercounting ~400 tokens/run).
+                total_tokens += plan.planner_total_tokens
+                budget.record_tokens(plan.planner_total_tokens)
 
             await emit_event(
                 ProgressEventType.PLAN_READY,
@@ -430,7 +542,23 @@ class Orchestrator:
             # Aggregate token usage from independent solving phase
             for o in outputs:
                 total_tokens += o.tokens_used
+                _record_call(
+                    "solve",
+                    o.agent_type or "solver",
+                    o.agent_id,
+                    o.provider,
+                    o.model,
+                    o.family,
+                    o.input_tokens,
+                    o.output_tokens,
+                    o.reasoning_tokens,
+                    o.tokens_used,
+                    1,
+                )
             budget.record_tokens(sum(o.tokens_used for o in outputs))
+            # Solve-phase transport failures were already counted by the
+            # manager retry path; surface any trips they caused.
+            await emit_breaker_trips()
 
             # ════════════════════════════════════════════════════════════
             # PHASE 5: DEBATE — Cross-agent critique rounds
@@ -481,11 +609,27 @@ class Orchestrator:
                         round_number,
                         budget,
                         emit_event,
+                        agent_manager,
                     )
+                    await emit_breaker_trips()
                     if challenged is not None:
-                        outputs, consensus_result, challenge_tokens = challenged
-                        total_tokens += challenge_tokens
-                        budget.record_tokens(challenge_tokens)
+                        outputs, consensus_result, challenge = challenged
+                        if challenge is not None:
+                            total_tokens += challenge.tokens_used
+                            budget.record_tokens(challenge.tokens_used)
+                            _record_call(
+                                "adversarial",
+                                challenge.agent_type or "critic",
+                                challenge.agent_id,
+                                challenge.provider,
+                                challenge.model,
+                                challenge.family,
+                                challenge.input_tokens,
+                                challenge.output_tokens,
+                                challenge.reasoning_tokens,
+                                challenge.tokens_used,
+                                round_number,
+                            )
                         budget.record_debate_round()
                         state_machine.transition(ExecState.EVALUATING)
                         await emit_consensus(consensus_result, round_number)
@@ -502,6 +646,38 @@ class Orchestrator:
                     {"round": round_number, "goal": f"Debate round {round_number}"},
                 )
 
+                # Circuit breaker: agents whose (model, role) tripped are
+                # swapped onto a healthy model before the round (same
+                # agent_id, so supports/disagrees_with refs keep working).
+                for idx, agent in enumerate(list(agents)):
+                    if agent_manager.should_avoid(agent.model, agent.agent_type):
+                        label = agent_manager.reroute_open_circuit(agent)
+                        if label is not None:
+                            agents[idx] = agent_manager.agents[agent.agent_id]
+                            providers_used = sorted(
+                                {
+                                    a.provider.provider_name
+                                    for a in agent_manager.agents.values()
+                                }
+                            )
+                            await emit_event(
+                                ProgressEventType.AGENT_STATUS,
+                                {
+                                    "role": agent.agent_type,
+                                    "activity": (
+                                        f"Circuit breaker rerouted {agent.agent_id} "
+                                        f"({agent.agent_type}) to {label} after "
+                                        "repeated failures."
+                                    )[:500],
+                                    "state": state_machine.state.value,
+                                },
+                            )
+                        else:
+                            logger.warning(
+                                f"Exec    │ {agent.agent_id} circuit-open but no "
+                                "healthy fallback; keeping original model"
+                            )
+
                 # Run debate round
                 outputs = await debate_manager.run_debate_round(
                     agents=agents,
@@ -512,10 +688,46 @@ class Orchestrator:
                 )
                 budget.record_debate_round()
 
-                # Aggregate token usage from debate round
-                round_tokens = sum(o.tokens_used for o in outputs)
+                # Debate critiques bypass the manager retry path, so record
+                # this round's transport failures here (carry-forwards with
+                # failed_round == round_number) for the breaker, per-run
+                # and cross-run alike.
+                agents_by_id = {a.agent_id: a for a in agents}
+                for o in outputs:
+                    if o.failed_round == round_number:
+                        failed_agent = agents_by_id.get(o.agent_id)
+                        if failed_agent is not None:
+                            agent_manager.breaker.record_failure(
+                                failed_agent.model, failed_agent.agent_type
+                            )
+                            cross_run_health().record_failure(
+                                failed_agent.model, failed_agent.agent_type
+                            )
+                await emit_breaker_trips()
+
+                # Aggregate token usage from debate round (fresh calls only;
+                # carry-forwards with failed_round == round_number reuse stale
+                # output and must not double-count tokens).
+                fresh = [
+                    o for o in outputs if o.failed_round != round_number
+                ]
+                round_tokens = sum(o.tokens_used for o in fresh)
                 total_tokens += round_tokens
                 budget.record_tokens(round_tokens)
+                for o in fresh:
+                    _record_call(
+                        "debate",
+                        o.agent_type or "solver",
+                        o.agent_id,
+                        o.provider,
+                        o.model,
+                        o.family,
+                        o.input_tokens,
+                        o.output_tokens,
+                        o.reasoning_tokens,
+                        o.tokens_used,
+                        round_number,
+                    )
 
                 # Re-evaluate consensus
                 force = budget.should_force_synthesis()
@@ -574,6 +786,19 @@ class Orchestrator:
             # Aggregate token usage from synthesis
             total_tokens += final_output.tokens_used
             budget.record_tokens(final_output.tokens_used)
+            _record_call(
+                "synthesis",
+                final_output.agent_type or "synthesizer",
+                final_output.agent_id,
+                final_output.provider,
+                final_output.model,
+                final_output.family,
+                final_output.input_tokens,
+                final_output.output_tokens,
+                final_output.reasoning_tokens,
+                final_output.tokens_used,
+                round_number,
+            )
 
             # ════════════════════════════════════════════════════════════
             # DONE — Compose the final answer and return the result
@@ -596,6 +821,12 @@ class Orchestrator:
                 synth_position=final_output.position,
                 synth_uncertainty=list(final_output.remaining_uncertainty),
                 synth_evidence=list(final_output.evidence),
+                research_degraded=_research_degraded(agents, call_log),
+                research_failures=agent_manager.breaker.failures_for_role("researcher"),
+                circuit_breaker_trips=[
+                    f"{trip.get('model')} on {trip.get('role')}"
+                    for trip in agent_manager.breaker.trips
+                ],
             )
             warnings.extend(composed.warnings)
             sources = [s.model_dump() for s in composed.sources]
@@ -616,6 +847,7 @@ class Orchestrator:
                 warnings=list(getattr(agent_manager.last_routing, "warnings", []) or [])
                 + warnings,
                 verification=composed.verification.to_dict(),
+                call_log=list(call_log),
             )
 
             state_machine.transition(ExecState.COMPLETED)
@@ -702,6 +934,7 @@ class Orchestrator:
                 debate_rounds=0,
                 total_tokens=total_tokens,
                 status="cancelled",
+                call_log=list(call_log) if "call_log" in locals() else [],
             )
         except Exception as e:  # noqa: BLE001 — execution must fail closed, never crash the worker
             # Server side keeps the full (masked) error; clients get a
@@ -728,6 +961,7 @@ class Orchestrator:
                 debate_rounds=0,
                 total_tokens=0,
                 status="failed",
+                call_log=list(call_log) if "call_log" in locals() else [],
             )
         finally:
             # The run settled: drop the deadline registration so a later
@@ -793,13 +1027,16 @@ class Orchestrator:
         round_number: int,
         budget,
         emit_event,
+        agent_manager=None,
     ):
         """One WORKFLOW 5b strike: a different-family critic attacks the consensus.
 
-        Returns (outputs, report, challenge_tokens), or None when there is
+        Returns (outputs, report, challenge_output), or None when there is
         no eligible critic or the strike itself fails — the caller then runs
         a normal debate round instead. ``emit_event`` is the recorder-backed
         emitter so the strike announcement keeps the run's dense sequence.
+        challenge_output is the critic's fresh AgentOutput (with per-call
+        input/output/reasoning tokens) or None.
         """
         from src.orchestration.consensus import ConsensusEngine
 
@@ -831,11 +1068,22 @@ class Orchestrator:
             )
         except Exception as e:  # noqa: BLE001 — a failed strike must not kill the run
             logger.error(f"Orchestrator │ Adversarial round failed: {e}")
+            if agent_manager is not None:
+                from src.orchestration.agent_manager import RETRYABLE_ERRORS
+                from src.orchestration.circuit_breaker import cross_run_health
+
+                if isinstance(e, RETRYABLE_ERRORS):
+                    agent_manager.breaker.record_failure(
+                        critic.model, critic.agent_type
+                    )
+                    cross_run_health().record_failure(
+                        critic.model, critic.agent_type
+                    )
             return None
         challenge = next(
             (o for o in new_outputs if o.agent_id == critic.agent_id), None
         )
-        return new_outputs, report, challenge.tokens_used if challenge else 0
+        return new_outputs, report, challenge
 
     async def _send_event(
         self,

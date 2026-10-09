@@ -152,20 +152,26 @@ Respond with the JSON format specified in your instructions."""
             "all_sources": [s.model_dump() for s in unique_sources],
         }
 
-        from src.providers.errors import ProviderDown, RateLimited
+        from src.providers.errors import ProviderDown, RateLimited, ToolCallError
         from src.providers.quota import QuotaExhausted
         from src.core.logging_config import logger
         
-        RETRYABLE_ERRORS = (RateLimited, QuotaExhausted, ProviderDown, TimeoutError)
+        RETRYABLE_ERRORS = (
+            RateLimited,
+            QuotaExhausted,
+            ProviderDown,
+            TimeoutError,
+            ToolCallError,
+        )
         
         try:
             result = await self.run(question, context=context, temperature=0.3)
         except RETRYABLE_ERRORS as e:
-            router_fallback = getattr(self.router, "fallback_for", None)
+            router_fallback = getattr(self._router, "fallback_for", None)
             fallback = None
-            if self.routing is not None and router_fallback is not None:
+            if self._routing is not None and router_fallback is not None:
                 try:
-                    fallback = router_fallback(self.routing, e)
+                    fallback = router_fallback(self._routing, e)
                 except Exception:
                     pass
             if fallback is None:
@@ -177,7 +183,7 @@ Respond with the JSON format specified in your instructions."""
             )
             self.provider = fallback.provider
             self.model = fallback.model
-            self.routing = fallback
+            self._routing = fallback
             self.family = getattr(fallback, "family", "")
             
             result = await self.run(question, context=context, temperature=0.3)

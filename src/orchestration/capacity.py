@@ -7,8 +7,8 @@ its inputs so it is easy to unit-test with no providers or network:
 
     for each key:
         calls_now   = min(rpm_limit x minutes_in_budget, rpd_remaining,
-                          tpm_limit x minutes / AVG_TOKENS_PER_CALL,
-                          tpd_remaining / AVG_TOKENS_PER_CALL)
+                          tpm_limit x minutes / tpm_tokens_per_call(),
+                          tpd_remaining / tpm_tokens_per_call())
     total_calls     = sum(calls_now over keys) x 0.7   # 30% safety margin
     cost(plan)      = agents x (1 solve) + rounds x agents x (1 critique)
                       + searches + 1 synthesis + 1 planner
@@ -33,9 +33,31 @@ VALID_TIERS: tuple[int, ...] = (3, 5, 10, 15)
 #: Keep a 30% safety margin on quota math (WORKFLOW section 4).
 SAFETY_FACTOR: float = 0.7
 
-#: Rough planning estimate of tokens per LLM call (prompt + completion).
-#: Not measured — it only keeps token budgets (tpm/tpd) comparable to
-#: call counts when deciding whether a plan fits.
+#: Tokens-per-call divisor converting tpm/tpd token windows into call
+#: counts. Measured, not guessed: the max of the per-stage Settings avgs
+#: (planner/solve/debate/adversarial/synthesis, source run id/date in
+#: config) — max, so token windows bind conservatively. Recomputed from
+#: Settings on every call so re-measurement propagates without code edits.
+#: Replaces the old flat AVG_TOKENS_PER_CALL=2000 guess at rebase time.
+def tpm_tokens_per_call() -> int:
+    """Conservative measured tokens/call divisor for tpm/tpd math."""
+    try:
+        from src.core.config import settings
+
+        stages = (
+            settings.tokens_planner_avg,
+            settings.tokens_solve_avg,
+            settings.tokens_debate_avg,
+            settings.tokens_adversarial_avg,
+            settings.tokens_synthesis_avg,
+        )
+        return max(1, max(int(v or 0) for v in stages))
+    except (AttributeError, TypeError, ValueError):
+        return 2000
+
+
+#: Back-compat alias: prefer tpm_tokens_per_call() (measured). Kept so
+#: any out-of-tree references keep working during the migration window.
 AVG_TOKENS_PER_CALL: int = 2000
 
 #: Floor (seconds) for the synthesis time reserve.
@@ -55,8 +77,14 @@ MIN_ROUNDS: int = 1
 # (cost = agents + rounds*agents + searches + planner + synthesis lands
 # inside the table's approx-call ranges). Replace the time estimates with
 # measured numbers after the first benchmark (WORKFLOW section 4).
+#
+# Rounds are a CEILING, not a fixed count: the consensus engine stops early
+# via FINALIZE as soon as score >= threshold with low new-info and no
+# critical contradiction. Extra tier time funds more DEBATE/ADVERSARIAL and
+# research/verification rounds only when consensus is NOT reached — a tier
+# that converges in 1 round still finalizes in 1 round.
 TIER_MAX_AGENTS: dict[int, int] = {3: 3, 5: 4, 10: 5, 15: 6}
-TIER_MAX_ROUNDS: dict[int, int] = {3: 1, 5: 2, 10: 4, 15: 6}
+TIER_MAX_ROUNDS: dict[int, int] = {3: 1, 5: 3, 10: 5, 15: 8}
 TIER_DEFAULT_ROUNDS: dict[int, int] = {3: 1, 5: 2, 10: 3, 15: 4}
 TIER_DEFAULT_SEARCHES: dict[int, int] = {3: 2, 5: 4, 10: 8, 15: 10}
 TIER_MAX_SEARCHES: dict[int, int] = {3: 5, 5: 10, 10: 20, 15: 30}
@@ -136,6 +164,8 @@ class TeamPlan:
     affordable_calls: int | None = None
     synth_reserve_seconds: float = 25.0
     explanation: str = ""
+    estimated_tokens_median: int = 0
+    estimated_tokens_worst: int = 0
 
     def to_dict(self) -> dict:
         """JSON-safe view for the preflight endpoint."""
@@ -153,6 +183,8 @@ class TeamPlan:
             "affordable_calls": self.affordable_calls,
             "synth_reserve_seconds": round(self.synth_reserve_seconds, 1),
             "explanation": self.explanation,
+            "estimated_tokens_median": self.estimated_tokens_median,
+            "estimated_tokens_worst": self.estimated_tokens_worst,
         }
 
 
@@ -170,8 +202,8 @@ def affordable_calls(
     """Quota-affordable calls after the 30% safety margin.
 
     Per bucket: min(rpm_limit x minutes, rpd_remaining,
-    tpm_limit x minutes / AVG_TOKENS_PER_CALL,
-    tpd_remaining / AVG_TOKENS_PER_CALL); a side with no known limit is
+    tpm_limit x minutes / tpm_tokens_per_call(),
+    tpd_remaining / tpm_tokens_per_call()); a side with no known limit is
     ignored. Buckets with NO known limit at all are unlimited-for-planning
     (fail-open, like the router). Returns None when every bucket is
     unlimited, i.e. quota does not constrain the plan. An empty bucket
@@ -179,6 +211,7 @@ def affordable_calls(
     """
     if not list(keys):
         return 0
+    divisor = tpm_tokens_per_call()
     known: list[int] = []
     for key in keys:
         options: list[int] = []
@@ -187,11 +220,9 @@ def affordable_calls(
         if key.rpd_remaining is not None:
             options.append(max(0, key.rpd_remaining))
         if key.tpm_limit is not None:
-            options.append(
-                max(0, key.tpm_limit) * max(0, minutes) // AVG_TOKENS_PER_CALL
-            )
+            options.append(max(0, key.tpm_limit) * max(0, minutes) // divisor)
         if key.tpd_remaining is not None:
-            options.append(max(0, key.tpd_remaining) // AVG_TOKENS_PER_CALL)
+            options.append(max(0, key.tpd_remaining) // divisor)
         if options:
             known.append(min(options))
     if not known:
@@ -202,6 +233,67 @@ def affordable_calls(
 def cost_of_plan(agents: int, rounds: int, searches: int) -> int:
     """Total LLM/search calls a plan needs (WORKFLOW section 4 formula)."""
     return agents + rounds * agents + searches + 2  # +1 planner, +1 synthesis
+
+
+def _stage_tokens(stage: str, worst: bool) -> int:
+    """Measured tokens/call for one stage (avg, or p90 when worst=True).
+
+    Reads the Settings token stats (source run id/date recorded there).
+    Fail-open: unknown stages or unreadable config read as 0 so the
+    estimate degrades instead of breaking planning.
+    """
+    try:
+        from src.core.config import settings
+
+        field = f"tokens_{stage}_{'p90' if worst else 'avg'}"
+        return max(0, int(getattr(settings, field, 0) or 0))
+    except (AttributeError, TypeError, ValueError):
+        return 0
+
+
+def estimated_tokens_median(agents: int, rounds: int, searches: int) -> int:
+    """Expected tokens for a plan at measured avg rates (planned rounds).
+
+    Searches are not LLM calls and carry no model tokens. The single
+    adversarial strike is a sometimes-cost: median plans exclude it.
+    """
+    _ = searches
+    return (
+        _stage_tokens("planner", False)
+        + max(0, agents) * _stage_tokens("solve", False)
+        + max(0, agents) * max(0, rounds) * _stage_tokens("debate", False)
+        + _stage_tokens("synthesis", False)
+    )
+
+
+def estimated_tokens_worst(agents: int, ceiling_rounds: int, searches: int) -> int:
+    """Worst-case tokens for a plan at p90 rates and ceiling rounds.
+
+    Includes one adversarial strike (a critic call at debate p90 rates):
+    worst case assumes consensus never lands early.
+    """
+    _ = searches
+    return (
+        _stage_tokens("planner", True)
+        + max(0, agents) * _stage_tokens("solve", True)
+        + max(0, agents) * max(0, ceiling_rounds) * _stage_tokens("debate", True)
+        + _stage_tokens("adversarial", True)
+        + _stage_tokens("synthesis", True)
+    )
+
+
+def token_cap_for_tier(tier: int) -> int | None:
+    """Max execution tokens for a tier (None only if unreadable).
+
+    Single source is BudgetController.token_cap_for_tier; this wrapper
+    keeps capacity importable even if that lookup ever fails.
+    """
+    try:
+        from src.orchestration.budget_controller import BudgetController
+
+        return int(BudgetController.token_cap_for_tier(tier))
+    except (AttributeError, TypeError, ValueError, ImportError):
+        return None
 
 
 def estimated_seconds(
@@ -343,13 +435,38 @@ def plan_capacity(
         agents, rounds, searches = _desired_for_tier(suggestion, tier)
         cost = cost_of_plan(agents, rounds, searches)
         seconds = estimated_seconds(agents, rounds, searches, avg_call_seconds)
-        if (affordable is None or cost <= affordable) and seconds <= budget_seconds:
+        tokens_median = estimated_tokens_median(agents, rounds, searches)
+        tokens_worst = estimated_tokens_worst(agents, TIER_MAX_ROUNDS[tier], searches)
+        cap = token_cap_for_tier(tier)
+        tokens_fit = cap is None or tokens_worst <= cap
+        if (
+            (affordable is None or cost <= affordable)
+            and seconds <= budget_seconds
+            and tokens_fit
+        ):
             downgraded = tier != requested_tier
             if downgraded:
+                full_cost = cost_of_plan(*full)
+                full_worst = estimated_tokens_worst(
+                    full[0], TIER_MAX_ROUNDS[requested_tier], full[2]
+                )
+                full_cap = token_cap_for_tier(requested_tier)
+                reasons: list[str] = []
+                if affordable is not None and full_cost > affordable:
+                    reasons.append(
+                        f"about {full_cost} calls but only {affordable} are affordable"
+                    )
+                if full_cap is not None and full_worst > full_cap:
+                    reasons.append(
+                        f"about {full_worst} worst-case tokens (p90) over the "
+                        f"{full_cap} token cap"
+                    )
+                detail = "; ".join(reasons) or (
+                    f"about {full_cost} calls do not fit {affordable} affordable"
+                )
                 warnings.append(
-                    f"Requested {requested_tier}-minute tier needs about "
-                    f"{cost_of_plan(*full)} calls but only {affordable} are "
-                    f"affordable; using the {tier}-minute plan instead."
+                    f"Requested {requested_tier}-minute tier needs {detail}; "
+                    f"using the {tier}-minute plan instead."
                 )
             explanation = _explain(
                 requested_tier,
@@ -377,6 +494,8 @@ def plan_capacity(
                 affordable_calls=affordable,
                 synth_reserve_seconds=reserve,
                 explanation=explanation,
+                estimated_tokens_median=tokens_median,
+                estimated_tokens_worst=tokens_worst,
             )
 
     # No tier standard fits: trim the 3-minute standard to the minimum team.
@@ -391,6 +510,15 @@ def plan_capacity(
             f"{cost_of_plan(*full)} calls but only {affordable} are affordable; "
             "using a trimmed 3-minute team instead."
         )
+        trimmed_worst = estimated_tokens_worst(agents, TIER_MAX_ROUNDS[3], searches)
+        trimmed_cap = token_cap_for_tier(3)
+        if trimmed_cap is not None and trimmed_worst > trimmed_cap:
+            warnings.append(
+                f"Even the trimmed team estimates about {trimmed_worst} "
+                f"worst-case tokens (p90) over the {trimmed_cap} token cap; "
+                "it may hit the execution token budget if consensus never "
+                "lands early."
+            )
         if suggestion.needs_research and searches == 0 and affordable is not None:
             warnings.append("Web research dropped: no search budget fits.")
         explanation = _explain(
@@ -419,6 +547,10 @@ def plan_capacity(
             affordable_calls=affordable,
             synth_reserve_seconds=reserve,
             explanation=explanation,
+            estimated_tokens_median=estimated_tokens_median(agents, rounds, searches),
+            estimated_tokens_worst=estimated_tokens_worst(
+                agents, TIER_MAX_ROUNDS[3], searches
+            ),
         )
 
     # Nothing fits, not even the minimal team.

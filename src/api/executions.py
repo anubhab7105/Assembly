@@ -251,6 +251,21 @@ async def preflight(
             )
             break
 
+    from src.orchestration.capacity import (
+        TIER_MAX_AGENTS,
+        TIER_MAX_ROUNDS,
+        cost_of_plan,
+    )
+
+    ceiling_agents = TIER_MAX_AGENTS.get(plan.feasible_tier, plan.agents)
+    ceiling_rounds = TIER_MAX_ROUNDS.get(plan.feasible_tier, plan.rounds)
+    # Median = planned rounds (consensus typically stops early here);
+    # worst = ceiling rounds (consensus never reached, every round runs).
+    expected_calls_median = plan.estimated_calls
+    expected_calls_worst = cost_of_plan(
+        plan.agents, max(plan.rounds, ceiling_rounds), plan.search_budget
+    )
+
     return PreflightResponse(
         question=question,
         requested_tier=time_budget_minutes,
@@ -275,6 +290,12 @@ async def preflight(
         usable_keys=len(keys),
         providers=[k.provider for k in keys],
         families=router.available_families(),
+        ceiling_agents=ceiling_agents,
+        ceiling_rounds=ceiling_rounds,
+        expected_calls_median=expected_calls_median,
+        expected_calls_worst=expected_calls_worst,
+        expected_tokens_median=plan.estimated_tokens_median,
+        expected_tokens_worst=plan.estimated_tokens_worst,
     )
 
 

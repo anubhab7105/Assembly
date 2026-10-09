@@ -16,9 +16,13 @@ from src.orchestration.capacity import (
     can_start_round,
     cost_of_plan,
     estimated_seconds,
+    estimated_tokens_median,
+    estimated_tokens_worst,
     heuristic_suggestion,
     plan_capacity,
     synth_reserve_seconds,
+    token_cap_for_tier,
+    tpm_tokens_per_call,
 )
 
 # WORKFLOW section 4 approx-call ranges per tier.
@@ -69,19 +73,33 @@ def test_affordable_prefers_tighter_side() -> None:
 
 
 def test_affordable_token_options_bind() -> None:
-    # tpm 8000 x 5 min / 2000 tokens-per-call = 20 calls: binds over rpm/rpd.
+    # tpm 8000 x 5 min / measured divisor binds over rpm/rpd.
+    divisor = tpm_tokens_per_call()
     assert affordable_calls(
         [KeyBudget(provider="g", rpm_limit=30, rpd_remaining=1000, tpm_limit=8000)],
         5,
-    ) == int(min(150, 1000, 20) * 0.7)
-    # tpd remaining 5000 tokens / 2000 = 2 calls: binds on its own.
+    ) == int(min(150, 1000, 8000 * 5 // divisor) * 0.7)
+    # tpd remaining 5000 tokens binds on its own.
     assert affordable_calls([KeyBudget(provider="g", tpd_remaining=5000)], 5) == int(
-        2 * 0.7
+        (5000 // divisor) * 0.7
     )
     # Absent token budgets change nothing (old math preserved).
     assert (
         affordable_calls([KeyBudget(provider="p", rpm_limit=30, rpd_remaining=20)], 5)
         == 14
+    )
+
+
+def test_tpm_divisor_is_measured_not_guessed() -> None:
+    # The flat 2000 guess is gone: the divisor is the max stage average.
+    from src.core.config import settings
+
+    assert tpm_tokens_per_call() == max(
+        settings.tokens_planner_avg,
+        settings.tokens_solve_avg,
+        settings.tokens_debate_avg,
+        settings.tokens_adversarial_avg,
+        settings.tokens_synthesis_avg,
     )
 
 
@@ -92,26 +110,29 @@ REACT_QUESTION = (
 
 
 def test_groq_tpm_downsizes_five_minute_plan() -> None:
-    """One groq-like bucket: tpm 8000 (20 calls/5 min) binds below the
-    tier-5 standard cost of 18, so the plan downgrades with an explanation."""
+    """One groq-like bucket: tpm 8000 binds below the tier-5 standard
+    cost of 18, so the plan downgrades with an explanation."""
     keys = [
         KeyBudget(provider="groq", rpm_limit=30, rpd_remaining=1000, tpm_limit=8000)
     ]
+    divisor = tpm_tokens_per_call()
     plan = plan_capacity(keys, 5, heuristic_suggestion(REACT_QUESTION))
-    assert plan.affordable_calls == int(min(150, 1000, 20) * 0.7) == 14
+    assert plan.affordable_calls == int(min(150, 1000, 8000 * 5 // divisor) * 0.7)
     assert plan.downgraded and plan.feasible
     assert plan.feasible_tier == 3
     assert plan.explanation
 
 
 def test_groq_three_buckets_sum_but_stay_tpm_bound() -> None:
-    """Three model-scope buckets sum — yet tpm still binds, not rpm:
-    3 x 14 = 42, where rpm alone would allow 3 x 105 = 315."""
+    """Three model-scope buckets sum — yet tpm still binds, not rpm."""
+    divisor = tpm_tokens_per_call()
+    per_bucket = min(150, 1000, 8000 * 5 // divisor)
     keys = [
         KeyBudget(provider="groq", rpm_limit=30, rpd_remaining=1000, tpm_limit=8000)
         for _ in range(3)
     ]
-    assert affordable_calls(keys, 5) == 42
+    assert affordable_calls(keys, 5) == int(3 * per_bucket * 0.7)
+    assert affordable_calls(keys, 5) < 315  # rpm alone would allow 3 x 105
 
 
 def test_affordable_unknown_limits_is_unlimited() -> None:
@@ -123,6 +144,40 @@ def test_cost_formula_matches_workflow() -> None:
     # agents x solve + rounds x agents x critique + searches + planner + synth.
     assert cost_of_plan(3, 1, 2) == 3 + 3 + 2 + 2 == 10
     assert cost_of_plan(4, 2, 4) == 4 + 8 + 4 + 2 == 18
+
+
+def test_token_estimates_use_measured_stage_stats() -> None:
+    # Defaults are the measured Settings stats (planner 398, solve 1126,
+    # debate 1484, adversarial 1484, synthesis 2245 — see config comments).
+    assert estimated_tokens_median(4, 2, 4) == 398 + 4 * 1126 + 4 * 2 * 1484 + 2245
+    assert estimated_tokens_worst(4, 3, 4) == (
+        398 + 4 * 1368 + 4 * 3 * 2078 + 2078 + 2245
+    )
+    assert estimated_tokens_worst(4, 3, 4) > estimated_tokens_median(4, 2, 4)
+
+
+def test_token_cap_mirrors_budget_controller() -> None:
+    from src.orchestration.budget_controller import BudgetController
+
+    for tier in (3, 5, 10, 15):
+        assert token_cap_for_tier(tier) == BudgetController.token_cap_for_tier(tier)
+
+
+def test_p90_gate_downgrades_token_hungry_plan(monkeypatch) -> None:
+    from src.core.config import settings
+
+    # Blow up debate p90: no tier standard fits its token cap anymore.
+    monkeypatch.setattr(settings, "tokens_debate_p90", 10**9)
+    plan = plan_capacity(_many_keys(), 15, GENEROUS)
+    assert plan.feasible and plan.downgraded
+    assert plan.feasible_tier < 15
+    assert any("worst-case tokens" in w for w in plan.warnings)
+
+
+def test_healthy_plan_carries_token_estimates() -> None:
+    plan = plan_capacity(_many_keys(), 5, GENEROUS)
+    assert plan.estimated_tokens_median > 0
+    assert plan.estimated_tokens_worst >= plan.estimated_tokens_median
 
 
 def test_can_start_round_needs_round_plus_reserve() -> None:
@@ -155,7 +210,7 @@ def test_each_tier_feasible_with_many_keys(tier: int) -> None:
 
 def test_many_key_plan_uses_full_team() -> None:
     plan = plan_capacity(_many_keys(), 5, GENEROUS)
-    assert (plan.agents, plan.rounds, plan.search_budget) == (4, 2, 4)
+    assert (plan.agents, plan.rounds, plan.search_budget) == (4, 3, 4)
 
 
 # ── Many-key vs few-key ───────────────────────────────────────────────
@@ -264,6 +319,8 @@ def test_plan_output_carries_no_secrets(fake_key: str) -> None:
         "affordable_calls",
         "synth_reserve_seconds",
         "explanation",
+        "estimated_tokens_median",
+        "estimated_tokens_worst",
     }
 
 

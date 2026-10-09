@@ -78,7 +78,7 @@ async def test_valid_workflow_shape() -> None:
     assert plan.needs_research is True
     assert plan.needs_code_execution is False
     assert plan.suggested_roles == ["solver", "solver", "researcher", "critic"]
-    assert plan.estimated_rounds == 2  # capped: 5-min tier allows 2 rounds
+    assert plan.estimated_rounds == 3  # 5-min ceiling is 3 rounds (early-stop via consensus)
     assert [m["agent_type"] for m in plan.team_composition] == plan.suggested_roles
     assert plan.fallback_used is False
     assert len(provider.calls) == 1  # no retry needed
@@ -297,6 +297,66 @@ async def test_heuristic_handles_empty_question() -> None:
     assert plan.problem_type == "general"
     assert plan.complexity == "low"
     assert len(plan.team_composition) == 2
+
+
+# ── Research OR-rule (LLM false + heuristic true → research) ─────────
+
+
+def _llm_says_no_research() -> dict:
+    return {
+        "problem_type": "general",
+        "complexity": "medium",
+        "needs_research": False,
+        "needs_code_execution": False,
+        "suggested_roles": ["solver", "critic"],
+        "estimated_rounds": 1,
+    }
+
+
+async def test_or_rule_rescues_comparative_question() -> None:
+    planner, _, _ = _planner(_llm_says_no_research())
+    plan = await planner.plan("Is React better than Vue for a large platform?", 5)
+
+    assert plan.needs_research is True
+    assert "researcher" in plan.suggested_roles
+    assert "heuristic" in plan.reasoning
+
+
+async def test_or_rule_rescues_evidence_seeking_question() -> None:
+    planner, _, _ = _planner(_llm_says_no_research())
+    plan = await planner.plan(
+        "What evidence shows this library is production ready?", 5
+    )
+
+    assert plan.needs_research is True
+    assert "researcher" in plan.suggested_roles
+
+
+async def test_or_rule_rescues_time_sensitive_question() -> None:
+    planner, _, _ = _planner(_llm_says_no_research())
+    plan = await planner.plan(
+        "What are the latest Python release highlights in 2026?", 5
+    )
+
+    assert plan.needs_research is True
+    assert "researcher" in plan.suggested_roles
+
+
+async def test_or_rule_keeps_llm_true_without_duplicating_researcher() -> None:
+    planner, _, _ = _planner(VALID_PLAN)
+    plan = await planner.plan("Compare React and Vue ecosystems.", 5)
+
+    assert plan.needs_research is True
+    assert plan.suggested_roles.count("researcher") == 1
+
+
+async def test_or_rule_stays_quiet_without_any_signal() -> None:
+    planner, _, _ = _planner(_llm_says_no_research())
+    plan = await planner.plan("What is 2+2?", 5)
+
+    assert plan.needs_research is False
+    assert "researcher" not in plan.suggested_roles
+    assert "heuristic" not in plan.reasoning
 
 
 # ── Key-leak scan ─────────────────────────────────────────────────────

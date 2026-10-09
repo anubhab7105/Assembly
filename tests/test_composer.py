@@ -234,7 +234,7 @@ def test_unreferenced_pool_sources_excluded() -> None:
     assert "Unused" not in composed.answer_markdown
 
 
-def test_no_references_no_sources_section() -> None:
+def test_no_references_reports_unused_sources() -> None:
     composed = compose_final_answer(
         agent_outputs=[_output()],
         consensus_score=0.9,
@@ -244,7 +244,22 @@ def test_no_references_no_sources_section() -> None:
         synth_position="Bare answer, no markers.",
     )
     assert composed.sources == []
-    assert "### Sources" not in composed.answer_markdown
+    assert "No external sources were used." in composed.answer_markdown
+    assert composed.verification.external_sources_used is False
+
+
+def test_empty_pool_reports_no_external_sources() -> None:
+    composed = compose_final_answer(
+        agent_outputs=[_output()],
+        consensus_score=0.9,
+        open_disagreements=[],
+        sources_pool=[],
+        debate_rounds=1,
+        synth_position="Bare answer.",
+    )
+    assert composed.sources == []
+    assert "No external sources were used." in composed.answer_markdown
+    assert composed.verification.external_sources_used is False
 
 
 def test_markdown_link_bodies_untouched() -> None:
@@ -288,6 +303,10 @@ def test_verification_summary_counts() -> None:
         "sources_verified": 1,
         "citations_checked": 1,
         "citations_dropped": 0,
+        "research_degraded": False,
+        "research_failures": 0,
+        "circuit_breaker_trips": [],
+        "external_sources_used": True,
     }
 
 

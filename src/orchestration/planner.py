@@ -134,6 +134,13 @@ class PlanResult:
         estimated_rounds: int = 1,
         needs_code_execution: bool = False,
         fallback_used: bool = False,
+        planner_provider: str = "",
+        planner_model: str = "",
+        planner_family: str = "",
+        planner_input_tokens: int = 0,
+        planner_output_tokens: int = 0,
+        planner_reasoning_tokens: int = 0,
+        planner_total_tokens: int = 0,
     ):
         self.problem_type = problem_type
         self.complexity = complexity  # low | medium | high
@@ -149,6 +156,14 @@ class PlanResult:
         self.estimated_rounds = estimated_rounds
         self.needs_code_execution = needs_code_execution
         self.fallback_used = fallback_used
+        # Planner-call provenance for per-call token measurement (step 1).
+        self.planner_provider = planner_provider
+        self.planner_model = planner_model
+        self.planner_family = planner_family
+        self.planner_input_tokens = planner_input_tokens
+        self.planner_output_tokens = planner_output_tokens
+        self.planner_reasoning_tokens = planner_reasoning_tokens
+        self.planner_total_tokens = planner_total_tokens
 
     def to_dict(self) -> dict:
         return {
@@ -251,19 +266,27 @@ Respond with JSON only:
                 temperature=0.1,
                 max_tokens=512,
             )
+            planner_assignment = assignment
+            planner_response = response
             try:
                 schema, reasoning = self._parse_and_validate(response.content)
             except (ValueError, TypeError) as first_error:
                 logger.warning(
                     f"Planner │ First plan invalid ({first_error}); retrying once"
                 )
-                retry_response = await self._retry_generate(
+                retry_response, retry_assignment = await self._retry_generate(
                     assignment, messages, first_error
                 )
+                planner_assignment = retry_assignment
+                planner_response = retry_response
                 schema, reasoning = self._parse_and_validate(retry_response.content)
 
-            plan = self._apply_capacity(schema, reasoning, time_budget_minutes)
+            plan = self._apply_capacity(
+                schema, reasoning, question, time_budget_minutes
+            )
             plan.capacity = self._read_capacity(time_budget_minutes)
+            plan.capacity = self._read_capacity(time_budget_minutes)
+            self._attach_planner_provenance(plan, planner_assignment, planner_response)
             logger.info(
                 f"Planner │ Type={plan.problem_type}, Complexity={plan.complexity}, "
                 f"Team={len(plan.team_composition)} agents, Research={plan.needs_research}"
@@ -280,11 +303,12 @@ Respond with JSON only:
 
     async def _retry_generate(
         self, assignment: Any, messages: list[ChatMessage], error: Exception
-    ) -> Any:
+    ) -> tuple[Any, Any]:
         """Repeat the classification once, preferring a fallback model.
 
         Falls back to the original assignment when the router offers no
         alternative (e.g. duck-typed test routers without fallback_for).
+        Returns (response, assignment_used) so callers can record provenance.
         """
         retry_assignment = assignment
         fallback_for = getattr(self.router, "fallback_for", None)
@@ -310,12 +334,29 @@ Respond with JSON only:
                 ),
             ),
         ]
-        return await retry_assignment.provider.generate(
+        retry_response = await retry_assignment.provider.generate(
             messages=retry_messages,
             model=retry_assignment.model,
             temperature=0.1,
             max_tokens=512,
         )
+        return retry_response, retry_assignment
+
+    @staticmethod
+    def _attach_planner_provenance(plan: PlanResult, assignment: Any, response: Any) -> None:
+        """Record planner-call tokens on the plan (measurement only, never keys)."""
+        try:
+            plan.planner_provider = str(getattr(assignment, "provider_name", ""))
+            plan.planner_model = str(getattr(assignment, "model", ""))
+            plan.planner_family = str(getattr(assignment, "family", ""))
+            plan.planner_input_tokens = int(getattr(response, "input_tokens", 0) or 0)
+            plan.planner_output_tokens = int(getattr(response, "output_tokens", 0) or 0)
+            plan.planner_reasoning_tokens = int(
+                getattr(response, "reasoning_tokens", 0) or 0
+            )
+            plan.planner_total_tokens = int(getattr(response, "total_tokens", 0) or 0)
+        except (AttributeError, TypeError, ValueError):
+            pass
 
     def _parse_and_validate(self, content: str) -> tuple[PlanSchema, str]:
         """Extract JSON with the hardened extractor and validate the schema.
@@ -362,7 +403,11 @@ Respond with JSON only:
         return schema, reasoning
 
     def _apply_capacity(
-        self, schema: PlanSchema, reasoning: str, time_budget_minutes: int
+        self,
+        schema: PlanSchema,
+        reasoning: str,
+        question: str,
+        time_budget_minutes: int,
     ) -> PlanResult:
         """Clip the validated wish to what the capacity planner allows."""
         tier = self._tier_for_minutes(time_budget_minutes)
@@ -383,7 +428,7 @@ Respond with JSON only:
             {"agent_type": role, "role_description": ROLE_DESCRIPTIONS[role]}
             for role in roles
         ]
-        return PlanResult(
+        plan = PlanResult(
             problem_type=schema.problem_type,
             complexity=schema.complexity,
             team_composition=team,
@@ -393,6 +438,50 @@ Respond with JSON only:
             estimated_rounds=rounds,
             needs_code_execution=schema.needs_code_execution,
         )
+        return self._apply_research_or(question, plan, tier)
+
+    def _apply_research_or(
+        self, question: str, plan: PlanResult, tier: int
+    ) -> PlanResult:
+        """needs_research = LLM result OR cheap heuristic.
+
+        The LLM classifier false-negatives on plainly comparative,
+        evidence-seeking, or time-sensitive wording (observed live: a
+        "better than" comparison classified Research=False, so no search
+        ran and the answer cited nothing). The keyword heuristic never
+        overrides True → False; it only rescues missed research. When it
+        wins, a researcher joins the team if the tier ceiling has room,
+        and the reasoning records why. Fail-open: heuristic trouble keeps
+        the LLM verdict.
+        """
+        try:
+            heuristic_wants = heuristic_suggestion(question or "").needs_research
+        except Exception:  # noqa: BLE001 — heuristic must never break planning
+            return plan
+        if not heuristic_wants or plan.needs_research:
+            return plan
+        plan.needs_research = True
+        note = (
+            " Research enabled by heuristic (comparative / evidence-seeking / "
+            "time-sensitive wording) despite LLM=false."
+        )
+        if (
+            "researcher" not in plan.suggested_roles
+            and len(plan.team_composition) < (TIER_MAX_AGENTS[tier])
+        ):
+            plan.suggested_roles.append("researcher")
+            plan.team_composition.append(
+                {
+                    "agent_type": "researcher",
+                    "role_description": ROLE_DESCRIPTIONS["researcher"],
+                }
+            )
+            note += " Researcher added to the team."
+        else:
+            note += " Team unchanged (researcher present or tier team full)."
+        plan.reasoning = (plan.reasoning + note).strip()
+        logger.info(f"Planner │ Research OR-rule fired for tier {tier}")
+        return plan
 
     def _capacity_plan(
         self,

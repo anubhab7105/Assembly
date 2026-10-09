@@ -28,6 +28,7 @@ class ProviderResponse:
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+    reasoning_tokens: int = 0
     finish_reason: str = "stop"
     raw_response: dict | None = None
 

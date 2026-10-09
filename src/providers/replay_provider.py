@@ -92,6 +92,7 @@ def response_to_record(response: ProviderResponse) -> dict[str, Any]:
         "input_tokens": response.input_tokens,
         "output_tokens": response.output_tokens,
         "total_tokens": response.total_tokens,
+        "reasoning_tokens": response.reasoning_tokens,
         "finish_reason": response.finish_reason,
     }
 
@@ -106,6 +107,7 @@ def response_from_record(record: dict[str, Any]) -> ProviderResponse:
         input_tokens=body.get("input_tokens", 0),
         output_tokens=body.get("output_tokens", 0),
         total_tokens=body.get("total_tokens", 0),
+        reasoning_tokens=body.get("reasoning_tokens", 0),
         finish_reason=body.get("finish_reason", "stop"),
     )
 

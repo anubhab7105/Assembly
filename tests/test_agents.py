@@ -393,6 +393,59 @@ async def test_researcher_still_sees_search_results() -> None:
     assert "https://example.com/t" in prompt
 
 
+def test_researcher_prompt_has_no_search_instructions() -> None:
+    """The researcher is never told to search/browse: gpt-oss then emits
+    native browser.search turns and Groq 400s them (tool_use_failed). It
+    analyzes ONLY provided sources. The ban list pins instructional
+    phrasings (the old trigger first); the shared injection-defense note
+    (UNTRUSTED_SYSTEM_NOTE, which describes untrusted web content as data
+    to distrust, not instructions) and role-name words ("research") are
+    fine, so the check runs on the researcher's own wording. Kept in sync
+    with the mock router marker in mock_provider._ROUTE_MARKERS."""
+    from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
+
+    agent = ResearcherAgent(agent_id="a2", provider=MockProvider(), model="m")
+    agent.search_results = [
+        {
+            "title": "T",
+            "url": "https://example.com/t",
+            "snippet": "Neutral snippet.",
+        }
+    ]
+    texts = [
+        agent.build_system_prompt().split(UNTRUSTED_SYSTEM_NOTE)[0],
+        agent.build_user_prompt("Q?"),
+        agent.build_user_prompt(
+            "Q?",
+            {
+                "mode": "critique",
+                "round_number": 1,
+                "other_outputs": [
+                    {
+                        "agent_id": "agent_01",
+                        "agent_type": "solver",
+                        "position": "P.",
+                        "confidence": 0.9,
+                        "evidence": [],
+                    }
+                ],
+                "valid_agent_ids": ["agent_01"],
+            },
+        ),
+    ]
+    blob = "\n".join(texts).casefold()
+    for banned in (
+        "research the question thoroughly",
+        "web search results",
+        "search the web for",
+        "gather evidence",
+        "use a search engine",
+    ):
+        assert banned not in blob, banned
+    assert "provided sources" in blob
+    assert "no web browsing" in blob
+
+
 # ── Synthesizer ──────────────────────────────────────────────────────
 
 

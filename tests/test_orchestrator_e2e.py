@@ -27,12 +27,16 @@ async def test_full_execution_end_to_end(orchestrator: Orchestrator) -> None:
     assert result.debate_rounds >= 1
     assert 0.0 <= result.consensus_score <= 1.0
 
-    # Tokens are tracked: every non-planner mock call reports 30 tokens.
+    # Tokens are tracked: every mock call reports 30 tokens, planner
+    # included (the planner is a real quota-consuming call; excluding it
+    # undercounted each run and broke tpm accounting).
     providers: list[MockProvider] = list(orchestrator.router._providers.values())
     total_calls = sum(len(p.calls) for p in providers)
-    plan_calls = sum(1 for p in providers for c in p.calls if c["script_key"] == "plan")
     assert total_calls > 0
-    assert result.total_tokens == (total_calls - plan_calls) * 30
+    assert result.total_tokens == total_calls * 30
+    assert any(
+        entry.get("stage") == "planner" for entry in (result.call_log or [])
+    )
 
     # Events are published to the progress callback.
     event_types = {e["event_type"] for e in events}
