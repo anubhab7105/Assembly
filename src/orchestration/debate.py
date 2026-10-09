@@ -9,6 +9,7 @@ when teams are large or debates run for many rounds.
 """
 
 import asyncio
+from typing import Any
 
 from src.agents.base_agent import AgentOutput, BaseAgent
 from src.core.logging_config import logger
@@ -19,24 +20,33 @@ from src.orchestration.workspace import EventType, WorkspaceEvent, workspace
 class DebateManager:
     """
     Manages multi-round agent debates.
-    
+
     In each round:
     1. Each agent sees ALL other agents' latest positions (compressed)
     2. Each agent produces a critique / updated position
     3. Results are published to the shared workspace
-    
+
     Every round must resolve a disagreement, add evidence,
     improve a solution, remove an error, or increase confidence —
     not produce conversational filler (PRD Section 7.3).
     """
 
-    # Context compression limits
-    MAX_POSITION_CHARS = 1500    # Truncate long positions
-    MAX_EVIDENCE_ITEMS = 3       # Keep only top evidence points
-    MAX_REASONING_CHARS = 500    # Truncate reasoning
+    # Context compression limits (fallback when a model's context is unknown)
+    MAX_POSITION_CHARS = 1500  # Truncate long positions
+    MAX_EVIDENCE_ITEMS = 3  # Keep only top evidence points
+    MAX_REASONING_CHARS = 500  # Truncate reasoning
+    # Token budget shaping for known contexts (chars ≈ 4 per token).
+    MAX_DEBATE_PROMPT_TOKENS = 12000  # cap critique context even for huge windows
+    ANSWER_RESERVE_TOKENS = 4500  # max_tokens (4096) + margin for the reply
+    PROMPT_OVERHEAD_TOKENS = 500  # question + instructions around the context
+    MIN_PER_OTHER_CHARS = 1200  # floor so a critique stays usable
+    CHARS_PER_TOKEN = 4
 
-    def __init__(self, execution_id: str):
+    def __init__(self, execution_id: str, config: Any = None) -> None:
         self.execution_id = execution_id
+        # ModelsConfig for per-recipient context budgets; None keeps the
+        # legacy fixed caps (used by older call sites and unit tests).
+        self._config = config
 
     async def run_debate_round(
         self,
@@ -49,7 +59,7 @@ class DebateManager:
     ) -> list[AgentOutput]:
         """
         Run one debate round: all agents review each other's work in parallel.
-        
+
         Args:
             agents: Active agent instances.
             current_outputs: Each agent's latest output.
@@ -58,17 +68,14 @@ class DebateManager:
             timeout_s: per-critique wall-clock bound (stragglers become
                 stale carry-forwards instead of hanging the run).
             tracker: task registry for bulk cancel + leak detection.
-        
+
         Returns:
             Updated list of AgentOutput after debate.
         """
         logger.info(f"Debate  │ Round {round_number} — {len(agents)} agents debating")
 
-        # Build mapping of agent_id → output for quick lookup
+        # Previous outputs by agent for stale carry-forward on failure.
         output_map = {o.agent_id: o for o in current_outputs}
-
-        # Compress outputs to prevent context window bloat
-        compressed_outputs = self._compress_outputs(current_outputs)
 
         own_tracker = (
             tracker
@@ -76,12 +83,14 @@ class DebateManager:
             else TaskTracker(owner=f"{self.execution_id}:debate-{round_number}")
         )
 
-        # Each agent critiques all others IN PARALLEL
+        # Each agent critiques all others IN PARALLEL, compressed to fit
+        # THAT agent's own model context (per-recipient budgets).
         tasks = []
         for agent in agents:
-            # Filter out this agent's own output — they review everyone else
-            others = [o for o in compressed_outputs if o.agent_id != agent.agent_id]
-            if others:
+            others_raw = [o for o in current_outputs if o.agent_id != agent.agent_id]
+            if others_raw:
+                per_other = self._per_other_chars(agent, len(others_raw))
+                others = self._compress_outputs(others_raw, per_other)
                 coro = self._agent_critique(
                     agent, question, others, round_number, timeout_s
                 )
@@ -116,39 +125,99 @@ class DebateManager:
             else:
                 updated_outputs.append(result)
                 # Publish to workspace
-                await workspace.publish(WorkspaceEvent(
-                    event_type=EventType.CRITIQUE,
-                    agent_id=result.agent_id,
-                    execution_id=self.execution_id,
-                    round_number=round_number,
-                    data=result.to_dict(),
-                ))
+                await workspace.publish(
+                    WorkspaceEvent(
+                        event_type=EventType.CRITIQUE,
+                        agent_id=result.agent_id,
+                        execution_id=self.execution_id,
+                        round_number=round_number,
+                        data=result.to_dict(),
+                    )
+                )
 
-        logger.info(f"Debate  │ Round {round_number} complete — {len(updated_outputs)} outputs")
+        logger.info(
+            f"Debate  │ Round {round_number} complete — {len(updated_outputs)} outputs"
+        )
         return updated_outputs
 
-    def _compress_outputs(self, outputs: list[AgentOutput]) -> list[AgentOutput]:
+    def _context_tokens_for(self, agent: BaseAgent) -> int | None:
+        """Recipient model context window, or None when unknown."""
+        provider_name = getattr(getattr(agent, "provider", None), "provider_name", "")
+        model_id = getattr(agent, "model", "")
+        if self._config is None or not provider_name or not model_id:
+            return None
+        try:
+            context = self._config.limits_of(provider_name, model_id).context_tokens
+        except (KeyError, AttributeError):
+            return None
+        return context if isinstance(context, int) else None
+
+    def _per_other_chars(self, agent: BaseAgent, other_count: int) -> int | None:
+        """Chars allowed per other-agent output, or None for legacy caps.
+
+        Budget = min(recipient context, MAX_DEBATE_PROMPT_TOKENS) minus
+        headroom for the answer and prompt overhead — never the team
+        minimum. Unknown context falls back to the fixed caps with a
+        warning (never a crash).
+        """
+        if other_count <= 0:
+            return None
+        context = self._context_tokens_for(agent)
+        if context is None:
+            logger.warning(
+                "Debate  │ unknown context window for "
+                f"{getattr(getattr(agent, 'provider', None), 'provider_name', '?')}"
+                f"/{getattr(agent, 'model', '?')}; using fixed compression caps"
+            )
+            return None
+        budget_tokens = (
+            min(context, self.MAX_DEBATE_PROMPT_TOKENS)
+            - self.ANSWER_RESERVE_TOKENS
+            - self.PROMPT_OVERHEAD_TOKENS
+        )
+        if budget_tokens <= 0:
+            return self.MIN_PER_OTHER_CHARS
+        return max(
+            self.MIN_PER_OTHER_CHARS,
+            (budget_tokens * self.CHARS_PER_TOKEN) // other_count,
+        )
+
+    def _compress_outputs(
+        self, outputs: list[AgentOutput], per_other_chars: int | None = None
+    ) -> list[AgentOutput]:
         """
         Create compressed copies of agent outputs to reduce context window usage.
-        
+
         Truncates long positions, limits evidence items, and shortens reasoning.
+        With per_other_chars (from the recipient's budget) the position gets
+        3/4 and the reasoning 1/4; without it the legacy fixed caps apply.
         The original outputs are NOT modified — compressed copies are returned.
         """
+        position_cap = (
+            self.MAX_POSITION_CHARS
+            if per_other_chars is None
+            else per_other_chars * 3 // 4
+        )
+        reasoning_cap = (
+            self.MAX_REASONING_CHARS
+            if per_other_chars is None
+            else per_other_chars // 4
+        )
         compressed = []
         for o in outputs:
             # Truncate position
             position = o.position
-            if len(position) > self.MAX_POSITION_CHARS:
-                position = position[:self.MAX_POSITION_CHARS] + "... [truncated]"
+            if len(position) > position_cap:
+                position = position[:position_cap] + "... [truncated]"
 
             # Limit evidence items
-            evidence = o.evidence[:self.MAX_EVIDENCE_ITEMS]
+            evidence = o.evidence[: self.MAX_EVIDENCE_ITEMS]
 
             # Truncate reasoning summary
             reasoning_summary = o.reasoning_summary
-            if len(reasoning_summary) > self.MAX_REASONING_CHARS:
+            if len(reasoning_summary) > reasoning_cap:
                 reasoning_summary = (
-                    reasoning_summary[: self.MAX_REASONING_CHARS] + "... [truncated]"
+                    reasoning_summary[:reasoning_cap] + "... [truncated]"
                 )
 
             compressed.append(
@@ -162,7 +231,9 @@ class DebateManager:
                     evidence=evidence,
                     supports=o.supports,
                     disagrees_with=o.disagrees_with,
-                    remaining_uncertainty=o.remaining_uncertainty[:2],  # Cap uncertainties too
+                    remaining_uncertainty=o.remaining_uncertainty[
+                        :2
+                    ],  # Cap uncertainties too
                     sources=o.sources,
                     provider=o.provider,
                     model=o.model,
@@ -198,4 +269,3 @@ class DebateManager:
             return await agent.run(question)
         async with asyncio.timeout(timeout_s):
             return await agent.run(question)
-

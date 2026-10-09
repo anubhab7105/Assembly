@@ -92,11 +92,16 @@ class OpenAICompatibleProvider(AIProvider):
         limiter = get_limiter()
         try:
             async with await limiter.acquire(
-                self.provider_name, self._fingerprint, est_tokens=max_tokens
+                self.provider_name,
+                self._fingerprint,
+                model_name,
+                est_tokens=max_tokens,
             ):
                 data = await self._post_with_retry(payload)
         except RateLimited as exc:
-            limiter.report_429(self.provider_name, self._fingerprint, exc.retry_after)
+            limiter.report_429(
+                self.provider_name, self._fingerprint, model_name, exc.retry_after
+            )
             raise
         return self._to_response(data, model_name)
 

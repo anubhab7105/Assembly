@@ -6,9 +6,22 @@
 # first — the router tries candidates top-down, so tight time budgets get
 # the fast models without any code changes.
 #
-# FILLING PLACEHOLDERS: every `null` below must be replaced with the value
-# from your own provider dashboard (free tiers change often — re-check before
-# the demo). Each placeholder names the exact dashboard page to open.
+# SHAPE (one shape only — no legacy aliases):
+#   providers.<id>.models[]: {id, family, roles, scope, limits}
+#   limits: {rpm, rpd, tpm, context_tokens} — each is a positive int, the
+#     literal `unlimited` (provider enforces no limit there; the limiter
+#     skips it), or null (unknown).
+#   scope: `model` (limits enforced per key+model) or `account` (limits
+#     shared across the provider's models on one key, e.g. OpenRouter free).
+# There is NO provider-level `limits:` anymore — it was removed so a
+# half-migrated file fails validation loudly instead of routing on
+# stale numbers.
+#
+# FILL RULE: every value carries a source + checked-date comment. Never
+# invent numbers — fill them from the dashboard page named in the comment
+# (or `scripts/verify_models.py --save` output). Null on an ENABLED
+# provider fails startup loudly (validate_limits_filled); providers you
+# have not filled in must stay enabled: false.
 # Families must come from the KNOWN_FAMILIES set in src/providers/config.py
 # (gemini, llama, qwen, gpt-oss, deepseek, mistral, kimi, gemma, nemotron,
 # allam, phi). Unknown families fail startup loudly — that is intentional:
@@ -24,18 +37,14 @@ providers:
       - id: gemini-3.8-flash
         family: gemini
         roles: [solver, researcher, critic, synthesizer, planner]
-        # context_tokens: open aistudio.google.com → thoughtmodel docs → "context window"
-        context_tokens: null
-      - id: gemini-2.5-flash
-        family: gemini
-        roles: [solver, researcher, planner]
-        context_tokens: null
-      - id: gemini-2.5-pro
-        family: gemini
-        roles: [solver, critic, synthesizer]
-        context_tokens: null
-    # limits: aistudio.google.com → "Get API key" → rate limits for your tier
-    limits: {rpm: null, rpd: null, tpm: null}
+        scope: model
+        limits:
+          # rpm/rpd/tpm: pending re-probe (verify 2026-10-09 transport-error
+          # at 20 s; re-run with --provider gemini --timeout 60 first).
+          rpm: null # source: aistudio.google.com/rate-limit; checked: pending re-probe
+          rpd: null # source: aistudio.google.com/rate-limit; checked: pending re-probe
+          tpm: null # source: aistudio.google.com/rate-limit; checked: pending re-probe
+          context_tokens: 1000000 # source: aistudio.google.com/rate-limit; checked: pending re-probe
 
   groq:
     base: openai-compatible
@@ -46,36 +55,60 @@ providers:
       - id: openai/gpt-oss-20b
         family: gpt-oss
         roles: [solver, researcher, critic, planner]
-        # context_tokens: console.groq.com → Docs → Models → context window
-        context_tokens: null
+        scope: model
+        limits:
+          rpm: 30 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09
+          rpd: 1000 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09
+          tpm: 8000 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09
+          # Effective free-tier per-request limit, not the advertised context.
+          context_tokens: 8000 # source: console.groq.com/docs/rate-limits; checked: 2026-10-09
       - id: openai/gpt-oss-120b
         family: gpt-oss
         roles: [solver, critic, synthesizer]
-        context_tokens: null
+        scope: model
+        limits:
+          rpm: 30 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09
+          rpd: 1000 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09
+          tpm: 8000 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09
+          # Effective free-tier per-request limit, not the advertised context.
+          context_tokens: 8000 # source: console.groq.com/docs/rate-limits; checked: 2026-10-09
       - id: qwen/qwen3.8-27b
         family: qwen
         roles: [solver, researcher]
-        context_tokens: null
-    # limits: console.groq.com → Limits (requests/min and requests/day per model)
-    limits: {rpm: null, rpd: null, tpm: null}
+        scope: model
+        limits:
+          rpm: 30 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09
+          rpd: 1000 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09
+          tpm: 8000 # source: verify report headers + console.groq.com/docs/rate-limits; checked: 2026-10-09
+          # Effective free-tier per-request limit, not the advertised context.
+          context_tokens: 8000 # source: console.groq.com/docs/rate-limits; checked: 2026-10-09
 
   cerebras:
     base: openai-compatible
     url: https://api.cerebras.ai/v1
     key_url: https://cloud.cerebras.ai
-    enabled: true
+    # Disabled 2026-10-09: key returns 402 payment-required on every model
+    # (verify report); re-enable only with a funded key + filled limits.
+    enabled: false
     models:
       - id: gpt-oss-120b
         family: gpt-oss
         roles: [solver, critic, synthesizer]
-        # context_tokens: cloud.cerebras.ai → Docs → Models
-        context_tokens: null
+        scope: model
+        limits:
+          rpm: null # source: cloud.cerebras.ai billing/limits; checked: unfilled
+          rpd: null # source: cloud.cerebras.ai billing/limits; checked: unfilled
+          tpm: null # source: cloud.cerebras.ai billing/limits; checked: unfilled
+          context_tokens: null # source: cloud.cerebras.ai docs/models; checked: unfilled
       - id: qwen-3.8-27b
         family: qwen
         roles: [solver, researcher]
-        context_tokens: null
-    # limits: cloud.cerebras.ai → billing/limits page for your key
-    limits: {rpm: null, rpd: null, tpm: null}
+        scope: model
+        limits:
+          rpm: null # source: cloud.cerebras.ai billing/limits; checked: unfilled
+          rpd: null # source: cloud.cerebras.ai billing/limits; checked: unfilled
+          tpm: null # source: cloud.cerebras.ai billing/limits; checked: unfilled
+          context_tokens: null # source: cloud.cerebras.ai docs/models; checked: unfilled
 
   openrouter:
     base: openai-compatible
@@ -90,41 +123,52 @@ providers:
       - id: google/gemma-4-26b-a4b-it:free
         family: gemma
         roles: [solver, researcher, planner]
-        # context_tokens: openrouter.ai → model page → "Context"
-        context_tokens: null
+        # The free daily cap is shared across all free models on the key.
+        scope: account
+        limits:
+          rpm: 20 # source: openrouter.ai dashboard; checked: 2026-10-09
+          rpd: 50 # source: openrouter.ai dashboard (shared free-model cap); checked: 2026-10-09
+          tpm: unlimited # source: openrouter.ai dashboard (no token cap); checked: 2026-10-09
+          context_tokens: 262144 # source: openrouter.ai model page context; checked: 2026-10-09
       - id: nvidia/nemotron-3-super-120b-a12b:free
         family: nemotron
         roles: [solver, critic, synthesizer]
-        context_tokens: null
-    # limits: openrouter.ai → Keys → your key → rate limit / credits
-    limits: {rpm: null, rpd: null, tpm: null}
+        # The free daily cap is shared across all free models on the key.
+        scope: account
+        limits:
+          rpm: 20 # source: openrouter.ai dashboard; checked: 2026-10-09
+          rpd: 50 # source: openrouter.ai dashboard (shared free-model cap); checked: 2026-10-09
+          tpm: unlimited # source: openrouter.ai dashboard (no token cap); checked: 2026-10-09
+          context_tokens: 262144 # source: openrouter.ai model page context; checked: 2026-10-09
 
   mistral:
     base: openai-compatible
     url: https://api.mistral.ai/v1
     key_url: https://console.mistral.ai
-    enabled: true
+    # Disabled until a key is added (no MISTRAL_API_KEY locally 2026-10-09).
+    enabled: false
     models:
       # Verify the exact id in console.mistral.ai → Docs → Models (aliases
       # like -latest move; pin the dated id once you confirm it works).
       - id: mistral-small-latest
         family: mistral
         roles: [solver, critic]
-        # context_tokens: console.mistral.ai → Docs → Models
-        context_tokens: null
-    # limits: console.mistral.ai → Billing → rate limits for your tier
-    limits: {rpm: null, rpd: null, tpm: null}
+        scope: model
+        limits:
+          rpm: null # source: console.mistral.ai billing/rate-limits; checked: unfilled
+          rpd: null # source: console.mistral.ai billing/rate-limits; checked: unfilled
+          tpm: null # source: console.mistral.ai billing/rate-limits; checked: unfilled
+          context_tokens: null # source: console.mistral.ai docs/models; checked: unfilled
 
   nvidia:
     base: openai-compatible
     url: https://integrate.api.nvidia.com/v1
     key_url: https://build.nvidia.com
-    enabled: true
+    # Disabled until a key is added (no NVIDIA_API_KEY locally 2026-10-09).
+    enabled: false
     # No models filled in yet: add the ones you enabled at build.nvidia.com
     # (ids look like "vendor/model-name"), each with a valid family + roles.
     models: []
-    # limits: build.nvidia.com → your key → quota page
-    limits: {rpm: null, rpd: null, tpm: null}
 
   huggingface:
     base: huggingface
@@ -137,9 +181,18 @@ providers:
       - id: meta-llama/Meta-Llama-3-8B-Instruct
         family: llama
         roles: [solver, researcher]
-        context_tokens: null
+        scope: model
+        limits:
+          rpm: null # source: huggingface.co inference limits; checked: unfilled
+          rpd: null # source: huggingface.co inference limits; checked: unfilled
+          tpm: null # source: huggingface.co inference limits; checked: unfilled
+          context_tokens: null # source: huggingface.co model page; checked: unfilled
       - id: mistralai/Mistral-7B-Instruct-v0.3
         family: mistral
         roles: [solver, critic]
-        context_tokens: null
-    limits: {rpm: null, rpd: null, tpm: null}
+        scope: model
+        limits:
+          rpm: null # source: huggingface.co inference limits; checked: unfilled
+          rpd: null # source: huggingface.co inference limits; checked: unfilled
+          tpm: null # source: huggingface.co inference limits; checked: unfilled
+          context_tokens: null # source: huggingface.co model page; checked: unfilled

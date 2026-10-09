@@ -20,12 +20,39 @@ from src.providers.openai_compat import OpenAICompatibleProvider
 from src.providers.quota import get_limiter
 from src.providers.registry import ProviderDisabledError, get_provider
 from src.providers.router import ModelRouter
+from tests.conftest import make_models_yaml
 
 
 @pytest.fixture(autouse=True)
 def _fresh_quota_state() -> None:
     """generate() reports 429s into the shared limiter; reset per test."""
     get_limiter().reset()
+
+
+def _custom_providers() -> dict:
+    return {
+        "groq": [
+            {
+                "id": "groq-custom-fast",
+                "family": "gpt-oss",
+                "roles": ["solver", "planner"],
+            }
+        ],
+        "cerebras": [
+            {
+                "id": "cerebras-custom-strong",
+                "family": "qwen",
+                "roles": ["solver", "critic"],
+            }
+        ],
+        "openrouter": [
+            {
+                "id": "or-custom-research",
+                "family": "gemini",
+                "roles": ["researcher", "planner"],
+            }
+        ],
+    }
 
 
 SUCCESS_BODY = {
@@ -38,31 +65,6 @@ SUCCESS_BODY = {
     ],
     "usage": {"prompt_tokens": 5, "completion_tokens": 7, "total_tokens": 12},
 }
-
-CUSTOM_YAML = """
-providers:
-  groq:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: groq-custom-fast, family: gpt-oss, roles: [solver, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-  cerebras:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: cerebras-custom-strong, family: qwen, roles: [solver, critic], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-  openrouter:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: or-custom-research, family: gemini, roles: [researcher, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-"""
 
 
 def _messages():
@@ -94,26 +96,130 @@ def test_repo_catalog_loads_with_sane_entries() -> None:
 
 
 def test_unknown_family_fails_loudly(tmp_path) -> None:
-    path = tmp_path / "models.yaml"
-    path.write_text(
-        CUSTOM_YAML.replace("family: gpt-oss", "family: skynet"), encoding="utf-8"
-    )
+    providers = _custom_providers()
+    providers["groq"][0]["family"] = "skynet"
     with pytest.raises(ValidationError, match="unknown model family"):
-        load_models_config(path)
+        load_models_config(make_models_yaml(tmp_path, providers))
 
 
 def test_missing_field_fails_loudly(tmp_path) -> None:
-    path = tmp_path / "models.yaml"
-    path.write_text(
-        CUSTOM_YAML.replace("- {id: groq-custom-fast,", "- {"), encoding="utf-8"
-    )
+    providers = _custom_providers()
+    del providers["groq"][0]["id"]
     with pytest.raises(ValidationError):
-        load_models_config(path)
+        load_models_config(make_models_yaml(tmp_path, providers))
 
 
 def test_missing_file_fails_loudly(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
         load_models_config(tmp_path / "nope.yaml")
+
+
+def test_legacy_provider_limits_rejected(tmp_path) -> None:
+    """One shape only: provider-level `limits:` fails validation."""
+    path = tmp_path / "models.yaml"
+    path.write_text(
+        "providers:\n"
+        "  groq:\n"
+        "    base: openai-compatible\n"
+        "    url: http://127.0.0.1:9/v1\n"
+        "    enabled: true\n"
+        "    models:\n"
+        "      - id: m\n"
+        "        family: gpt-oss\n"
+        "        roles: [solver]\n"
+        "        scope: model\n"
+        "        limits: {rpm: 1, rpd: 1, tpm: 1, context_tokens: 100}\n"
+        "    limits: {rpm: 1, rpd: 1, tpm: 1}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError):
+        load_models_config(path)
+
+
+def test_unlimited_literal_accepted(tmp_path) -> None:
+    providers = _custom_providers()
+    providers["groq"][0]["limits"] = {"tpm": "unlimited"}
+    config = load_models_config(make_models_yaml(tmp_path, providers))
+    assert config.limits_of("groq", "groq-custom-fast").tpm == "unlimited"
+
+
+def test_tpd_optional_forms_accepted(tmp_path) -> None:
+    """tpd accepts int / "unlimited" / absent / null — none fail validation."""
+    from src.providers.config import validate_limits_filled
+
+    providers = _custom_providers()
+    providers["groq"][0]["limits"] = {"tpd": 50000}
+    providers["cerebras"][0]["limits"] = {"tpd": "unlimited"}
+    providers["openrouter"][0]["limits"] = {"tpd": None}
+    config = load_models_config(make_models_yaml(tmp_path, providers))
+    assert config.limits_of("groq", "groq-custom-fast").tpd == 50000
+    assert config.limits_of("cerebras", "cerebras-custom-strong").tpd == "unlimited"
+    assert config.limits_of("openrouter", "or-custom-research").tpd is None
+    validate_limits_filled(config)  # tpd never blocks enabled providers
+
+
+def test_limit_scope_defaults_to_model(tmp_path) -> None:
+    config = load_models_config(make_models_yaml(tmp_path, _custom_providers()))
+    assert config.scope_of("groq", "groq-custom-fast") == "model"
+
+
+def test_model_spec_unknown_ids_raise_key_error(tmp_path) -> None:
+    config = load_models_config(make_models_yaml(tmp_path, _custom_providers()))
+    with pytest.raises(KeyError):
+        config.model_spec("nope", "groq-custom-fast")
+    with pytest.raises(KeyError):
+        config.model_spec("groq", "nope")
+
+
+def test_validate_filled_passes_on_filled_catalog(tmp_path) -> None:
+    from src.providers.config import validate_limits_filled
+
+    validate_limits_filled(
+        load_models_config(make_models_yaml(tmp_path, _custom_providers()))
+    )
+
+
+def test_validate_filled_ignores_disabled_providers(tmp_path) -> None:
+    from src.providers.config import validate_limits_filled
+
+    providers = _custom_providers()
+    providers["groq"][0]["limits"] = {"rpm": None}
+    validate_limits_filled(
+        load_models_config(make_models_yaml(tmp_path, providers, enabled=False))
+    )
+
+
+def test_validate_filled_raises_on_enabled_nulls(tmp_path) -> None:
+    from src.providers.config import LimitsNotFilledError, validate_limits_filled
+
+    providers = _custom_providers()
+    providers["groq"][0]["limits"] = {"rpm": None}
+    with pytest.raises(LimitsNotFilledError, match="groq-custom-fast"):
+        validate_limits_filled(
+            load_models_config(make_models_yaml(tmp_path, providers))
+        )
+
+
+def test_repo_catalog_validation_flags_gemini() -> None:
+    from src.providers.config import LimitsNotFilledError, validate_limits_filled
+
+    with pytest.raises(LimitsNotFilledError, match="gemini-3.8-flash"):
+        validate_limits_filled(load_models_config())
+
+
+def test_router_skips_provider_with_unfilled_limits(tmp_path, monkeypatch) -> None:
+    from src.providers.config import LimitsNotFilledError, validate_provider_limits
+
+    providers = _custom_providers()
+    providers["groq"][0]["limits"] = {"rpm": None}
+    config = load_models_config(make_models_yaml(tmp_path, providers))
+    for pid in ("groq", "cerebras", "openrouter"):
+        monkeypatch.setattr(settings, f"{pid}_api_key", "test-key")
+    router = ModelRouter(config=config)
+    assert "groq" not in router.get_available_providers()
+    assert router.get_live_count() == 2
+    with pytest.raises(LimitsNotFilledError, match="LIMITS NOT FILLED"):
+        validate_provider_limits("groq", config.providers["groq"])
 
 
 # ── Generic provider: success ─────────────────────────────────────────
@@ -259,8 +365,7 @@ def test_registry_rejects_unknown_and_disabled() -> None:
 
 
 def test_model_ids_come_from_yaml_only(tmp_path, monkeypatch) -> None:
-    path = tmp_path / "models.yaml"
-    path.write_text(CUSTOM_YAML, encoding="utf-8")
+    path = make_models_yaml(tmp_path, _custom_providers())
     for pid in ("groq", "cerebras", "openrouter"):
         monkeypatch.setattr(settings, f"{pid}_api_key", "test-key")
 
@@ -270,7 +375,8 @@ def test_model_ids_come_from_yaml_only(tmp_path, monkeypatch) -> None:
     assert router.route("solver").model == "groq-custom-fast"
 
     path.write_text(
-        CUSTOM_YAML.replace("groq-custom-fast", "groq-turbo"), encoding="utf-8"
+        path.read_text(encoding="utf-8").replace("groq-custom-fast", "groq-turbo"),
+        encoding="utf-8",
     )
     router2 = ModelRouter(config=load_models_config(path))
     assert router2.route("solver").model == "groq-turbo"

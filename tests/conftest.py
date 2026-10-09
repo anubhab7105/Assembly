@@ -8,8 +8,10 @@ default mock plan sets needs_research=False so no search HTTP occurs.
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
+import yaml
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -105,6 +107,62 @@ class MockRouter:
 def fake_key() -> str:
     """Sentinel secret: must never appear in logs, DB rows, or responses."""
     return "sk-test-FAKE-KEY-DO-NOT-USE-7f3a9c4e2b"
+
+
+# ── New-shape models.yaml builder (single source for test catalogs) ──
+
+DEFAULT_TEST_LIMITS: dict[str, Any] = {
+    "rpm": 60,
+    "rpd": 1000,
+    "tpm": 10000,
+    "context_tokens": 32000,
+}
+
+TEST_BASE_URL = "http://127.0.0.1:9/v1"
+
+
+def make_models_yaml(
+    tmp_path: Path,
+    providers: dict[str, list[dict[str, Any]]],
+    *,
+    base: str = "openai-compatible",
+    url: str = TEST_BASE_URL,
+    enabled: bool | dict[str, bool] = True,
+    filename: str = "models.yaml",
+) -> Path:
+    """Write a new-shape tmp models.yaml for tests. Returns the path.
+
+    providers maps provider id → list of model dicts with id/family/roles
+    plus optional scope and (partial) limits. Omitted scope/limit fields
+    default to model scope + DEFAULT_TEST_LIMITS (all filled, so the
+    router admits the provider); pass explicit values — including None
+    for unknown or "unlimited" — to exercise validation/quota paths.
+    Keys deliberately omitted from a model dict (e.g. no "id") stay
+    omitted so loader validation tests keep failing loudly.
+    """
+    doc: dict[str, Any] = {"providers": {}}
+    for provider_id, models in providers.items():
+        flag = enabled if isinstance(enabled, bool) else enabled.get(provider_id, True)
+        rendered: list[dict[str, Any]] = []
+        for spec in models:
+            merged: dict[str, Any] = dict(DEFAULT_TEST_LIMITS)
+            merged.update(spec.get("limits") or {})
+            entry: dict[str, Any] = {}
+            for field in ("id", "family", "roles"):
+                if field in spec:
+                    entry[field] = spec[field]
+            entry["scope"] = spec.get("scope", "model")
+            entry["limits"] = merged
+            rendered.append(entry)
+        doc["providers"][provider_id] = {
+            "base": base,
+            "url": url,
+            "enabled": flag,
+            "models": rendered,
+        }
+    path = Path(tmp_path) / filename
+    path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    return path
 
 
 @pytest.fixture(autouse=True)

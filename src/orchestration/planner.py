@@ -415,6 +415,8 @@ Respond with JSON only:
                     provider=str(entry.get("provider", "unknown")),
                     rpm_limit=entry.get("rpm_limit"),
                     rpd_remaining=entry.get("rpd_remaining"),
+                    tpm_limit=entry.get("tpm_limit"),
+                    tpd_remaining=entry.get("tpd_remaining"),
                 )
                 for entry in snapshot()
             ]

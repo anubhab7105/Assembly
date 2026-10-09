@@ -158,10 +158,21 @@ async def providers_status(
         if available:
             families.update(provider_families)
             fingerprint = fingerprint_key(reveal(held[provider_id]))
-            remaining = limiter.remaining(provider_id, fingerprint)
-            entry.rpm_remaining = remaining["rpm_remaining"]
-            entry.rpd_remaining = remaining["rpd_remaining"]
-            entry.cooldown_seconds = remaining["cooldown_seconds"]
+            rpm_left: list[int] = []
+            rpd_left: list[int] = []
+            worst_cooldown = 0.0
+            for model in spec.models:
+                remaining = limiter.remaining(provider_id, fingerprint, model.id)
+                if remaining["rpm_remaining"] is not None:
+                    rpm_left.append(remaining["rpm_remaining"])
+                if remaining["rpd_remaining"] is not None:
+                    rpd_left.append(remaining["rpd_remaining"])
+                worst_cooldown = max(
+                    worst_cooldown, float(remaining["cooldown_seconds"] or 0.0)
+                )
+            entry.rpm_remaining = min(rpm_left) if rpm_left else None
+            entry.rpd_remaining = min(rpd_left) if rpd_left else None
+            entry.cooldown_seconds = worst_cooldown
             known = [
                 value
                 for value in (entry.rpm_remaining, entry.rpd_remaining)

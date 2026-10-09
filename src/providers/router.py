@@ -20,8 +20,14 @@ from pydantic import SecretStr
 
 from src.core.keystore import get_keystore, reveal
 from src.core.logging_config import logger
+from src.orchestration.capacity import AVG_TOKENS_PER_CALL
 from src.providers.base import AIProvider
-from src.providers.config import ModelsConfig, load_models_config
+from src.providers.config import (
+    LimitsNotFilledError,
+    ModelsConfig,
+    load_models_config,
+    validate_provider_limits,
+)
 from src.providers.quota import fingerprint_key, get_limiter
 from src.providers.registry import get_provider
 
@@ -131,6 +137,11 @@ class ModelRouter:
                 logger.warning(f"Router  │ ✗ {provider_id} provider — no API key")
                 continue
             try:
+                validate_provider_limits(provider_id, spec)
+            except LimitsNotFilledError as exc:
+                logger.error(f"Router  │ ✗ {provider_id} provider — {exc}")
+                continue
+            try:
                 provider = get_provider(provider_id, key, config=self.config)
                 if provider.is_available():
                     self._providers[provider_id] = provider
@@ -179,19 +190,29 @@ class ModelRouter:
                 return model.family
         return ""
 
-    def _usable(self, provider_id: str) -> bool:
-        """Live and not quota-exhausted (cooling down or daily quota spent).
+    def _usable_model(self, provider_id: str, model_id: str) -> bool:
+        """Live and not quota-exhausted for one model (cooldown or spent bucket).
 
-        Fail-open: limiter trouble never removes a provider from routing;
+        Fail-open: limiter trouble never removes a model from routing;
         acquire() still enforces at call time.
         """
         fingerprint = self._fingerprints.get(provider_id)
         if fingerprint is None:
             return True
         try:
-            return not self._limiter.is_exhausted(provider_id, fingerprint)
+            return not self._limiter.is_exhausted(provider_id, fingerprint, model_id)
         except Exception:  # noqa: BLE001 — quota must never break routing
             return True
+
+    def _usable(self, provider_id: str) -> bool:
+        """Live and not quota-exhausted on every model (legacy helper)."""
+        try:
+            models = self.config.providers[provider_id].models
+        except KeyError:
+            return True
+        if not models:
+            return True
+        return any(self._usable_model(provider_id, model.id) for model in models)
 
     def _affordable(self, time_budget_minutes: int) -> dict[str, bool]:
         """Providers able to afford a solve+critique pair for this budget.
@@ -232,14 +253,14 @@ class ModelRouter:
         usable = [
             (pid, mid, fam)
             for pid, mid, fam in self._role_models(role)
-            if self._usable(pid) and affordable.get(pid, True)
+            if self._usable_model(pid, mid) and affordable.get(pid, True)
         ]
         if usable:
             return usable
         fallback = [
             (pid, mid, fam)
             for pid, mid, fam in self._role_models(role)
-            if self._usable(pid)
+            if self._usable_model(pid, mid)
         ]
         if fallback:
             logger.warning(
@@ -248,10 +269,13 @@ class ModelRouter:
         return fallback
 
     def capacity_estimate(self, time_budget_minutes: int = 3) -> dict[str, object]:
-        """Affordable calls per key for the planner (WORKFLOW capacity rule).
+        """Affordable calls per provider for the planner (WORKFLOW capacity rule).
 
-        calls_now = min(rpm × minutes, rpd remaining); total × 0.7 margin.
-        Unknown limits yield None (unlimited-for-planning, not zero).
+        Per quota bucket: calls_now = min(rpm × minutes, rpd remaining,
+        tpm × minutes / AVG_TOKENS_PER_CALL, tpd / AVG_TOKENS_PER_CALL);
+        a provider totals its buckets × 0.7 margin (account-scope models
+        share one bucket and are counted once). Unknown limits yield None
+        (unlimited-for-planning, not zero).
         """
         per_provider: dict[str, int | None] = {}
         for provider_id in self._providers:
@@ -260,50 +284,108 @@ class ModelRouter:
                 per_provider[provider_id] = None
                 continue
             try:
-                remaining = self._limiter.remaining(provider_id, fingerprint)
+                buckets: dict[str, dict[str, Any]] = {}
+                for model in self.config.providers[provider_id].models:
+                    remaining = self._limiter.remaining(
+                        provider_id, fingerprint, model.id
+                    )
+                    key = (
+                        "" if remaining.get("scope", "model") == "account" else model.id
+                    )
+                    buckets.setdefault(key, remaining)
+                subtotals = []
+                for remaining in buckets.values():
+                    options = []
+                    if remaining["rpm_limit"] is not None:
+                        options.append(remaining["rpm_limit"] * time_budget_minutes)
+                    if remaining["rpd_limit"] is not None:
+                        options.append(remaining["rpd_remaining"])
+                    if remaining["tpm_limit"] is not None:
+                        options.append(
+                            remaining["tpm_limit"]
+                            * time_budget_minutes
+                            // AVG_TOKENS_PER_CALL
+                        )
+                    if remaining["tpd_limit"] is not None:
+                        options.append(
+                            remaining["tpd_remaining"] // AVG_TOKENS_PER_CALL
+                        )
+                    if options:
+                        subtotals.append(int(min(options) * 0.7))
+                per_provider[provider_id] = sum(subtotals) if subtotals else None
             except Exception:  # noqa: BLE001 — unknown capacity, not zero
                 per_provider[provider_id] = None
                 continue
-            options = []
-            if remaining["rpm_limit"] is not None:
-                options.append(remaining["rpm_limit"] * time_budget_minutes)
-            if remaining["rpd_limit"] is not None:
-                options.append(remaining["rpd_remaining"])
-            per_provider[provider_id] = int(min(options) * 0.7) if options else None
         known = [v for v in per_provider.values() if v is not None]
         return {"per_provider": per_provider, "total": sum(known) if known else None}
 
     def quota_snapshot(self) -> list[dict[str, Any]]:
-        """Per live key: provider + quota COUNTS (limits, remaining calls).
+        """Per quota bucket: provider + model + quota COUNTS.
 
         Read-only input for the capacity planner (WORKFLOW section 4).
-        Counts only — fingerprints and raw keys never leave the router.
-        Unknown limits stay None (unlimited-for-planning, fail-open).
+        Account-scope models share one bucket and appear once (as the
+        first model). Counts only — fingerprints and raw keys never leave
+        the router. Unknown limits stay None (unlimited-for-planning).
         """
         snapshot: list[dict[str, Any]] = []
         for provider_id in self._providers:
-            rpm_limit: int | None = None
-            rpd_remaining: int | None = None
-            cooldown_seconds: float = 0.0
             try:
                 spec = self.config.providers.get(provider_id)
-                if spec is not None and spec.limits is not None:
-                    rpm_limit = spec.limits.rpm
+                models = spec.models if spec is not None else []
                 fingerprint = self._fingerprints.get(provider_id)
-                if fingerprint is not None:
-                    remaining = self._limiter.remaining(provider_id, fingerprint)
-                    rpd_remaining = remaining.get("rpd_remaining")
-                    cooldown_seconds = float(remaining.get("cooldown_seconds") or 0.0)
+                seen_buckets: set[str] = set()
+                for model in models:
+                    scope = model.scope
+                    bucket = "" if scope == "account" else model.id
+                    if bucket in seen_buckets:
+                        continue
+                    seen_buckets.add(bucket)
+                    rpm_limit: int | None = None
+                    rpd_remaining: int | None = None
+                    tpm_limit: int | None = None
+                    tpd_remaining: int | None = None
+                    cooldown_seconds: float = 0.0
+                    if fingerprint is not None:
+                        remaining = self._limiter.remaining(
+                            provider_id, fingerprint, model.id
+                        )
+                        rpm_limit = remaining.get("rpm_limit")
+                        rpd_remaining = remaining.get("rpd_remaining")
+                        tpm_limit = remaining.get("tpm_limit")
+                        tpd_remaining = remaining.get("tpd_remaining")
+                        cooldown_seconds = float(
+                            remaining.get("cooldown_seconds") or 0.0
+                        )
+                    else:
+                        limits = model.limits
+                        rpm_limit = limits.rpm if isinstance(limits.rpm, int) else None
+                    snapshot.append(
+                        {
+                            "provider": provider_id,
+                            "model": model.id,
+                            "scope": scope,
+                            "rpm_limit": rpm_limit,
+                            "rpd_remaining": rpd_remaining,
+                            "tpm_limit": tpm_limit,
+                            "tpd_remaining": tpd_remaining,
+                            "cooldown_seconds": cooldown_seconds,
+                        }
+                    )
+                if not models:
+                    snapshot.append(
+                        {
+                            "provider": provider_id,
+                            "model": "",
+                            "scope": "model",
+                            "rpm_limit": None,
+                            "rpd_remaining": None,
+                            "tpm_limit": None,
+                            "tpd_remaining": None,
+                            "cooldown_seconds": 0.0,
+                        }
+                    )
             except Exception:  # noqa: BLE001, S110 — quota must never break planning
                 pass
-            snapshot.append(
-                {
-                    "provider": provider_id,
-                    "rpm_limit": rpm_limit,
-                    "rpd_remaining": rpd_remaining,
-                    "cooldown_seconds": cooldown_seconds,
-                }
-            )
         return snapshot
 
     def available_families(self) -> list[str]:
@@ -462,7 +544,7 @@ class ModelRouter:
             (pid, mid, fam)
             for pid, mid, fam in self._role_models(decision.role or "solver")
             if (pid, mid) != (decision.provider_name, decision.model)
-            and self._usable(pid)
+            and self._usable_model(pid, mid)
         ]
         different_family = [c for c in pool if c[2] != decision.family]
         same_family = [
@@ -529,7 +611,9 @@ class ModelRouter:
             )
             if model is not None:
                 affordable = self._affordable(time_budget_minutes)
-                if affordable.get(prefer_provider, True):
+                if affordable.get(prefer_provider, True) and self._usable_model(
+                    prefer_provider, model.id
+                ):
                     return RoutingDecision(
                         provider=self._providers[prefer_provider],
                         model=model.id,

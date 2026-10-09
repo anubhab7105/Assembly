@@ -28,41 +28,81 @@ from src.providers.quota import (
     today_str,
 )
 from src.providers.router import ModelRouter
+from tests.conftest import make_models_yaml
 
-CUSTOM_YAML = """
-providers:
-  alpha:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: alpha-fast, family: gpt-oss, roles: [solver, planner], context_tokens: null}
-    limits: {rpm: 2, rpd: 10, tpm: null}
-  beta:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: beta-strong, family: qwen, roles: [solver, critic, synthesizer], context_tokens: null}
-    limits: {rpm: 1000, rpd: 1000, tpm: null}
-  gamma:
-    base: openai-compatible
-    url: http://127.0.0.1:9/v1
-    enabled: true
-    models:
-      - {id: gamma-flash, family: gemini, roles: [researcher, planner], context_tokens: null}
-    limits: {rpm: null, rpd: null, tpm: null}
-"""
+BASE_LIMITS = {"rpm": 1000, "rpd": 1000, "tpm": 10000, "context_tokens": 32000}
 
-DAY_YAML = CUSTOM_YAML.replace(
-    "- {id: alpha-fast, family: gpt-oss, roles: [solver, planner], context_tokens: null}",
-    "- {id: solo-day, family: gpt-oss, roles: [solver, planner], context_tokens: null}",
-).replace("{rpm: 2, rpd: 10, tpm: null}", "{rpm: 1000, rpd: 3, tpm: null}", 1)
 
-TPM_YAML = CUSTOM_YAML.replace(
-    "- {id: alpha-fast, family: gpt-oss, roles: [solver, planner], context_tokens: null}",
-    "- {id: solo-tpm, family: gpt-oss, roles: [solver, planner], context_tokens: null}",
-).replace("{rpm: 2, rpd: 10, tpm: null}", "{rpm: 1000, rpd: null, tpm: 100}", 1)
+def _quota_providers() -> dict:
+    """alpha (tight rpm) / beta (roomy) / gamma (defaults), all filled."""
+    return {
+        "alpha": [
+            {
+                "id": "alpha-fast",
+                "family": "gpt-oss",
+                "roles": ["solver", "planner"],
+                "limits": {"rpm": 2, "rpd": 10, "tpm": "unlimited"},
+            }
+        ],
+        "beta": [
+            {
+                "id": "beta-strong",
+                "family": "qwen",
+                "roles": ["solver", "critic", "synthesizer"],
+                "limits": dict(BASE_LIMITS),
+            }
+        ],
+        "gamma": [
+            {
+                "id": "gamma-flash",
+                "family": "gemini",
+                "roles": ["researcher", "planner"],
+                "limits": dict(BASE_LIMITS),
+            }
+        ],
+    }
+
+
+def _day_providers() -> dict:
+    """alpha with a tiny daily quota (model renamed to prove yaml-only ids)."""
+    providers = _quota_providers()
+    providers["alpha"] = [
+        {
+            "id": "solo-day",
+            "family": "gpt-oss",
+            "roles": ["solver", "planner"],
+            "limits": {"rpm": 1000, "rpd": 3, "tpm": "unlimited"},
+        }
+    ]
+    return providers
+
+
+def _tpm_providers() -> dict:
+    """alpha with a tiny token-per-minute window."""
+    providers = _quota_providers()
+    providers["alpha"] = [
+        {
+            "id": "solo-tpm",
+            "family": "gpt-oss",
+            "roles": ["solver", "planner"],
+            "limits": {"rpm": 1000, "rpd": "unlimited", "tpm": 100},
+        }
+    ]
+    return providers
+
+
+def _tpd_providers() -> dict:
+    """alpha with a tiny token-per-day budget (tracked like rpd)."""
+    providers = _quota_providers()
+    providers["alpha"] = [
+        {
+            "id": "solo-tpd",
+            "family": "gpt-oss",
+            "roles": ["solver", "planner"],
+            "limits": {"rpm": 1000, "rpd": "unlimited", "tpm": "unlimited", "tpd": 200},
+        }
+    ]
+    return providers
 
 
 def _factory():
@@ -73,9 +113,8 @@ def _factory():
     return sessionmaker(bind=engine)
 
 
-def _limiter(tmp_path, yaml_text=CUSTOM_YAML, **kwargs):
-    path = tmp_path / "models.yaml"
-    path.write_text(yaml_text, encoding="utf-8")
+def _limiter(tmp_path, providers=None, **kwargs):
+    path = make_models_yaml(tmp_path, providers or _quota_providers())
     config = load_models_config(path)
     args = {
         "config": config,
@@ -106,12 +145,12 @@ def test_fingerprint_stable_opaque_and_salted() -> None:
 async def test_rpm_window_waits_for_slot(tmp_path) -> None:
     limiter, _ = _limiter(tmp_path)
     fingerprint = fingerprint_key("k1")
-    async with await limiter.acquire("alpha", fingerprint):
+    async with await limiter.acquire("alpha", fingerprint, "alpha-fast"):
         pass
-    async with await limiter.acquire("alpha", fingerprint):
+    async with await limiter.acquire("alpha", fingerprint, "alpha-fast"):
         pass
     started = time.monotonic()
-    async with await limiter.acquire("alpha", fingerprint):
+    async with await limiter.acquire("alpha", fingerprint, "alpha-fast"):
         pass
     assert time.monotonic() - started >= 1.8
 
@@ -119,22 +158,22 @@ async def test_rpm_window_waits_for_slot(tmp_path) -> None:
 async def test_rpm_exhaustion_raises_when_wait_too_long(tmp_path) -> None:
     limiter, _ = _limiter(tmp_path, max_wait_seconds=0.3)
     fingerprint = fingerprint_key("k1")
-    async with await limiter.acquire("alpha", fingerprint):
+    async with await limiter.acquire("alpha", fingerprint, "alpha-fast"):
         pass
-    async with await limiter.acquire("alpha", fingerprint):
+    async with await limiter.acquire("alpha", fingerprint, "alpha-fast"):
         pass
     with pytest.raises(QuotaExhausted):
-        await limiter.acquire("alpha", fingerprint)
+        await limiter.acquire("alpha", fingerprint, "alpha-fast")
 
 
 async def test_tpm_window_counts_estimated_tokens(tmp_path) -> None:
-    limiter, _ = _limiter(tmp_path, yaml_text=TPM_YAML, max_wait_seconds=0.5)
+    limiter, _ = _limiter(tmp_path, providers=_tpm_providers(), max_wait_seconds=0.5)
     fingerprint = fingerprint_key("k1")
-    async with await limiter.acquire("alpha", fingerprint, est_tokens=60):
+    async with await limiter.acquire("alpha", fingerprint, "solo-tpm", est_tokens=60):
         pass
-    assert limiter.remaining("alpha", fingerprint)["tpm_remaining"] == 40
+    assert limiter.remaining("alpha", fingerprint, "solo-tpm")["tpm_remaining"] == 40
     with pytest.raises(QuotaExhausted):
-        await limiter.acquire("alpha", fingerprint, est_tokens=60)
+        await limiter.acquire("alpha", fingerprint, "solo-tpm", est_tokens=60)
 
 
 async def test_parallel_calls_share_concurrency_cap(tmp_path) -> None:
@@ -145,7 +184,7 @@ async def test_parallel_calls_share_concurrency_cap(tmp_path) -> None:
 
     async def worker() -> None:
         nonlocal active, peak
-        async with await limiter.acquire("beta", fingerprint):
+        async with await limiter.acquire("beta", fingerprint, "beta-strong"):
             active += 1
             peak = max(peak, active)
             await asyncio.sleep(0.2)
@@ -162,23 +201,23 @@ async def test_parallel_calls_share_concurrency_cap(tmp_path) -> None:
 async def test_429_report_triggers_cooldown(tmp_path) -> None:
     limiter, _ = _limiter(tmp_path)
     fingerprint = fingerprint_key("k1")
-    async with await limiter.acquire("alpha", fingerprint):
+    async with await limiter.acquire("alpha", fingerprint, "alpha-fast"):
         pass
-    assert not limiter.is_exhausted("alpha", fingerprint)
-    limiter.report_429("alpha", fingerprint, retry_after=60.0)
-    assert limiter.is_exhausted("alpha", fingerprint)
-    assert limiter.remaining("alpha", fingerprint)["cooldown_seconds"] > 0
+    assert not limiter.is_exhausted("alpha", fingerprint, "alpha-fast")
+    limiter.report_429("alpha", fingerprint, "alpha-fast", retry_after=60.0)
+    assert limiter.is_exhausted("alpha", fingerprint, "alpha-fast")
+    assert limiter.remaining("alpha", fingerprint, "alpha-fast")["cooldown_seconds"] > 0
     started = time.monotonic()
     with pytest.raises(QuotaExhausted):
-        await limiter.acquire("alpha", fingerprint)
+        await limiter.acquire("alpha", fingerprint, "alpha-fast")
     assert time.monotonic() - started < 1.0
 
 
 async def test_429_without_retry_after_uses_default(tmp_path) -> None:
     limiter, _ = _limiter(tmp_path)
     fingerprint = fingerprint_key("k1")
-    limiter.report_429("alpha", fingerprint, retry_after=None)
-    assert limiter.remaining("alpha", fingerprint)["cooldown_seconds"] > 0
+    limiter.report_429("alpha", fingerprint, "alpha-fast", retry_after=None)
+    assert limiter.remaining("alpha", fingerprint, "alpha-fast")["cooldown_seconds"] > 0
 
 
 # ── Daily counters + rollover ─────────────────────────────────────
@@ -186,27 +225,33 @@ async def test_429_without_retry_after_uses_default(tmp_path) -> None:
 
 async def test_day_rollover_resets_counters(tmp_path) -> None:
     factory = _factory()
-    limiter, _config = _limiter(tmp_path, yaml_text=DAY_YAML, session_factory=factory)
+    limiter, _config = _limiter(
+        tmp_path, providers=_day_providers(), session_factory=factory
+    )
     fingerprint = fingerprint_key("k-day")
     yesterday = (date.fromisoformat(today_str()) - timedelta(days=1)).isoformat()
 
     db = factory()
     db.add(
         QuotaUsage(
-            provider="alpha", key_fingerprint=fingerprint, day=yesterday, count=3
+            provider="alpha",
+            key_fingerprint=fingerprint,
+            day=yesterday,
+            model_id="solo-day",
+            count=3,
         )
     )
     db.commit()
     db.close()
 
-    assert limiter.remaining("alpha", fingerprint)["rpd_remaining"] == 3
+    assert limiter.remaining("alpha", fingerprint, "solo-day")["rpd_remaining"] == 3
     for _ in range(3):
-        async with await limiter.acquire("alpha", fingerprint):
+        async with await limiter.acquire("alpha", fingerprint, "solo-day"):
             pass
-    assert limiter.remaining("alpha", fingerprint)["rpd_remaining"] == 0
+    assert limiter.remaining("alpha", fingerprint, "solo-day")["rpd_remaining"] == 0
     with pytest.raises(QuotaExhausted):
-        await limiter.acquire("alpha", fingerprint)
-    assert limiter.is_exhausted("alpha", fingerprint)
+        await limiter.acquire("alpha", fingerprint, "solo-day")
+    assert limiter.is_exhausted("alpha", fingerprint, "solo-day")
 
     db = factory()
     rows = db.query(QuotaUsage).filter(QuotaUsage.provider == "alpha").all()
@@ -215,6 +260,7 @@ async def test_day_rollover_resets_counters(tmp_path) -> None:
     assert by_day[today_str()] == 3
     for row in rows:
         assert row.key_fingerprint == fingerprint
+        assert row.model_id == "solo-day"
         assert "k-day" not in row.key_fingerprint
     db.close()
 
@@ -229,7 +275,7 @@ def test_router_skips_exhausted_key(tmp_path) -> None:
     assert router.get_live_count() == 3
     assert router.route("solver").provider_name == "alpha"
 
-    limiter.report_429("alpha", fingerprint_key("k1"), retry_after=60.0)
+    limiter.report_429("alpha", fingerprint_key("k1"), "alpha-fast", retry_after=60.0)
     skipped = router.route("solver")
     assert skipped.provider_name == "beta"
     assert skipped.model == "beta-strong"
@@ -264,5 +310,202 @@ async def test_status_reflects_limiter_remaining() -> None:
         assert entry.cooldown_seconds >= 0
 
 
+def test_account_scope_counts_one_shared_pool(tmp_path) -> None:
+    """OpenRouter-style: two account-scope models share ONE rpd pool —
+    the snapshot lists it once and capacity counts it once (35, not 70)."""
+    from src.orchestration.capacity import KeyBudget, affordable_calls
+
+    providers = {
+        "or": [
+            {
+                "id": "free-a",
+                "family": "gemma",
+                "roles": ["solver"],
+                "scope": "account",
+                "limits": {"rpm": 20, "rpd": 50, "tpm": "unlimited"},
+            },
+            {
+                "id": "free-b",
+                "family": "nemotron",
+                "roles": ["solver"],
+                "scope": "account",
+                "limits": {"rpm": 20, "rpd": 50, "tpm": "unlimited"},
+            },
+        ],
+    }
+    limiter, config = _limiter(tmp_path, providers=providers)
+    router = ModelRouter(config=config, keys={"or": "k1"}, limiter=limiter)
+    entries = [e for e in router.quota_snapshot() if e["provider"] == "or"]
+    assert len(entries) == 1
+    keys = [
+        KeyBudget(
+            provider=e["provider"],
+            rpm_limit=e["rpm_limit"],
+            rpd_remaining=e["rpd_remaining"],
+            tpm_limit=e.get("tpm_limit"),
+            tpd_remaining=e.get("tpd_remaining"),
+        )
+        for e in entries
+    ]
+    assert affordable_calls(keys, 5) == int(min(100, 50) * 0.7) == 35
+
+
 def test_shared_singleton_exists() -> None:
     assert get_limiter() is get_limiter()
+
+
+# ── Scopes: model buckets vs shared account buckets ───────────────
+
+
+def _scoped_providers() -> dict:
+    return {
+        "solo": [
+            {
+                "id": "solo-a",
+                "family": "qwen",
+                "roles": ["solver"],
+                "limits": {"rpm": 1000, "rpd": 5, "tpm": "unlimited"},
+            },
+            {
+                "id": "solo-b",
+                "family": "gemini",
+                "roles": ["solver"],
+                "limits": {"rpm": 1000, "rpd": 5, "tpm": "unlimited"},
+            },
+        ],
+        "shared": [
+            {
+                "id": "shared-a",
+                "family": "qwen",
+                "roles": ["solver"],
+                "scope": "account",
+                "limits": {"rpm": 1000, "rpd": 4, "tpm": "unlimited"},
+            },
+            {
+                "id": "shared-b",
+                "family": "gemini",
+                "roles": ["solver"],
+                "scope": "account",
+                "limits": {"rpm": 1000, "rpd": 4, "tpm": "unlimited"},
+            },
+        ],
+    }
+
+
+async def test_model_scope_buckets_are_independent(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path, providers=_scoped_providers())
+    fingerprint = fingerprint_key("k-scope")
+    for _ in range(5):
+        async with await limiter.acquire("solo", fingerprint, "solo-a"):
+            pass
+    assert limiter.is_exhausted("solo", fingerprint, "solo-a")
+    assert not limiter.is_exhausted("solo", fingerprint, "solo-b")
+    assert limiter.remaining("solo", fingerprint, "solo-b")["rpd_remaining"] == 5
+
+
+async def test_account_scope_models_share_one_bucket(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path, providers=_scoped_providers())
+    fingerprint = fingerprint_key("k-shared")
+    for _ in range(2):
+        async with await limiter.acquire("shared", fingerprint, "shared-a"):
+            pass
+    for _ in range(2):
+        async with await limiter.acquire("shared", fingerprint, "shared-b"):
+            pass
+    # 2 + 2 against the shared rpd of 4: both models are now spent.
+    assert limiter.is_exhausted("shared", fingerprint, "shared-a")
+    assert limiter.is_exhausted("shared", fingerprint, "shared-b")
+    assert limiter.remaining("shared", fingerprint, "shared-a")["rpd_remaining"] == 0
+
+
+async def test_429_cools_only_the_failing_model(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path, providers=_scoped_providers())
+    fingerprint = fingerprint_key("k-429")
+    async with await limiter.acquire("shared", fingerprint, "shared-a"):
+        pass
+    limiter.report_429("shared", fingerprint, "shared-a", retry_after=60.0)
+    assert limiter.is_exhausted("shared", fingerprint, "shared-a")
+    # Sibling on the same account bucket keeps serving...
+    assert not limiter.is_exhausted("shared", fingerprint, "shared-b")
+    async with await limiter.acquire("shared", fingerprint, "shared-b"):
+        pass
+    # ...and the 429 consumed nothing from the shared bucket (1 + 1 of 4).
+    assert limiter.remaining("shared", fingerprint, "shared-b")["rpd_remaining"] == 2
+
+
+async def test_tpm_pre_reject_uses_model_window(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path, providers=_tpm_providers(), max_wait_seconds=0.5)
+    fingerprint = fingerprint_key("k-tpm2")
+    with pytest.raises(QuotaExhausted, match="exceed.*tpm limit of 100"):
+        await limiter.acquire("alpha", fingerprint, "solo-tpm", est_tokens=101)
+
+
+async def test_tpd_tracked_like_rpd(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path, providers=_tpd_providers())
+    fingerprint = fingerprint_key("k-tpd")
+    for _ in range(4):
+        async with await limiter.acquire(
+            "alpha", fingerprint, "solo-tpd", est_tokens=50
+        ):
+            pass
+    assert limiter.remaining("alpha", fingerprint, "solo-tpd")["tpd_remaining"] == 0
+    assert limiter.is_exhausted("alpha", fingerprint, "solo-tpd")
+    with pytest.raises(QuotaExhausted, match="daily token budget spent"):
+        await limiter.acquire("alpha", fingerprint, "solo-tpd", est_tokens=50)
+
+
+async def test_tpd_pre_reject_before_sending(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path, providers=_tpd_providers(), max_wait_seconds=0.5)
+    fingerprint = fingerprint_key("k-tpd2")
+    with pytest.raises(QuotaExhausted, match="daily token budget of 200"):
+        await limiter.acquire("alpha", fingerprint, "solo-tpd", est_tokens=500)
+
+
+async def test_tpd_absent_is_not_enforced(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path)
+    fingerprint = fingerprint_key("k-notpd")
+    async with await limiter.acquire(
+        "alpha", fingerprint, "alpha-fast", est_tokens=10**6
+    ):
+        pass
+    remaining = limiter.remaining("alpha", fingerprint, "alpha-fast")
+    assert remaining["tpd_limit"] is None and remaining["tpd_remaining"] is None
+
+
+async def test_unknown_model_fails_open(tmp_path) -> None:
+    """Quota must never break runs: uncatalogued pairs get no windows."""
+    limiter, _ = _limiter(tmp_path)
+    fingerprint = fingerprint_key("k-unknown")
+    async with await limiter.acquire("test", fingerprint, "m", est_tokens=10**9):
+        pass
+    assert limiter.remaining("test", fingerprint, "m")["rpd_remaining"] is None
+
+
+async def test_unknown_pair_warns_once_per_pair(tmp_path, caplog) -> None:
+    import logging
+
+    limiter, _ = _limiter(tmp_path)
+    fingerprint = fingerprint_key("k-warn")
+    with caplog.at_level(logging.WARNING, logger="assembly"):
+        for _ in range(3):
+            async with await limiter.acquire("nope", fingerprint, "ghost"):
+                pass
+    warnings = [
+        line
+        for line in caplog.text.splitlines()
+        if "unknown (provider, model) pair" in line
+    ]
+    assert len(warnings) == 1
+    assert "nope/ghost" in warnings[0]
+
+
+async def test_unlimited_fields_are_not_enforced(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path)
+    fingerprint = fingerprint_key("k-unlim")
+    for _ in range(3):
+        async with await limiter.acquire(
+            "alpha", fingerprint, "alpha-fast", est_tokens=10**6
+        ):
+            pass
+    remaining = limiter.remaining("alpha", fingerprint, "alpha-fast")
+    assert remaining["tpm_limit"] is None and remaining["tpm_remaining"] is None

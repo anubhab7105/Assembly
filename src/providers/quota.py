@@ -1,11 +1,17 @@
 """
-Assembly — per-key quota limiter (free-tier survival).
+Assembly — per-key, per-model quota limiter (free-tier survival).
 
-Tracks request counts per (provider, key fingerprint) for sliding
-per-minute / per-day windows using limits from models.yaml, enforces a
-per-provider asyncio concurrency cap, persists daily counters in the
-quota_usage table so they survive restarts, and exposes remaining
+Tracks request counts per (provider, key fingerprint, bucket) for sliding
+per-minute / per-day windows using per-model limits from models.yaml,
+enforces a per-provider asyncio concurrency cap, persists daily counters
+in the quota_usage table so they survive restarts, and exposes remaining
 capacity to the planner and the status endpoint.
+
+Buckets: a model with scope "model" gets its own bucket (the model id);
+a model with scope "account" shares its provider's "" bucket (e.g. the
+OpenRouter free daily cap spans all free models on one key). Cooldowns
+after a 429 are always per (provider, key, model): a rate-limited model
+cools down without consuming or resetting any bucket window.
 
 The raw key is NEVER stored: only a salted SHA-256 prefix (16 hex chars)
 identifies a key in memory and in the database.
@@ -25,6 +31,9 @@ from src.core.logging_config import logger
 DAY_SECONDS = 24 * 3600
 DEFAULT_COOLDOWN_SECONDS = 60.0
 MAX_COOLDOWN_SECONDS = 3600.0
+
+# Account-scope bucket id: shared by every account-scoped model on one key.
+ACCOUNT_BUCKET = ""
 
 
 def today_str() -> str:
@@ -73,7 +82,6 @@ def _default_salt() -> str:
     return "assembly-dev-quota"
 
 
-
 def fingerprint_key(key: Any, salt: str | None = None) -> str:
     """Salted SHA-256 prefix identifying a key without storing it."""
     from src.core.keystore import reveal
@@ -108,7 +116,11 @@ class QuotaLease:
 
 
 class QuotaLimiter:
-    """Sliding-window RPM/TPM + daily RPD + cooldowns + concurrency caps."""
+    """Sliding-window RPM/TPM + daily RPD + cooldowns + concurrency caps.
+
+    All quota state is keyed (provider, key fingerprint, bucket); model
+    cooldowns are keyed (provider, key fingerprint, model id).
+    """
 
     def __init__(
         self,
@@ -125,28 +137,57 @@ class QuotaLimiter:
         self._window = window_seconds
         self._max_wait = max_wait_seconds
         self._max_in_flight = max(1, max_in_flight)
-        self._minute_calls: dict[tuple[str, str], deque[float]] = {}
-        self._minute_tokens: dict[tuple[str, str], deque[tuple[float, int]]] = {}
-        self._cooldowns: dict[tuple[str, str], float] = {}
+        self._minute_calls: dict[tuple[str, str, str], deque[float]] = {}
+        self._minute_tokens: dict[tuple[str, str, str], deque[tuple[float, int]]] = {}
+        self._cooldowns: dict[tuple[str, str, str], float] = {}
         self._slots: dict[str, asyncio.Semaphore] = {}
         self._in_flight: dict[str, int] = {}
+        self._warned_unknown_pairs: set[tuple[str, str]] = set()
 
     # ── internal helpers ─────────────────────────────────────────────
 
-    def _limits(self, provider: str) -> Any:
-        spec = self._config.providers.get(provider)
-        return spec.limits if spec else None
+    def _lookup(self, provider: str, model_id: str) -> tuple[Any, str, str]:
+        """(limits, scope, bucket) for one catalog model.
 
-    def _prune(self, provider: str, key_id: str, now: float) -> None:
-        calls = self._minute_calls.setdefault((provider, key_id), deque())
+        Unknown (provider, model) pairs fail open (None limits = no
+        windows): quota must never break runs — routing only ever emits
+        catalog models, so anything else is a test double or a custom
+        provider outside the catalog.
+        """
+        try:
+            limits = self._config.limits_of(provider, model_id)
+            scope = self._config.scope_of(provider, model_id)
+        except (KeyError, AttributeError):
+            if (provider, model_id) not in self._warned_unknown_pairs:
+                self._warned_unknown_pairs.add((provider, model_id))
+                logger.warning(
+                    f"Quota   │ unknown (provider, model) pair "
+                    f"{provider}/{model_id} — no limits enforced (fail-open)"
+                )
+            return None, "model", model_id
+        bucket = model_id if scope == "model" else ACCOUNT_BUCKET
+        return limits, scope, bucket
+
+    @staticmethod
+    def _int_or_none(value: Any) -> int | None:
+        """An enforceable int limit, or None for null/"unlimited"."""
+        if isinstance(value, bool):
+            return None
+        return value if isinstance(value, int) else None
+
+    def _prune(self, provider: str, key_id: str, bucket: str, now: float) -> None:
+        calls = self._minute_calls.setdefault((provider, key_id, bucket), deque())
         while calls and calls[0] <= now - self._window:
             calls.popleft()
-        tokens = self._minute_tokens.setdefault((provider, key_id), deque())
+        tokens = self._minute_tokens.setdefault((provider, key_id, bucket), deque())
         while tokens and tokens[0][0] <= now - self._window:
             tokens.popleft()
 
-    def _cooldown_left(self, provider: str, key_id: str) -> float:
-        return max(0.0, self._cooldowns.get((provider, key_id), 0.0) - time.monotonic())
+    def _cooldown_left(self, provider: str, key_id: str, model_id: str) -> float:
+        return max(
+            0.0,
+            self._cooldowns.get((provider, key_id, model_id), 0.0) - time.monotonic(),
+        )
 
     def _session(self) -> Any:
         if self._session_factory is not None:
@@ -155,11 +196,14 @@ class QuotaLimiter:
 
         return SessionLocal()
 
-    def _today_used(self, provider: str, key_id: str) -> int | None:
-        """Calls already spent today, or None when no daily limit applies."""
-        limits = self._limits(provider)
-        if limits is None or limits.rpd is None:
-            return None
+    def _today_counters(
+        self, provider: str, key_id: str, bucket: str
+    ) -> tuple[int, int]:
+        """(calls, tokens) spent today in a bucket; (0, 0) when unreadable.
+
+        Fail-open like the old per-field readers: a DB error reads as an
+        empty bucket, never as a spent one.
+        """
         try:
             from src.database.models import QuotaUsage
 
@@ -171,25 +215,34 @@ class QuotaLimiter:
                         QuotaUsage.provider == provider,
                         QuotaUsage.key_fingerprint == key_id,
                         QuotaUsage.day == today_str(),
+                        QuotaUsage.model_id == bucket,
                     )
                     .first()
                 )
-                return row.count if row else 0
+                if row is None:
+                    return 0, 0
+                return (row.count or 0), (row.tokens or 0)
             finally:
                 db.close()
         except Exception as exc:  # noqa: BLE001 — quota must never break runs
             logger.warning(f"Quota   │ day-counter read failed: {exc}")
-            return None
+            return 0, 0
 
-    def _record(self, provider: str, key_id: str, est_tokens: int) -> None:
+    def _record(
+        self,
+        provider: str,
+        key_id: str,
+        bucket: str,
+        est_tokens: int,
+        track_day: bool,
+    ) -> None:
         now = time.monotonic()
-        self._minute_calls.setdefault((provider, key_id), deque()).append(now)
+        self._minute_calls.setdefault((provider, key_id, bucket), deque()).append(now)
         if est_tokens > 0:
-            self._minute_tokens.setdefault((provider, key_id), deque()).append(
+            self._minute_tokens.setdefault((provider, key_id, bucket), deque()).append(
                 (now, est_tokens)
             )
-        limits = self._limits(provider)
-        if limits is None or limits.rpd is None:
+        if not track_day:
             return
         try:
             from src.database.models import QuotaUsage
@@ -202,6 +255,7 @@ class QuotaLimiter:
                         QuotaUsage.provider == provider,
                         QuotaUsage.key_fingerprint == key_id,
                         QuotaUsage.day == today_str(),
+                        QuotaUsage.model_id == bucket,
                     )
                     .first()
                 )
@@ -210,6 +264,7 @@ class QuotaLimiter:
                         provider=provider,
                         key_fingerprint=key_id,
                         day=today_str(),
+                        model_id=bucket,
                     )
                     db.add(row)
                 row.count = (row.count or 0) + 1
@@ -242,6 +297,7 @@ class QuotaLimiter:
         limit: int,
         provider: str,
         key_id: str,
+        bucket: str,
         deadline: float,
         what: str,
     ) -> None:
@@ -250,60 +306,92 @@ class QuotaLimiter:
             now = time.monotonic()
             if now >= deadline:
                 raise QuotaExhausted(provider, key_id, f"{what} window full")
-            calls = self._minute_calls.get((provider, key_id), deque())
+            calls = self._minute_calls.get((provider, key_id, bucket), deque())
             wake_at = (calls[0] + self._window) if calls else now
             await asyncio.sleep(max(0.0, min(wake_at - now, deadline - now) + 0.05))
-            self._prune(provider, key_id, time.monotonic())
-            calls = self._minute_calls.get((provider, key_id), deque())
+            self._prune(provider, key_id, bucket, time.monotonic())
+            calls = self._minute_calls.get((provider, key_id, bucket), deque())
             used = len(calls)
 
     # ── public API ───────────────────────────────────────────────────
 
     async def acquire(
-        self, provider: str, key_id: str, est_tokens: int = 0
+        self, provider: str, key_id: str, model_id: str, est_tokens: int = 0
     ) -> QuotaLease:
         """Take a concurrency slot + record usage. Waits on full windows
         (bounded by max_wait_seconds), raises QuotaExhausted on cooldown,
-        spent daily quota, or wait timeout. Use as
+        spent daily quota, or wait timeout. A single request estimated
+        above the model's tpm is rejected before sending. Use as
         `async with await limiter.acquire(...)`."""
         now = time.monotonic()
-        left = self._cooldown_left(provider, key_id)
+        left = self._cooldown_left(provider, key_id, model_id)
         if left > 0:
             raise QuotaExhausted(provider, key_id, "cooling down", retry_after=left)
-        limits = self._limits(provider)
-        if limits is not None and limits.rpd is not None:
-            used = self._today_used(provider, key_id)
-            if used is not None and used >= limits.rpd:
+        limits, _scope, bucket = self._lookup(provider, model_id)
+        rpm = self._int_or_none(limits.rpm) if limits is not None else None
+        rpd = self._int_or_none(limits.rpd) if limits is not None else None
+        tpm = self._int_or_none(limits.tpm) if limits is not None else None
+        tpd = self._int_or_none(limits.tpd) if limits is not None else None
+        if tpm is not None and est_tokens > tpm:
+            raise QuotaExhausted(
+                provider,
+                key_id,
+                f"estimated {est_tokens} tokens exceed the {model_id} "
+                f"tpm limit of {tpm} — reduce max_tokens",
+            )
+        if tpd is not None and est_tokens > tpd:
+            raise QuotaExhausted(
+                provider,
+                key_id,
+                f"estimated {est_tokens} tokens exceed the {model_id} "
+                f"daily token budget of {tpd} — reduce max_tokens",
+            )
+        if rpd is not None or tpd is not None:
+            used_calls, used_tokens = self._today_counters(provider, key_id, bucket)
+            if rpd is not None and used_calls >= rpd:
                 raise QuotaExhausted(provider, key_id, "daily quota spent")
-        deadline = now + self._max_wait
-        if limits is not None and limits.rpm is not None:
-            self._prune(provider, key_id, now)
-            used = len(self._minute_calls.get((provider, key_id), deque()))
-            await self._wait_for_room(
-                used, limits.rpm, provider, key_id, deadline, "rpm"
-            )
-        if limits is not None and limits.tpm is not None and est_tokens > 0:
-            self._prune(provider, key_id, time.monotonic())
-            spent = sum(
-                t for _, t in self._minute_tokens.get((provider, key_id), deque())
-            )
-            while spent + est_tokens > limits.tpm and time.monotonic() < deadline:
-                await asyncio.sleep(0.5)
-                self._prune(provider, key_id, time.monotonic())
-                spent = sum(
-                    t for _, t in self._minute_tokens.get((provider, key_id), deque())
+            if tpd is not None and used_tokens + est_tokens > tpd:
+                raise QuotaExhausted(
+                    provider,
+                    key_id,
+                    f"daily token budget spent ({used_tokens} of {tpd} "
+                    "tokens used) — try tomorrow or a smaller max_tokens",
                 )
-            if spent + est_tokens > limits.tpm:
+        deadline = now + self._max_wait
+        if rpm is not None:
+            self._prune(provider, key_id, bucket, now)
+            used = len(self._minute_calls.get((provider, key_id, bucket), deque()))
+            await self._wait_for_room(
+                used, rpm, provider, key_id, bucket, deadline, "rpm"
+            )
+        if tpm is not None and est_tokens > 0:
+            self._prune(provider, key_id, bucket, time.monotonic())
+            spent = sum(
+                t
+                for _, t in self._minute_tokens.get((provider, key_id, bucket), deque())
+            )
+            while spent + est_tokens > tpm and time.monotonic() < deadline:
+                await asyncio.sleep(0.5)
+                self._prune(provider, key_id, bucket, time.monotonic())
+                spent = sum(
+                    t
+                    for _, t in self._minute_tokens.get(
+                        (provider, key_id, bucket), deque()
+                    )
+                )
+            if spent + est_tokens > tpm:
                 raise QuotaExhausted(provider, key_id, "tpm window full")
         # A cooldown may have landed while waiting: re-check before recording.
-        left = self._cooldown_left(provider, key_id)
+        left = self._cooldown_left(provider, key_id, model_id)
         if left > 0:
             raise QuotaExhausted(provider, key_id, "cooling down", retry_after=left)
         slot = self._slot_for(provider)
         await slot.acquire()
         try:
             self._in_flight[provider] = self._in_flight.get(provider, 0) + 1
-            self._record(provider, key_id, est_tokens)
+            self._record(
+                provider, key_id, bucket, est_tokens, rpd is not None or tpd is not None
+            )
         except BaseException:
             # A cancellation landing here must not leak the semaphore permit
             # or the in-flight counter (today: no await sits between acquire
@@ -314,36 +402,76 @@ class QuotaLimiter:
         return QuotaLease(self, provider, slot)
 
     def report_429(
-        self, provider: str, key_id: str, retry_after: float | None = None
+        self,
+        provider: str,
+        key_id: str,
+        model_id: str,
+        retry_after: float | None = None,
     ) -> None:
-        """Put a key on cooldown after a 429. Names only are ever logged."""
+        """Put one model on cooldown after a 429. Names only are ever logged.
+
+        Only the model's cooldown is set (honoring Retry-After): bucket
+        windows are neither consumed nor reset, so sibling models on an
+        account-scope key keep serving.
+        """
         wait = (
             retry_after if retry_after and retry_after > 0 else DEFAULT_COOLDOWN_SECONDS
         )
-        self._cooldowns[(provider, key_id)] = time.monotonic() + min(
+        self._cooldowns[(provider, key_id, model_id)] = time.monotonic() + min(
             wait, MAX_COOLDOWN_SECONDS
         )
         logger.info(
-            f"Quota   │ {provider} cooling down for {min(wait, MAX_COOLDOWN_SECONDS):.0f}s"
+            f"Quota   │ {provider}/{model_id} cooling down "
+            f"for {min(wait, MAX_COOLDOWN_SECONDS):.0f}s"
         )
 
-    def is_exhausted(self, provider: str, key_id: str) -> bool:
-        """True when a key must be skipped: cooling down or daily quota spent.
+    def is_exhausted(self, provider: str, key_id: str, model_id: str) -> bool:
+        """True when a model must be skipped: cooling down or bucket spent.
         A full per-minute window is transient (acquire waits), not exhaustion."""
-        if self._cooldown_left(provider, key_id) > 0:
+        if self._cooldown_left(provider, key_id, model_id) > 0:
             return True
-        limits = self._limits(provider)
-        if limits is not None and limits.rpd is not None:
-            used = self._today_used(provider, key_id)
-            if used is not None and used >= limits.rpd:
-                return True
-        return False
+        try:
+            limits, _scope, bucket = self._lookup(provider, model_id)
+        except KeyError:
+            return True
+        if limits is None:
+            return False
+        rpd = self._int_or_none(limits.rpd)
+        tpd = self._int_or_none(limits.tpd)
+        if rpd is None and tpd is None:
+            return False
+        used_calls, used_tokens = self._today_counters(provider, key_id, bucket)
+        return (rpd is not None and used_calls >= rpd) or (
+            tpd is not None and used_tokens >= tpd
+        )
 
-    def remaining(self, provider: str, key_id: str) -> dict[str, Any]:
-        """Remaining capacity snapshot for planner and status views."""
+    def remaining(self, provider: str, key_id: str, model_id: str) -> dict[str, Any]:
+        """Remaining capacity snapshot for one model for planner/status views."""
         now = time.monotonic()
-        self._prune(provider, key_id, now)
-        limits = self._limits(provider)
+        try:
+            limits, scope, bucket = self._lookup(provider, model_id)
+        except KeyError:
+            limits, scope, bucket = None, "model", model_id
+        if limits is None:
+            return {
+                "rpm_limit": None,
+                "rpm_remaining": None,
+                "tpm_limit": None,
+                "tpm_remaining": None,
+                "rpd_limit": None,
+                "rpd_remaining": None,
+                "tpd_limit": None,
+                "tpd_remaining": None,
+                "cooldown_seconds": 0.0,
+                "in_flight": self._in_flight.get(provider, 0),
+                "scope": "model",
+                "model": model_id,
+            }
+        self._prune(provider, key_id, bucket, now)
+        rpm = self._int_or_none(limits.rpm)
+        tpm = self._int_or_none(limits.tpm)
+        rpd = self._int_or_none(limits.rpd)
+        tpd = self._int_or_none(limits.tpd)
         out: dict[str, Any] = {
             "rpm_limit": None,
             "rpm_remaining": None,
@@ -351,28 +479,36 @@ class QuotaLimiter:
             "tpm_remaining": None,
             "rpd_limit": None,
             "rpd_remaining": None,
-            "cooldown_seconds": round(self._cooldown_left(provider, key_id), 1),
+            "tpd_limit": None,
+            "tpd_remaining": None,
+            "cooldown_seconds": round(
+                self._cooldown_left(provider, key_id, model_id), 1
+            ),
             "in_flight": self._in_flight.get(provider, 0),
+            "scope": scope,
+            "model": model_id,
         }
-        if limits is None:
-            return out
-        if limits.rpm is not None:
-            out["rpm_limit"] = limits.rpm
+        if rpm is not None:
+            out["rpm_limit"] = rpm
             out["rpm_remaining"] = max(
-                0, limits.rpm - len(self._minute_calls.get((provider, key_id), deque()))
+                0,
+                rpm - len(self._minute_calls.get((provider, key_id, bucket), deque())),
             )
-        if limits.tpm is not None:
+        if tpm is not None:
             spent = sum(
-                t for _, t in self._minute_tokens.get((provider, key_id), deque())
+                t
+                for _, t in self._minute_tokens.get((provider, key_id, bucket), deque())
             )
-            out["tpm_limit"] = limits.tpm
-            out["tpm_remaining"] = max(0, limits.tpm - spent)
-        if limits.rpd is not None:
-            used = self._today_used(provider, key_id)
-            out["rpd_limit"] = limits.rpd
-            out["rpd_remaining"] = (
-                limits.rpd if used is None else max(0, limits.rpd - used)
-            )
+            out["tpm_limit"] = tpm
+            out["tpm_remaining"] = max(0, tpm - spent)
+        if rpd is not None:
+            used_calls, _ = self._today_counters(provider, key_id, bucket)
+            out["rpd_limit"] = rpd
+            out["rpd_remaining"] = max(0, rpd - used_calls)
+        if tpd is not None:
+            _, used_tokens = self._today_counters(provider, key_id, bucket)
+            out["tpd_limit"] = tpd
+            out["tpd_remaining"] = max(0, tpd - used_tokens)
         return out
 
     def reset(self) -> None:
