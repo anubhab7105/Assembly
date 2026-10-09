@@ -5,7 +5,7 @@ Gathers evidence, performs web research, and provides
 evidence-backed analysis.
 """
 
-from typing import Optional, Dict, Any
+from typing import Any
 
 from src.agents.base_agent import BaseAgent
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE, sanitize_search_results
@@ -50,7 +50,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
 ```"""
         return prompt + "\n\n" + UNTRUSTED_SYSTEM_NOTE
 
-    def build_user_prompt(self, question: str, context: Optional[Dict[str, Any]] = None) -> str:
+    def build_user_prompt(self, question: str, context: dict[str, Any] | None = None) -> str:
         # Web search results arrive via critique/run context, or via the
         # search_results attribute the orchestrator injects before the run.
         # They pass through the sanitizer: delimited UNTRUSTED blocks,

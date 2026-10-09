@@ -5,9 +5,9 @@ Dedicated adversarial agent that finds flaws, challenges assumptions,
 and prevents echo chambers (PRD Section 10).
 """
 
-from typing import Optional, Dict, Any
+from typing import Any
 
-from src.agents.base_agent import BaseAgent, AgentOutput
+from src.agents.base_agent import AgentOutput, BaseAgent
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
 
 
@@ -58,7 +58,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
 ```"""
         return prompt + "\n\n" + UNTRUSTED_SYSTEM_NOTE
 
-    def build_user_prompt(self, question: str, context: Optional[Dict[str, Any]] = None) -> str:
+    def build_user_prompt(self, question: str, context: dict[str, Any] | None = None) -> str:
         if context and context.get("mode") == "adversarial":
             return self._build_adversarial_prompt(
                 question,

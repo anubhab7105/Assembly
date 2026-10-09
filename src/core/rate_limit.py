@@ -1,7 +1,9 @@
-import time
 import asyncio
+import time
 from collections import defaultdict
-from fastapi import Request, HTTPException, status, Depends
+
+from fastapi import Depends, HTTPException, Request, status
+
 from src.core.security import get_current_user_id
 
 _rate_limit_history: dict[tuple[str, str], list[float]] = defaultdict(list)
@@ -38,6 +40,16 @@ def rate_limiter(action: str, limit: int, window_seconds: int):
         await check_rate_limit(f"ip:{ip}", action, limit, window_seconds)
         if user_id:
             await check_rate_limit(f"user:{user_id}", action, limit, window_seconds)
+        return True
+    return dependency
+
+def unauth_rate_limiter(action: str, limit: int, window_seconds: int):
+    """
+    Dependency to enforce rate limits per IP only, for unauthenticated endpoints.
+    """
+    async def dependency(request: Request):
+        ip = request.client.host if request.client else "unknown"
+        await check_rate_limit(f"ip:{ip}", action, limit, window_seconds)
         return True
     return dependency
 

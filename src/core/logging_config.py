@@ -19,8 +19,8 @@ provider names. Traceback frames are code, not values — frame locals are
 never printed by the default formatter, so exc_info is safe to keep.
 """
 
-import logging
 import json
+import logging
 import re
 import sys
 

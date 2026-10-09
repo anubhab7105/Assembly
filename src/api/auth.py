@@ -7,11 +7,16 @@ Handles user signup, login, and token management.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from src.core.rate_limit import rate_limiter, unauth_rate_limiter
+from src.core.security import (
+    create_access_token,
+    get_current_user_id,
+    hash_password,
+    verify_password,
+)
 from src.database.base import get_db
 from src.database.models import User
-from src.database.schemas import SignupRequest, LoginRequest, AuthResponse, UserResponse
-from src.core.rate_limit import rate_limiter
-from src.core.security import hash_password, verify_password, create_access_token, get_current_user_id
+from src.database.schemas import AuthResponse, LoginRequest, SignupRequest, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -20,7 +25,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 def signup(
     req: SignupRequest,
     db: Session = Depends(get_db),
-    _rate_limit: bool = Depends(rate_limiter("signup", 5, 60)),
+    _rate_limit: bool = Depends(unauth_rate_limiter("signup", 5, 60)),
 ):
     """Create a new user account."""
     # Check if email exists
@@ -54,7 +59,7 @@ def signup(
 def login(
     req: LoginRequest,
     db: Session = Depends(get_db),
-    _rate_limit: bool = Depends(rate_limiter("login", 10, 60)),
+    _rate_limit: bool = Depends(unauth_rate_limiter("login", 10, 60)),
 ):
     """Authenticate and get a token."""
     user = db.query(User).filter(User.email == req.email).first()

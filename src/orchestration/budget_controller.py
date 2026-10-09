@@ -7,9 +7,6 @@ per execution (PRD Section 23).
 
 import time
 from dataclasses import dataclass, field
-from typing import Optional
-
-from src.core.logging_config import logger
 
 
 @dataclass

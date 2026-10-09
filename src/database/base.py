@@ -5,9 +5,10 @@ Supports both SQLite (local dev) and PostgreSQL (Supabase production).
 Auto-detects the database type from DATABASE_URL.
 """
 
+from collections.abc import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
-from typing import Generator
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from src.core.config import settings
 from src.core.logging_config import logger

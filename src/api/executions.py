@@ -45,6 +45,7 @@ from src.orchestration.capacity import (
     plan_capacity,
 )
 from src.orchestration.orchestrator import Orchestrator
+from src.research.sanitize import scan_for_injection, summarize_flags
 
 router = APIRouter(prefix="/api/executions", tags=["executions"])
 
@@ -88,6 +89,18 @@ async def create_execution(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Time budget must be 3, 5, 10, or 15 minutes.",
+        )
+
+    # Scan the user question for prompt-injection patterns (GAP-7).
+    # This does NOT block the execution (the user is authenticated and
+    # self-submits), but flags are logged so operators can monitor for
+    # abuse on shared deployments. The orchestrator treats the question
+    # as a task, not instructions, regardless of its content.
+    question_flags = scan_for_injection(req.question)
+    if question_flags:
+        logger.warning(
+            f"Exec    | Injection markers in question from user {user_id}: "
+            f"{summarize_flags(question_flags)}"
         )
 
     # Create or get conversation
