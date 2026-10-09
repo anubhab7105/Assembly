@@ -58,14 +58,20 @@ _PREFIX_RE = re.compile(
     r"|sk-[A-Za-z0-9\-_]{10,}"
 )
 
-# Long opaque blobs (JWT segments, signed payloads). Ignore hex-only object IDs
-# such as Git commit SHAs (40-char hex) and other non-secret hash values.
-_LONG_TOKEN_RE = re.compile(
-    r"(?<![A-Fa-f0-9])"
-    r"(?![A-Fa-f0-9]{40,64}\b)"
-    r"(?=[A-Za-z0-9_\-+/=]{40,}\b)"
-    r"[A-Za-z0-9_\-+/=]{40,}\b"
-)
+# Long opaque blobs (JWT segments, signed payloads). Keep Git object IDs only
+# when they appear in Git context (e.g. `git log` or `commit <sha>`), while
+# masking other secret-like long tokens such as hex API keys.
+_LONG_TOKEN_RE = re.compile(r"\b[A-Za-z0-9_\-+/=]{40,}\b")
+_GIT_CONTEXT_RE = re.compile(r"(?i)\b(?:git\s+log|commit|sha|hash)\b")
+
+
+def _is_git_object_id(token: str, text: str, start: int) -> bool:
+    """Return True for a Git commit/object ID appearing in Git log context."""
+    if not re.fullmatch(r"[0-9a-fA-F]{7,64}", token):
+        return False
+    context_start = max(0, start - 80)
+    context_end = min(len(text), start + len(token) + 80)
+    return bool(_GIT_CONTEXT_RE.search(text[context_start:context_end]))
 
 
 def mask_text(text: str) -> str:
@@ -78,7 +84,14 @@ def mask_text(text: str) -> str:
     masked = _NESTED_RE.sub(rf"\g<1>{MASK}", masked)
     masked = _FIELD_RE.sub(rf"\g<1>\g<2>{MASK}", masked)
     masked = _PREFIX_RE.sub(MASK, masked)
-    masked = _LONG_TOKEN_RE.sub(MASK, masked)
+
+    def _mask_long_token(match: re.Match[str]) -> str:
+        token = match.group(0)
+        if _is_git_object_id(token, masked, match.start()):
+            return token
+        return MASK
+
+    masked = _LONG_TOKEN_RE.sub(_mask_long_token, masked)
     return masked
 
 
