@@ -1,10 +1,27 @@
-import { ArrowRight, Brain, CheckCircle2, GitBranch, Search, Sparkles, Users, Zap } from "lucide-react"
+import {
+  ArrowRight,
+  Bot,
+  Brain,
+  CheckCircle2,
+  Compass,
+  Cpu,
+  GitBranch,
+  Search,
+  Sparkles,
+  Users,
+  Wind,
+  Zap,
+} from "lucide-react"
 
 const agents = [
-  { icon: Brain, label: "Gemini", role: "Reasoner", color: "#4285F4", delay: "0s" },
-  { icon: GitBranch, label: "Llama", role: "Critic", color: "#7C3AED", delay: "0.8s" },
-  { icon: Search, label: "Qwen", role: "Researcher", color: "#059669", delay: "1.6s" },
-  { icon: CheckCircle2, label: "DeepSeek", role: "Verifier", color: "#DC2626", delay: "2.4s" },
+  { icon: Bot, label: "ChatGPT", role: "Synthesizer", color: "#10A37F" },
+  { icon: Cpu, label: "Claude", role: "Analyst", color: "#D97706" },
+  { icon: Sparkles, label: "Gemini", role: "Reasoner", color: "#4285F4" },
+  { icon: CheckCircle2, label: "DeepSeek", role: "Verifier", color: "#2563EB" },
+  { icon: GitBranch, label: "Llama", role: "Critic", color: "#8B5CF6" },
+  { icon: Wind, label: "Mistral", role: "Strategist", color: "#F97316" },
+  { icon: Search, label: "Qwen", role: "Researcher", color: "#059669" },
+  { icon: Compass, label: "Grok", role: "Explorer", color: "#E11D48" },
 ]
 
 const steps = [
@@ -102,21 +119,22 @@ export default function LandingPage() {
               </div>
 
               {/* Agent nodes */}
-              {agents.map((agent) => {
+              {agents.map((agent, i) => {
                 const Icon = agent.icon
-                const angle = agents.indexOf(agent) * 90
+                const angle = i * (360 / agents.length)
+                const delay = `-${((i * 16) / agents.length).toFixed(2)}s`
                 return (
                   <div
                     key={agent.label}
                     className="animate-orbit absolute"
-                    style={{ animationDelay: agent.delay, transform: `rotate(${angle}deg)` }}
+                    style={{ animationDelay: delay, transform: `rotate(${angle}deg)` }}
                   >
                     <div
-                      className="animate-counter-orbit flex h-16 w-16 flex-col items-center justify-center gap-0.5 rounded-2xl border bg-card shadow-lg transition-all hover:scale-110 hover:shadow-xl"
-                      style={{ borderColor: agent.color + "40", animationDelay: agent.delay }}
+                      className="animate-counter-orbit flex h-14 w-14 sm:h-16 sm:w-16 flex-col items-center justify-center gap-0.5 rounded-2xl border bg-card shadow-lg transition-all hover:scale-110 hover:shadow-xl"
+                      style={{ borderColor: agent.color + "40", animationDelay: delay }}
                     >
-                      <Icon className="size-5" style={{ color: agent.color }} />
-                      <span className="text-[10px] font-semibold text-muted-foreground">{agent.label}</span>
+                      <Icon className="size-4 sm:size-5" style={{ color: agent.color }} />
+                      <span className="text-[9px] sm:text-[10px] font-semibold text-muted-foreground">{agent.label}</span>
                     </div>
                   </div>
                 )
