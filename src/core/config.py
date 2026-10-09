@@ -1,8 +1,7 @@
-"""
-Assembly — Application Configuration
+"""Assembly — Application Configuration (stateless web + local desktop).
 
-Loads all environment variables via Pydantic Settings.
-Supports local development (SQLite) and production (Supabase PostgreSQL).
+Web mode stores nothing server-side: no database file, no disk writes.
+Desktop/dev modes keep a local SQLite file for run history.
 """
 
 import secrets
@@ -12,7 +11,6 @@ from typing import Literal
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 
-# ── Resolve project root (two levels up from this file) ──────────────
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 DESKTOP_TOKEN = secrets.token_hex(32)
@@ -27,31 +25,32 @@ class Settings(BaseSettings):
     debug: bool = True
     host: str = "0.0.0.0"
     port: int = 8000
-    # Key backend selector: dev (env keys) | web (per-request keys) |
-    # desktop (OS keyring). Env keys refuse to load when app_env=production.
-    app_mode: Literal["dev", "web", "desktop"] = "dev"
+    # Key backend selector: web (per-request keys, stateless) |
+    # desktop (OS keyring + local SQLite) | dev (env keys + local SQLite).
+    app_mode: Literal["web", "desktop", "dev"] = "dev"
     desktop_token: str = DESKTOP_TOKEN
 
-    # ── Frontend URL (for CORS in production) ────────────────────────
-    frontend_url: str = ""  # e.g. "https://assembly-frontend.vercel.app"
+    # ── Frontend / CORS allow-list ───────────────────────────────────
+    # Comma-separated origins also accepted via CORS_ALLOW_LIST.
+    frontend_url: str = ""
+    cors_allow_list: str = ""
 
-    # ── Security ─────────────────────────────────────────────────────
-    # SecretStr: repr/str show '**********'. Reveal only at the call site.
-    jwt_secret_key: SecretStr = Field(default=SecretStr(""))
-    jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 1440  # 24 hours
-    # Dedicated HMAC salt for quota fingerprinting (must not be the JWT key).
-    # Set QUOTA_SALT in .env or environment. Generated from secrets.token_hex(32)
-    # if not provided (safe for dev; set explicitly in production).
+    # ── Stateless run registry (web) ─────────────────────────────────
+    run_ttl_seconds: int = 3600
+    max_concurrent_runs: int = 20
+    sse_heartbeat_seconds: int = 15
+
+    # ── Abuse protection (no accounts) ───────────────────────────────
+    max_body_bytes: int = 1024 * 1024
+    max_question_chars: int = 2000
+    rate_limit_run_per_min_per_ip: int = 5
+    rate_limit_preflight_per_min_per_ip: int = 10
+    rate_limit_key_test_per_min_per_ip: int = 10
+
+    # ── Quota salt (dedicated HMAC salt for key fingerprinting) ──────
     quota_salt: SecretStr = Field(default=SecretStr(""))
 
-    # ── Database ─────────────────────────────────────────────────────
-    database_url: str = Field(
-        default=f"sqlite:///{BASE_DIR / 'assembly.db'}",
-        description="Database URL. Use postgresql://... for Supabase, sqlite:///... for local dev.",
-    )
-
-    # ── AI Provider API Keys ─────────────────────────────────────────
+    # ── AI Provider API Keys (dev mode only) ─────────────────────────
     gemini_api_key: SecretStr = Field(default=SecretStr(""))
     groq_api_key: SecretStr = Field(default=SecretStr(""))
     cerebras_api_key: SecretStr = Field(default=SecretStr(""))
@@ -66,7 +65,6 @@ class Settings(BaseSettings):
     max_searches_per_execution: int = 20
 
     # ── Consensus scoring (docs/WORKFLOW.md section 6) ───────────────
-    # Starting weights — tune on the benchmark, never hard-code elsewhere.
     consensus_w_agreement: float = 0.30
     consensus_w_confidence: float = 0.20
     consensus_w_evidence: float = 0.25
@@ -84,22 +82,19 @@ class Settings(BaseSettings):
     }
 
     @property
+    def is_web(self) -> bool:
+        return self.app_mode == "web"
+
+    @property
     def effective_database_url(self) -> str:
-        """Return the database URL with common fixes applied.
+        """Desktop/dev SQLite URL. Web mode has no database — raises."""
+        if self.is_web:
+            raise RuntimeError("Web mode is stateless: no database URL.")
+        import platformdirs
 
-        Supabase and Heroku sometimes provide `postgres://` which
-        SQLAlchemy 2.x does not accept — it requires `postgresql://`.
-        """
-        if self.app_mode == "desktop":
-            import platformdirs
-            data_dir = Path(platformdirs.user_data_dir("Assembly", "Assembly"))
-            data_dir.mkdir(parents=True, exist_ok=True)
-            return f"sqlite:///{data_dir / 'assembly.db'}"
-
-        url = self.database_url
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql://", 1)
-        return url
+        data_dir = Path(platformdirs.user_data_dir("Assembly", "Assembly"))
+        data_dir.mkdir(parents=True, exist_ok=True)
+        return f"sqlite:///{data_dir / 'assembly.db'}"
 
     @property
     def is_production(self) -> bool:
@@ -107,26 +102,36 @@ class Settings(BaseSettings):
 
     @property
     def is_postgres(self) -> bool:
-        """Check if using PostgreSQL (Supabase) vs SQLite."""
-        return self.effective_database_url.startswith("postgresql")
+        """Postgres/Supabase removed: always False (kept for compat)."""
+        return False
 
     @property
     def cors_origins(self) -> list[str]:
-        """Allowed CORS origins based on environment."""
+        """Allowed CORS origins. Web: explicit allow-list only."""
+        origins: list[str] = []
         if self.frontend_url:
-            # Production: only allow the specific frontend URL
-            origins = [self.frontend_url]
-            # Also allow common variations (with/without trailing slash)
-            if self.frontend_url.endswith("/"):
-                origins.append(self.frontend_url.rstrip("/"))
-            else:
-                origins.append(self.frontend_url + "/")
-            return origins
-        # Development: allow all origins
+            origins.append(self.frontend_url.rstrip("/") or self.frontend_url)
+        if self.cors_allow_list:
+            origins.extend(
+                o.strip().rstrip("/")
+                for o in self.cors_allow_list.split(",")
+                if o.strip()
+            )
+        # Dedupe, preserve order.
+        seen: set[str] = set()
+        out: list[str] = []
+        for o in origins:
+            if o and o not in seen:
+                seen.add(o)
+                out.append(o)
+        if out:
+            return out
+        if self.is_web:
+            return []
         return ["*"]
 
     def has_provider(self, provider: str) -> bool:
-        """Check if an API key is configured for a provider."""
+        """Check if an API key is configured for a provider (dev only)."""
         key_map = {
             "gemini": self.gemini_api_key,
             "groq": self.groq_api_key,
@@ -136,7 +141,6 @@ class Settings(BaseSettings):
         }
         raw = key_map.get(provider)
         key = raw.get_secret_value() if isinstance(raw, SecretStr) else (raw or "")
-        # Reject placeholder values
         placeholders = (
             "sk-your",
             "your-",
