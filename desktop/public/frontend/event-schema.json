@@ -1,0 +1,624 @@
+{
+  "version": 1,
+  "event_types": [
+    "execution.started",
+    "plan.ready",
+    "team.ready",
+    "agent.status",
+    "round.started",
+    "round.finished",
+    "disagreement.opened",
+    "disagreement.resolved",
+    "source.found",
+    "source.verified",
+    "consensus.updated",
+    "quota.warning",
+    "timer.tick",
+    "synthesis.started",
+    "execution.completed",
+    "execution.failed_partial",
+    "execution.cancelled"
+  ],
+  "envelope": {
+    "$defs": {
+      "ProgressEventType": {
+        "description": "Canonical event names (WORKFLOW \u00a78 + execution.cancelled).",
+        "enum": [
+          "execution.started",
+          "plan.ready",
+          "team.ready",
+          "agent.status",
+          "round.started",
+          "round.finished",
+          "disagreement.opened",
+          "disagreement.resolved",
+          "source.found",
+          "source.verified",
+          "consensus.updated",
+          "quota.warning",
+          "timer.tick",
+          "synthesis.started",
+          "execution.completed",
+          "execution.failed_partial",
+          "execution.cancelled"
+        ],
+        "title": "ProgressEventType",
+        "type": "string"
+      }
+    },
+    "additionalProperties": false,
+    "description": "Wire + REST envelope for one sequenced progress event.\n\n``state`` is envelope metadata (the \u00a72 lifecycle state at emission),\nnot \u00a78 payload content: the API persists it to Execution.status so\nlive phases stay visible to GET /{id} and cancel polling.",
+    "properties": {
+      "event_type": {
+        "$ref": "#/$defs/ProgressEventType"
+      },
+      "execution_id": {
+        "minLength": 1,
+        "title": "Execution Id",
+        "type": "string"
+      },
+      "seq": {
+        "minimum": 1,
+        "title": "Seq",
+        "type": "integer"
+      },
+      "state": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "State"
+      },
+      "data": {
+        "additionalProperties": true,
+        "title": "Data",
+        "type": "object"
+      },
+      "timestamp": {
+        "format": "date-time",
+        "title": "Timestamp",
+        "type": "string"
+      }
+    },
+    "required": [
+      "event_type",
+      "execution_id",
+      "seq"
+    ],
+    "title": "ProgressEvent",
+    "type": "object"
+  },
+  "payloads": {
+    "execution.started": {
+      "additionalProperties": false,
+      "properties": {
+        "tier_minutes": {
+          "minimum": 1,
+          "title": "Tier Minutes",
+          "type": "integer"
+        },
+        "deadline_seconds": {
+          "minimum": 0,
+          "title": "Deadline Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "tier_minutes",
+        "deadline_seconds"
+      ],
+      "title": "ExecutionStartedPayload",
+      "type": "object"
+    },
+    "plan.ready": {
+      "additionalProperties": false,
+      "properties": {
+        "problem_type": {
+          "minLength": 1,
+          "title": "Problem Type",
+          "type": "string"
+        },
+        "complexity": {
+          "minLength": 1,
+          "title": "Complexity",
+          "type": "string"
+        },
+        "agent_count": {
+          "minimum": 0,
+          "title": "Agent Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "problem_type",
+        "complexity",
+        "agent_count"
+      ],
+      "title": "PlanReadyPayload",
+      "type": "object"
+    },
+    "team.ready": {
+      "$defs": {
+        "TeamRole": {
+          "additionalProperties": false,
+          "properties": {
+            "agent_id": {
+              "minLength": 1,
+              "title": "Agent Id",
+              "type": "string"
+            },
+            "agent_type": {
+              "minLength": 1,
+              "title": "Agent Type",
+              "type": "string"
+            },
+            "model": {
+              "default": "",
+              "title": "Model",
+              "type": "string"
+            },
+            "provider_name": {
+              "default": "",
+              "title": "Provider Name",
+              "type": "string"
+            },
+            "role_description": {
+              "default": "",
+              "title": "Role Description",
+              "type": "string"
+            },
+            "family": {
+              "default": "",
+              "title": "Family",
+              "type": "string"
+            }
+          },
+          "required": [
+            "agent_id",
+            "agent_type"
+          ],
+          "title": "TeamRole",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "roles": {
+          "items": {
+            "$ref": "#/$defs/TeamRole"
+          },
+          "title": "Roles",
+          "type": "array"
+        }
+      },
+      "title": "TeamReadyPayload",
+      "type": "object"
+    },
+    "agent.status": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "activity": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Activity",
+          "type": "string"
+        },
+        "state": {
+          "minLength": 1,
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "activity",
+        "state"
+      ],
+      "title": "AgentStatusPayload",
+      "type": "object"
+    },
+    "round.started": {
+      "additionalProperties": false,
+      "properties": {
+        "round": {
+          "minimum": 1,
+          "title": "Round",
+          "type": "integer"
+        },
+        "goal": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Goal",
+          "type": "string"
+        }
+      },
+      "required": [
+        "round",
+        "goal"
+      ],
+      "title": "RoundStartedPayload",
+      "type": "object"
+    },
+    "round.finished": {
+      "additionalProperties": false,
+      "properties": {
+        "round": {
+          "minimum": 1,
+          "title": "Round",
+          "type": "integer"
+        },
+        "outcome": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Outcome",
+          "type": "string"
+        }
+      },
+      "required": [
+        "round",
+        "outcome"
+      ],
+      "title": "RoundFinishedPayload",
+      "type": "object"
+    },
+    "disagreement.opened": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "agents": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Agents",
+          "type": "array"
+        },
+        "round": {
+          "minimum": 1,
+          "title": "Round",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "description",
+        "round"
+      ],
+      "title": "DisagreementOpenedPayload",
+      "type": "object"
+    },
+    "disagreement.resolved": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "agents": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Agents",
+          "type": "array"
+        },
+        "round": {
+          "minimum": 1,
+          "title": "Round",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "description",
+        "round"
+      ],
+      "title": "DisagreementResolvedPayload",
+      "type": "object"
+    },
+    "source.found": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "domain": {
+          "default": "",
+          "title": "Domain",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "title": "Url",
+          "type": "string"
+        },
+        "snippet": {
+          "default": "",
+          "title": "Snippet",
+          "type": "string"
+        }
+      },
+      "title": "SourcePayload",
+      "type": "object"
+    },
+    "source.verified": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "domain": {
+          "default": "",
+          "title": "Domain",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "title": "Url",
+          "type": "string"
+        },
+        "snippet": {
+          "default": "",
+          "title": "Snippet",
+          "type": "string"
+        }
+      },
+      "title": "SourcePayload",
+      "type": "object"
+    },
+    "consensus.updated": {
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Score",
+          "type": "number"
+        },
+        "new_info_rate": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "New Info Rate",
+          "type": "number"
+        },
+        "decision": {
+          "minLength": 1,
+          "title": "Decision",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "round": {
+          "minimum": 1,
+          "title": "Round",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "score",
+        "new_info_rate",
+        "decision",
+        "reason",
+        "round"
+      ],
+      "title": "ConsensusUpdatedPayload",
+      "type": "object"
+    },
+    "quota.warning": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "remaining": {
+          "minimum": 0.0,
+          "title": "Remaining",
+          "type": "number"
+        },
+        "detail": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "remaining"
+      ],
+      "title": "QuotaWarningPayload",
+      "type": "object"
+    },
+    "timer.tick": {
+      "additionalProperties": false,
+      "properties": {
+        "seconds_remaining": {
+          "minimum": 0.0,
+          "title": "Seconds Remaining",
+          "type": "number"
+        }
+      },
+      "required": [
+        "seconds_remaining"
+      ],
+      "title": "TimerTickPayload",
+      "type": "object"
+    },
+    "synthesis.started": {
+      "additionalProperties": false,
+      "description": "No payload per \u00a78 (\"none\"); the event itself is the signal.",
+      "properties": {},
+      "title": "SynthesisStartedPayload",
+      "type": "object"
+    },
+    "execution.completed": {
+      "$defs": {
+        "SourcePayload": {
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "default": "",
+              "title": "Title",
+              "type": "string"
+            },
+            "domain": {
+              "default": "",
+              "title": "Domain",
+              "type": "string"
+            },
+            "url": {
+              "default": "",
+              "title": "Url",
+              "type": "string"
+            },
+            "snippet": {
+              "default": "",
+              "title": "Snippet",
+              "type": "string"
+            }
+          },
+          "title": "SourcePayload",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "completed",
+          "pattern": "^(completed|failed)$",
+          "title": "Status",
+          "type": "string"
+        },
+        "answer": {
+          "default": "",
+          "title": "Answer",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SourcePayload"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "confidence_label": {
+          "default": "low",
+          "pattern": "^(high|medium|low)$",
+          "title": "Confidence Label",
+          "type": "string"
+        },
+        "consensus_score": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Consensus Score",
+          "type": "number"
+        },
+        "agent_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Agent Count",
+          "type": "integer"
+        },
+        "providers_used": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Providers Used",
+          "type": "array"
+        },
+        "tokens_used": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Tokens Used",
+          "type": "integer"
+        },
+        "debate_rounds": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Debate Rounds",
+          "type": "integer"
+        },
+        "elapsed_seconds": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "Elapsed Seconds",
+          "type": "number"
+        }
+      },
+      "title": "ExecutionCompletedPayload",
+      "type": "object"
+    },
+    "execution.failed_partial": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "failed",
+          "pattern": "^(failed|failed_partial)$",
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "answer": {
+          "default": "",
+          "title": "Answer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "ExecutionFailedPartialPayload",
+      "type": "object"
+    },
+    "execution.cancelled": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "cancelled",
+          "pattern": "^cancelled$",
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "ExecutionCancelledPayload",
+      "type": "object"
+    }
+  }
+}

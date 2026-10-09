@@ -57,7 +57,7 @@ async function startBackend() {
       console.error(`backend stderr: ${line}`);
     });
 
-    const child = await command.spawn();
+    await command.spawn();
     
     // Wait for port and token
     statusEl.innerText = 'Waiting for configuration...';

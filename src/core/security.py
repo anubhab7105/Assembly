@@ -85,6 +85,14 @@ async def get_current_user_id(
     Returns user_id string or raises 401.
     """
     if settings.app_mode in ("dev", "desktop"):
+        if settings.app_mode == "dev" and settings.is_production:
+            # Safety net: dev-mode auth bypass must never reach production.
+            # If someone accidentally deploys with APP_MODE=dev + APP_ENV=production
+            # we hard-fail rather than silently skip auth.
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Server misconfiguration: dev auth bypass is not allowed in production.",
+            )
         return "local-dev-user"
 
     if credentials is None:

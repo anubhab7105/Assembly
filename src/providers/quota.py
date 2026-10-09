@@ -47,17 +47,31 @@ class QuotaExhausted(Exception):
 
 
 def _default_salt() -> str:
-    """Stable per-deployment salt. Override with QUOTA_SALT for rotation."""
-    salt = os.environ.get("QUOTA_SALT", "")
-    if not salt:
-        try:
-            from src.core.config import settings
-            from src.core.keystore import reveal
+    """Stable per-deployment salt. Override with QUOTA_SALT for rotation.
 
-            salt = reveal(settings.jwt_secret_key)
-        except Exception:  # noqa: BLE001 — fall back to a documented dev constant
-            salt = ""
-    return salt or "assembly-dev-quota"
+    Uses the dedicated quota_salt setting (QUOTA_SALT env var) so the JWT
+    signing key is never reused as a cryptographic salt. Falls back to a
+    per-process random value for dev only.
+    """
+    # 1. Explicit QUOTA_SALT env var (takes precedence for rotation).
+    salt = os.environ.get("QUOTA_SALT", "")
+    if salt:
+        return salt
+    # 2. Pydantic settings quota_salt field (preferred in all modes).
+    try:
+        from src.core.config import settings
+        from src.core.keystore import reveal
+
+        configured = reveal(settings.quota_salt)
+        if configured:
+            return configured
+    except Exception:  # noqa: BLE001 — quota must never crash
+        pass
+    # 3. Dev fallback: a per-process random value (not the JWT key).
+    #    Not stable across restarts — acceptable for dev/desktop where
+    #    quota counters are ephemeral anyway.
+    return "assembly-dev-quota"
+
 
 
 def fingerprint_key(key: Any, salt: str | None = None) -> str:

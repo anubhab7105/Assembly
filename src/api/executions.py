@@ -62,6 +62,9 @@ _ws_seq: dict[int, int] = {}
 # removed when the run settles (see _run_execution finally-block).
 _run_tasks: dict[str, asyncio.Task] = {}
 
+# ── WebSocket connection cap per execution (DoS prevention) ──────────
+MAX_WS_CONNECTIONS_PER_EXEC: int = 20
+
 # ── Shared orchestrator instance ─────────────────────────────────────
 _orchestrator = Orchestrator()
 
@@ -320,27 +323,33 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
     to receive live updates: agent status, consensus score,
     timer, and the final answer.
 
+    Authentication is done via the first text message (JSON:
+    {"type": "auth", "token": "<JWT or desktop_token>"}), NOT as a
+    query parameter. This prevents the token from appearing in
+    access logs, browser history, or CDN request logs.
+
     `?after_seq=N` replays persisted events with seq > N first (in
     order), so a refreshed browser re-attaches without missing history,
     then streams live events. The connection registers BEFORE the replay
-    read, so rows written mid-replay still arrive live — and the per-
+    read, so rows written mid-replay still arrive live -- and the per-
     connection watermark dedups the overlap instead of doubling it.
     """
     await websocket.accept()
 
-    # Authenticate via token query param or first message
     from src.core.config import settings
-    
-    # Check WebSocket Origin
+
+    # Check WebSocket Origin (web mode only)
     origin = websocket.headers.get("origin")
     if settings.app_mode == "web" and settings.frontend_url:
         if origin and origin.rstrip('/') != settings.frontend_url.rstrip('/'):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid Origin")
             return
 
+    # -- Authentication via first message (all modes) -----------------
+    # All modes now use first-message auth so the token is never in the
+    # URL (prevents logging by reverse proxies, CDNs, and browser history).
     if settings.app_mode == "desktop":
         try:
-            # Wait for first message to auth
             data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
             msg = json.loads(data)
             if msg.get("type") != "auth" or msg.get("token") != settings.desktop_token:
@@ -351,17 +360,29 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
             return
         user_id = "local-desktop-user"
     elif settings.app_mode == "dev":
+        # Dev mode: accept any auth message (or no auth) for local testing.
+        try:
+            await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
+        except Exception:
+            pass  # timeout or disconnect; continue as local-dev-user
         user_id = "local-dev-user"
     else:
-        token = websocket.query_params.get("token", "")
+        # Web mode: expect {"type": "auth", "token": "<JWT>"} as first message.
+        # The token must NOT be passed as a query parameter (?token=...) because
+        # that would be recorded in access logs.
         try:
-            if token:
-                payload = decode_access_token(token)
-                user_id = payload.get("sub")
-                if not user_id:
-                    raise ValueError("Invalid token")
-            else:
-                raise ValueError("No token")
+            data = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+            msg = json.loads(data)
+            if msg.get("type") != "auth":
+                await websocket.close(code=4001, reason="Authentication failed")
+                return
+            token = msg.get("token", "")
+            if not token:
+                raise ValueError("No token in auth message")
+            payload = decode_access_token(token)
+            user_id = payload.get("sub")
+            if not user_id:
+                raise ValueError("Invalid token payload")
         except Exception:
             await websocket.close(code=4001, reason="Authentication failed")
             return
@@ -379,6 +400,16 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
     finally:
         db.close()
 
+    # -- Connection cap (DoS prevention: GAP-5) -----------------------
+    current_conns = _ws_connections.get(execution_id, [])
+    if len(current_conns) >= MAX_WS_CONNECTIONS_PER_EXEC:
+        logger.warning(
+            f"WS      | Connection cap ({MAX_WS_CONNECTIONS_PER_EXEC}) reached "
+            f"for execution {execution_id[:8]}...; rejecting new connection"
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Too many connections")
+        return
+
     try:
         after_seq = int(websocket.query_params.get("after_seq", "0") or "0")
     except ValueError:
@@ -391,7 +422,7 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
     _ws_connections[execution_id].append(websocket)
     _ws_seq[id(websocket)] = after_seq
 
-    logger.info(f"WS      │ Client connected for execution {execution_id[:8]}...")
+    logger.info(f"WS      | Client connected for execution {execution_id[:8]}...")
 
     # Replay missed history in seq order before going live.
     db = SessionLocal()
@@ -418,7 +449,7 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
-        logger.info(f"WS      │ Client disconnected from {execution_id[:8]}...")
+        logger.info(f"WS      | Client disconnected from {execution_id[:8]}...")
     except Exception:
         pass
     finally:
