@@ -88,6 +88,7 @@ class ExecutionRequest(BaseModel):
     # Web-mode BYOK keys (provider → key). In-memory for this run only:
     # never written to the database, never logged, never returned.
     provider_keys: dict[str, str] | None = None
+    is_demo: bool = False
 
 
 class ExecutionResponse(BaseModel):

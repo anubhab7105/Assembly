@@ -160,6 +160,7 @@ async def create_execution(
                 conversation.id,
                 req.provider_keys,
                 user_id,
+                is_demo=req.is_demo,
             )
         )
 
@@ -504,6 +505,7 @@ async def _run_execution(
     conversation_id: str,
     provider_keys: dict[str, str] | None = None,
     user_id: str | None = None,
+    is_demo: bool = False,
 ):
     """
     Run the orchestrator in the background and stream progress
@@ -543,12 +545,33 @@ async def _run_execution(
             _ws_seq.pop(id(ws), None)
 
     try:
+        router_override = None
+        if is_demo:
+            from pathlib import Path
+            from src.providers.replay_provider import ReplayRouter
+            # Look for the default demo recording
+            demo_path = Path("recordings/demo.json")
+            if not demo_path.exists():
+                # Find the most recent recording if demo.json doesn't exist
+                import glob
+                import os
+                recordings = glob.glob("recordings/run-*.json")
+                if recordings:
+                    demo_path = Path(max(recordings, key=os.path.getctime))
+            
+            if demo_path.exists():
+                logger.info(f"Exec    │ Loading demo recording from {demo_path}")
+                router_override = ReplayRouter.load(demo_path, delay_scale=1.0)
+            else:
+                logger.warning("Exec    │ Demo mode requested but no recordings found.")
+
         result = await _orchestrator.execute(
             execution_id=execution_id,
             question=question,
             time_budget_minutes=time_budget_minutes,
             on_progress=on_progress,
             provider_keys=provider_keys,
+            router_override=router_override,
         )
 
         # Update database with results

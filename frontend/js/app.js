@@ -37,6 +37,11 @@ document.addEventListener('DOMContentLoaded', () => {
         showAuth();
     }
     setupEventListeners();
+    
+    // Reveal demo toggle if ?demo=1 flag is present
+    if (window.location.search.includes('demo=1')) {
+        document.getElementById('demo-toggle-container').style.display = 'flex';
+    }
 });
 
 function setupEventListeners() {
@@ -84,6 +89,34 @@ function setupEventListeners() {
             handleInputChange();
             document.getElementById('question-input').focus();
         });
+    });
+
+    document.getElementById('play-demo-btn').addEventListener('click', async () => {
+        // Cancel the current execution
+        if (state.currentExecutionId) {
+            fetch(`${API}/api/executions/${state.currentExecutionId}/cancel`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${state.token}` },
+            }).catch(console.error);
+        }
+        
+        // Hide fallback UI and turn on demo mode
+        document.getElementById('demo-fallback-container').style.display = 'none';
+        document.getElementById('demo-mode-checkbox').checked = true;
+        
+        // Submit the question again
+        const currentQuestion = document.querySelector('.message-user:last-child .message-content')?.textContent || 'Is React better than Vue for a large cybersecurity platform? Compare ecosystem, performance, state management at scale, and hiring.';
+        
+        document.getElementById('question-input').value = currentQuestion;
+        
+        // Remove the previous user message because submitQuestion will add it again
+        const messages = document.getElementById('chat-messages');
+        if (messages.lastElementChild && messages.lastElementChild.classList.contains('message-user')) {
+            messages.removeChild(messages.lastElementChild);
+        }
+        
+        state.isExecuting = false;
+        submitQuestion();
     });
 }
 
@@ -386,6 +419,7 @@ async function submitQuestion() {
                 question,
                 time_budget_minutes: state.selectedTimeBudget,
                 conversation_id: state.currentConversationId,
+                is_demo: document.getElementById('demo-mode-checkbox').checked,
             }),
         });
 
@@ -410,6 +444,19 @@ async function submitQuestion() {
         try {
             state.lastSeq = parseInt(localStorage.getItem(`assembly:lastSeq:${execution.id}`) || '0', 10) || 0;
         } catch (e) { /* private mode: start live */ }
+
+        // Hide any previous fallback UI
+        document.getElementById('demo-fallback-container').style.display = 'none';
+        
+        // Set a 15-second timeout to show the fallback button if team.ready isn't received
+        if (!document.getElementById('demo-mode-checkbox').checked) {
+            clearTimeout(state.fallbackTimeout);
+            state.fallbackTimeout = setTimeout(() => {
+                if (state.isExecuting) {
+                    document.getElementById('demo-fallback-container').style.display = 'block';
+                }
+            }, 15000);
+        }
 
         // Connect WebSocket for real-time progress
         connectWebSocket(execution.id, state.lastSeq);
@@ -528,6 +575,7 @@ function handleProgressEvent(event) {
             break;
 
         case 'team.ready':
+            clearTimeout(state.fallbackTimeout); // They successfully started
             updateAgentCards(data.roles);
             addFeedItem('solving', 'Team assembled');
             break;
