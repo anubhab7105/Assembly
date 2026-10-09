@@ -56,6 +56,20 @@ async def lifespan(app: FastAPI):
     logger.info(f"Server   │ DB URL: {_mask_db_url(settings.effective_database_url)}")
     logger.info("====================================================")
 
+    # ── Catalog limit check (per-model limits migration) ─────────────
+    # Loud but non-blocking while gemini limits await the re-probe: the
+    # router also skips unfilled providers with an error log. Flip this
+    # to a hard refusal once every enabled model is filled.
+    try:
+        from src.providers.config import load_models_config, validate_limits_filled
+
+        validate_limits_filled(load_models_config())
+        logger.info("Server   │ models.yaml limits filled for all enabled models")
+    except ValueError as exc:
+        logger.error(f"Server   │ {exc} — fill models.yaml or disable the provider.")
+    except Exception as exc:  # noqa: BLE001 — catalog trouble must not kill boot
+        logger.warning(f"Server   │ models.yaml check skipped: {exc}")
+
     # ── Startup Security Checks (GAP-9, GAP-4) ───────────────────────
     if settings.app_mode == "web" and settings.is_production:
         from src.core.keystore import reveal

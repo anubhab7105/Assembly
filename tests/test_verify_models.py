@@ -260,8 +260,8 @@ def test_save_report_writes_only_limits(tmp_path, fake_key: str) -> None:
     assert "`m1`" in text and "200" in text and "plan-not-allowed" in text
     assert "x-ratelimit-limit-requests=30" in text
     assert fake_key not in text
-    assert "29" not in text  # remaining value excluded
-    assert "60" not in text  # reset value excluded
+    assert "remaining-requests" not in text  # usage counters excluded
+    assert "reset-requests" not in text
     assert "retry-after" not in text.lower()
 
 
