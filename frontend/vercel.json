@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "echo 'No build step required'",
-  "outputDirectory": ".",
+  "buildCommand": "npm run build",
+  "outputDirectory": "out",
   "headers": [
     {
       "source": "/css/(.*)",
