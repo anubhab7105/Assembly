@@ -33,3 +33,6 @@ src/static/
 # ── Internal docs (optional, uncomment to keep private) ──
 /audit.md
 /project.md
+
+# Tauri Binaries
+desktop/src-tauri/binaries/
