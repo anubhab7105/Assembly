@@ -1,174 +1,158 @@
-"use client"
+import { ArrowRight, Brain, CheckCircle2, GitBranch, Search, Sparkles, Users, Zap } from "lucide-react"
 
-import React, { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { globalVault } from "@/lib/key-vault"
-import { ApiClient, type UsageEntry } from "@/lib/api-client"
-import { storage } from "@/lib/storage"
-import { ModelPicker, type ModelSelection } from "@/components/model-picker"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Zap, Send, Settings, Sparkles, Clock } from "lucide-react"
-
-const EXAMPLES = [
-  "Will quantum computing achieve commercial advantage before 2030?",
-  "What are the most viable methods for replicating room-temperature superconductors?",
-  "Analyse the timeline and economic impacts of AGI given current scaling laws.",
-  "Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?"
+const agents = [
+  { icon: Brain, label: "Gemini", role: "Reasoner", color: "#4285F4", delay: "0s" },
+  { icon: GitBranch, label: "Llama", role: "Critic", color: "#7C3AED", delay: "0.8s" },
+  { icon: Search, label: "Qwen", role: "Researcher", color: "#059669", delay: "1.6s" },
+  { icon: CheckCircle2, label: "DeepSeek", role: "Verifier", color: "#DC2626", delay: "2.4s" },
 ]
 
-const TIME_BUDGETS = [3, 5, 10, 15]
+const steps = [
+  { icon: Zap, title: "Ask", desc: "One question, a time budget, and your keys." },
+  { icon: Users, title: "Team forms", desc: "A planner assembles diverse agents across model families." },
+  { icon: GitBranch, title: "Debate", desc: "Agents reason independently, then cross-examine each other." },
+  { icon: Sparkles, title: "Consensus", desc: "A verifier checks sources, a critic stress-tests claims." },
+]
 
-export default function Home() {
-  const router = useRouter()
-
-  const [question, setQuestion] = useState("")
-  const [minutes, setMinutes] = useState(5)
-  const [loading, setLoading] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
-  const [selection, setSelection] = useState<ModelSelection>({ selected: [], pins: {} })
-  const [hasKeys, setHasKeys] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    globalVault.allKeys().then((k) => setHasKeys(Object.keys(k).length > 0)).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`
-    }
-  }, [question])
-
-  const handleLaunch = async () => {
-    if (!question.trim() || loading) return
-    setLoading(true)
-    setStatus("Checking capacity…")
-    try {
-      const keys = await globalVault.allKeys()
-      const usage: UsageEntry[] = await storage.getUsage()
-      const preflight = await ApiClient.preflight(question, minutes, usage)
-      if (!preflight.feasible) {
-        setStatus(`Not feasible: ${preflight.explanation ?? "quota exhausted"}`)
-        setLoading(false)
-        return
-      }
-      setStatus("Running team… (streaming)")
-      let finalAnswer = ""
-      let consensus: number | null = null
-      const runId = `local-${Date.now()}`
-      const result = await ApiClient.startRunStream(
-        {
-          question,
-          minutes,
-          providerKeys: keys,
-          selection: { selected: selection.selected, pins: selection.pins },
-          usage,
-        },
-        (event: { event_type?: string; data?: { answer?: string; consensus_score?: number }; usage?: UsageEntry[] }) => {
-          if (event.event_type === "execution.completed") {
-            finalAnswer = event.data?.answer ?? ""
-            consensus = event.data?.consensus_score ?? null
-          }
-          if (event.event_type === "run.finished" && Array.isArray(event.usage)) {
-            void storage.setUsage(event.usage)
-          }
-        },
-      )
-      await storage.saveHistory({
-        id: runId,
-        question,
-        answer: finalAnswer,
-        status: result.status,
-        created_at: new Date().toISOString(),
-        minutes,
-        consensus,
-      })
-      router.push(`/executions?id=${runId}`)
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Run failed")
-      setLoading(false)
-    }
-  }
-
+export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
-      <main className="w-full max-w-2xl space-y-8">
-        <div className="text-center space-y-4">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10 text-brand mb-4">
-            <Zap className="size-8" />
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
+      {/* Ambient background */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div className="animate-aurora absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-brand/20 blur-[140px]" />
+        <div className="animate-float-slow absolute top-1/3 -left-40 h-96 w-96 rounded-full bg-info/10 blur-[120px]" />
+        <div className="animate-float-slower absolute -right-40 bottom-0 h-96 w-96 rounded-full bg-brand/10 blur-[120px]" />
+        <div
+          className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+          style={{
+            backgroundImage:
+              "linear-gradient(var(--foreground) 1px, transparent 1px), linear-gradient(90deg, var(--foreground) 1px, transparent 1px)",
+            backgroundSize: "64px 64px",
+          }}
+        />
+      </div>
+
+      {/* Nav */}
+      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-brand-foreground shadow-lg shadow-brand/30">
+            <Zap className="size-5" />
           </div>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Assembly
-          </h1>
-          <p className="text-lg text-muted-foreground mx-auto max-w-xl">
-            Turn one question into a temporary team of AI agents that reason, debate, and verify to find the best answer.
-          </p>
+          <span className="text-lg font-bold tracking-tight">Assembly</span>
+        </div>
+        <a
+          href="/chat"
+          className="group inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-all hover:border-brand hover:text-brand hover:shadow-lg hover:shadow-brand/10"
+        >
+          Launch App
+          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+        </a>
+      </header>
+
+      {/* Hero */}
+      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
+        <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-subtle px-4 py-1.5 text-xs font-medium text-brand">
+          <Sparkles className="size-3.5" />
+          Multi-agent AI research
         </div>
 
-        {!hasKeys && (
-          <div className="rounded-xl border border-warning/30 bg-warning-subtle p-4 flex items-center justify-between gap-4">
-            <p className="text-sm text-warning">Add provider keys first — runs use your keys, never a server account.</p>
-            <Button variant="outline" size="sm" onClick={() => router.push("/setup")}>
-              <Settings className="size-4 mr-2" />
-              Configure Keys
-            </Button>
-          </div>
-        )}
+        <h1 className="animate-fade-up mt-8 max-w-3xl text-5xl font-bold leading-[1.1] tracking-tight sm:text-7xl" style={{ animationDelay: "0.1s" }}>
+          One question.
+          <br />
+          <span className="bg-gradient-to-r from-brand via-[#e8a020] to-[#c8860a] bg-clip-text text-transparent">
+            A team of minds.
+          </span>
+        </h1>
 
-        <div className="space-y-4">
-          <div className="relative rounded-2xl border border-border bg-card p-2 shadow-sm focus-within:border-brand">
-            <textarea
-              ref={textareaRef}
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="What do you want the team to research?"
-              className="w-full resize-none bg-transparent px-4 pt-3 pb-12 text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
-              rows={2}
-              maxLength={2000}
-            />
-            <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-muted px-2 py-1 font-mono text-muted-foreground">
-                  Mode: Auto
-                </Badge>
-                <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-                  <Clock className="size-3.5 text-muted-foreground ml-2 mr-1" />
-                  {TIME_BUDGETS.map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setMinutes(m)}
-                      className={`px-2 py-1 text-xs font-medium rounded-sm ${minutes === m ? "bg-muted text-foreground" : "text-muted-foreground"}`}
-                    >
-                      {m}m
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <Button size="sm" onClick={handleLaunch} disabled={loading || !question.trim()} className="shrink-0 h-8 rounded-lg">
-                {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="size-4 mr-1.5" />}
-                Launch Team
-              </Button>
+        <p className="animate-fade-up mt-6 max-w-xl text-lg text-muted-foreground sm:text-xl" style={{ animationDelay: "0.2s" }}>
+          Assembly forms a temporary team of AI agents that reason independently, cross-examine, verify with live sources, and synthesise a single high-confidence answer.
+        </p>
+
+        <div className="animate-fade-up mt-10 flex flex-col items-center gap-4 sm:flex-row" style={{ animationDelay: "0.3s" }}>
+          <a
+            href="/chat"
+            className="group inline-flex h-12 items-center gap-2 rounded-xl bg-brand px-8 text-base font-semibold text-brand-foreground shadow-xl shadow-brand/30 transition-all hover:bg-brand-hover hover:shadow-2xl hover:shadow-brand/40 hover:-translate-y-0.5"
+          >
+            <Zap className="size-5" />
+            Start Researching
+            <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
+          </a>
+          <a
+            href="/setup"
+            className="inline-flex h-12 items-center gap-2 rounded-xl border border-border bg-card px-8 text-base font-semibold text-foreground transition-all hover:border-brand/50 hover:text-brand hover:-translate-y-0.5"
+          >
+            Configure Keys
+          </a>
+        </div>
+
+        {/* Agent orbit visual */}
+        <div className="animate-fade-up relative mt-20 flex items-center justify-center" style={{ animationDelay: "0.4s" }}>
+          <div className="relative flex h-72 w-72 items-center justify-center sm:h-80 sm:w-80">
+            {/* Orbit rings */}
+            <div className="animate-spin-slower absolute inset-0 rounded-full border border-border/50" />
+            <div className="animate-spin-reverse absolute inset-8 rounded-full border border-border/30" />
+            <div className="animate-spin-slow absolute inset-16 rounded-full border border-border/20" />
+
+            {/* Center */}
+            <div className="animate-pulse-glow relative z-10 flex h-24 w-24 items-center justify-center rounded-3xl bg-brand text-brand-foreground shadow-2xl shadow-brand/40">
+              <Zap className="size-10" />
             </div>
+
+            {/* Agent nodes */}
+            {agents.map((agent) => {
+              const Icon = agent.icon
+              const angle = agents.indexOf(agent) * 90
+              return (
+                <div
+                  key={agent.label}
+                  className="animate-orbit absolute"
+                  style={{ animationDelay: agent.delay, transform: `rotate(${angle}deg)` }}
+                >
+                  <div
+                    className="animate-counter-orbit flex h-16 w-16 flex-col items-center justify-center gap-0.5 rounded-2xl border bg-card shadow-lg transition-all hover:scale-110 hover:shadow-xl"
+                    style={{ borderColor: agent.color + "40", animationDelay: agent.delay }}
+                  >
+                    <Icon className="size-5" style={{ color: agent.color }} />
+                    <span className="text-[10px] font-semibold text-muted-foreground">{agent.label}</span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
-          {status && <p className="px-2 text-xs text-muted-foreground">{status}</p>}
         </div>
 
-        <ModelPicker value={selection} onChange={setSelection} />
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          {EXAMPLES.map((ex, i) => (
-            <Card key={i} className="cursor-pointer hover:-translate-y-0.5 bg-card" onClick={() => { setQuestion(ex); textareaRef.current?.focus() }}>
-              <CardContent className="p-4 flex gap-3">
-                <Sparkles className="size-4 shrink-0 text-brand mt-0.5" />
-                <p className="text-sm text-muted-foreground">{ex}</p>
-              </CardContent>
-            </Card>
-          ))}
+        {/* How it works */}
+        <div className="animate-fade-up mt-28 w-full" style={{ animationDelay: "0.5s" }}>
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">How it works</h2>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {steps.map((step, i) => {
+              const Icon = step.icon
+              return (
+                <div
+                  key={step.title}
+                  className="group relative rounded-2xl border border-border bg-card p-6 text-left transition-all hover:-translate-y-1 hover:border-brand/40 hover:shadow-xl hover:shadow-brand/5"
+                >
+                  <div className="absolute right-4 top-4 font-mono text-xs text-muted-foreground/50">
+                    0{i + 1}
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand transition-all group-hover:scale-110 group-hover:bg-brand group-hover:text-brand-foreground">
+                    <Icon className="size-5" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold">{step.title}</h3>
+                  <p className="mt-1.5 text-sm text-muted-foreground">{step.desc}</p>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-border/50 py-6 text-center">
+        <p className="text-xs text-muted-foreground">
+          Assembly &middot; Temporary teams of AI agents that produce measurably better answers
+        </p>
+      </footer>
     </div>
   )
 }

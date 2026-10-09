@@ -44,7 +44,7 @@ function ExecutionContent() {
           // Local or already-settled runs have nothing to cancel server-side.
         }
       }
-      router.push("/")
+      router.push("/chat")
     }
   }
 
