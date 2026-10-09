@@ -41,7 +41,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def default_db_path() -> Path:
     """Resolve the app's SQLite file without importing app singletons."""
     try:
-        from src.core.config import settings  # noqa: PLC0415 - CLI startup
+        from src.core.config import settings
     except ImportError as exc:
         raise SystemExit(f"ABORT: cannot load settings: {exc}") from exc
     url = settings.effective_database_url
