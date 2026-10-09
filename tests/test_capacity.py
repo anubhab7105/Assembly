@@ -328,6 +328,7 @@ def test_plan_output_carries_no_secrets(fake_key: str) -> None:
 
 
 def _authed_client(monkeypatch):
+    """Open preflight client (no accounts, no auth headers)."""
     from fastapi.testclient import TestClient
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
@@ -338,7 +339,7 @@ def _authed_client(monkeypatch):
     from src.database.base import Base, get_db
     from src.main import app
 
-    monkeypatch.setattr(settings, "app_mode", "web")
+    monkeypatch.setattr(settings, "app_mode", "dev")
 
     engine = create_engine(
         "sqlite://",
@@ -358,16 +359,6 @@ def _authed_client(monkeypatch):
     app.dependency_overrides[get_db] = override_get_db
     monkeypatch.setattr(exec_mod, "SessionLocal", testing_session)
     client = TestClient(app)
-    signup = client.post(
-        "/api/auth/signup",
-        json={
-            "email": "preflight@test.local",
-            "name": "Pre",
-            "password": "password123",
-        },
-    )
-    assert signup.status_code == 200, signup.text
-    client.headers.update({"Authorization": f"Bearer {signup.json()['access_token']}"})
     return client, exec_mod
 
 
@@ -456,16 +447,10 @@ def test_preflight_exhausted_quota_is_infeasible(monkeypatch) -> None:
     assert response.json()["feasible"] is False
 
 
-def test_preflight_rejects_bad_tier_and_needs_auth(monkeypatch) -> None:
+def test_preflight_rejects_bad_tier(monkeypatch) -> None:
     client, _ = _authed_client(monkeypatch)
     bad_tier = client.get(
         "/api/executions/preflight",
         params={"question": "Hi?", "time_budget_minutes": 7},
     )
     assert bad_tier.status_code == 400
-    client.headers.pop("Authorization")
-    denied = client.get(
-        "/api/executions/preflight",
-        params={"question": "Hi?", "time_budget_minutes": 3},
-    )
-    assert denied.status_code in (401, 403)

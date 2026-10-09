@@ -4,14 +4,12 @@ uvicorn[standard]>=0.34.0
 sqlalchemy>=2.0.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-bcrypt>=4.0.0
 python-dotenv>=1.0.0
 python-multipart>=0.0.9
 httpx>=0.28.0
 aiohttp>=3.9.0
 websockets>=12.0
+platformdirs>=4.0.0
 
 # AI Providers (all OpenAI-compatible traffic goes through async httpx now;
 # no vendor SDKs except Gemini's; Hugging Face is optional/disabled by default)
@@ -20,8 +18,7 @@ huggingface-hub>=0.20.0
 pyyaml>=6.0.0
 keyring>=25.0.0              # Desktop mode: Windows Credential Manager (needs pywin32 on Windows)
 
-# Database
-psycopg2-binary>=2.9.0     # PostgreSQL driver for Supabase
+# Database (desktop/dev local SQLite only; web is stateless)
 alembic>=1.13.0
 
 # Utilities

@@ -165,9 +165,12 @@ async def test_canary_absent_in_failure_path_events(caplog) -> None:
 
 
 def _authed_client(monkeypatch, db_path: str) -> tuple[TestClient, str]:
+    """Desktop local-history client (no accounts)."""
     import src.api.executions as exec_mod
+    from src.core.config import settings as _settings
     from src.main import app
 
+    monkeypatch.setattr(_settings, "app_mode", "dev")
     engine = create_engine(
         f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
     )
@@ -184,23 +187,12 @@ def _authed_client(monkeypatch, db_path: str) -> tuple[TestClient, str]:
     app.dependency_overrides[get_db] = override_get_db
     monkeypatch.setattr(exec_mod, "SessionLocal", testing_session)
     client = TestClient(app)
-    signup = client.post(
-        "/api/auth/signup",
-        json={
-            "email": "canary@test.local",
-            "name": "Canary",
-            "password": "password123",
-        },
-    )
-    assert signup.status_code == 200, signup.text
-    token = signup.json()["access_token"]
-    client.headers.update({"Authorization": f"Bearer {token}"})
-    return client, token
+    return client, ""
 
 
 def test_canary_end_to_end_api_db_ws(monkeypatch, tmp_path, caplog) -> None:
     db_file = tmp_path / "canary.db"
-    client, token = _authed_client(monkeypatch, str(db_file))
+    client, _token = _authed_client(monkeypatch, str(db_file))
 
     with caplog.at_level(logging.INFO, logger="assembly"):
         # One key on purpose: routing fails before any network I/O, so the
@@ -226,10 +218,12 @@ def test_canary_end_to_end_api_db_ws(monkeypatch, tmp_path, caplog) -> None:
     # coverage is the on_progress payload capture above).
     ws_messages: list[str] = []
     try:
+        from src.core.config import settings as _settings
+
         with client.websocket_connect(
             f"/api/executions/ws/{execution_id}"
         ) as ws:
-            ws.send_text(json.dumps({"type": "auth", "token": token}))
+            ws.send_text(json.dumps({"type": "auth", "token": _settings.desktop_token}))
             deadline = time.monotonic() + 8.0
             while time.monotonic() < deadline:
                 try:
@@ -280,22 +274,11 @@ def test_canary_absent_in_422(monkeypatch, tmp_path) -> None:
 
 
 def test_providers_status_hides_mode_keys() -> None:
-    import uuid
-
     from fastapi.testclient import TestClient as TC
 
     from src.main import app
 
     client = TC(app)
-    signup = client.post(
-        "/api/auth/signup",
-        json={
-            "email": f"canary-{uuid.uuid4().hex[:8]}@test.local",
-            "name": "Canary",
-            "password": "password123",
-        },
-    )
-    client.headers.update({"Authorization": f"Bearer {signup.json()['access_token']}"})
     response = client.get("/api/providers/status")
     assert response.status_code == 200
     for attr in (
@@ -305,7 +288,6 @@ def test_providers_status_hides_mode_keys() -> None:
         "openrouter_api_key",
         "huggingface_api_key",
         "tavily_api_key",
-        "jwt_secret_key",
     ):
         value = getattr(settings, attr).get_secret_value()
         if value:

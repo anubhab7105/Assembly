@@ -143,6 +143,8 @@ class QuotaLimiter:
         self._slots: dict[str, asyncio.Semaphore] = {}
         self._in_flight: dict[str, int] = {}
         self._warned_unknown_pairs: set[tuple[str, str]] = set()
+        self._day_counts: dict[tuple[str, str, str], list[int]] = {}
+        self._snapshot: dict[tuple[str, str], tuple[int, int]] = {}
 
     # ── internal helpers ─────────────────────────────────────────────
 
@@ -190,21 +192,76 @@ class QuotaLimiter:
         )
 
     def _session(self) -> Any:
+        from src.core.config import settings
+
+        if settings.is_web:
+            raise RuntimeError("stateless web: no database session")
         if self._session_factory is not None:
             return self._session_factory()
         from src.database.base import SessionLocal
 
         return SessionLocal()
 
+    # ── client usage snapshot (stateless web) ────────────────────────
+    # The browser tracks daily usage in IndexedDB and sends it with each
+    # run. The limiter takes max(in-memory, snapshot) per bucket, so a
+    # restarted server never under-counts a key it cannot see.
+
+    def set_usage_snapshot(self, entries: Any) -> None:
+        """Load a client usage_snapshot: [{provider, model, count, tokens}]."""
+        merged: dict[tuple[str, str], tuple[int, int]] = {}
+        for entry in entries or []:
+            if isinstance(entry, dict):
+                provider = str(entry.get("provider", ""))
+                model = str(entry.get("model", ""))
+                try:
+                    count = max(0, int(entry.get("count", 0) or 0))
+                except (TypeError, ValueError):
+                    count = 0
+                try:
+                    tokens = max(0, int(entry.get("tokens", 0) or 0))
+                except (TypeError, ValueError):
+                    tokens = 0
+            else:
+                provider = str(getattr(entry, "provider", ""))
+                model = str(getattr(entry, "model", ""))
+                count = max(0, int(getattr(entry, "count", 0) or 0))
+                tokens = max(0, int(getattr(entry, "tokens", 0) or 0))
+            if not provider:
+                continue
+            key = (provider, model)
+            prev = merged.get(key, (0, 0))
+            merged[key] = (prev[0] + count, prev[1] + tokens)
+        self._snapshot = merged
+
+    def _snapshot_for(self, provider: str, bucket: str) -> tuple[int, int]:
+        snap: dict[tuple[str, str], tuple[int, int]] = getattr(self, "_snapshot", {})
+        if not snap:
+            return 0, 0
+        if bucket == "":
+            # Account scope: shared pool sums every model on the provider.
+            total_c = sum(c for (p, _m), (c, _t) in snap.items() if p == provider)
+            total_t = sum(_t for (p, _m), (c, _t) in snap.items() if p == provider)
+            return total_c, total_t
+        return snap.get((provider, bucket), (0, 0))
+
     def _today_counters(
         self, provider: str, key_id: str, bucket: str
     ) -> tuple[int, int]:
-        """(calls, tokens) spent today in a bucket; (0, 0) when unreadable.
+        """(calls, tokens) spent today: max(memory, snapshot, DB).
 
-        Fail-open like the old per-field readers: a DB error reads as an
-        empty bucket, never as a spent one.
+        Web mode has no DB: memory + client snapshot only. Desktop adds
+        persisted rows. Fail-open: a DB error reads as memory+snapshot.
         """
+        mem = self._day_counts.get((provider, key_id, bucket), [0, 0])
+        mem_c, mem_t = mem[0], mem[1]
+        snap_c, snap_t = self._snapshot_for(provider, bucket)
+        best_c, best_t = max(mem_c, snap_c), max(mem_t, snap_t)
         try:
+            from src.core.config import settings
+
+            if settings.is_web:
+                return best_c, best_t
             from src.database.models import QuotaUsage
 
             db = self._session()
@@ -220,13 +277,15 @@ class QuotaLimiter:
                     .first()
                 )
                 if row is None:
-                    return 0, 0
-                return (row.count or 0), (row.tokens or 0)
+                    return best_c, best_t
+                return max(best_c, row.count or 0), max(best_t, row.tokens or 0)
             finally:
                 db.close()
+        except RuntimeError:
+            return best_c, best_t
         except Exception as exc:  # noqa: BLE001 — quota must never break runs
             logger.warning(f"Quota   │ day-counter read failed: {exc}")
-            return 0, 0
+            return best_c, best_t
 
     def _record(
         self,
@@ -244,7 +303,15 @@ class QuotaLimiter:
             )
         if not track_day:
             return
+        # In-memory day counters work in every mode (web has no DB).
+        slot = self._day_counts.setdefault((provider, key_id, bucket), [0, 0])
+        slot[0] += 1
+        slot[1] += max(0, est_tokens)
         try:
+            from src.core.config import settings
+
+            if settings.is_web:
+                return
             from src.database.models import QuotaUsage
 
             db = self._session()
@@ -512,12 +579,14 @@ class QuotaLimiter:
         return out
 
     def reset(self) -> None:
-        """Drop in-memory windows and cooldowns (day rows in the DB stay)."""
+        """Drop in-memory windows, cooldowns, day counts and snapshot."""
         self._minute_calls.clear()
         self._minute_tokens.clear()
         self._cooldowns.clear()
         self._slots.clear()
         self._in_flight.clear()
+        self._day_counts.clear()
+        self._snapshot = {}
 
 
 _limiter: QuotaLimiter | None = None

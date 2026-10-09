@@ -26,7 +26,7 @@ from src.core.keystore import (
     wrap_keys,
 )
 from src.database.base import Base, get_db
-from src.database.models import AgentRun, Conversation, Execution, Message, User
+from src.database.models import AgentRun, Execution
 
 
 def _string_values(obj: Any) -> list[str]:
@@ -119,9 +119,12 @@ def test_reveal_handles_all_shapes(fake_key: str) -> None:
 
 
 def _authed_client(monkeypatch) -> TestClient:
+    """Desktop local-history client (no accounts)."""
     import src.api.executions as exec_mod
+    from src.core.config import settings as _settings
     from src.main import app
 
+    monkeypatch.setattr(_settings, "app_mode", "dev")
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -140,12 +143,6 @@ def _authed_client(monkeypatch) -> TestClient:
     app.dependency_overrides[get_db] = override_get_db
     monkeypatch.setattr(exec_mod, "SessionLocal", testing_session)
     client = TestClient(app)
-    signup = client.post(
-        "/api/auth/signup",
-        json={"email": "keys@test.local", "name": "Keys", "password": "password123"},
-    )
-    assert signup.status_code == 200, signup.text
-    client.headers.update({"Authorization": f"Bearer {signup.json()['access_token']}"})
     return client
 
 
@@ -205,11 +202,8 @@ def test_execution_db_rows_hold_no_keys(monkeypatch, fake_key: str) -> None:
     db = exec_mod.SessionLocal()
     try:
         rows: list[Any] = []
-        rows += db.query(User).all()
-        rows += db.query(Conversation).all()
         rows += db.query(Execution).all()
         rows += db.query(AgentRun).all()
-        rows += db.query(Message).all()
         assert rows != []
         for row in rows:
             for value in _string_values(row):
@@ -250,7 +244,6 @@ def test_providers_status_names_only(monkeypatch) -> None:
         "openrouter_api_key",
         "huggingface_api_key",
         "tavily_api_key",
-        "jwt_secret_key",
     ):
         value = reveal(getattr(settings, attr, ""))
         if value:

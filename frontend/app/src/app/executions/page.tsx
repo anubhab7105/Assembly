@@ -37,7 +37,13 @@ function ExecutionContent() {
   // Handlers
   const handleCancel = async () => {
     if (id && confirm("Are you sure you want to cancel this execution?")) {
-      await ApiClient.cancelExecution(id)
+      if (!id.startsWith("local-")) {
+        try {
+          await ApiClient.cancelExecution(id)
+        } catch {
+          // Local or already-settled runs have nothing to cancel server-side.
+        }
+      }
       router.push("/")
     }
   }

@@ -1,148 +1,158 @@
 import { env } from "./env"
-import { z } from "zod"
-import { createClient } from "./supabase/client"
 
-// Zod schemas for backend responses
-export const StartExecutionResponseSchema = z.object({
-  id: z.string(),
-  status: z.string(),
-})
+/** Model catalog shapes (GET /api/catalog). */
+export interface CatalogModel {
+  id: string
+  family: string
+  roles: string[]
+  scope: string
+}
 
-export type StartExecutionResponse = z.infer<typeof StartExecutionResponseSchema>
+export interface CatalogProvider {
+  id: string
+  enabled: boolean
+  key_url: string
+  models: CatalogModel[]
+}
 
-export const ExecutionStatusResponseSchema = z.object({
-  id: z.string(),
-  status: z.string(),
-  events: z.array(z.any()), // Can be refined to ProgressEvent schema if needed
-})
+export interface Catalog {
+  providers: CatalogProvider[]
+  families: string[]
+}
 
-export type ExecutionStatusResponse = z.infer<typeof ExecutionStatusResponseSchema>
+export interface UsageEntry {
+  provider: string
+  model: string
+  count: number
+  tokens: number
+}
+
+export interface ModelSelection {
+  selected: string[]
+  pins: Record<string, string>
+}
+
+export interface RunStreamEvent {
+  event_type: string
+  [key: string]: unknown
+}
 
 export class ApiClient {
+  private static headers(extra: Record<string, string> = {}): Record<string, string> {
+    const auth: Record<string, string> = {}
+    if (env.NEXT_PUBLIC_APP_MODE === "desktop" && env.desktopToken) {
+      auth["X-Assembly-Token"] = env.desktopToken
+    }
+    return { "Content-Type": "application/json", ...auth, ...extra }
+  }
+
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${env.apiUrl}${endpoint}`
-    let authHeader: Record<string, string> = {}
-    
-    if (env.NEXT_PUBLIC_APP_MODE === 'web') {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.access_token) {
-        authHeader['Authorization'] = `Bearer ${session.access_token}`
-      }
-    } else if (env.NEXT_PUBLIC_APP_MODE === 'desktop' && env.desktopToken) {
-      authHeader['X-Assembly-Token'] = env.desktopToken
-    }
-
     const response = await fetch(url, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeader,
-        ...options.headers,
-      },
+      headers: { ...this.headers(), ...options.headers },
     })
-
     if (!response.ok) {
       throw new Error(`API Error: ${response.status} ${response.statusText}`)
     }
-
-    return response.json()
+    return response.json() as Promise<T>
   }
 
-  static async startExecution(question: string, minutes: number): Promise<StartExecutionResponse> {
-    try {
-      const data = await this.request("/executions", {
-        method: "POST",
-        body: JSON.stringify({ question, tier_minutes: minutes }),
-      })
-      return StartExecutionResponseSchema.parse(data)
-    } catch (e: any) {
-      // For demo purposes, fake a successful start if backend isn't running
-      return { id: "demo-exec-" + Date.now(), status: "running" }
+  static catalog(): Promise<Catalog> {
+    return this.request<Catalog>("/api/catalog")
+  }
+
+  static preflight(question: string, minutes: number, usage: UsageEntry[] = []) {
+    return this.request("/api/executions/preflight", {
+      method: "POST",
+      body: JSON.stringify({
+        question,
+        time_budget_minutes: minutes,
+        usage_snapshot: usage,
+      }),
+    }) as Promise<{ feasible: boolean; explanation?: string; feasible_tier?: number }>
+  }
+
+  /** POST /api/run and stream SSE events to onEvent. Resolves on run.finished. */
+  static async startRunStream(
+    args: {
+      question: string
+      minutes: number
+      providerKeys: Record<string, string>
+      selection: ModelSelection
+      usage: UsageEntry[]
+      signal?: AbortSignal
+    },
+    onEvent: (event: RunStreamEvent) => void,
+  ): Promise<{ status: string; usage: UsageEntry[] }> {
+    const response = await fetch(`${env.apiUrl}/api/run`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({
+        question: args.question,
+        time_budget_minutes: args.minutes,
+        provider_keys: args.providerKeys,
+        model_selection: args.selection,
+        usage_snapshot: args.usage,
+      }),
+      signal: args.signal,
+    })
+    if (!response.ok || !response.body) {
+      throw new Error(`Run failed: ${response.status}`)
     }
-  }
-
-  static async getExecution(id: string): Promise<ExecutionStatusResponse> {
-    const data = await this.request(`/executions/${id}`)
-    return ExecutionStatusResponseSchema.parse(data)
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ""
+    let status = "unknown"
+    let usage: UsageEntry[] = []
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split("\n\n")
+      buffer = parts.pop() ?? ""
+      for (const part of parts) {
+        const lines = part.split("\n").filter((l) => l.startsWith("data: "))
+        for (const line of lines) {
+          const event = JSON.parse(line.slice(6))
+          onEvent(event)
+          if (event.event_type === "run.finished") {
+            status = event.status ?? "unknown"
+            usage = event.usage ?? []
+          }
+        }
+      }
+    }
+    return { status, usage }
   }
 
   static async cancelExecution(id: string): Promise<{ status: string }> {
-    try {
-      const data = await this.request(`/executions/${id}/cancel`, { method: "POST" })
-      return data as { status: string }
-    } catch (e: any) {
-      return { status: "cancelled" }
-    }
-  }
-
-  static async runSingleModel(question: string): Promise<{ answer: string }> {
-    try {
-      const data = await this.request("/executions/single", {
-        method: "POST",
-        body: JSON.stringify({ question }),
-      })
-      return data as { answer: string }
-    } catch (e: any) {
-      return { answer: "This is a mock fallback answer from a single model (e.g. Gemini Flash) for comparison." }
-    }
-  }
-
-  static async listExecutions(): Promise<{ id: string, question: string, status: string, created_at: string }[]> {
-    try {
-      const data = await this.request("/executions")
-      return data as { id: string, question: string, status: string, created_at: string }[]
-    } catch (e: any) {
-      // Mock data for UI development if backend is not ready
-      return [
-        { id: "exec-1", question: "Will quantum computing achieve commercial advantage before 2030?", status: "completed", created_at: new Date().toISOString() },
-        { id: "exec-2", question: "Timeline for AGI?", status: "failed", created_at: new Date(Date.now() - 86400000).toISOString() },
-      ]
-    }
-  }
-
-  static async deleteExecution(id: string): Promise<void> {
-    try {
-      await this.request(`/executions/${id}`, { method: "DELETE" })
-    } catch (e: any) {
-      console.warn("Mock delete", id)
-    }
+    const data = await this.request<{ status: string }>(`/api/executions/${id}/cancel`, {
+      method: "POST",
+    })
+    return data
   }
 
   static async testKey(provider: string, key: string): Promise<{ status: "valid" | "rate_limited" | "invalid" }> {
     try {
-      const data = await this.request(`/providers/${provider}/test`, {
-        method: "POST",
-        body: JSON.stringify({ key }),
-      })
-      return data as { status: "valid" | "rate_limited" | "invalid" }
-    } catch (e: any) {
-      if (e.message.includes("429")) return { status: "rate_limited" }
+      const data = await this.request<{ valid: boolean; rate_limited: boolean }>(
+        "/api/keys/test",
+        { method: "POST", body: JSON.stringify({ provider, key }) },
+      )
+      if (data.valid) return { status: "valid" }
+      if (data.rate_limited) return { status: "rate_limited" }
       return { status: "invalid" }
-    }
-  }
-
-  static async preflightExecution(question: string, minutes: number): Promise<{ feasible: boolean; reason?: string; best_smaller_plan?: number }> {
-    try {
-      const data = await this.request("/executions/preflight", {
-        method: "POST",
-        body: JSON.stringify({ question, tier_minutes: minutes }),
-      })
-      return data as { feasible: boolean; reason?: string; best_smaller_plan?: number }
-    } catch (e: any) {
-      // Mock failure for 15 minute plans for demonstration if backend isn't real
-      if (minutes >= 15) {
-        return { feasible: false, reason: "Current configured models cannot guarantee completion within 15 minutes due to rate limits.", best_smaller_plan: 10 }
-      }
-      return { feasible: true }
+    } catch (e: unknown) {
+      if (String((e as Error)?.message ?? e).includes("429")) return { status: "rate_limited" }
+      return { status: "invalid" }
     }
   }
 
   static async wakeup(): Promise<void> {
     try {
-      const baseUrl = env.apiUrl.endsWith("/api") ? env.apiUrl.replace("/api", "") : env.apiUrl;
-      await fetch(`${baseUrl}/health`).catch(() => {});
-    } catch (e: any) {
+      const baseUrl = env.apiUrl.endsWith("/api") ? env.apiUrl.replace("/api", "") : env.apiUrl
+      await fetch(`${baseUrl}/health`).catch(() => {})
+    } catch {
       // Ignore
     }
   }
