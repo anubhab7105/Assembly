@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     jwt_secret_key: SecretStr = Field(default=SecretStr(""))
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 1440  # 24 hours
+    # Dedicated HMAC salt for quota fingerprinting (must not be the JWT key).
+    # Set QUOTA_SALT in .env or environment. Generated from secrets.token_hex(32)
+    # if not provided (safe for dev; set explicitly in production).
+    quota_salt: SecretStr = Field(default=SecretStr(""))
 
     # ── Database ─────────────────────────────────────────────────────
     database_url: str = Field(
