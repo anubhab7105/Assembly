@@ -2,6 +2,7 @@
 /.env
 .env.dev
 assembly.db
+.local/
 
 # ── Python ──────────────────────────────────
 __pycache__/
