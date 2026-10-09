@@ -142,6 +142,7 @@ class QuotaLimiter:
         self._cooldowns: dict[tuple[str, str, str], float] = {}
         self._slots: dict[str, asyncio.Semaphore] = {}
         self._in_flight: dict[str, int] = {}
+        self._warned_unknown_pairs: set[tuple[str, str]] = set()
 
     # ── internal helpers ─────────────────────────────────────────────
 
@@ -157,6 +158,12 @@ class QuotaLimiter:
             limits = self._config.limits_of(provider, model_id)
             scope = self._config.scope_of(provider, model_id)
         except (KeyError, AttributeError):
+            if (provider, model_id) not in self._warned_unknown_pairs:
+                self._warned_unknown_pairs.add((provider, model_id))
+                logger.warning(
+                    f"Quota   │ unknown (provider, model) pair "
+                    f"{provider}/{model_id} — no limits enforced (fail-open)"
+                )
             return None, "model", model_id
         bucket = model_id if scope == "model" else ACCOUNT_BUCKET
         return limits, scope, bucket
@@ -189,12 +196,14 @@ class QuotaLimiter:
 
         return SessionLocal()
 
-    def _today_used(
-        self, provider: str, key_id: str, bucket: str, rpd: int | None
-    ) -> int | None:
-        """Calls already spent today in a bucket, or None when no limit."""
-        if rpd is None:
-            return None
+    def _today_counters(
+        self, provider: str, key_id: str, bucket: str
+    ) -> tuple[int, int]:
+        """(calls, tokens) spent today in a bucket; (0, 0) when unreadable.
+
+        Fail-open like the old per-field readers: a DB error reads as an
+        empty bucket, never as a spent one.
+        """
         try:
             from src.database.models import QuotaUsage
 
@@ -210,15 +219,22 @@ class QuotaLimiter:
                     )
                     .first()
                 )
-                return row.count if row else 0
+                if row is None:
+                    return 0, 0
+                return (row.count or 0), (row.tokens or 0)
             finally:
                 db.close()
         except Exception as exc:  # noqa: BLE001 — quota must never break runs
             logger.warning(f"Quota   │ day-counter read failed: {exc}")
-            return None
+            return 0, 0
 
     def _record(
-        self, provider: str, key_id: str, bucket: str, est_tokens: int, rpd: int | None
+        self,
+        provider: str,
+        key_id: str,
+        bucket: str,
+        est_tokens: int,
+        track_day: bool,
     ) -> None:
         now = time.monotonic()
         self._minute_calls.setdefault((provider, key_id, bucket), deque()).append(now)
@@ -226,7 +242,7 @@ class QuotaLimiter:
             self._minute_tokens.setdefault((provider, key_id, bucket), deque()).append(
                 (now, est_tokens)
             )
-        if rpd is None:
+        if not track_day:
             return
         try:
             from src.database.models import QuotaUsage
@@ -315,6 +331,7 @@ class QuotaLimiter:
         rpm = self._int_or_none(limits.rpm) if limits is not None else None
         rpd = self._int_or_none(limits.rpd) if limits is not None else None
         tpm = self._int_or_none(limits.tpm) if limits is not None else None
+        tpd = self._int_or_none(limits.tpd) if limits is not None else None
         if tpm is not None and est_tokens > tpm:
             raise QuotaExhausted(
                 provider,
@@ -322,10 +339,24 @@ class QuotaLimiter:
                 f"estimated {est_tokens} tokens exceed the {model_id} "
                 f"tpm limit of {tpm} — reduce max_tokens",
             )
-        if rpd is not None:
-            used = self._today_used(provider, key_id, bucket, rpd)
-            if used is not None and used >= rpd:
+        if tpd is not None and est_tokens > tpd:
+            raise QuotaExhausted(
+                provider,
+                key_id,
+                f"estimated {est_tokens} tokens exceed the {model_id} "
+                f"daily token budget of {tpd} — reduce max_tokens",
+            )
+        if rpd is not None or tpd is not None:
+            used_calls, used_tokens = self._today_counters(provider, key_id, bucket)
+            if rpd is not None and used_calls >= rpd:
                 raise QuotaExhausted(provider, key_id, "daily quota spent")
+            if tpd is not None and used_tokens + est_tokens > tpd:
+                raise QuotaExhausted(
+                    provider,
+                    key_id,
+                    f"daily token budget spent ({used_tokens} of {tpd} "
+                    "tokens used) — try tomorrow or a smaller max_tokens",
+                )
         deadline = now + self._max_wait
         if rpm is not None:
             self._prune(provider, key_id, bucket, now)
@@ -358,7 +389,9 @@ class QuotaLimiter:
         await slot.acquire()
         try:
             self._in_flight[provider] = self._in_flight.get(provider, 0) + 1
-            self._record(provider, key_id, bucket, est_tokens, rpd)
+            self._record(
+                provider, key_id, bucket, est_tokens, rpd is not None or tpd is not None
+            )
         except BaseException:
             # A cancellation landing here must not leak the semaphore permit
             # or the in-flight counter (today: no await sits between acquire
@@ -401,12 +434,16 @@ class QuotaLimiter:
             limits, _scope, bucket = self._lookup(provider, model_id)
         except KeyError:
             return True
-        rpd = self._int_or_none(limits.rpd) if limits is not None else None
-        if rpd is not None:
-            used = self._today_used(provider, key_id, bucket, rpd)
-            if used is not None and used >= rpd:
-                return True
-        return False
+        if limits is None:
+            return False
+        rpd = self._int_or_none(limits.rpd)
+        tpd = self._int_or_none(limits.tpd)
+        if rpd is None and tpd is None:
+            return False
+        used_calls, used_tokens = self._today_counters(provider, key_id, bucket)
+        return (rpd is not None and used_calls >= rpd) or (
+            tpd is not None and used_tokens >= tpd
+        )
 
     def remaining(self, provider: str, key_id: str, model_id: str) -> dict[str, Any]:
         """Remaining capacity snapshot for one model for planner/status views."""
@@ -423,6 +460,8 @@ class QuotaLimiter:
                 "tpm_remaining": None,
                 "rpd_limit": None,
                 "rpd_remaining": None,
+                "tpd_limit": None,
+                "tpd_remaining": None,
                 "cooldown_seconds": 0.0,
                 "in_flight": self._in_flight.get(provider, 0),
                 "scope": "model",
@@ -432,6 +471,7 @@ class QuotaLimiter:
         rpm = self._int_or_none(limits.rpm)
         tpm = self._int_or_none(limits.tpm)
         rpd = self._int_or_none(limits.rpd)
+        tpd = self._int_or_none(limits.tpd)
         out: dict[str, Any] = {
             "rpm_limit": None,
             "rpm_remaining": None,
@@ -439,6 +479,8 @@ class QuotaLimiter:
             "tpm_remaining": None,
             "rpd_limit": None,
             "rpd_remaining": None,
+            "tpd_limit": None,
+            "tpd_remaining": None,
             "cooldown_seconds": round(
                 self._cooldown_left(provider, key_id, model_id), 1
             ),
@@ -460,9 +502,13 @@ class QuotaLimiter:
             out["tpm_limit"] = tpm
             out["tpm_remaining"] = max(0, tpm - spent)
         if rpd is not None:
-            used = self._today_used(provider, key_id, bucket, rpd)
+            used_calls, _ = self._today_counters(provider, key_id, bucket)
             out["rpd_limit"] = rpd
-            out["rpd_remaining"] = rpd if used is None else max(0, rpd - used)
+            out["rpd_remaining"] = max(0, rpd - used_calls)
+        if tpd is not None:
+            _, used_tokens = self._today_counters(provider, key_id, bucket)
+            out["tpd_limit"] = tpd
+            out["tpd_remaining"] = max(0, tpd - used_tokens)
         return out
 
     def reset(self) -> None:

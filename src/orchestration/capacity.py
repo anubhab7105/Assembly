@@ -6,7 +6,9 @@ chosen time tier, BEFORE any agent runs. The math is a pure function of
 its inputs so it is easy to unit-test with no providers or network:
 
     for each key:
-        calls_now   = min(rpm_limit x minutes_in_budget, rpd_remaining)
+        calls_now   = min(rpm_limit x minutes_in_budget, rpd_remaining,
+                          tpm_limit x minutes / AVG_TOKENS_PER_CALL,
+                          tpd_remaining / AVG_TOKENS_PER_CALL)
     total_calls     = sum(calls_now over keys) x 0.7   # 30% safety margin
     cost(plan)      = agents x (1 solve) + rounds x agents x (1 critique)
                       + searches + 1 synthesis + 1 planner
@@ -30,6 +32,11 @@ VALID_TIERS: tuple[int, ...] = (3, 5, 10, 15)
 
 #: Keep a 30% safety margin on quota math (WORKFLOW section 4).
 SAFETY_FACTOR: float = 0.7
+
+#: Rough planning estimate of tokens per LLM call (prompt + completion).
+#: Not measured — it only keeps token budgets (tpm/tpd) comparable to
+#: call counts when deciding whether a plan fits.
+AVG_TOKENS_PER_CALL: int = 2000
 
 #: Floor (seconds) for the synthesis time reserve.
 SYNTH_RESERVE_MIN_SECONDS: float = 25.0
@@ -88,11 +95,18 @@ RESEARCH_HINTS: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class KeyBudget:
-    """Affordable-call snapshot for ONE key. Counts only — never the key."""
+    """Affordable-call snapshot for ONE quota bucket. Counts only — never keys.
+
+    One entry per bucket (a model-scope model, or a whole account-scope
+    pool): buckets with independent windows sum; a shared pool appears
+    once and counts once.
+    """
 
     provider: str
     rpm_limit: int | None = None
     rpd_remaining: int | None = None
+    tpm_limit: int | None = None
+    tpd_remaining: int | None = None
 
 
 @dataclass(frozen=True)
@@ -155,11 +169,13 @@ def affordable_calls(
 ) -> int | None:
     """Quota-affordable calls after the 30% safety margin.
 
-    Per key: min(rpm_limit x minutes, rpd_remaining); a side with no known
-    limit is ignored. Keys with NO known limit at all are unlimited-for-
-    planning (fail-open, like the router). Returns None when every key is
-    unlimited, i.e. quota does not constrain the plan. An empty key list
-    means zero affordable calls.
+    Per bucket: min(rpm_limit x minutes, rpd_remaining,
+    tpm_limit x minutes / AVG_TOKENS_PER_CALL,
+    tpd_remaining / AVG_TOKENS_PER_CALL); a side with no known limit is
+    ignored. Buckets with NO known limit at all are unlimited-for-planning
+    (fail-open, like the router). Returns None when every bucket is
+    unlimited, i.e. quota does not constrain the plan. An empty bucket
+    list means zero affordable calls.
     """
     if not list(keys):
         return 0
@@ -170,6 +186,12 @@ def affordable_calls(
             options.append(max(0, key.rpm_limit) * max(0, minutes))
         if key.rpd_remaining is not None:
             options.append(max(0, key.rpd_remaining))
+        if key.tpm_limit is not None:
+            options.append(
+                max(0, key.tpm_limit) * max(0, minutes) // AVG_TOKENS_PER_CALL
+            )
+        if key.tpd_remaining is not None:
+            options.append(max(0, key.tpd_remaining) // AVG_TOKENS_PER_CALL)
         if options:
             known.append(min(options))
     if not known:

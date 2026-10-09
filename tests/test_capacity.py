@@ -68,6 +68,52 @@ def test_affordable_prefers_tighter_side() -> None:
     )
 
 
+def test_affordable_token_options_bind() -> None:
+    # tpm 8000 x 5 min / 2000 tokens-per-call = 20 calls: binds over rpm/rpd.
+    assert affordable_calls(
+        [KeyBudget(provider="g", rpm_limit=30, rpd_remaining=1000, tpm_limit=8000)],
+        5,
+    ) == int(min(150, 1000, 20) * 0.7)
+    # tpd remaining 5000 tokens / 2000 = 2 calls: binds on its own.
+    assert affordable_calls([KeyBudget(provider="g", tpd_remaining=5000)], 5) == int(
+        2 * 0.7
+    )
+    # Absent token budgets change nothing (old math preserved).
+    assert (
+        affordable_calls([KeyBudget(provider="p", rpm_limit=30, rpd_remaining=20)], 5)
+        == 14
+    )
+
+
+REACT_QUESTION = (
+    "Is React better than Vue for a large cybersecurity platform? "
+    "Compare ecosystem, performance, state management at scale, and hiring."
+)
+
+
+def test_groq_tpm_downsizes_five_minute_plan() -> None:
+    """One groq-like bucket: tpm 8000 (20 calls/5 min) binds below the
+    tier-5 standard cost of 18, so the plan downgrades with an explanation."""
+    keys = [
+        KeyBudget(provider="groq", rpm_limit=30, rpd_remaining=1000, tpm_limit=8000)
+    ]
+    plan = plan_capacity(keys, 5, heuristic_suggestion(REACT_QUESTION))
+    assert plan.affordable_calls == int(min(150, 1000, 20) * 0.7) == 14
+    assert plan.downgraded and plan.feasible
+    assert plan.feasible_tier == 3
+    assert plan.explanation
+
+
+def test_groq_three_buckets_sum_but_stay_tpm_bound() -> None:
+    """Three model-scope buckets sum — yet tpm still binds, not rpm:
+    3 x 14 = 42, where rpm alone would allow 3 x 105 = 315."""
+    keys = [
+        KeyBudget(provider="groq", rpm_limit=30, rpd_remaining=1000, tpm_limit=8000)
+        for _ in range(3)
+    ]
+    assert affordable_calls(keys, 5) == 42
+
+
 def test_affordable_unknown_limits_is_unlimited() -> None:
     assert affordable_calls([KeyBudget(provider="p")], 5) is None
     assert affordable_calls([], 5) == 0  # no keys at all: nothing affordable

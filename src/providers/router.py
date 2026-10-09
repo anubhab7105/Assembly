@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from src.core.keystore import get_keystore, reveal
 from src.core.logging_config import logger
+from src.orchestration.capacity import AVG_TOKENS_PER_CALL
 from src.providers.base import AIProvider
 from src.providers.config import (
     LimitsNotFilledError,
@@ -270,7 +271,8 @@ class ModelRouter:
     def capacity_estimate(self, time_budget_minutes: int = 3) -> dict[str, object]:
         """Affordable calls per provider for the planner (WORKFLOW capacity rule).
 
-        Per quota bucket: calls_now = min(rpm × minutes, rpd remaining);
+        Per quota bucket: calls_now = min(rpm × minutes, rpd remaining,
+        tpm × minutes / AVG_TOKENS_PER_CALL, tpd / AVG_TOKENS_PER_CALL);
         a provider totals its buckets × 0.7 margin (account-scope models
         share one bucket and are counted once). Unknown limits yield None
         (unlimited-for-planning, not zero).
@@ -298,6 +300,16 @@ class ModelRouter:
                         options.append(remaining["rpm_limit"] * time_budget_minutes)
                     if remaining["rpd_limit"] is not None:
                         options.append(remaining["rpd_remaining"])
+                    if remaining["tpm_limit"] is not None:
+                        options.append(
+                            remaining["tpm_limit"]
+                            * time_budget_minutes
+                            // AVG_TOKENS_PER_CALL
+                        )
+                    if remaining["tpd_limit"] is not None:
+                        options.append(
+                            remaining["tpd_remaining"] // AVG_TOKENS_PER_CALL
+                        )
                     if options:
                         subtotals.append(int(min(options) * 0.7))
                 per_provider[provider_id] = sum(subtotals) if subtotals else None
@@ -330,6 +342,8 @@ class ModelRouter:
                     seen_buckets.add(bucket)
                     rpm_limit: int | None = None
                     rpd_remaining: int | None = None
+                    tpm_limit: int | None = None
+                    tpd_remaining: int | None = None
                     cooldown_seconds: float = 0.0
                     if fingerprint is not None:
                         remaining = self._limiter.remaining(
@@ -337,6 +351,8 @@ class ModelRouter:
                         )
                         rpm_limit = remaining.get("rpm_limit")
                         rpd_remaining = remaining.get("rpd_remaining")
+                        tpm_limit = remaining.get("tpm_limit")
+                        tpd_remaining = remaining.get("tpd_remaining")
                         cooldown_seconds = float(
                             remaining.get("cooldown_seconds") or 0.0
                         )
@@ -350,6 +366,8 @@ class ModelRouter:
                             "scope": scope,
                             "rpm_limit": rpm_limit,
                             "rpd_remaining": rpd_remaining,
+                            "tpm_limit": tpm_limit,
+                            "tpd_remaining": tpd_remaining,
                             "cooldown_seconds": cooldown_seconds,
                         }
                     )
@@ -361,6 +379,8 @@ class ModelRouter:
                             "scope": "model",
                             "rpm_limit": None,
                             "rpd_remaining": None,
+                            "tpm_limit": None,
+                            "tpd_remaining": None,
                             "cooldown_seconds": 0.0,
                         }
                     )
