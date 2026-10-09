@@ -24,6 +24,10 @@
   ],
   "rewrites": [
     {
+      "source": "/settings",
+      "destination": "/setup"
+    },
+    {
       "source": "/landing",
       "destination": "/landing.html"
     },
