@@ -170,11 +170,38 @@ providers:
     base: openai-compatible
     url: https://integrate.api.nvidia.com/v1
     key_url: https://build.nvidia.com
-    # Disabled until a key is added (no NVIDIA_API_KEY locally 2026-10-09).
-    enabled: false
-    # No models filled in yet: add the ones you enabled at build.nvidia.com
-    # (ids look like "vendor/model-name"), each with a valid family + roles.
-    models: []
+    # Enabled 2026-10-09: ids below are the long-lived build.nvidia.com
+    # instruct models; limits pending a verify run with a user key
+    # (router loud-skips until rpm/rpd/tpm are filled).
+    enabled: true
+    models:
+      - id: meta/llama-3.1-8b-instruct
+        family: llama
+        roles: [solver, researcher]
+        scope: model
+        limits:
+          rpm: null # source: build.nvidia.com limits; checked: pending verify
+          rpd: null # source: build.nvidia.com limits; checked: pending verify
+          tpm: null # source: build.nvidia.com limits; checked: pending verify
+          context_tokens: null # source: build.nvidia.com model page; checked: pending verify
+      - id: meta/llama-3.1-70b-instruct
+        family: llama
+        roles: [solver, critic]
+        scope: model
+        limits:
+          rpm: null # source: build.nvidia.com limits; checked: pending verify
+          rpd: null # source: build.nvidia.com limits; checked: pending verify
+          tpm: null # source: build.nvidia.com limits; checked: pending verify
+          context_tokens: null # source: build.nvidia.com model page; checked: pending verify
+      - id: mistralai/mixtral-8x7b-instruct-v0.1
+        family: mistral
+        roles: [solver, critic]
+        scope: model
+        limits:
+          rpm: null # source: build.nvidia.com limits; checked: pending verify
+          rpd: null # source: build.nvidia.com limits; checked: pending verify
+          tpm: null # source: build.nvidia.com limits; checked: pending verify
+          context_tokens: null # source: build.nvidia.com model page; checked: pending verify
 
   huggingface:
     base: huggingface
