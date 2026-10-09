@@ -68,8 +68,13 @@ def test_affordable_prefers_tighter_side() -> None:
     )
 
 
-def test_affordable_unknown_limits_is_unlimited() -> None:
-    assert affordable_calls([KeyBudget(provider="p")], 5) is None
+def test_affordable_unknown_limits_uses_defaults() -> None:
+    from src.providers.config import DEFAULT_RPM
+    from src.orchestration.capacity import SAFETY_FACTOR
+    
+    # 1 key * DEFAULT_RPM * 5 minutes * 0.7
+    expected = int(1 * DEFAULT_RPM * 5 * SAFETY_FACTOR)
+    assert affordable_calls([KeyBudget(provider="p")], 5) == expected
     assert affordable_calls([], 5) == 0  # no keys at all: nothing affordable
 
 
@@ -164,8 +169,7 @@ def test_exhausted_daily_quota_is_infeasible() -> None:
 
 def test_cooling_but_unlimited_keys_stay_feasible() -> None:
     plan = plan_capacity([KeyBudget(provider="p")], 3, GENEROUS)
-    assert plan.feasible and plan.affordable_calls is None
-    assert any("unknown" in w.lower() for w in plan.warnings)
+    assert plan.feasible and plan.affordable_calls is not None
 
 
 # ── Heuristic suggestion ──────────────────────────────────────────────

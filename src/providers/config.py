@@ -123,8 +123,15 @@ def default_catalog_path() -> Path:
     return Path(__file__).resolve().parent.parent.parent / "models.yaml"
 
 
+DEFAULT_RPM = 15
+DEFAULT_RPD = 200
+DEFAULT_TPM = 40000
+DEFAULT_CONTEXT = 8192
+
 def load_models_config(path: str | Path | None = None) -> ModelsConfig:
     """Load and validate the catalog. Raises loudly on any problem."""
+    from src.core.logging_config import logger
+    
     catalog = Path(path) if path else default_catalog_path()
     if not catalog.is_file():
         raise FileNotFoundError(
@@ -135,8 +142,30 @@ def load_models_config(path: str | Path | None = None) -> ModelsConfig:
         raw: Any = yaml.safe_load(catalog.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise ValueError(f"models.yaml at {catalog} is not valid YAML: {exc}") from exc
-    if not isinstance(raw, dict):
+    if not isinstance(raw, dict) or "providers" not in raw:
         raise TypeError(
-            f"models.yaml at {catalog} must contain a mapping at the top level"
+            f"models.yaml at {catalog} must contain a 'providers' mapping at the top level"
         )
+    
+    # Apply conservative defaults for null limits and context sizes, emitting warnings
+    for provider_name, provider_data in raw["providers"].items():
+        limits = provider_data.get("limits", {})
+        if limits:
+            if limits.get("rpm") is None:
+                logger.warning(f"Config  │ {provider_name} has null rpm limit; defaulting to {DEFAULT_RPM}")
+                limits["rpm"] = DEFAULT_RPM
+            if limits.get("rpd") is None:
+                logger.warning(f"Config  │ {provider_name} has null rpd limit; defaulting to {DEFAULT_RPD}")
+                limits["rpd"] = DEFAULT_RPD
+            if limits.get("tpm") is None:
+                logger.warning(f"Config  │ {provider_name} has null tpm limit; defaulting to {DEFAULT_TPM}")
+                limits["tpm"] = DEFAULT_TPM
+            provider_data["limits"] = limits
+            
+        models = provider_data.get("models", [])
+        for model in models:
+            if model.get("context_tokens") is None:
+                logger.warning(f"Config  │ {provider_name} model {model.get('id')} has null context_tokens; defaulting to {DEFAULT_CONTEXT}")
+                model["context_tokens"] = DEFAULT_CONTEXT
+
     return ModelsConfig.model_validate(raw)

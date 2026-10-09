@@ -173,7 +173,9 @@ def affordable_calls(
         if options:
             known.append(min(options))
     if not known:
-        return None
+        from src.providers.config import DEFAULT_RPM
+        # Make the capacity planner never plan beyond what the defaults allow
+        return int(len(keys) * DEFAULT_RPM * minutes * SAFETY_FACTOR)
     return int(sum(known) * SAFETY_FACTOR)
 
 
