@@ -1,6 +1,6 @@
 # Assembly — Tech Stack
 
-*v1.0 · October 8, 2026 · Companion to the PRD v1.0 · Goal: hackathon demo first, free-tier only, BYOK*
+*v1.1 · October 10, 2026 · Companion to the PRD v1.1 · Goal: hackathon demo first, free-tier only, BYOK*
 
 > **Verify before you rely on it.** Free-tier limits and model names change often. The numbers below come from third-party summaries read in October 2026. Open each provider's dashboard and confirm your own limits before the demo. Keep every limit and model name in a config file (`models.yaml`), never hard-coded.
 
@@ -15,13 +15,13 @@
 | Orchestration | Custom Python (already built in Phase 1) | It is your differentiator; do not replace it with a framework |
 | Backend | FastAPI + asyncio + httpx + Pydantic | Already built; async fits parallel agent calls and WebSockets |
 | Realtime | WebSocket (already built); SSE as simple fallback | Live progress, consensus meter and countdown |
-| Database | SQLite for desktop and demo; Postgres only for the hosted site | No server to run locally; same SQLAlchemy models work for both |
+| Database | SQLite for desktop only; no database for web (D8) | Desktop history is local; the web backend is stateless and stores nothing |
 | Event bus | In-memory asyncio pub/sub (already built) | Redis adds nothing until you run several workers |
 | Frontend | Next.js + TypeScript + Tailwind CSS | Planned in your PRD; one UI for web and desktop |
 | Windows app | **Tauri 2 shell + bundled Python backend (sidecar)**; Electron as fallback | Small installer, keys stay on the machine (section 4) |
-| Key storage | Windows Credential Manager via the `keyring` library | OS-encrypted; no plain-text key files |
+| Key storage | Windows Credential Manager via the `keyring` library (desktop); browser memory + opt-in encrypted IndexedDB (web) | OS-encrypted on desktop; in-memory by default on web |
 | Search | A free search source with fallback (section 6) | Research is a core feature |
-| Auth | None on desktop; Supabase Auth (free tier) on the website | Desktop is single-user and local |
+| Auth | None — no accounts, no login in any mode (D8). The desktop shell uses a per-launch local token (`X-Assembly-Token`, `src/main.py`) only to stop other local programs calling the backend. | Nothing to log into; nothing to leak |
 | Testing | pytest, a log-scan test for keys, a benchmark harness | Proves both safety and your hypothesis |
 
 ---
@@ -190,8 +190,8 @@ Design: a `SearchProvider` interface like the model providers, a search budget p
 |---|---|---|
 | Frontend | Vercel (you already use it) | Static or SSR is fine |
 | Backend (long-running, WebSocket) | A free long-running host (for example Render, Fly.io, Railway, Hugging Face Spaces, or an always-free cloud VM) | Free tiers often **sleep** when idle and may limit long requests. Vercel serverless functions are the wrong place for 15-minute executions |
-| Database | Supabase free Postgres | Or SQLite on a persistent volume if the host offers one |
-| Auth | Supabase Auth | Google OAuth available |
+| Database | None — the backend is stateless (D8) | No database to run, nothing to leak; history lives in the browser |
+| Auth | None (D8) | No login of any kind |
 
 Rule for the demo: **run it locally**. A sleeping free server is the most common cause of failed live demos.
 
@@ -205,11 +205,11 @@ Rule for the demo: **run it locally**. A sleeping free server is the most common
 | `providers/*` | Merge Groq, Cerebras, OpenRouter, Mistral into one OpenAI-compatible provider class driven by `models.yaml`; keep Gemini separate; move Hugging Face to optional |
 | `orchestration/budget_controller.py` | Add per-provider requests-per-minute and per-day tracking; add the capacity-aware planner (see WORKFLOW.md section 4) |
 | `core/config.py`, `.env.example` | Remove server-side provider keys for the BYOK path; keep them only as an optional developer mode |
-| `core/security.py` | Add key encryption-at-rest helpers using `keyring`; keep JWT only for the web build |
+| `core/security.py` | Superseded by D8 (stateless web): file deleted; there is no user auth. Desktop local calls use a per-launch token (`src/main.py`); web keys travel per request and are wiped after the run. |
 | `core/logging_config.py` | Add a key-masking filter |
-| `api/executions.py` | Accept per-request keys (web) or read local keys (desktop); never persist them |
+| `api/executions.py` | Desktop-only local history (D8). Web runs use stateless `POST /api/run` (SSE) in `src/api/run.py`; per-request keys are never persisted |
 | `orchestration/consensus.py` | Keep your multi-factor score; add the adversarial-round trigger and calibration (WORKFLOW.md section 6) |
-| `database/models.py` | Keep SQLite; store provider, model, family and tokens per agent run; never store keys |
+| `database/models.py` | SQLite for desktop only (D8); store provider, model, family and tokens per agent run; never store keys |
 | `static/` frontend | Migrate to Next.js + TypeScript + Tailwind after the end-to-end run works |
 | Docs and diagrams | Replace OpenAI/GPT boxes with the free lineup |
 

@@ -408,3 +408,7 @@
 - Backend: `DiversityGate` + `diversity_gate()` + `FAMILY_GATE_THRESHOLDS={ok:3,warn:2}` in `src/providers/router.py`; `_enforce_minimum` blocks only BLOCKED; gate in providers/status, preflight (`diversity` field), `/api/run` `run.started` SSE event; `cap_label_for_degraded` caps DEGRADED High→Moderate in `src/orchestration/orchestrator.py`.
 - Frontend: `frontend/src/lib/diversity-gate.ts` mirror + chip in chat (`diversity-chip`), keys-manager (`readiness-chip`), model-picker (`picker-gate-chip`); confirm step at DEGRADED, Run disabled only at BLOCKED.
 - Tests: `tests/test_diversity_gate.py` (12: 4-family OK, llama-only DEGRADED, 2-family WARN, BLOCKED, selection narrowing, cooldown/daily-quota/unfilled-limits exclusion, enforce-only-on-zero, status+preflight shape, label cap) + `frontend/src/lib/diversity-gate.test.ts` (6 chip states). Updated `test_key_handling.py::test_execution_with_request_keys_leaks_nothing` to the disabled-provider BLOCKED path (see decisions log for why). New backend total 456 collected (444 + 12).
+
+## 2026-10-10 — PRD v1.1 status updates (docs only, no code)
+
+- D8 recorded (no accounts/login/server storage); PRD bumped to v1.1 with status key + changelog; FR-41 Done-different, FR-14 Optional/Deferred, Insight Optional, FR-36 Could, theme Optional, FR-11 reworded; release tracks R1/R2 with verified pre-release items; demo fallback ladder; TECH_STACK/WORKFLOW aligned; `docs/prd-gap-report.md` created; `BUILD_PROMPTS.md` absent (intended markings logged in decisions); remaining contradictions listed in `docs/doc-drift.md`.
