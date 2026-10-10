@@ -17,7 +17,13 @@ import {
 import { useToast } from "@/components/ui/toast"
 import { Shield, Key, Trash2, ExternalLink, Copy } from "lucide-react"
 
-type KeyStatus = "unknown" | "valid" | "invalid" | "rate_limited" | "testing"
+type KeyStatus = "unknown" | "valid" | "invalid" | "rate_limited" | "model_unavailable" | "unreachable" | "testing"
+
+type StatusDetail = { message?: string; availableModels?: string[] }
+
+function cleanPastedKey(raw: string): string {
+  return (raw || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim()
+}
 
 function maskKey(key: string): string {
   if (!key) return ""
@@ -32,6 +38,7 @@ export function KeysManager() {
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({})
   const [statuses, setStatuses] = useState<Record<string, KeyStatus>>({})
+  const [details, setDetails] = useState<Record<string, StatusDetail>>({})
   const [remember, setRememberUi] = useState(() => globalVault.remember)
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
@@ -93,6 +100,7 @@ export function KeysManager() {
     setSavedKeys({})
     setInputs({})
     setStatuses({})
+    setDetails({})
     setTavilyInput("")
     setPassphrase("")
     toast({ title: "Keys forgotten", description: "All API keys removed from memory, disk, and system keyring." })
@@ -102,7 +110,7 @@ export function KeysManager() {
   const tavilySaved = !!savedKeys["tavily"]
 
   const handleSaveTavily = async () => {
-    const rawKey = (tavilyInput || savedKeys["tavily"] || "").trim()
+    const rawKey = cleanPastedKey(tavilyInput || savedKeys["tavily"] || "")
     if (!rawKey) return
     // No server-side probe exists for search keys: store only.
     await globalVault.setKey("tavily", rawKey)
@@ -112,7 +120,7 @@ export function KeysManager() {
   }
 
   const handleSaveAndTest = async (providerId: string) => {
-    const rawKey = inputs[providerId] || savedKeys[providerId]
+    const rawKey = cleanPastedKey(inputs[providerId] || savedKeys[providerId] || "")
     if (!rawKey) return
     // Soft prefix hint never blocks saving (FR-30): validation is advisory only.
     void isKeyFormatOk(providerId, rawKey)
@@ -123,15 +131,24 @@ export function KeysManager() {
     try {
       const res = await ApiClient.testKey(providerId, rawKey)
       setStatuses((prev) => ({ ...prev, [providerId]: res.status }))
+      setDetails((prev) => ({
+        ...prev,
+        [providerId]: { message: res.message, availableModels: res.availableModels },
+      }))
       if (res.status === "valid") {
-        toast({ title: "Key verified", description: `Connected to ${providerId}.`, variant: "success" })
+        toast({ title: "Key verified", description: res.message ?? `Connected to ${providerId}.`, variant: "success" })
       } else if (res.status === "rate_limited") {
-        toast({ title: "Rate limited", description: "Key is valid but rate-limited.", variant: "warning" })
+        toast({ title: "Key valid, rate limited", description: res.message ?? "Key is valid but rate-limited.", variant: "warning" })
+      } else if (res.status === "model_unavailable") {
+        toast({ title: "Key valid, model unavailable", description: res.message ?? "The configured model is not available to this key.", variant: "warning" })
+      } else if (res.status === "unreachable") {
+        toast({ title: "Couldn't reach provider", description: res.message ?? "Try again.", variant: "warning" })
       } else {
-        toast({ title: "Invalid key", description: `Could not authenticate with ${providerId}.`, variant: "danger" })
+        toast({ title: "Invalid key", description: `${res.message ?? `Could not authenticate with ${providerId}.`} Check the key was copied without spaces.`, variant: "danger" })
       }
     } catch {
-      setStatuses((prev) => ({ ...prev, [providerId]: "invalid" }))
+      setStatuses((prev) => ({ ...prev, [providerId]: "unreachable" }))
+      setDetails((prev) => ({ ...prev, [providerId]: { message: "Couldn't reach the server; try again." } }))
     }
   }
 
@@ -148,6 +165,7 @@ export function KeysManager() {
     setSavedKeys({})
     setInputs({})
     setStatuses({})
+    setDetails({})
     setTavilyInput("")
     setPassphrase("")
     toast({ title: "Keys cleared", description: "All API keys removed from memory, disk, and system keyring." })
@@ -155,7 +173,9 @@ export function KeysManager() {
 
   const readyFamilies = new Set<string>()
   providers.forEach((p) => {
-    if (savedKeys[p.id] && statuses[p.id] !== "invalid") {
+    // Only a working key counts: valid or quota-hit. Model-unavailable and
+    // unreachable keys cannot serve runs, invalid keys never could.
+    if (savedKeys[p.id] && (statuses[p.id] === "valid" || statuses[p.id] === "rate_limited")) {
       p.models.forEach((m) => readyFamilies.add(m.family))
     }
   })
@@ -347,9 +367,29 @@ export function KeysManager() {
                     {hint} This hint never blocks saving.
                   </p>
                   {st !== "unknown" && st !== "testing" && (
-                    <p data-testid={`test-result-${provider.id}`} className="text-xs">
-                      Test result: {st}
-                    </p>
+                    <div className="space-y-1">
+                      <p data-testid={`test-result-${provider.id}`} className="text-xs">
+                        Test result: {st}
+                      </p>
+                      {details[provider.id]?.message && (
+                        <p data-testid={`test-message-${provider.id}`} className="text-xs opacity-80">
+                          {details[provider.id].message}
+                        </p>
+                      )}
+                      {st === "invalid" && (
+                        <p className="text-[10px] text-muted-foreground">
+                          Check the key was copied without spaces.
+                        </p>
+                      )}
+                      {st === "model_unavailable" && details[provider.id]?.availableModels && (
+                        <p data-testid={`test-models-${provider.id}`} className="text-[10px] font-mono opacity-80">
+                          Available: {details[provider.id].availableModels!.slice(0, 8).join(", ")}
+                          {details[provider.id].availableModels!.length > 8
+                            ? ` (+${details[provider.id].availableModels!.length - 8} more)`
+                            : ""}
+                        </p>
+                      )}
+                    </div>
                   )}
                   <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
                     <Shield className="size-3 shrink-0" />

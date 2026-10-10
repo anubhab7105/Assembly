@@ -224,9 +224,12 @@ def test_keys_test_endpoint_never_echoes(monkeypatch, fake_key: str) -> None:
     response = client.post("/api/keys/test", json={"provider": "groq", "key": fake_key})
     assert response.status_code == 200, response.text
     body = response.json()
-    assert set(body) == {"provider", "valid", "rate_limited", "error_code", "model"}
+    assert {"provider", "valid", "rate_limited", "error_code", "model"} <= set(body)
     assert body["provider"] == "groq"
     assert body["valid"] is False
+    # Offline the list probe cannot reach the provider: unreachable, never invalid.
+    assert body["error_code"] == "unreachable"
+    assert body["message"]
     assert fake_key not in response.text
 
     unknown = client.post(

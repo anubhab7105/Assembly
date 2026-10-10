@@ -12,7 +12,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.api.request_context import (
@@ -23,7 +23,7 @@ from src.api.request_context import (
 )
 from src.core.config import settings
 from src.core.logging_config import logger
-from src.core.rate_limit import check_rate_limit
+from src.core.rate_limit import check_rate_limit, client_ip, count_invalid_request
 from src.database.schemas import RunRequest
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
 from src.providers.quota import get_limiter
@@ -65,8 +65,18 @@ async def _sweep_expired() -> None:
             entry.task.cancel()
 
 
-def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+async def _count_invalid_or_429(ip: str) -> JSONResponse | None:
+    """Record a validation failure, or 429 JSON when its budget is spent."""
+    try:
+        await count_invalid_request(ip)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many invalid requests; try again later."},
+            )
+        raise
+    return None
 
 
 
@@ -155,20 +165,26 @@ async def _execute_run(
 @router.post("", response_class=StreamingResponse)
 async def start_run(req: RunRequest, request: Request):
     """Stream a full run as SSE. Cancels on disconnect. Stateless."""
-    ip = _client_ip(request)
+    ip = client_ip(request)
+    # Validation first: a request that fails validation counts against
+    # the looser invalid budget, never against the 5/min run budget.
+    question = (req.question or "").strip()
+    if not question:
+        limited = await _count_invalid_or_429(ip)
+        return limited if limited is not None else JSONResponse(status_code=422, content={"detail": "Invalid request."})
+    if len(question) > settings.max_question_chars:
+        limited = await _count_invalid_or_429(ip)
+        return limited if limited is not None else JSONResponse(status_code=422, content={"detail": "Invalid request."})
+    if req.time_budget_minutes not in (3, 5, 10, 15):
+        limited = await _count_invalid_or_429(ip)
+        return limited if limited is not None else JSONResponse(status_code=422, content={"detail": "Invalid request."})
+    if len(req.provider_keys or {}) > 20:
+        limited = await _count_invalid_or_429(ip)
+        return limited if limited is not None else JSONResponse(status_code=422, content={"detail": "Invalid request."})
     await check_rate_limit(
         f"ip:{ip}", "run", settings.rate_limit_run_per_min_per_ip, 60
     )
     await _sweep_expired()
-    question = (req.question or "").strip()
-    if not question:
-        return JSONResponse(status_code=422, content={"detail": "Invalid request."})
-    if len(question) > settings.max_question_chars:
-        return JSONResponse(status_code=422, content={"detail": "Invalid request."})
-    if req.time_budget_minutes not in (3, 5, 10, 15):
-        return JSONResponse(status_code=422, content={"detail": "Invalid request."})
-    if len(req.provider_keys or {}) > 20:
-        return JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
     # One shared per-request context for keys, selection, and quota, so
     # the diversity verdict here and the router used below cannot diverge.

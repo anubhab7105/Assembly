@@ -162,18 +162,42 @@ export class ApiClient {
     return data
   }
 
-  static async testKey(provider: string, key: string): Promise<{ status: "valid" | "rate_limited" | "invalid" }> {
+  static async testKey(
+    provider: string,
+    key: string,
+  ): Promise<{
+    status: "valid" | "rate_limited" | "invalid" | "model_unavailable" | "unreachable"
+    message?: string
+    availableModels?: string[]
+  }> {
     try {
-      const data = await this.request<{ valid: boolean; rate_limited: boolean }>(
+      const data = await this.request<{
+        valid: boolean
+        rate_limited: boolean
+        error_code?: string | null
+        message?: string | null
+        available_models?: string[] | null
+      }>(
         "/api/keys/test",
         { method: "POST", body: JSON.stringify({ provider, key }) },
       )
-      if (data.valid) return { status: "valid" }
-      if (data.rate_limited) return { status: "rate_limited" }
-      return { status: "invalid" }
+      const message = data.message ?? undefined
+      const availableModels = data.available_models ?? undefined
+      // Order matters: quota and model states ride on valid keys, so they
+      // must win over the valid flag. Only an auth failure is "invalid".
+      if (data.rate_limited) return { status: "rate_limited", message, availableModels }
+      if (data.error_code === "model_not_found")
+        return { status: "model_unavailable", message, availableModels }
+      if (data.error_code === "unreachable")
+        return { status: "unreachable", message, availableModels }
+      if (data.valid) return { status: "valid", message, availableModels }
+      return { status: "invalid", message, availableModels }
     } catch (e: unknown) {
-      if (String((e as Error)?.message ?? e).includes("429")) return { status: "rate_limited" }
-      return { status: "invalid" }
+      // The endpoint's own per-IP limiter answers HTTP 429: provider quota,
+      // never an invalid key. Anything else means we never got an answer.
+      if (String((e as Error)?.message ?? e).includes("429"))
+        return { status: "rate_limited", message: "Too many test attempts; wait a minute and try again." }
+      return { status: "unreachable", message: "Couldn't reach the server; try again." }
     }
   }
 

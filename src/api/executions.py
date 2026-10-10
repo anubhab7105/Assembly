@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from src.api.events import event_to_wire, fetch_events, fetch_latest_seq, persist_event
 from src.core.config import settings
 from src.core.logging_config import logger
-from src.core.rate_limit import check_rate_limit, execution_tracker
+from src.core.rate_limit import check_rate_limit, client_ip, execution_tracker
 from src.database.base import SessionLocal, get_db
 from src.database.models import AgentRun, Execution
 from src.database.schemas import (
@@ -178,7 +178,7 @@ def _build_preflight(
 async def create_execution(req: ExecutionRequest, request: Request, db: Session = Depends(get_db)):
     """Desktop/dev only: submit a question, track locally. Web uses /api/run."""
     _require_desktop()
-    ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
     await check_rate_limit(f"ip:{ip}", "create_execution", 5, 60)
     if req.time_budget_minutes not in (3, 5, 10, 15):
         raise HTTPException(status_code=400, detail="Time budget must be 3, 5, 10, or 15 minutes.")

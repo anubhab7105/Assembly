@@ -97,6 +97,11 @@ export function useExecution(executionId: string | null) {
           next.team = prev.team.map((a) =>
             a.id === agentData.agent_id ? { ...a, state: agentData.state, activity: agentData.activity } : a,
           )
+          // Item 5: a "no external sources" outcome must also stay visible
+          // in the Event Log (the team panel resets after the run).
+          if ((agentData.activity ?? "").includes("no external sources")) {
+            pushFeed(agentData.activity, "warning")
+          }
           break
         }
         case "round.started":

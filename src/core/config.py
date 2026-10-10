@@ -46,6 +46,16 @@ class Settings(BaseSettings):
     rate_limit_run_per_min_per_ip: int = 5
     rate_limit_preflight_per_min_per_ip: int = 10
     rate_limit_key_test_per_min_per_ip: int = 10
+    # Validation failures (422/413) count here, never against the run
+    # budget above: looser on purpose so a typo never blocks a real run.
+    rate_limit_invalid_per_min_per_ip: int = 30
+
+    # ── Client IP behind proxies ───────────────────────────────────────
+    # How many trusted proxy hops sit in front of this server. The
+    # forwarded chain is used ONLY when this is greater than 0; with the
+    # default 0 any X-Forwarded-For/Forwarded header is ignored outright
+    # so spoofed headers cannot fake a client IP (and rate-limit bucket).
+    trusted_proxy_count: int = 0
 
     # ── Quota salt (dedicated HMAC salt for key fingerprinting) ──────
     quota_salt: SecretStr = Field(default=SecretStr(""))
@@ -173,7 +183,13 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        """Allowed CORS origins. Web: explicit allow-list only."""
+        """Allowed CORS origins.
+
+        Explicit CORS_ALLOW_LIST (or frontend_url) always wins. Otherwise
+        the development default allows the local Next.js dev servers only.
+        Production serves no implicit default: ``require_cors_allow_list``
+        (called at startup) refuses to boot web/production without one.
+        """
         origins: list[str] = []
         if self.frontend_url:
             origins.append(self.frontend_url.rstrip("/") or self.frontend_url)
@@ -192,9 +208,15 @@ class Settings(BaseSettings):
                 out.append(o)
         if out:
             return out
+        if self.is_production:
+            return []
+        # Desktop serves a Tauri webview (custom scheme origin), so it
+        # keeps the open local default; dev servers get the loopback pair.
+        if self.app_mode == "desktop":
+            return ["*"]
         if self.is_web:
             return []
-        return ["*"]
+        return ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     def has_provider(self, provider: str) -> bool:
         """Check if an API key is configured for a provider (dev only)."""

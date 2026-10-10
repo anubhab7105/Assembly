@@ -6,6 +6,8 @@ from collections import defaultdict
 
 from fastapi import HTTPException, Request, status
 
+from src.core.config import settings
+
 _rate_limit_history: dict[tuple[str, str], list[float]] = defaultdict(list)
 _rate_limit_lock = asyncio.Lock()
 
@@ -14,6 +16,59 @@ _ip_executions: dict[str, int] = defaultdict(int)
 
 MAX_GLOBAL_EXECUTIONS = 50
 MAX_RUNS_PER_IP = 2
+
+
+def _forwarded_chain(request: Request) -> list[str]:
+    """Client-claimed proxy chain, leftmost (original) first.
+
+    Prefers X-Forwarded-For; falls back to RFC 7239 Forwarded ``for=``
+    entries. Returns [] when neither header is present. Values are
+    untrusted input — only used when TRUSTED_PROXY_COUNT > 0.
+    """
+    xff = request.headers.get("x-forwarded-for", "")
+    parts = [p.strip() for p in xff.split(",") if p.strip()]
+    if parts:
+        return parts
+    out: list[str] = []
+    for segment in request.headers.get("forwarded", "").split(","):
+        for pair in segment.split(";"):
+            name, _, value = pair.partition("=")
+            if name.strip().lower() == "for" and value.strip():
+                out.append(value.strip().strip('"').strip("[]"))
+    return out
+
+
+def client_ip(request: Request) -> str:
+    """Best-effort client IP for rate-limit buckets.
+
+    The forwarded chain is honored ONLY when TRUSTED_PROXY_COUNT > 0
+    (N trusted hops: the Nth address from the right; a shorter chain
+    falls back to its leftmost entry). With the default 0, forwarded
+    headers are ignored outright so spoofed values cannot move a client
+    into another bucket.
+    """
+    try:
+        trusted = max(0, int(settings.trusted_proxy_count or 0))
+    except (TypeError, ValueError):
+        trusted = 0
+    if trusted > 0:
+        chain = _forwarded_chain(request)
+        if chain:
+            if len(chain) >= trusted:
+                return chain[-trusted]
+            return chain[0]
+    return request.client.host if request.client else "unknown"
+
+
+async def count_invalid_request(ip: str) -> None:
+    """Count one validation failure (422/413) against the looser budget.
+
+    Raises HTTPException 429 when the per-IP invalid budget is spent.
+    Real runs use the run budget instead, so typos never block real runs.
+    """
+    await check_rate_limit(
+        f"ip:{ip}", "invalid", settings.rate_limit_invalid_per_min_per_ip, 60
+    )
 
 
 async def check_rate_limit(key: str, action: str, limit: int, window_seconds: int) -> None:
@@ -34,8 +89,7 @@ def rate_limiter(action: str, limit: int, window_seconds: int):
     """Dependency enforcing per-IP rate limits (no accounts)."""
 
     async def dependency(request: Request) -> bool:
-        ip = request.client.host if request.client else "unknown"
-        await check_rate_limit(f"ip:{ip}", action, limit, window_seconds)
+        await check_rate_limit(f"ip:{client_ip(request)}", action, limit, window_seconds)
         return True
 
     return dependency

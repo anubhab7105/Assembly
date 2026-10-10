@@ -15,7 +15,7 @@ START_TIME = time.time()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -30,12 +30,28 @@ from src.core.config import settings
 from src.core.logging_config import logger
 
 
+def require_cors_allow_list() -> None:
+    """Refuse production startup without an explicit CORS allow-list.
+
+    Production serves no implicit CORS default (``cors_origins`` is []
+    there), so booting without CORS_ALLOW_LIST would silently serve an
+    unreachable-or-open API. Raise with the exact variable to set.
+    """
+    if settings.is_production and not settings.cors_allow_list:
+        raise RuntimeError(
+            "Production requires CORS_ALLOW_LIST: set it to a comma-separated "
+            "list of allowed frontend origins (e.g. "
+            "CORS_ALLOW_LIST=https://assembly.example.com)."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize storage on startup (desktop/dev only)."""
     logger.info("====================================================")
     logger.info("  Assembly -- Multi-Agent AI Consensus Platform")
     logger.info("====================================================")
+    require_cors_allow_list()
     if settings.is_web:
         logger.info("Server   │ Mode: web (stateless — no database, no disk writes)")
     else:
@@ -135,8 +151,20 @@ async def desktop_token_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def limit_upload_size(request: Request, call_next):
+    from src.core.rate_limit import client_ip, count_invalid_request
+
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > settings.max_body_bytes:
+        try:
+            await count_invalid_request(client_ip(request))
+        except HTTPException as exc:
+            if exc.status_code == 429:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many invalid requests; try again later."},
+                )
+        except Exception:  # noqa: BLE001 — oversized bodies fail closed either way
+            pass
         return JSONResponse(status_code=413, content={"detail": "Request body too large."})
 
     # SSE/WebSocket origin check (web mode with allow-list configured).
@@ -166,9 +194,25 @@ app.include_router(keys_router)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc: RequestValidationError):
-    """Generic 422: never echo offending input values (may include keys)."""
+    """Generic 422: never echo offending input values (may include keys).
+
+    Schema-validation failures count against the looser invalid budget,
+    never against any endpoint's run budget.
+    """
+    from src.core.rate_limit import client_ip, count_invalid_request
+
     shapes = [{key: error.get(key) for key in ("type", "loc", "msg")} for error in exc.errors()]
     logger.warning("Validation failed: %s", shapes)
+    try:
+        await count_invalid_request(client_ip(request))
+    except HTTPException as budget_exc:
+        if budget_exc.status_code == 429:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many invalid requests; try again later."},
+            )
+    except Exception:  # noqa: BLE001 — limiter trouble must not break the 422
+        pass
     return JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
 

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from pydantic import SecretStr
 
-from src.core.keystore import reveal
+from src.core.keystore import clean_key
 from src.providers.base import AIProvider
 from src.providers.config import ModelsConfig, load_models_config
 from src.providers.gemini_provider import GeminiProvider
@@ -31,7 +31,7 @@ def get_provider(
 ) -> AIProvider:
     """Construct the provider for id, authenticated with api_key."""
     catalog = config or load_models_config(models_yaml)
-    key = reveal(api_key)
+    key = clean_key(api_key)
     if provider_id not in catalog.providers:
         raise KeyError(
             f"unknown provider {provider_id!r}; "
