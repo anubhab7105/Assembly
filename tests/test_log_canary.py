@@ -193,6 +193,23 @@ def _authed_client(monkeypatch, db_path: str) -> tuple[TestClient, str]:
 def test_canary_end_to_end_api_db_ws(monkeypatch, tmp_path, caplog) -> None:
     db_file = tmp_path / "canary.db"
     client, _token = _authed_client(monkeypatch, str(db_file))
+    # Offline hermetic run: mock routing, no live provider calls (single live
+    # keys now proceed degraded under the family gate and would hit real
+    # network; TestClient portals cancel slow background tasks).
+    import src.api.executions as exec_mod
+    import src.orchestration.orchestrator as orch_mod
+    from src.providers.mock_provider import MockProvider
+    from tests.conftest import MockRouter
+
+    def _mock_router_factory(*args: object, **kwargs: object) -> object:
+        return MockRouter([MockProvider(provider_name="mock-a")])
+
+    monkeypatch.setattr(
+        exec_mod._orchestrator,
+        "router",
+        MockRouter([MockProvider(provider_name="mock-a")]),
+    )
+    monkeypatch.setattr(orch_mod, "ModelRouter", _mock_router_factory)
 
     with caplog.at_level(logging.INFO, logger="assembly"):
         # One key on purpose: routing fails before any network I/O, so the

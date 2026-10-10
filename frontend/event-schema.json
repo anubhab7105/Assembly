@@ -3,6 +3,7 @@
   "event_types": [
     "execution.started",
     "plan.ready",
+    "plan.adjusted",
     "team.ready",
     "agent.status",
     "round.started",
@@ -22,10 +23,11 @@
   "envelope": {
     "$defs": {
       "ProgressEventType": {
-        "description": "Canonical event names (WORKFLOW \u00a78 + execution.cancelled).",
+        "description": "Canonical event names (WORKFLOW \u00a78 + execution.cancelled + plan.adjusted).",
         "enum": [
           "execution.started",
           "plan.ready",
+          "plan.adjusted",
           "team.ready",
           "agent.status",
           "round.started",
@@ -140,6 +142,43 @@
         "agent_count"
       ],
       "title": "PlanReadyPayload",
+      "type": "object"
+    },
+    "plan.adjusted": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "added": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Added",
+          "type": "array"
+        },
+        "removed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Removed",
+          "type": "array"
+        },
+        "final_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Final Roles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "PlanAdjustedPayload",
       "type": "object"
     },
     "team.ready": {
@@ -566,6 +605,11 @@
           "minimum": 0.0,
           "title": "Elapsed Seconds",
           "type": "number"
+        },
+        "verification": {
+          "additionalProperties": true,
+          "title": "Verification",
+          "type": "object"
         }
       },
       "title": "ExecutionCompletedPayload",

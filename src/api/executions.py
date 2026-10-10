@@ -97,7 +97,27 @@ def _build_preflight(question: str, tier: int, snapshot: list[dict]) -> Prefligh
         TIER_MAX_ROUNDS,
         cost_of_plan,
     )
+    from src.orchestration.core_roles import (
+        ensure_core_roles,
+        final_roles_with_synthesizer,
+        single_family_warning,
+    )
     from src.providers.router import DiversityGateResponse
+
+    # FR-2: final team roles after the core-role guarantee (+ synthesizer).
+    team_roles = list(suggestion.roles)
+    team_roles, _core_adjust = ensure_core_roles(
+        team_roles, TIER_MAX_AGENTS.get(tier, 3)
+    )
+    final_roles = final_roles_with_synthesizer(team_roles)
+    families_for_warning = (
+        router_obj.available_families()
+        if hasattr(router_obj, "available_families")
+        else []
+    )
+    fam_warning = single_family_warning(families_for_warning)
+    if fam_warning and fam_warning not in warnings:
+        warnings.append(fam_warning)
 
     ceiling_agents = TIER_MAX_AGENTS.get(plan.feasible_tier, plan.agents)
     ceiling_rounds = TIER_MAX_ROUNDS.get(plan.feasible_tier, plan.rounds)
@@ -154,6 +174,7 @@ def _build_preflight(question: str, tier: int, snapshot: list[dict]) -> Prefligh
         expected_tokens_median=plan.estimated_tokens_median,
         expected_tokens_worst=plan.estimated_tokens_worst,
         diversity=diversity,
+        final_roles=final_roles,
     )
 
 

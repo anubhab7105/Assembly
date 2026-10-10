@@ -158,6 +158,8 @@ class PreflightResponse(BaseModel):
     expected_tokens_worst: int = 0
     # Family-diversity gate (PRD FR-10): OK/WARN/DEGRADED/BLOCKED.
     diversity: DiversityGateResponse = DiversityGateResponse()
+    # FR-2: final team roles after the core-role guarantee (+ synthesizer).
+    final_roles: list[str] = []
 
 
 # ═════════════════════════════════════════════════════════════════════

@@ -1,6 +1,6 @@
 """Progress event system tests (docs/WORKFLOW.md section 8).
 
-Covers: Pydantic contracts for all 17 event types, sanitization
+Covers: Pydantic contracts for all 18 event types, sanitization
 (no keys / no chain-of-thought), recorder sequencing, disagreement
 diffing, DB persistence + ordering, WS replay with ?after_seq=,
 the REST fallback, the schema artifact, and a canary secrets scan.
@@ -95,6 +95,13 @@ def _minimal_payload(event_type: ProgressEventType) -> dict[str, Any]:
             return {"status": "failed", "reason": "boom", "answer": ""}
         case ProgressEventType.EXECUTION_CANCELLED:
             return {"status": "cancelled", "reason": "user stop"}
+        case ProgressEventType.PLAN_ADJUSTED:
+            return {
+                "reason": "added critic",
+                "added": ["added critic"],
+                "removed": [],
+                "final_roles": ["solver", "critic", "synthesizer"],
+            }
     raise AssertionError(f"unreachable: {event_type}")
 
 
@@ -102,7 +109,8 @@ def _minimal_payload(event_type: ProgressEventType) -> dict[str, Any]:
 
 
 def test_all_seventeen_types_have_models() -> None:
-    assert len(ProgressEventType) == 17
+    # FR-2 adds plan.adjusted (18 total); name kept for history.
+    assert len(ProgressEventType) == 18
     assert set(PAYLOAD_MODELS) == set(ProgressEventType)
 
 
@@ -544,9 +552,27 @@ def test_events_canary_end_to_end(monkeypatch, tmp_path, caplog) -> None:
 
     import src.api.executions as exec_mod
     from src.database.models import ExecutionEvent as ExecutionEventRow
+    from src.providers.mock_provider import MockProvider
+    from tests.conftest import MockRouter
 
     db_file = tmp_path / "events_canary.db"
     client, token = _authed_client(monkeypatch, str(db_file))
+    # Offline hermetic run: mock routing, no live provider calls. The canary
+    # still flows through provider_keys → events → DB/file/log surfaces.
+    # Both the shared router and the per-run isolated ModelRouter (built from
+    # provider_keys) must be mocked; otherwise the canary run hits real
+    # providers and the TestClient portal cancels the slow background task.
+    import src.orchestration.orchestrator as orch_mod
+
+    def _mock_router_factory(*args: object, **kwargs: object) -> object:
+        return MockRouter([MockProvider(provider_name="mock-a")])
+
+    monkeypatch.setattr(
+        exec_mod._orchestrator,
+        "router",
+        MockRouter([MockProvider(provider_name="mock-a")]),
+    )
+    monkeypatch.setattr(orch_mod, "ModelRouter", _mock_router_factory)
 
     with caplog.at_level(logging.INFO, logger="assembly"):
         created = client.post(
@@ -604,7 +630,7 @@ def test_schema_bundle_covers_all_types() -> None:
 
     bundle = bundle_fn()
     assert bundle["version"] == 1
-    assert len(bundle["event_types"]) == 17
+    assert len(bundle["event_types"]) == 18
     assert set(bundle["payloads"]) == set(bundle["event_types"])
     assert set(bundle["envelope"]["properties"]) == {
         "event_type",
@@ -630,7 +656,7 @@ def test_export_script_writes_artifact(tmp_path) -> None:
     )
     assert completed.returncode == 0, completed.stderr
     artifact = json.loads(out.read_text(encoding="utf-8"))
-    assert len(artifact["event_types"]) == 17
+    assert len(artifact["event_types"]) == 18
 
 
 def test_openapi_exposes_event_models(monkeypatch) -> None:

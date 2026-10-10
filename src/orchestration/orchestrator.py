@@ -429,6 +429,24 @@ class Orchestrator:
                     "agent_count": len(plan.team_composition),
                 },
             )
+            # FR-2: surface solver/critic adds or tight-cap drops.
+            plan_adjustments = list(getattr(plan, "plan_adjustments", []) or [])
+            if plan_adjustments:
+                from src.orchestration.core_roles import final_roles_with_synthesizer
+
+                await emit_event(
+                    ProgressEventType.PLAN_ADJUSTED,
+                    {
+                        "reason": "; ".join(plan_adjustments)[:500],
+                        "added": [a for a in plan_adjustments if a.startswith("added")],
+                        "removed": [
+                            a for a in plan_adjustments if a.startswith("dropped")
+                        ],
+                        "final_roles": final_roles_with_synthesizer(
+                            list(getattr(plan, "suggested_roles", []) or [])
+                        ),
+                    },
+                )
 
             # ════════════════════════════════════════════════════════════
             # PHASE 2: TEAM FORMATION — Create agents
@@ -478,6 +496,30 @@ class Orchestrator:
                     ],
                 },
             )
+            # FR-2: single-family teams cannot give the critic a different
+            # family; warn in the run and lower confidence downstream.
+            try:
+                from src.orchestration.core_roles import single_family_warning
+
+                team_families = [str(e.get("family", "") or "") for e in agent_info]
+                fam_warning = single_family_warning(team_families)
+                if fam_warning:
+                    warnings.append(fam_warning)
+                    plan.reasoning = (plan.reasoning + " " + fam_warning).strip()
+                    await emit_event(
+                        ProgressEventType.PLAN_ADJUSTED,
+                        {
+                            "reason": fam_warning[:500],
+                            "added": [],
+                            "removed": [],
+                            "final_roles": sorted(
+                                {str(e.get("agent_type", "")) for e in agent_info}
+                                | {"synthesizer"}
+                            ),
+                        },
+                    )
+            except Exception:  # noqa: BLE001 — warning must not break the run
+                pass
 
             # ════════════════════════════════════════════════════════════
             # PHASE 3: WEB RESEARCH (if needed)

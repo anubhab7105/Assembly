@@ -156,6 +156,8 @@ class PlanResult:
         self.estimated_rounds = estimated_rounds
         self.needs_code_execution = needs_code_execution
         self.fallback_used = fallback_used
+        # FR-2: short reasons for solver/critic adds or tight-cap drops.
+        self.plan_adjustments: list[str] = []
         # Planner-call provenance for per-call token measurement (step 1).
         self.planner_provider = planner_provider
         self.planner_model = planner_model
@@ -177,6 +179,7 @@ class PlanResult:
             "estimated_rounds": self.estimated_rounds,
             "needs_code_execution": self.needs_code_execution,
             "fallback_used": self.fallback_used,
+            "plan_adjustments": list(getattr(self, "plan_adjustments", [])),
         }
 
 
@@ -410,9 +413,16 @@ Respond with JSON only:
         time_budget_minutes: int,
     ) -> PlanResult:
         """Clip the validated wish to what the capacity planner allows."""
+        from src.orchestration.core_roles import ensure_core_roles
+
         tier = self._tier_for_minutes(time_budget_minutes)
         roles = list(schema.suggested_roles)[: TIER_MAX_AGENTS[tier]]
         rounds = min(max(schema.estimated_rounds, MIN_ROUNDS), TIER_MAX_ROUNDS[tier])
+
+        # FR-2 (1st call): guarantee solver+critic right after the planner,
+        # before capacity trims.
+        roles, first_adjust = ensure_core_roles(roles, TIER_MAX_AGENTS[tier])
+        adjustments: list[str] = list(first_adjust)
 
         team_plan = self._capacity_plan(schema, roles, rounds, tier)
         capacity_note = ""
@@ -423,6 +433,16 @@ Respond with JSON only:
                 capacity_note = f" Capacity trim: {team_plan.explanation}"
             elif not team_plan.feasible:
                 capacity_note = f" Capacity warning: {team_plan.explanation}"
+
+        # FR-2 (2nd call): re-guarantee after capacity planning (tight caps
+        # drop researcher, then extra solvers/critics — never the last pair).
+        cap = (
+            team_plan.agents
+            if team_plan is not None and team_plan.feasible
+            else TIER_MAX_AGENTS[tier]
+        )
+        roles, second_adjust = ensure_core_roles(roles, cap)
+        adjustments.extend(a for a in second_adjust if a not in adjustments)
 
         team = [
             {"agent_type": role, "role_description": ROLE_DESCRIPTIONS[role]}
@@ -438,6 +458,12 @@ Respond with JSON only:
             estimated_rounds=rounds,
             needs_code_execution=schema.needs_code_execution,
         )
+        plan.plan_adjustments = adjustments
+        if adjustments:
+            plan.reasoning = (
+                plan.reasoning + " Plan adjusted: " + "; ".join(adjustments)
+            ).strip()
+            logger.info(f"Planner │ Core-role guarantee: {'; '.join(adjustments)}")
         return self._apply_research_or(question, plan, tier)
 
     def _apply_research_or(
@@ -541,16 +567,19 @@ Respond with JSON only:
         self, question: str, time_budget_minutes: int, reason: str
     ) -> PlanResult:
         """Deterministic keyword/length fallback — planning never fails."""
+        from src.orchestration.core_roles import ensure_core_roles
+
         suggestion = heuristic_suggestion(question)
         tier = self._tier_for_minutes(time_budget_minutes)
         roles = list(suggestion.roles)[: TIER_MAX_AGENTS[tier]]
         rounds = min(suggestion.estimated_rounds, TIER_MAX_ROUNDS[tier])
+        roles, adjustments = ensure_core_roles(roles, TIER_MAX_AGENTS[tier])
         team = [
             {"agent_type": role, "role_description": ROLE_DESCRIPTIONS[role]}
             for role in roles
         ]
         problem_type = self._heuristic_problem_type(question)
-        return PlanResult(
+        plan = PlanResult(
             problem_type=problem_type,
             complexity=suggestion.complexity,
             team_composition=team,
@@ -564,6 +593,8 @@ Respond with JSON only:
             needs_code_execution=problem_type in ("coding", "math"),
             fallback_used=True,
         )
+        plan.plan_adjustments = adjustments
+        return plan
 
     @staticmethod
     def _heuristic_problem_type(question: str) -> str:

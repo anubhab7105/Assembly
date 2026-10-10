@@ -418,3 +418,8 @@
 - Backend: `ProviderSpec.key_steps/key_notes/sensitive_signup` optional (absent allowed); `models.yaml` generic 7-step `key_steps` per provider, `sensitive_signup: null` everywhere; `GET /api/catalog` exposes steps/notes/signup + `recommended_order` (capacity-sorted), `minimum_families=3`, fallback text.
 - Frontend: `key-setup.ts` helpers + `KeysManager` Minimum-to-start banner, expandable stepper, copy-link, prefix hint (display-only, never blocks), inline Test result, Why line from roles/families; `api-client.ts` types extended.
 - Tests: `tests/test_key_setup.py` (4: catalog steps+fallback, absent-fields schema, capacity order, no blocking format) + `key-setup.test.ts` (4) + `keys-manager.test.tsx` (banner/stepper/copy/hint/why/fallback). Backend total 460 collected (456 + 4).
+
+## 2026-10-10 — FR-2 solver and critic always present (B)
+
+- Backend: `core_roles.py` guarantee + `Planner` double-call + `plan.adjusted` event + preflight `final_roles` + single-family warning/confidence cap; `event-schema.json` regenerated (18 types).
+- Tests: `tests/test_core_roles.py` (9: no-critic/no-solver adds, researcher-first drop, 3-min keeps trio, never-drop-last, preflight roles, single-family warning+cap, event contract, orchestrator emit). Updated `tests/test_events.py` (17→18 counts + `plan.adjusted` minimal payload, justified by new event) and fixed `test_events_canary_end_to_end` + `test_log_canary::test_canary_end_to_end_api_db_ws` to mock routing (pre-existing live-call slowness under TestClient portals caused `cancelled` instead of `completed`; now offline hermetic, still canary-scanned). Backend total 469 collected (460 + 9).

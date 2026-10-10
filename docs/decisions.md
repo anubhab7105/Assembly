@@ -194,3 +194,9 @@ Append-only log of significant technical and product decisions.
 - Context: Setup page gave no per-provider steps; users did not know where keys come from or the 3-family minimum.
 - Decision: (1) Optional `key_steps`/`key_notes`/`sensitive_signup` on `ProviderSpec` (absent allowed); `models.yaml` fills generic safe `key_steps` only (open key page, sign in, create key, copy, paste, Test, rate-limit page) with `sensitive_signup: null` everywhere. (2) `GET /api/catalog` exposes the new fields plus `recommended_order` (capacity-sorted enabled providers), `minimum_families=3`, and the shared signup fallback. (3) Frontend `key-setup.ts` helpers (fallback, prefix hint display-only, why-line, banner) + `KeysManager` banner/stepper/copy-link/hint/inline Test result/why line. Prefix hints never block saving by construction.
 - Consequences: No provider-specific signup facts invented; nulls render the free-tier-only fallback. Catalog stays names-only.
+
+## 2026-10-10 — FR-2 solver and critic always present (B)
+
+- Context: LLM plans could omit the critic or solver, leaving no cross-examination; tight caps had no mandated drop order.
+- Decision: (1) New `src/orchestration/core_roles.py::ensure_core_roles` (solver+critic guarantee, trim researcher → extra solvers → extra critics, never the last pair) called after the planner and again after capacity planning, plus heuristic fallback. (2) New `plan.adjusted` event (reason + added/removed + final roles) emitted on role changes and single-family warnings; preflight gains `final_roles` (+ synthesizer). (3) Router critic-avoids-solvers kept; single-family warns in plan/run and lowers confidence via the existing High→Moderate cap. (4) Fixed two pre-existing live-call canary tests to mock routing (offline hermetic).
+- Consequences: Event contract grows 17→18 types (`frontend/event-schema.json` regenerated); `test_events.py` counts updated with justification. Every plan keeps solver+critic+synthesizer.
