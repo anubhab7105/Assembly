@@ -412,3 +412,9 @@
 ## 2026-10-10 — PRD v1.1 status updates (docs only, no code)
 
 - D8 recorded (no accounts/login/server storage); PRD bumped to v1.1 with status key + changelog; FR-41 Done-different, FR-14 Optional/Deferred, Insight Optional, FR-36 Could, theme Optional, FR-11 reworded; release tracks R1/R2 with verified pre-release items; demo fallback ladder; TECH_STACK/WORKFLOW aligned; `docs/prd-gap-report.md` created; `BUILD_PROMPTS.md` absent (intended markings logged in decisions); remaining contradictions listed in `docs/doc-drift.md`.
+
+## 2026-10-10 — FR-30 key setup instructions (A)
+
+- Backend: `ProviderSpec.key_steps/key_notes/sensitive_signup` optional (absent allowed); `models.yaml` generic 7-step `key_steps` per provider, `sensitive_signup: null` everywhere; `GET /api/catalog` exposes steps/notes/signup + `recommended_order` (capacity-sorted), `minimum_families=3`, fallback text.
+- Frontend: `key-setup.ts` helpers + `KeysManager` Minimum-to-start banner, expandable stepper, copy-link, prefix hint (display-only, never blocks), inline Test result, Why line from roles/families; `api-client.ts` types extended.
+- Tests: `tests/test_key_setup.py` (4: catalog steps+fallback, absent-fields schema, capacity order, no blocking format) + `key-setup.test.ts` (4) + `keys-manager.test.tsx` (banner/stepper/copy/hint/why/fallback). Backend total 460 collected (456 + 4).

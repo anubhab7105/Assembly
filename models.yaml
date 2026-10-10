@@ -34,6 +34,15 @@ providers:
     key_url: https://aistudio.google.com/apikey
     enabled: true
     privacy_note: "Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information."
+    key_steps:
+      - "Open the key page via the Get free key link."
+      - "Sign in or create an account."
+      - "Create a new API key."
+      - "Copy the key value."
+      - "Paste it into Assembly for this provider."
+      - "Press Test to verify the key."
+      - "Open the provider's rate-limit page and record the current limits."
+    sensitive_signup: null
     models:
       - id: gemini-3.8-flash
         family: gemini
@@ -52,6 +61,15 @@ providers:
     url: https://api.groq.com/openai/v1
     key_url: https://console.groq.com/keys
     enabled: true
+    key_steps:
+      - "Open the key page via the Get free key link."
+      - "Sign in or create an account."
+      - "Create a new API key."
+      - "Copy the key value."
+      - "Paste it into Assembly for this provider."
+      - "Press Test to verify the key."
+      - "Open the provider's rate-limit page and record the current limits."
+    sensitive_signup: null
     models:
       - id: openai/gpt-oss-20b
         family: gpt-oss
@@ -97,6 +115,15 @@ providers:
     # Disabled 2026-10-09: key returns 402 payment-required on every model
     # (verify report); re-enable only with a funded key + filled limits.
     enabled: false
+    key_steps:
+      - "Open the key page via the Get free key link."
+      - "Sign in or create an account."
+      - "Create a new API key."
+      - "Copy the key value."
+      - "Paste it into Assembly for this provider."
+      - "Press Test to verify the key."
+      - "Open the provider's rate-limit page and record the current limits."
+    sensitive_signup: null
     models:
       - id: gpt-oss-120b
         family: gpt-oss
@@ -122,6 +149,15 @@ providers:
     url: https://openrouter.ai/api/v1
     key_url: https://openrouter.ai/keys
     enabled: true
+    key_steps:
+      - "Open the key page via the Get free key link."
+      - "Sign in or create an account."
+      - "Create a new API key."
+      - "Copy the key value."
+      - "Paste it into Assembly for this provider."
+      - "Press Test to verify the key."
+      - "Open the provider's rate-limit page and record the current limits."
+    sensitive_signup: null
     # OpenRouter appreciates callers identifying themselves; fill yours in.
     headers:
       HTTP-Referer: https://localhost:8000
@@ -154,6 +190,15 @@ providers:
     key_url: https://console.mistral.ai
     # Disabled until a key is added (no MISTRAL_API_KEY locally 2026-10-09).
     enabled: false
+    key_steps:
+      - "Open the key page via the Get free key link."
+      - "Sign in or create an account."
+      - "Create a new API key."
+      - "Copy the key value."
+      - "Paste it into Assembly for this provider."
+      - "Press Test to verify the key."
+      - "Open the provider's rate-limit page and record the current limits."
+    sensitive_signup: null
     models:
       # Verify the exact id in console.mistral.ai → Docs → Models (aliases
       # like -latest move; pin the dated id once you confirm it works).
@@ -175,6 +220,15 @@ providers:
     # instruct models; limits pending a verify run with a user key
     # (router loud-skips until rpm/rpd/tpm are filled).
     enabled: true
+    key_steps:
+      - "Open the key page via the Get free key link."
+      - "Sign in or create an account."
+      - "Create a new API key."
+      - "Copy the key value."
+      - "Paste it into Assembly for this provider."
+      - "Press Test to verify the key."
+      - "Open the provider's rate-limit page and record the current limits."
+    sensitive_signup: null
     models:
       - id: meta/llama-3.1-8b-instruct
         family: llama
@@ -210,6 +264,15 @@ providers:
     # Disabled by default: free credit is tiny (~$0.10/mo), not enough for
     # multi-agent runs. Set enabled: true only if you know what you are doing.
     enabled: false
+    key_steps:
+      - "Open the key page via the Get free key link."
+      - "Sign in or create an account."
+      - "Create a new API key."
+      - "Copy the key value."
+      - "Paste it into Assembly for this provider."
+      - "Press Test to verify the key."
+      - "Open the provider's rate-limit page and record the current limits."
+    sensitive_signup: null
     models:
       # Verify ids at huggingface.co → model page → "Use this model" → Inference API.
       - id: meta-llama/Meta-Llama-3-8B-Instruct

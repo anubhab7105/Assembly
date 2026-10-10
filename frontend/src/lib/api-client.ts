@@ -13,12 +13,18 @@ export interface CatalogProvider {
   enabled: boolean
   key_url: string
   privacy_note?: string | null
+  key_steps?: string[] | null
+  key_notes?: string[] | null
+  sensitive_signup?: string | null
   models: CatalogModel[]
 }
 
 export interface Catalog {
   providers: CatalogProvider[]
   families: string[]
+  recommended_order?: string[]
+  minimum_families?: number
+  sensitive_signup_fallback?: string
 }
 
 export interface UsageEntry {
