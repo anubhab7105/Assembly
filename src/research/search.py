@@ -6,22 +6,23 @@ Web search integration for research-heavy questions (PRD Section 11).
 
 import httpx
 
-from src.core.config import settings
-from src.core.keystore import reveal
+from src.core.keystore import resolve_tavily_key, reveal
 from src.core.logging_config import logger
 
 
 class SearchEngine:
     """
     Web search abstraction.
-    
+
     Uses Tavily API when available, falls back to a no-op
     that returns empty results for the MVP.
     """
 
-    def __init__(self):
+    def __init__(self, tavily_key=None):
         # Stored as SecretStr; revealed only inside the request body below.
-        self.tavily_key = settings.tavily_api_key
+        # An explicit per-request key wins; otherwise the server key applies
+        # only where allowed (web mode ignores it by default).
+        self.tavily_key = resolve_tavily_key(tavily_key)
         key = reveal(self.tavily_key)
         self.has_tavily = bool(key) and not key.startswith("tvly-your")
 

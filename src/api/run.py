@@ -26,6 +26,12 @@ from src.providers.quota import get_limiter
 
 router = APIRouter(prefix="/api/run", tags=["run"])
 
+#: Machine-readable code for "no usable model family" rejections.
+BLOCKED_CODE = "blocked_no_usable_keys"
+
+#: Minimum distinct model families for a healthy team (mirrors catalog).
+MINIMUM_FAMILIES = 3
+
 
 @dataclass
 class _RunEntry:
@@ -80,6 +86,32 @@ def _resolve_selection(selected: list[str]) -> tuple[set[str], dict[str, str]]:
     if not allowed:
         return set(), {}
     return allowed, {m: known[m] for m in allowed}
+
+
+def _diversity_is_blocked(router: object, allowed: set[str]) -> bool:
+    """True when zero model families are usable for this run's keys.
+
+    Routers with a family diversity gate use it; routers without one
+    (test doubles) fall back to catalog families under the selection.
+    """
+    gate = None
+    diversity_gate = getattr(router, "diversity_gate", None)
+    if callable(diversity_gate):
+        try:
+            gate = diversity_gate(set(allowed) if allowed else None)
+        except Exception:  # noqa: BLE001 — gate trouble reads as blocked
+            return True
+    if gate is not None:
+        return gate.level == "BLOCKED"
+    catalog = load_models_config()
+    fams: set[str] = set()
+    for spec in catalog.providers.values():
+        if not spec.enabled:
+            continue
+        for m in spec.models:
+            if not allowed or m.id in allowed:
+                fams.add(m.family)
+    return len(fams) == 0
 
 
 def _filtered_router(provider_keys: dict[str, str], allowed: set[str], pins: dict[str, str]):
@@ -174,6 +206,7 @@ async def _execute_run(
     pins: dict[str, str],
     usage_snapshot: list[dict],
     entry: _RunEntry,
+    search_keys: dict[str, str] | None = None,
 ) -> None:
     """Run the orchestrator, forwarding recorder events into the SSE queue."""
     from src.orchestration.orchestrator import Orchestrator
@@ -197,6 +230,7 @@ async def _execute_run(
             time_budget_minutes=tier,
             on_progress=on_progress,
             provider_keys=provider_keys or None,
+            search_keys=search_keys,
             router_override=router_override,
         )
         result_status = result.status
@@ -264,6 +298,22 @@ async def start_run(req: RunRequest, request: Request):
     # only an actually-infeasible verdict blocks; errors fail open.
     allowed, _ = _resolve_selection(list(req.model_selection.selected or []))
     pins = dict(req.model_selection.pins or {})
+
+    # No usable model family: refuse before streaming or spending quota.
+    gate_probe = _filtered_router(dict(req.provider_keys or {}), allowed, {})
+    if _diversity_is_blocked(gate_probe, allowed):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "code": BLOCKED_CODE,
+                "detail": (
+                    "No usable model families. Add keys for at least "
+                    f"{MINIMUM_FAMILIES} model families (2 work with a "
+                    "warning)."
+                ),
+                "minimum_families": MINIMUM_FAMILIES,
+            },
+        )
     try:
         limiter = get_limiter()
         limiter.set_usage_snapshot(
@@ -316,7 +366,6 @@ async def start_run(req: RunRequest, request: Request):
         "reasons": [],
     }
     try:
-        gate_probe = _filtered_router(dict(req.provider_keys or {}), allowed, {})
         gate = (
             gate_probe.diversity_gate(set(allowed) if allowed else None)
             if hasattr(gate_probe, "diversity_gate")
@@ -363,6 +412,9 @@ async def start_run(req: RunRequest, request: Request):
             pins,
             [u.model_dump() for u in (req.usage_snapshot or [])],
             entry,
+            search_keys=(
+                dict(req.search_keys) if req.search_keys is not None else None
+            ),
         )
     )
 

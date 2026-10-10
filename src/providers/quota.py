@@ -55,31 +55,119 @@ class QuotaExhausted(Exception):
         self.retry_after = retry_after
 
 
-def _default_salt() -> str:
-    """Stable per-deployment salt. Override with QUOTA_SALT for rotation.
+#: Constant salts are forbidden: fingerprints must never mix keys across
+#: deployments with a guessable value.
+_FORBIDDEN_SALTS = frozenset({"", "assembly-dev-quota"})
 
-    Uses the dedicated quota_salt setting (QUOTA_SALT env var) so the JWT
-    signing key is never reused as a cryptographic salt. Falls back to a
-    per-process random value for dev only.
-    """
-    # 1. Explicit QUOTA_SALT env var (takes precedence for rotation).
+#: Cached per-process salt (web/dev when QUOTA_SALT is unset).
+_process_salt: str | None = None
+
+
+def _explicit_salt() -> str:
+    """QUOTA_SALT from the environment or settings ("" when unset)."""
     salt = os.environ.get("QUOTA_SALT", "")
     if salt:
         return salt
-    # 2. Pydantic settings quota_salt field (preferred in all modes).
     try:
         from src.core.config import settings
         from src.core.keystore import reveal
 
-        configured = reveal(settings.quota_salt)
-        if configured:
-            return configured
+        return reveal(settings.quota_salt)
     except Exception:  # noqa: BLE001 — quota must never crash
-        pass
-    # 3. Dev fallback: a per-process random value (not the JWT key).
-    #    Not stable across restarts — acceptable for dev/desktop where
-    #    quota counters are ephemeral anyway.
-    return "assembly-dev-quota"
+        return ""
+
+
+def _desktop_salt_path() -> "Path":
+    """File holding the desktop installation's persistent quota salt."""
+    from pathlib import Path as _Path
+
+    try:
+        import platformdirs
+
+        data_dir = _Path(platformdirs.user_data_dir("Assembly", "Assembly"))
+    except Exception:  # noqa: BLE001 — fall back to temp dir
+        import tempfile
+
+        data_dir = _Path(tempfile.gettempdir()) / "assembly"
+    return data_dir / "quota_salt"
+
+
+def _read_or_create_desktop_salt() -> str:
+    """Load the desktop salt file, creating it once with tight permissions."""
+    import secrets
+    import stat
+
+    path = _desktop_salt_path()
+    try:
+        existing = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        existing = ""
+    if existing:
+        return existing
+    value = secrets.token_hex(32)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        fd = os.open(path, flags, 0o600)
+        try:
+            os.write(fd, value.encode("utf-8"))
+        finally:
+            os.close(fd)
+        if os.name == "posix":
+            os.chmod(path, 0o600 | stat.S_IRUSR | stat.S_IWUSR)
+    except FileExistsError:
+        # Raced creation: read the winner's value.
+        try:
+            return path.read_text(encoding="utf-8").strip()
+        except OSError:
+            return value
+    except OSError as exc:
+        logger.warning(f"Quota   │ desktop salt file unwritable: {exc}")
+    return value
+
+
+def reset_quota_salt_cache() -> None:
+    """Drop the cached per-process salt (tests only)."""
+    global _process_salt
+    _process_salt = None
+
+
+def get_quota_salt() -> str:
+    """Effective fingerprint salt for the current APP_MODE.
+
+    Precedence: explicit QUOTA_SALT (any mode) → web: random per-process →
+    desktop: random once, persisted in the app-data folder → dev: random
+    per-process. Never returns an empty or constant salt; raises
+    RuntimeError if no salt can be produced (startup assertion).
+    """
+    import secrets
+
+    explicit = _explicit_salt()
+    if explicit and explicit not in _FORBIDDEN_SALTS:
+        return explicit
+    try:
+        from src.core.config import settings
+
+        mode = settings.app_mode
+    except Exception:  # noqa: BLE001 — unknown mode degrades to dev
+        mode = "dev"
+    if mode == "desktop":
+        salt = _read_or_create_desktop_salt()
+    else:
+        global _process_salt
+        if not _process_salt:
+            _process_salt = secrets.token_hex(32)
+        salt = _process_salt
+    if not salt or salt in _FORBIDDEN_SALTS:
+        raise RuntimeError(
+            "Quota salt misconfigured: refusing empty or constant salt."
+        )
+    return salt
+
+
+def _default_salt() -> str:
+    """Back-compat entry point for fingerprint_key (see get_quota_salt)."""
+    return get_quota_salt()
 
 
 def fingerprint_key(key: Any, salt: str | None = None) -> str:

@@ -59,6 +59,9 @@ class Settings(BaseSettings):
 
     # ── Research / Web Search ────────────────────────────────────────
     tavily_api_key: SecretStr = Field(default=SecretStr(""))
+    # Web mode ignores the server-side Tavily key unless this is true
+    # (BYOK: search keys arrive per request; see search_keys on RunRequest).
+    allow_server_search_key: bool = False
 
     # ── Budget Defaults ──────────────────────────────────────────────
     max_tokens_per_execution: int = 100_000

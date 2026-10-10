@@ -19,8 +19,7 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
-from src.core.config import settings
-from src.core.keystore import reveal
+from src.core.keystore import resolve_tavily_key, reveal
 from src.core.logging_config import logger
 from src.research.schemas import SearchResult
 
@@ -108,8 +107,10 @@ class TavilySearchProvider(SearchProvider):
     provider_name: str = "tavily"
 
     def __init__(self, api_key: SecretStr | str | None = None) -> None:
+        # Explicit per-request key wins; otherwise the server key applies
+        # only where allowed (web mode ignores it by default).
         self._api_key: SecretStr | str = (
-            api_key if api_key is not None else settings.tavily_api_key
+            api_key if api_key is not None else resolve_tavily_key()
         )
 
     @property

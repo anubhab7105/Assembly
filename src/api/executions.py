@@ -211,6 +211,7 @@ async def create_execution(req: ExecutionRequest, request: Request, db: Session 
                 req.question,
                 req.time_budget_minutes,
                 req.provider_keys,
+                search_keys=req.search_keys,
                 is_demo=req.is_demo,
             )
         )
@@ -424,6 +425,7 @@ async def _run_execution(
     question: str,
     time_budget_minutes: int,
     provider_keys: dict[str, str] | None = None,
+    search_keys: dict[str, str] | None = None,
     is_demo: bool = False,
 ):
     """Run the orchestrator in the background and stream to WS clients."""
@@ -481,6 +483,7 @@ async def _run_execution(
             time_budget_minutes=time_budget_minutes,
             on_progress=on_progress,
             provider_keys=provider_keys,
+            search_keys=search_keys,
             router_override=router_override,
         )
 

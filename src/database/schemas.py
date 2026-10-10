@@ -37,6 +37,11 @@ class RunRequest(BaseModel):
     # Web-mode BYOK keys (provider → key). In-memory for this run only:
     # never written to disk or database, never logged, never returned.
     provider_keys: dict[str, str] = Field(default_factory=dict, max_length=20)
+    # Optional per-request search keys (e.g. {"tavily": ...}). Same handling
+    # as provider_keys: in memory only, never logged, never returned.
+    # None (absent) means "use the server key where allowed"; a present
+    # value (even empty) means keyless sources only unless it holds a key.
+    search_keys: dict[str, str] | None = Field(default=None, max_length=20)
     model_selection: ModelSelection = Field(default_factory=ModelSelection)
     usage_snapshot: list[UsageSnapshotEntry] = Field(default_factory=list, max_length=200)
 
@@ -73,6 +78,8 @@ class ExecutionRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     time_budget_minutes: int = Field(..., ge=3, le=15)
     provider_keys: dict[str, str] | None = None
+    # Optional per-request search keys (same handling as /api/run).
+    search_keys: dict[str, str] | None = None
     model_selection: ModelSelection = Field(default_factory=ModelSelection)
     usage_snapshot: list[UsageSnapshotEntry] = Field(default_factory=list)
     is_demo: bool = False

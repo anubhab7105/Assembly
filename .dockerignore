@@ -1,0 +1,29 @@
+# Assembly — Docker build context excludes (secrets + local state first).
+# Secret files: never bake keys into the image (web is BYOK at runtime).
+.env
+.env.*
+!.env.example
+assembly.db
+.local/
+# Python caches / builds.
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+# Frontend build output / deps (backend image only needs src/).
+frontend/out/
+frontend/.next/
+frontend/node_modules/
+node_modules/
+# OS / IDE noise.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+# Recordings and test artifacts.
+recordings/
+playwright-report/
+test-results/
