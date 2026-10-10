@@ -362,19 +362,39 @@ def _authed_client(monkeypatch):
     return client, exec_mod
 
 
-def _stub_router(monkeypatch, exec_mod, snapshot):
+def _stub_preflight_context(monkeypatch, snapshot):
+    """Stub the shared request-context builder for POST /api/preflight."""
+    import src.api.preflight as preflight_mod
+    from src.api.request_context import RequestContext
+
     router = SimpleNamespace(
         quota_snapshot=lambda: snapshot,
         available_families=lambda: ["gemini", "qwen", "gpt-oss"],
     )
-    monkeypatch.setattr(exec_mod._orchestrator, "router", router)
+    ctx = RequestContext(
+        router=router,
+        allowed=set(),
+        pins={},
+        quota_snapshot=list(snapshot),
+        has_search_key=False,
+    )
+    monkeypatch.setattr(preflight_mod, "build_request_context", lambda *a, **k: ctx)
+
+
+def _preflight_body(question="Is React better than Vue?", tier=5):
+    return {
+        "question": question,
+        "time_budget_minutes": tier,
+        "provider_keys": {"p0": "fake"},
+        "model_selection": {"selected": [], "pins": {}},
+        "usage_snapshot": [],
+    }
 
 
 def test_preflight_returns_plan_without_running(monkeypatch) -> None:
-    client, exec_mod = _authed_client(monkeypatch)
-    _stub_router(
+    client, _exec_mod = _authed_client(monkeypatch)
+    _stub_preflight_context(
         monkeypatch,
-        exec_mod,
         [
             {
                 "provider": f"p{i}",
@@ -385,10 +405,7 @@ def test_preflight_returns_plan_without_running(monkeypatch) -> None:
             for i in range(5)
         ],
     )
-    response = client.get(
-        "/api/executions/preflight",
-        params={"question": "Is React better than Vue?", "time_budget_minutes": 5},
-    )
+    response = client.post("/api/preflight", json=_preflight_body())
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["feasible"] is True
@@ -401,10 +418,9 @@ def test_preflight_returns_plan_without_running(monkeypatch) -> None:
 
 
 def test_preflight_reports_fallback_on_thin_quota(monkeypatch) -> None:
-    client, exec_mod = _authed_client(monkeypatch)
-    _stub_router(
+    client, _exec_mod = _authed_client(monkeypatch)
+    _stub_preflight_context(
         monkeypatch,
-        exec_mod,
         [
             {
                 "provider": "solo",
@@ -414,9 +430,8 @@ def test_preflight_reports_fallback_on_thin_quota(monkeypatch) -> None:
             }
         ],
     )
-    response = client.get(
-        "/api/executions/preflight",
-        params={"question": "Is React better than Vue?", "time_budget_minutes": 15},
+    response = client.post(
+        "/api/preflight", json=_preflight_body("Is React better than Vue?", 15)
     )
     assert response.status_code == 200, response.text
     body = response.json()
@@ -425,10 +440,9 @@ def test_preflight_reports_fallback_on_thin_quota(monkeypatch) -> None:
 
 
 def test_preflight_exhausted_quota_is_infeasible(monkeypatch) -> None:
-    client, exec_mod = _authed_client(monkeypatch)
-    _stub_router(
+    client, _exec_mod = _authed_client(monkeypatch)
+    _stub_preflight_context(
         monkeypatch,
-        exec_mod,
         [
             {
                 "provider": f"p{i}",
@@ -439,18 +453,12 @@ def test_preflight_exhausted_quota_is_infeasible(monkeypatch) -> None:
             for i in range(3)
         ],
     )
-    response = client.get(
-        "/api/executions/preflight",
-        params={"question": "What is 2+2?", "time_budget_minutes": 3},
-    )
+    response = client.post("/api/preflight", json=_preflight_body("What is 2+2?", 3))
     assert response.status_code == 200, response.text
     assert response.json()["feasible"] is False
 
 
 def test_preflight_rejects_bad_tier(monkeypatch) -> None:
     client, _ = _authed_client(monkeypatch)
-    bad_tier = client.get(
-        "/api/executions/preflight",
-        params={"question": "Hi?", "time_budget_minutes": 7},
-    )
-    assert bad_tier.status_code == 400
+    bad_tier = client.post("/api/preflight", json=_preflight_body("Hi?", 7))
+    assert bad_tier.status_code == 422

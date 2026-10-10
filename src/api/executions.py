@@ -19,7 +19,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from pydantic import BaseModel, ConfigDict
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from src.api.events import event_to_wire, fetch_events, fetch_latest_seq, persist_event
@@ -35,7 +35,6 @@ from src.database.schemas import (
     ExecutionResponse,
     PlannerSuggestionResponse,
     PreflightResponse,
-    UsageSnapshotEntry,
 )
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
 from src.orchestration.orchestrator import Orchestrator
@@ -59,17 +58,14 @@ def _require_desktop() -> None:
         )
 
 
-class PreflightBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    question: str = ""
-    time_budget_minutes: int = 5
-    usage_snapshot: list[UsageSnapshotEntry] = []
-
-
-def _build_preflight(question: str, tier: int, snapshot: list[dict]) -> PreflightResponse:
+def _build_preflight(
+    question: str,
+    tier: int,
+    snapshot: list[dict],
+    router_override=None,
+) -> PreflightResponse:
     suggestion = heuristic_suggestion(question)
-    router_obj = _orchestrator.router
+    router_obj = router_override if router_override is not None else _orchestrator.router
     raw_snapshot = router_obj.quota_snapshot() if hasattr(router_obj, "quota_snapshot") else []
     keys = [
         KeyBudget(
@@ -238,38 +234,21 @@ async def cancel_execution(execution_id: str, db: Session = Depends(get_db)):
     return ExecutionCancelResponse(id=execution_id, status="cancelling")
 
 
-@router.get("/preflight", response_model=PreflightResponse)
-async def preflight(
-    request: Request,
-    question: str = Query(..., min_length=1, max_length=2000),
-    time_budget_minutes: int = Query(5, ge=3, le=15),
-):
-    """Capacity verdict WITHOUT running. Open (no auth), all modes."""
-    ip = request.client.host if request.client else "unknown"
-    await check_rate_limit(
-        f"ip:{ip}", "preflight", settings.rate_limit_preflight_per_min_per_ip, 60
+@router.get("/preflight")
+async def preflight() -> JSONResponse:
+    """Gone: use POST /api/preflight (per-request keys in the body)."""
+    return JSONResponse(
+        status_code=410,
+        content={"detail": "Gone: use POST /api/preflight.", "use": "POST /api/preflight"},
     )
-    if time_budget_minutes not in (3, 5, 10, 15):
-        raise HTTPException(status_code=400, detail="Time budget must be 3, 5, 10, or 15 minutes.")
-    return _build_preflight(question, time_budget_minutes, [])
 
 
-@router.post("/preflight", response_model=PreflightResponse)
-async def preflight_post(body: PreflightBody, request: Request):
-    """Capacity verdict with client usage_snapshot. Open (no auth)."""
-    ip = request.client.host if request.client else "unknown"
-    await check_rate_limit(
-        f"ip:{ip}", "preflight", settings.rate_limit_preflight_per_min_per_ip, 60
-    )
-    question = (body.question or "").strip()
-    if not question or len(question) > settings.max_question_chars:
-        raise HTTPException(status_code=422, detail="Invalid request.")
-    if body.time_budget_minutes not in (3, 5, 10, 15):
-        raise HTTPException(status_code=400, detail="Time budget must be 3, 5, 10, or 15 minutes.")
-    return _build_preflight(
-        question,
-        body.time_budget_minutes,
-        [u.model_dump() for u in (body.usage_snapshot or [])],
+@router.post("/preflight")
+async def preflight_post() -> JSONResponse:
+    """Gone: use POST /api/preflight (per-request keys in the body)."""
+    return JSONResponse(
+        status_code=410,
+        content={"detail": "Gone: use POST /api/preflight.", "use": "POST /api/preflight"},
     )
 
 

@@ -25,8 +25,10 @@ vi.mock("@/lib/key-vault", () => ({
     setRemember: vi.fn(),
     setKey: vi.fn(),
     allKeys: vi.fn().mockResolvedValue({}),
+    hasPersisted: vi.fn().mockResolvedValue(false),
     clearAll: vi.fn(),
     unlock: vi.fn(),
+    lock: vi.fn(),
   },
 }));
 
@@ -96,5 +98,10 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
     );
     expect(await screen.findByTestId("tavily-input")).toBeDefined();
     expect(await screen.findByTestId("tavily-save")).toBeDefined();
+    // Memory-only mode shows the refresh warning; no unlock prompt without a blob.
+    expect((await screen.findByTestId("memory-only-banner")).textContent).toContain(
+      "a refresh clears them",
+    );
+    expect(screen.queryByTestId("unlock-prompt")).toBeNull();
   });
 });

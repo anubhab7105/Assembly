@@ -157,9 +157,15 @@ def test_status_preflight_carry_diversity(monkeypatch) -> None:
     assert body["diversity"]["level"] in ("OK", "WARN", "DEGRADED", "BLOCKED")
     assert "families_ready" in body["diversity"]
 
-    pre = client.get(
-        "/api/executions/preflight",
-        params={"question": "Is 2+2 4?", "time_budget_minutes": 3},
+    pre = client.post(
+        "/api/preflight",
+        json={
+            "question": "Is 2+2 4?",
+            "time_budget_minutes": 3,
+            "provider_keys": {},
+            "model_selection": {"selected": [], "pins": {}},
+            "usage_snapshot": [],
+        },
     )
     assert pre.status_code == 200, pre.text
     assert pre.json()["diversity"]["level"] in ("OK", "WARN", "DEGRADED", "BLOCKED")

@@ -52,7 +52,7 @@ def test_never_drops_last_solver_or_critic() -> None:
 def test_preflight_shows_final_roles() -> None:
     client = TestClient(app)
     resp = client.post(
-        "/api/executions/preflight",
+        "/api/preflight",
         json={"question": "What is 2+2?", "time_budget_minutes": 3},
     )
     assert resp.status_code == 200, resp.text
@@ -61,6 +61,17 @@ def test_preflight_shows_final_roles() -> None:
     assert "solver" in data["final_roles"]
     assert "critic" in data["final_roles"]
     assert "synthesizer" in data["final_roles"]
+
+
+def test_old_preflight_routes_are_gone() -> None:
+    client = TestClient(app)
+    for method in ("get", "post"):
+        resp = getattr(client, method)(
+            "/api/executions/preflight",
+            **({"params": {"question": "Hi?", "time_budget_minutes": 3}} if method == "get" else {"json": {"question": "Hi?", "time_budget_minutes": 3}}),
+        )
+        assert resp.status_code == 410, resp.text
+        assert resp.json()["use"] == "POST /api/preflight"
 
 
 def test_single_family_warns_and_lowers_confidence() -> None:

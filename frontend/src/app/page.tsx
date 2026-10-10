@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   ArrowRight,
   Bot,
@@ -67,13 +68,13 @@ export default function LandingPage() {
           </div>
           <span className="text-lg font-bold tracking-tight">Assembly</span>
         </div>
-        <a
+        <Link
           href="/chat"
           className="group inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-all hover:border-brand hover:text-brand hover:shadow-lg hover:shadow-brand/10"
         >
           Launch App
           <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-        </a>
+        </Link>
       </header>
 
       {/* Hero */}
@@ -98,20 +99,20 @@ export default function LandingPage() {
             </p>
 
             <div className="animate-fade-up mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center" style={{ animationDelay: "0.3s" }}>
-              <a
+              <Link
                 href="/chat"
                 className="group inline-flex h-12 items-center gap-2 rounded-xl bg-brand px-8 text-base font-semibold text-brand-foreground shadow-xl shadow-brand/30 transition-all hover:bg-brand-hover hover:shadow-2xl hover:shadow-brand/40 hover:-translate-y-0.5"
               >
                 <Zap className="size-5" />
                 Start Researching
                 <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/settings"
                 className="inline-flex h-12 items-center gap-2 rounded-xl border border-border bg-card px-8 text-base font-semibold text-foreground transition-all hover:border-brand/50 hover:text-brand hover:-translate-y-0.5"
               >
                 Configure Keys
-              </a>
+              </Link>
             </div>
           </div>
 

@@ -450,3 +450,10 @@
 - Backend: `ALLOW_SERVER_SEARCH_KEY`, `enforce_web_key_policy()` (startup fail on server provider keys in web; one warning for ignored Tavily), `resolve_tavily_key()`, per-run `SearchRouter` with keyless fallback + providers-used/empty events, `search_keys` on run/execution schemas, 400 `blocked_no_usable_keys`, per-mode quota salt (web per-process, desktop persisted 0o600, assertion in lifespan), `.dockerignore` (no `.env*` in image), `render.yaml` flag pinned false.
 - Frontend: Tavily search-key card (keyless-sources note), `searchKeys` split out of vault keys in chat, server error detail surfaced on run failure. `tsc` clean; one pre-existing eslint error (chat set-state-in-effect, untouched); keys-manager snapshot test updated for the new card (justified).
 - Tests: `tests/test_prompt_a.py` (16, all offline, canary). Backend subset re-run green; full offline suite pending as final gate.
+
+## 2026-10-10 — Group 1 implementation (blockers)
+
+- Shared context: `src/api/request_context.py` feeds both preflight and run; `POST /api/preflight` (RunRequest body, canary-clean 422); old executions preflight routes return 410; frontend sends keys/selection/usage.
+- Navigation: landing CTAs → `<Link>`; `internal-links.test.ts` guard green.
+- Vault: load-first mount, unlock prompt, explicit forget, memory-only banner; `key-vault.test.ts` 5/5; Playwright `keys-persist.spec.ts` passes (mocked, canary only).
+- Tests: backend group-1 files green; full offline suite as final gate (see commit).

@@ -69,12 +69,20 @@ export class ApiClient {
     return this.request<Catalog>("/api/catalog")
   }
 
-  static preflight(question: string, minutes: number, usage: UsageEntry[] = []) {
-    return this.request("/api/executions/preflight", {
+  static preflight(
+    question: string,
+    minutes: number,
+    usage: UsageEntry[] = [],
+    providerKeys: Record<string, string> = {},
+    selection: ModelSelection = { selected: [], pins: {} },
+  ) {
+    return this.request("/api/preflight", {
       method: "POST",
       body: JSON.stringify({
         question,
         time_budget_minutes: minutes,
+        provider_keys: providerKeys,
+        model_selection: selection,
         usage_snapshot: usage,
       }),
     }) as Promise<{ feasible: boolean; explanation?: string; feasible_tier?: number }>

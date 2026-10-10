@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from src.api.catalog import router as catalog_router
 from src.api.executions import router as executions_router
 from src.api.keys import router as keys_router
+from src.api.preflight import router as preflight_router
 from src.api.run import router as run_router
 from src.core.config import settings
 from src.core.logging_config import logger
@@ -157,6 +158,7 @@ async def limit_upload_size(request: Request, call_next):
 
 # ── API Routes (no auth router, no conversations router) ─────────────
 app.include_router(run_router)
+app.include_router(preflight_router)
 app.include_router(catalog_router)
 app.include_router(executions_router)
 app.include_router(keys_router)
