@@ -36,10 +36,11 @@ from src.database.models import ExecutionEvent
 
 
 class ProgressEventType(str, Enum):
-    """Canonical event names (WORKFLOW §8 + execution.cancelled)."""
+    """Canonical event names (WORKFLOW §8 + execution.cancelled + plan.adjusted)."""
 
     EXECUTION_STARTED = "execution.started"
     PLAN_READY = "plan.ready"
+    PLAN_ADJUSTED = "plan.adjusted"
     TEAM_READY = "team.ready"
     AGENT_STATUS = "agent.status"
     ROUND_STARTED = "round.started"
@@ -75,6 +76,13 @@ class PlanReadyPayload(_Strict):
     problem_type: str = Field(min_length=1)
     complexity: str = Field(min_length=1)
     agent_count: int = Field(ge=0)
+
+
+class PlanAdjustedPayload(_Strict):
+    reason: str = Field(min_length=1, max_length=500)
+    added: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    final_roles: list[str] = Field(default_factory=list)
 
 
 class TeamRole(_Strict):
@@ -177,6 +185,7 @@ class ExecutionCancelledPayload(_Strict):
 PAYLOAD_MODELS: dict[ProgressEventType, type[BaseModel]] = {
     ProgressEventType.EXECUTION_STARTED: ExecutionStartedPayload,
     ProgressEventType.PLAN_READY: PlanReadyPayload,
+    ProgressEventType.PLAN_ADJUSTED: PlanAdjustedPayload,
     ProgressEventType.TEAM_READY: TeamReadyPayload,
     ProgressEventType.AGENT_STATUS: AgentStatusPayload,
     ProgressEventType.ROUND_STARTED: RoundStartedPayload,
