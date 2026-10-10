@@ -122,6 +122,10 @@ def load_csv(path: Path) -> list[Row]:
                 row["score"] = float(row.get("score") or 0)
                 row["max_score"] = float(row.get("max_score") or 1)
                 row["correct"] = str(row.get("correct", "")).lower() in ("true", "1", "yes")
+                row["live"] = str(row.get("live", "true")).lower() in ("true", "1", "yes")
+                row["verification_status"] = str(
+                    row.get("verification_status", "unverified") or "unverified"
+                ).lower()
                 rows.append(row)
             except (ValueError, KeyError):
                 continue
@@ -214,6 +218,9 @@ def _make_demo_rows(rng: random.Random) -> list[Row]:
                 "criteria_json": "",
                 "manual_spot_check": False,
                 "answer_excerpt": "demo answer text",
+                "live": False,
+                "verification_status": "unverified",
+                "synthetic": True,
                 "_calls":   max(1, int(calls_b * noise)),
                 "_tokens":  max(100, int(tokens_b * noise)),
                 "_seconds": max(0.5, round(seconds_b * noise, 1)),
@@ -242,6 +249,74 @@ def make_demo_data(seed: int) -> tuple[list[Row], list[dict[str, Any]]]:
             "method": {"tier_minutes": rng.choice(tiers) if "assembly" in r["system"] else None},
         })
     return rows, run_records
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Data-status guards (D): DEMO / UNVERIFIED / LIVE, VERIFIED
+# ─────────────────────────────────────────────────────────────────────
+
+def data_status(rows: list[Row], run_records: list[dict[str, Any]], is_demo: bool) -> str:
+    """Header for the report: DEMO, UNVERIFIED, or LIVE, VERIFIED (n of N)."""
+    if is_demo or any(r.get("synthetic") or r.get("judge_provider") == "demo" for r in rows):
+        return "DATA STATUS: DEMO (synthetic) — do not publish"
+    questions = sorted({str(r.get("question_id", "")) for r in rows})
+    verified_qs = sorted(
+        {
+            str(r.get("question_id", ""))
+            for r in rows
+            if str(r.get("verification_status", "unverified")).lower() == "verified"
+        }
+    )
+    if verified_qs and len(verified_qs) == len(questions) and all(
+        bool(r.get("live", True)) for r in rows
+    ) and all(
+        not rec or bool(rec.get("live", True)) for rec in (run_records or [])
+    ):
+        return f"DATA STATUS: LIVE, VERIFIED ({len(verified_qs)} of {len(questions)} questions)"
+    return "DATA STATUS: UNVERIFIED — do not publish"
+
+
+def is_final_ready(rows: list[Row], run_records: list[dict[str, Any]], is_demo: bool) -> bool:
+    """True only when every included question is verified and all runs are live."""
+    if is_demo:
+        return False
+    if not rows:
+        return False
+    if any(r.get("synthetic") or r.get("judge_provider") == "demo" for r in rows):
+        return False
+    questions = {str(r.get("question_id", "")) for r in rows}
+    for qid in questions:
+        qrows = [r for r in rows if str(r.get("question_id")) == qid]
+        if not qrows or any(
+            str(r.get("verification_status", "unverified")).lower() != "verified"
+            for r in qrows
+        ):
+            return False
+    if any(not bool(r.get("live", True)) for r in rows):
+        return False
+    for rec in run_records or []:
+        if not bool(rec.get("live", True)):
+            return False
+    return True
+
+
+def _watermark(fig: Any) -> None:
+    """DEMO DATA watermark for non-final charts."""
+    try:
+        fig.text(
+            0.5,
+            0.5,
+            "DEMO DATA",
+            fontsize=48,
+            color="red",
+            alpha=0.18,
+            ha="center",
+            va="center",
+            rotation=30,
+            weight="bold",
+        )
+    except Exception:  # noqa: BLE001, S110 — watermark must not break charts
+        pass
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -649,7 +724,7 @@ def _style_ax(ax: Any) -> None:
     ax.spines[["left", "bottom"]].set_color("#aaaaaa")
 
 
-def chart_win_rate(wr: dict[str, Any], out: Path) -> None:
+def chart_win_rate(wr: dict[str, Any], out: Path, watermark: bool = False) -> None:
     if not HAS_MPL:
         return
     systems_in_chart = [s for s in ["single", "vote", "assembly"] if s in wr["overall"]]
@@ -665,7 +740,7 @@ def chart_win_rate(wr: dict[str, Any], out: Path) -> None:
     fig.patch.set_facecolor(_BG)
     fig.suptitle("Assembly Win Rate — By Category & Overall", **_FONT_TITLE, y=1.02)
 
-    for i, sys in enumerate(systems_in_chart):
+    for i, sys in enumerate(systems_in_chart):  # noqa: F402 — chart label, not import
         accs    = [wr["by_category"][sys].get(cat, {}).get("accuracy", 0) for cat in cats]
         ci_los  = [wr["by_category"][sys].get(cat, {}).get("ci_lo", 0) for cat in cats]
         ci_his  = [wr["by_category"][sys].get(cat, {}).get("ci_hi", 0) for cat in cats]
@@ -715,11 +790,13 @@ def chart_win_rate(wr: dict[str, Any], out: Path) -> None:
 
     plt.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
+    if watermark:
+        _watermark(fig)
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
-def chart_ablation(ablations: dict[str, Any], out: Path) -> None:
+def chart_ablation(ablations: dict[str, Any], out: Path, watermark: bool = False) -> None:
     if not HAS_MPL:
         return
     ranked: list[tuple[str, str, float]] = ablations.get("_ranked", [])
@@ -758,11 +835,15 @@ def chart_ablation(ablations: dict[str, Any], out: Path) -> None:
 
     plt.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
+    if watermark:
+        _watermark(fig)
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
-def chart_calls_vs_acc(rows: list[Row], wr: dict[str, Any], out: Path) -> None:
+def chart_calls_vs_acc(
+    rows: list[Row], wr: dict[str, Any], out: Path, watermark: bool = False
+) -> None:
     if not HAS_MPL:
         return
 
@@ -773,7 +854,7 @@ def chart_calls_vs_acc(rows: list[Row], wr: dict[str, Any], out: Path) -> None:
     plot_systems = [s for s in ["single", "vote", "assembly"] if s in by_system]
 
     xs, ys, sizes, colors, labels_list = [], [], [], [], []
-    for sys in plot_systems:
+    for sys in plot_systems:  # noqa: F402 — chart label, not import
         sys_rows = by_system[sys]
         n = max(len(sys_rows), 1)
         avg_calls = sum(r.get("_calls", 1) for r in sys_rows) / n
@@ -812,6 +893,8 @@ def chart_calls_vs_acc(rows: list[Row], wr: dict[str, Any], out: Path) -> None:
 
     plt.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
+    if watermark:
+        _watermark(fig)
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
@@ -832,6 +915,7 @@ def build_report(
     weight_tune: dict[str, Any],
     charts_dir: Path,
     is_demo: bool,
+    status_header: str = "",
 ) -> str:
     lines: list[str] = []
 
@@ -845,6 +929,8 @@ def build_report(
         lines.append("")
 
     lines.append("# Assembly Benchmark — Analysis Report\n")
+    if status_header:
+        lines.append(f"**{status_header}**\n")
     if is_demo:
         lines.append(
             "> ⚠️ **DEMO MODE** — No real graded CSV files were found. "
@@ -1132,23 +1218,36 @@ def main(argv: list[str] | None = None) -> int:
     weight_tune = suggest_consensus_weights(rows)
 
     charts_dir = args.charts_dir
+    status_header = data_status(rows, run_records, is_demo)
+    ready = is_final_ready(rows, run_records, is_demo)
+    print(f"[analyze] {status_header}")
+    watermark = not ready
     if HAS_MPL:
         print(f"[analyze] Generating charts → {charts_dir}")
-        chart_win_rate(wr, charts_dir / "win_rate.png")
-        chart_ablation(ablations, charts_dir / "ablation.png")
-        chart_calls_vs_acc(rows, wr, charts_dir / "calls_vs_acc.png")
+        chart_win_rate(wr, charts_dir / "win_rate.png", watermark=watermark)
+        chart_ablation(ablations, charts_dir / "ablation.png", watermark=watermark)
+        chart_calls_vs_acc(rows, wr, charts_dir / "calls_vs_acc.png", watermark=watermark)
         print("[analyze] Charts: win_rate.png  ablation.png  calls_vs_acc.png")
     else:
         print("[analyze] WARNING: matplotlib unavailable — skipping charts.")
         print("          pip install matplotlib numpy")
 
-    report = build_report(wr, cost, ablations, failures, weight_tune, charts_dir, is_demo)
+    report = build_report(
+        wr, cost, ablations, failures, weight_tune, charts_dir, is_demo, status_header
+    )
 
     out_dir = args.output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    report_path = out_dir / "REPORT.md"
-    report_path.write_text(report, encoding="utf-8")
-    print(f"\n[analyze] Report → {report_path}")
+    if not ready:
+        preview_path = out_dir / "REPORT.preview.md"
+        preview_path.write_text(report, encoding="utf-8")
+        print(f"\n[analyze] {status_header}")
+        print(f"[analyze] Refusing final REPORT.md — wrote preview → {preview_path}")
+        print("[analyze] Final REPORT.md requires every question verified + all runs live.")
+    else:
+        report_path = out_dir / "REPORT.md"
+        report_path.write_text(report, encoding="utf-8")
+        print(f"\n[analyze] Report → {report_path}")
 
     # Console summary
     print("\n── Win Rates ──────────────────────────────────────")
@@ -1172,7 +1271,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Δ simulated accuracy: {weight_tune['improvement']:+.1%}")
     print(f"  {weight_tune['recommendation']}")
 
-    return 0
+    return 0 if ready else 2
 
 
 if __name__ == "__main__":

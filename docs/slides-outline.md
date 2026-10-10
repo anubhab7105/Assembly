@@ -30,11 +30,11 @@
 
 ## Slide 5: Benchmark Results
 - **Title**: Measurably Better Answers
-- **Content**:
-  - **Full Assembly Accuracy**: **87.5%**
-  - **Best Single Model Accuracy**: **57.5%**
-  - **Basic Voting Accuracy**: **60.0%**
-  - *Ablation Note*: Removing the debate phase entirely drops Assembly's accuracy significantly down to 70.0%. Enforcing diversity is key—using same-family models drops accuracy by 17.5%.
+- **Content** (numbers pending verification — see `bench/results/demo/README.md`):
+  - **Full Assembly Accuracy**: [insert verified number]
+  - **Best Single Model Accuracy**: [insert verified number]
+  - **Basic Voting Accuracy**: [insert verified number]
+  - *Ablation Note*: Removing the debate phase entirely drops Assembly's accuracy to [insert verified number]. Enforcing diversity is key—using same-family models drops accuracy by [insert verified number].
 
 ## Slide 6: Security & Cost
 - **Title**: Free, Fast, and Secure (BYOK)

@@ -44,6 +44,16 @@ from src.providers.errors import (
 from src.providers.quota import QuotaExhausted
 
 
+class Verification(BaseModel):
+    """Human verification state for one benchmark question."""
+
+    status: str = "unverified"
+    verified_by: str | None = None
+    verified_at: str | None = None
+    method: str | None = None
+    source: str | None = None
+
+
 class BenchQuestion(BaseModel):
     """One benchmark question (subset of the questions.jsonl schema)."""
 
@@ -54,6 +64,7 @@ class BenchQuestion(BaseModel):
     reference_answer: str = ""
     rubric: list[str] | None = None
     difficulty: str = "medium"
+    verification: Verification = Field(default_factory=Verification)
 
 
 class BenchResult(BaseModel):
@@ -72,6 +83,8 @@ class BenchResult(BaseModel):
     seconds: float = 0.0
     consensus_score: float | None = None
     errors: list[dict[str, str]] = Field(default_factory=list)
+    live: bool = True
+    verification_status: str = "unverified"
 
 
 @dataclass
@@ -383,6 +396,7 @@ class ResultStore:
 def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """CLI flags shared by all three runners."""
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
+    parser.add_argument("--questions-file", type=Path, default=None)
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument(
         "--run-id",
@@ -390,6 +404,14 @@ def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         help="Resume/extend this run id (default: fresh <mode>-<utc stamp>)",
     )
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=20261008)
+    parser.add_argument(
+        "--verified-only",
+        dest="verified_only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Only use verified questions (default ON; --no-verified-only to include all).",
+    )
     parser.add_argument(
         "--category",
         default=None,
@@ -439,14 +461,35 @@ def remaining_questions(
     done: set[str],
     category: str | None,
     limit: int | None,
+    verified_only: bool = False,
+    seed: int | None = None,
 ) -> list[BenchQuestion]:
-    """Skip answered ids, filter by category, then cap at limit."""
+    """Skip answered ids, filter by category/verification, shuffle, cap at limit."""
     pending = [q for q in questions if q.id not in done]
     if category is not None:
         pending = [q for q in pending if q.category == category]
+    if verified_only:
+        pending = [
+            q
+            for q in pending
+            if (q.verification.status if q.verification else "unverified") == "verified"
+        ]
+    if seed is not None:
+        import random
+
+        rng = random.Random(seed)
+        rng.shuffle(pending)
     if limit is not None:
         pending = pending[:limit]
     return pending
+
+
+def resolve_questions_path(args: argparse.Namespace) -> Path:
+    """--questions-file overrides --questions (both point at a jsonl file)."""
+    override = getattr(args, "questions_file", None)
+    if override:
+        return Path(override)
+    return Path(getattr(args, "questions", DEFAULT_QUESTIONS))
 
 
 def print_summary(mode: str, results: list[BenchResult], elapsed: float) -> None:

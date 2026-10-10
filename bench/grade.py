@@ -68,6 +68,8 @@ class LoadedResult(BaseModel):
     seconds: float = 0.0
     consensus_score: float | None = None
     errors: list[dict[str, str]] = Field(default_factory=list)
+    live: bool = True
+    verification_status: str = "unverified"
 
     @property
     def system(self) -> str:
@@ -101,6 +103,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Run ids or .jsonl paths to grade/compare.",
     )
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
+    parser.add_argument("--questions-file", type=Path, default=None)
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument(
         "--output-run-id",
@@ -116,6 +119,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--env-file", type=Path, default=None)
     parser.add_argument("--app-mode", default=None, choices=["dev", "web", "desktop"])
     parser.add_argument("--seed", type=int, default=20261008)
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--verified-only",
+        dest="verified_only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Only grade verified questions (default ON).",
+    )
     return parser.parse_args(argv)
 
 
@@ -425,6 +436,8 @@ def _blank_grade(row: LoadedResult, max_score: float, rationale: str) -> dict[st
         "criteria_json": "",
         "manual_spot_check": False,
         "answer_excerpt": row.answer[:300].replace("\n", " "),
+        "live": bool(getattr(row, "live", True)),
+        "verification_status": str(getattr(row, "verification_status", "unverified")),
     }
 
 
@@ -432,8 +445,31 @@ async def grade_all(
     args: argparse.Namespace,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Grade all loaded rows and return CSV rows plus judge usage."""
-    questions = {q.id: q for q in load_questions(args.questions)}
+    qpath = getattr(args, "questions_file", None) or args.questions
+    questions = {q.id: q for q in load_questions(Path(qpath))}
     results = load_results(args.results_dir, args.run_ids)
+    # --verified-only (default ON): drop unverified questions before grading.
+    if getattr(args, "verified_only", True):
+        results = [
+            r
+            for r in results
+            if (questions.get(r.question_id) is not None)
+            and (
+                getattr(questions[r.question_id].verification, "status", "unverified")
+                == "verified"
+            )
+        ]
+    # --limit + --seed: deterministic subset for pilots.
+    limit = getattr(args, "limit", None)
+    seed = getattr(args, "seed", 20261008)
+    if limit is not None:
+        import random as _random
+
+        order = sorted({r.question_id for r in results})
+        rng = _random.Random(seed)
+        rng.shuffle(order)
+        keep = set(order[:limit])
+        results = [r for r in results if r.question_id in keep]
     by_question: dict[str, list[LoadedResult]] = defaultdict(list)
     for row in results:
         by_question[row.question_id].append(row)
@@ -557,6 +593,8 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "criteria_json",
         "manual_spot_check",
         "answer_excerpt",
+        "live",
+        "verification_status",
     ]
     with open(path, "w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)

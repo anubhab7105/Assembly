@@ -43,6 +43,7 @@ from bench.bench_common import (
     load_questions,
     print_summary,
     remaining_questions,
+    resolve_questions_path,
 )
 from src.core.logging_config import logger
 from src.orchestration.orchestrator import Orchestrator
@@ -234,10 +235,15 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
             "desktop: OS keyring) so the key store is non-empty."
         )
 
-    questions = load_questions(args.questions)
+    questions = load_questions(resolve_questions_path(args))
     store = ResultStore(args.results_dir / f"{run_id}.jsonl")
     pending = remaining_questions(
-        questions, store.done_ids(), args.category, args.limit
+        questions,
+        store.done_ids(),
+        args.category,
+        args.limit,
+        getattr(args, "verified_only", True),
+        getattr(args, "seed", None),
     )
     print(f"Questions: {len(pending)} pending ({len(questions)} total)")
     print(f"Tier: {args.tier} minutes")
@@ -453,6 +459,10 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
             seconds=round(elapsed, 2),
             consensus_score=consensus,
             errors=errors,
+            live=True,
+            verification_status=(
+                item.verification.status if item.verification else "unverified"
+            ),
         )
         if pin_team and pinned is not None:
             record.method["pinned_families"] = list(pinned)

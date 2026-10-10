@@ -34,7 +34,7 @@ This script is timed for a fast-paced 3-minute hackathon pitch.
 2. **How is security handled with user API keys?**
    - *Answer*: In the Desktop app, keys are securely stored in the OS Keyring and never touch plain text files. On Web, they are held purely in memory for the duration of the run and immediately wiped.
 3. **Why not just use one large, capable model (like GPT-4)?**
-   - *Answer*: Our benchmark ablation study shows a team of diverse free-tier models hits **87.5% accuracy**, compared to just **57.5%** for the best single free model. Diversity catches blind spots.
+   - *Answer*: Our benchmark ablation study (once verified — see `bench/results/demo/README.md`; demo numbers are synthetic) shows [insert verified number] for a team of diverse free-tier models vs [insert verified number] for the best single free model. Diversity catches blind spots.
 4. **How exactly is the "consensus" computed?**
    - *Answer*: A deterministic engine scores answers based on five weighted factors: agreement (0.4), confidence (0.2), contradiction (0.175), stability (0.125), and evidence (0.1).
 5. **What happens if all models agree immediately, but they are all wrong?**
