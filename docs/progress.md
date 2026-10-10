@@ -437,3 +437,10 @@
 - Guards: `analyze.py` header + preview-only refusal + watermark; demo results moved to `bench/results/demo/` + README; docs scrubbed (demo-script, slides-outline → `[insert verified number]`).
 - Schedule: `bench/plan_schedule.py` offline estimator.
 - Tests: `tests/test_bench_verify.py` (9) + updated `tests/test_bench_grade.py` (verified fixtures + new args, justified by new schema). Backend total 487 collected (478 + 9). No live calls made; no benchmark run.
+## 2026-10-10 — Key-safety isolated web run (names-only audit)
+
+- Pre-flight: .env/.env.dev ignored + untracked + no history; allowlist = 5 provider keys + TAVILY (Settings/.env.example); leftovers none. Script `.local/preflight_names.py` (names/status/class only).
+- Web isolation on :8001 with all 6 key names blanked: /health web-stateless healthy; /providers/status all unavailable, BLOCKED 0 families; Settings check tavily/gemini/groq all False. LLM path has no env fallback (PASS).
+- Failure case POST /api/run provider_keys={}: SSE BLOCKED + failed_partial + run.finished failed, tokens 0, no provider call (planner routing error in logs). Suggest upfront 400 for empty-keys BLOCKED.
+- Gap: no UI field for Tavily search key (keys-manager renders catalog LLM providers only); SearchEngine/TavilySearchProvider read settings.tavily_api_key server-side, so web isolation depends on blanking env. Recommend per-request search key or web-mode guard. Browser injection skipped (no keys handled).
+- Scan `.local/key_scan.py`: clean (live-test artifacts + docs/live-test-report.md + generic prefixes); artifacts under .local/live-test/ deleted. Report: docs/live-test-report.md. No rotations required.
