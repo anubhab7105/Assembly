@@ -629,6 +629,15 @@ class Orchestrator:
 
             await emit_consensus(consensus_result, round_number)
 
+            # FR-5: stagnation guard — never launch another plain debate after
+            # a stagnant round; failed-agent rounds never count as no-change.
+            from src.orchestration.stagnation import (
+                compute_round_delta,
+                needs_debate,
+                stagnation_note,
+            )
+
+            stagnant_seen = False
             # Debate loop: DEBATE and ADVERSARIAL both mean "not done yet";
             # FINALIZE and FORCE_FINALIZE fall through to synthesis. The
             # deadline is a hard cutoff: once only the synthesis reserve
@@ -648,7 +657,30 @@ class Orchestrator:
                         "another round — synthesizing from current positions"
                     )
                     break
-                if consensus_result.decision == "ADVERSARIAL" and not adversarial_done:
+                # FR-5: after a stagnant round, never launch another plain
+                # debate — adversarial once, else force-finalize with note.
+                if stagnant_seen and consensus_result.decision == "DEBATE":
+                    note = stagnation_note()
+                    if note not in warnings:
+                        warnings.append(note)
+                    logger.info(
+                        "Exec    │ debate stagnated — forcing final synthesis"
+                    )
+                    break
+                # FR-5: plain debate needs an open disagreement or thin
+                # evidence; otherwise skip (no extra LLM calls spent).
+                if consensus_result.decision == "DEBATE" and not needs_debate(
+                    consensus_result
+                ):
+                    logger.info(
+                        "Exec    │ no open disagreement or missing evidence — "
+                        "skipping further debate"
+                    )
+                    break
+                if (
+                    consensus_result.decision == "ADVERSARIAL"
+                    or (stagnant_seen and not adversarial_done)
+                ) and not adversarial_done:
                     adversarial_done = True
                     # The strike is a targeted round: EVALUATING → DEBATING.
                     state_machine.transition(ExecState.DEBATING)
@@ -730,6 +762,11 @@ class Orchestrator:
                             )
 
                 # Run debate round
+                prev_outputs = list(outputs)
+                prev_contradiction = float(
+                    (consensus_result.factors or {}).get("contradiction_ratio", 0.0)
+                    or 0.0
+                )
                 outputs = await debate_manager.run_debate_round(
                     agents=agents,
                     current_outputs=outputs,
@@ -802,6 +839,43 @@ class Orchestrator:
                     },
                 )
                 await emit_consensus(consensus_result, round_number)
+                # FR-5: stagnant rounds emit round.stagnated (no extra LLM).
+                try:
+                    curr_contradiction = float(
+                        (consensus_result.factors or {}).get(
+                            "contradiction_ratio", 0.0
+                        )
+                        or 0.0
+                    )
+                except (TypeError, ValueError):
+                    curr_contradiction = 0.0
+                delta = compute_round_delta(
+                    prev_outputs,
+                    outputs,
+                    prev_contradiction,
+                    curr_contradiction,
+                    consensus_result.new_info_rate,
+                    round_number,
+                )
+                if delta.stagnant:
+                    stagnant_seen = True
+                    await emit_event(
+                        ProgressEventType.ROUND_STAGNATED,
+                        {
+                            "round": round_number,
+                            "reason": delta.reason[:500],
+                            "delta": delta.to_dict(),
+                        },
+                    )
+                    if adversarial_done:
+                        note = stagnation_note()
+                        if note not in warnings:
+                            warnings.append(note)
+                        logger.info(
+                            "Exec    │ debate stagnated after adversarial — "
+                            "forcing final synthesis"
+                        )
+                        break
 
             # ════════════════════════════════════════════════════════════
             # PHASE 6: FINAL SYNTHESIS — Produce the answer

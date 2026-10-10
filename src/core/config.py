@@ -118,6 +118,14 @@ class Settings(BaseSettings):
     consensus_contradiction_limit: float = 0.20
     consensus_evidence_floor: float = 0.50
 
+    # ── Debate stagnation guard (FR-5, WORKFLOW section 6) ────────────
+    # RoundDelta thresholds: a debate round with no position change, no
+    # confidence shift above epsilon, no new evidence/sources, no
+    # disagreement open/resolve, and no contradiction change is stagnant.
+    stagnation_conf_epsilon: float = 0.05
+    stagnation_contradiction_epsilon: float = 0.05
+    stagnation_enabled: bool = True
+
     model_config = {
         "env_file": str(BASE_DIR / ".env"),
         "env_file_encoding": "utf-8",

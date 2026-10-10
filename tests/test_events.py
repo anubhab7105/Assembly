@@ -1,6 +1,6 @@
 """Progress event system tests (docs/WORKFLOW.md section 8).
 
-Covers: Pydantic contracts for all 18 event types, sanitization
+Covers: Pydantic contracts for all 19 event types, sanitization
 (no keys / no chain-of-thought), recorder sequencing, disagreement
 diffing, DB persistence + ordering, WS replay with ?after_seq=,
 the REST fallback, the schema artifact, and a canary secrets scan.
@@ -102,6 +102,8 @@ def _minimal_payload(event_type: ProgressEventType) -> dict[str, Any]:
                 "removed": [],
                 "final_roles": ["solver", "critic", "synthesizer"],
             }
+        case ProgressEventType.ROUND_STAGNATED:
+            return {"round": 2, "reason": "no change", "delta": {}}
     raise AssertionError(f"unreachable: {event_type}")
 
 
@@ -109,8 +111,8 @@ def _minimal_payload(event_type: ProgressEventType) -> dict[str, Any]:
 
 
 def test_all_seventeen_types_have_models() -> None:
-    # FR-2 adds plan.adjusted (18 total); name kept for history.
-    assert len(ProgressEventType) == 18
+    # FR-2 adds plan.adjusted, FR-5 adds round.stagnated (19 total).
+    assert len(ProgressEventType) == 19
     assert set(PAYLOAD_MODELS) == set(ProgressEventType)
 
 
@@ -630,7 +632,7 @@ def test_schema_bundle_covers_all_types() -> None:
 
     bundle = bundle_fn()
     assert bundle["version"] == 1
-    assert len(bundle["event_types"]) == 18
+    assert len(bundle["event_types"]) == 19
     assert set(bundle["payloads"]) == set(bundle["event_types"])
     assert set(bundle["envelope"]["properties"]) == {
         "event_type",
@@ -656,7 +658,7 @@ def test_export_script_writes_artifact(tmp_path) -> None:
     )
     assert completed.returncode == 0, completed.stderr
     artifact = json.loads(out.read_text(encoding="utf-8"))
-    assert len(artifact["event_types"]) == 18
+    assert len(artifact["event_types"]) == 19
 
 
 def test_openapi_exposes_event_models(monkeypatch) -> None:
