@@ -560,10 +560,7 @@ class Orchestrator:
                         ProgressEventType.AGENT_STATUS,
                         {
                             "role": "researcher",
-                            "activity": (
-                                "Web search via "
-                                f"{', '.join(used_sources)}."
-                            )[:500],
+                            "activity": f"Web search via {', '.join(used_sources)}."[:500],
                             "state": ExecState.TEAM_READY.value,
                         },
                     )

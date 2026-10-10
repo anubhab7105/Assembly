@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
             raise RuntimeError("Quota salt misconfigured.")
     except RuntimeError:
         raise
-    except Exception as exc:  # noqa: BLE001 — salt trouble must fail loudly
+    except Exception as exc:
         raise RuntimeError(f"Quota salt misconfigured: {exc}") from exc
     logger.info("====================================================")
 
