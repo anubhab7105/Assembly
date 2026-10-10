@@ -1,55 +1,46 @@
 # Privacy — what the server sees and stores
 
-This is the exact privacy contract for Assembly's stateless web mode
-(`APP_MODE=web`) and the local desktop mode (`APP_MODE=desktop`).
+> Single source for the consent wording: `frontend/src/lib/privacy-notice.ts`
+> (`WEB_PRIVACY_PARAGRAPHS` / `DESKTOP_PRIVACY_PARAGRAPHS`). The paragraphs
+> below match the blocking first-run dialog exactly.
 
-## Web mode (`APP_MODE=web`)
+## Web mode consent text (blocking dialog, version 1)
 
-**The server stores nothing.** No accounts, no database file, no disk
-writes. Each run lives in an in-memory registry with a TTL and a global
-concurrency cap, and is forgotten when it finishes or expires.
+Assembly web mode processes your question, API keys and model choices in memory for the duration of one run and stores nothing on the server.
 
-What the server transiently sees during `POST /api/run` (memory only):
+Server logs contain metadata only (run id, tier, timings, counts) — never your questions, answers or keys.
 
-- The question text (to run the team; never written to disk or logs —
-  logs carry the question length only).
-- The provider keys you send (`provider_keys`; held in memory for that
-  run only, wiped in a `finally` path, never logged, never returned).
-- The model selection and usage snapshot you send (to plan capacity;
-  counts only, never keys).
-- The generated answer and sources (streamed back to you as SSE events;
-  never stored).
+Your history and settings stay in this browser (IndexedDB). Nothing is stored on the server.
 
-What the server logs (metadata only):
+Each model provider handles your inputs under its own policy:
 
-- Run id prefix, requested tier, model-selection size (`auto` or count),
-  timings, capacity verdicts, and error classes. No question text, no
-  keys, no answers. The key-masking log filter still scrubs anything
-  resembling a secret.
+- gemini: Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information.
+- all other providers: Check this provider's terms for how free-tier inputs are handled.
 
-Abuse protection without accounts: per-IP rate limits, request size
-limit, max question length (2000 chars), SSE origin check, and a CORS
-allow-list. No fingerprinting, no cookies, no tracking.
+Avoid sending sensitive or confidential information.
 
-## Desktop mode (`APP_MODE=desktop`)
+The desktop app keeps keys in the Windows Credential Manager and sends requests straight from your PC — keys never leave your machine except to authenticate with the provider.
 
-Everything stays on your machine: run history in a local SQLite file
-under your OS data directory, provider keys in the OS credential
-manager (Windows Credential Manager via `keyring`), never in plain
-files or `.env`. No data leaves the device except provider API calls
-made with your own keys.
+## Desktop mode consent text (shorter, no server wording)
 
-## Browser storage (both modes)
+Assembly desktop mode runs entirely on your PC.
 
-History, settings, and daily usage counters live in your browser
-(IndexedDB) via the `StorageService` interface — never on our server.
-"Remember on this device" encrypts keys with WebCrypto AES-GCM under a
-key derived from YOUR passphrase via PBKDF2 (210,000 iterations); the
-passphrase is never stored. History Export/Import is a JSON file you
-control.
+Your history and settings stay in this browser (IndexedDB).
 
-## What we will never do
+Each model provider handles your inputs under its own policy:
 
-- Store, log, or return your provider keys (only provider/model names).
-- Store questions or answers server-side in web mode.
-- Require an account, email, or password for any feature.
+- gemini: Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information.
+- all other providers: Check this provider's terms for how free-tier inputs are handled.
+
+Avoid sending sensitive or confidential information.
+
+Keys are kept in the Windows Credential Manager and requests go straight from your PC — keys never leave your machine except to authenticate with the provider.
+
+## Acknowledgment storage
+
+The dialog requires an explicit "I understand" button. The browser stores
+`{version, acknowledged_at}` under `privacy_notice_ack` via `StorageService`
+(IndexedDB in web, `DesktopStorage` on desktop). A run cannot start until the
+stored version equals `PRIVACY_NOTICE_VERSION`; bumping the version re-prompts.
+Settings → Privacy repeats the same text with a "Review again" link. The
+acknowledgment record never contains keys, questions or answers.

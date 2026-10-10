@@ -33,6 +33,7 @@ providers:
     base: google-genai
     key_url: https://aistudio.google.com/apikey
     enabled: true
+    privacy_note: "Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information."
     models:
       - id: gemini-3.8-flash
         family: gemini
