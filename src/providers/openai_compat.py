@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
-from src.core.keystore import reveal
+from src.core.keystore import clean_key, reveal
 from src.core.logging_config import logger
 from src.providers.base import AIProvider, ChatMessage, ProviderResponse
 from src.providers.errors import (
@@ -91,7 +91,7 @@ class OpenAICompatibleProvider(AIProvider):
         timeout_seconds: float = 60.0,
         max_retries: int = 2,
     ) -> None:
-        value = reveal(api_key)
+        value = clean_key(api_key)
         if not value:
             raise AuthError(provider_id, "missing API key")
         from src.providers.quota import fingerprint_key

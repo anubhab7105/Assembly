@@ -10,14 +10,88 @@ import google.generativeai as genai
 from pydantic import SecretStr
 
 from src.core.config import settings
-from src.core.keystore import reveal
+from src.core.keystore import clean_key
 from src.core.logging_config import logger
 from src.providers.base import AIProvider, ChatMessage, ProviderResponse
-from src.providers.errors import RateLimited, classify_exception
+from src.providers.errors import RateLimited, TruncatedResponse, classify_exception
 
 # Bound a single generation call: the legacy SDK has no timeout of its own,
 # and an unbounded await here freezes the whole execution past its budget.
 GENERATION_TIMEOUT_SECONDS = 120.0
+
+# Legacy google.generativeai 0.8.6 GenerationConfig takes only
+# candidate_count/stop_sequences/max_output_tokens/temperature/top_p/top_k/
+# response_mime_type/response_schema/presence_penalty/frequency_penalty —
+# there is NO thinking-budget parameter, so none is set (verified against
+# the installed SDK; do not add one by guess).
+
+
+def _finish_to_string(finish: object) -> str:
+    """Normalize SDK/REST finish reasons to the REST vocabulary.
+
+    The legacy SDK surfaces protobuf ints (STOP=1, MAX_TOKENS=2,
+    SAFETY=3, ...) while REST uses strings. Unknown shapes read as "".
+    """
+    if finish is None:
+        return ""
+    if isinstance(finish, str):
+        return finish.upper() or ""
+    if isinstance(finish, bool):
+        return ""
+    if isinstance(finish, int):
+        return {
+            0: "UNSPECIFIED",
+            1: "STOP",
+            2: "MAX_TOKENS",
+            3: "SAFETY",
+            4: "RECITATION",
+            5: "OTHER",
+        }.get(finish, str(finish))
+    text = str(finish).upper()
+    # "FinishReason.STOP" / "finish_reason=2" shapes: keep the tail token.
+    for token in ("STOP", "MAX_TOKENS", "SAFETY", "RECITATION", "OTHER"):
+        if token in text:
+            return token
+    return text[:32]
+
+
+def _extract_text_and_finish(response: object) -> tuple[str, str]:
+    """Safe candidate/parts extraction. Never touches response.text.
+
+    response.text raises ValueError when the turn carries no parts
+    (MAX_TOKENS cut, safety block, empty), which the old code
+    misclassified as ProviderDown → UI "invalid". Walk the structure
+    instead; missing pieces read as ("", finish).
+    """
+    try:
+        candidates = getattr(response, "candidates", None)
+        if isinstance(candidates, dict):
+            candidates = [candidates]
+        if not candidates:
+            return "", ""
+        cand = candidates[0]
+        if isinstance(cand, dict):
+            finish = _finish_to_string(
+                cand.get("finishReason", cand.get("finish_reason", ""))
+            )
+            content = cand.get("content", {})
+            parts = content.get("parts", []) if isinstance(content, dict) else []
+        else:
+            finish = _finish_to_string(getattr(cand, "finish_reason", ""))
+            content = getattr(cand, "content", None)
+            parts = getattr(content, "parts", []) if content is not None else []
+        texts: list[str] = []
+        if isinstance(parts, list):
+            for part in parts:
+                if isinstance(part, dict):
+                    text = part.get("text", "")
+                else:
+                    text = getattr(part, "text", "")
+                if isinstance(text, str) and text:
+                    texts.append(text)
+        return "".join(texts), finish
+    except (AttributeError, TypeError, ValueError):
+        return "", ""
 
 
 class GeminiProvider(AIProvider):
@@ -33,7 +107,7 @@ class GeminiProvider(AIProvider):
     ) -> None:
         if not default_model:
             raise ValueError("GeminiProvider needs default_model (from models.yaml)")
-        key = reveal(api_key) or reveal(settings.gemini_api_key)
+        key = clean_key(api_key) or clean_key(settings.gemini_api_key)
         if key:
             genai.configure(api_key=key)
         # SecretStr so the value never renders in logs/repr; revealed only
@@ -158,14 +232,23 @@ class GeminiProvider(AIProvider):
                     response.usage_metadata
                 )
 
+            content, finish_reason = _extract_text_and_finish(response)
+            if not content.strip():
+                # Key worked, turn produced nothing usable: distinct type,
+                # never an auth error (the key Test reports this as valid).
+                raise TruncatedResponse(
+                    self.provider_name,
+                    f"empty generation (finish={finish_reason or 'unknown'})",
+                )
             return ProviderResponse(
-                content=response.text or "",
+                content=content,
                 model=model_name,
                 provider=self.provider_name,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 total_tokens=input_tokens + output_tokens,
                 reasoning_tokens=reasoning_tokens,
+                finish_reason=finish_reason or "stop",
             )
 
         except Exception as e:

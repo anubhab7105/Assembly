@@ -32,13 +32,30 @@ def reveal(value: KeyValue) -> str:
     return value
 
 
+#: Invisible characters users pick up when copying keys from dashboards.
+_ZERO_WIDTH_CHARS = ("\u200b", "\u200c", "\u200d", "\ufeff")
+
+
+def clean_key(value: KeyValue) -> str:
+    """Trim a pasted key: surrounding whitespace/newlines + zero-width chars.
+
+    Pure function (never logs). Copy-paste from provider dashboards
+    routinely adds a trailing newline or space; without this a valid
+    key authenticates as invalid.
+    """
+    raw = reveal(value)
+    for char in _ZERO_WIDTH_CHARS:
+        raw = raw.replace(char, "")
+    return raw.strip()
+
+
 def wrap_keys(raw: Mapping[str, KeyValue]) -> KeyMap:
     """Normalize incoming keys to SecretStr, silently dropping empties."""
     wrapped: KeyMap = {}
     for provider, key in raw.items():
-        value = reveal(key)
+        value = clean_key(key)
         if value:
-            wrapped[provider] = key if isinstance(key, SecretStr) else SecretStr(value)
+            wrapped[provider] = SecretStr(value)
     return wrapped
 
 
@@ -76,11 +93,9 @@ class RequestKeyStore(KeyStore):
         return dict(self._keys)
 
     def set_key(self, provider: str, key: KeyValue) -> None:
-        value = reveal(key)
+        value = clean_key(key)
         if value:
-            self._keys[provider] = (
-                key if isinstance(key, SecretStr) else SecretStr(value)
-            )
+            self._keys[provider] = SecretStr(value)
         else:
             self._keys.pop(provider, None)
 
@@ -126,7 +141,7 @@ class KeyringKeyStore(KeyStore):
         return keys
 
     def set_key(self, provider: str, key: KeyValue) -> None:
-        value = reveal(key)
+        value = clean_key(key)
         if value:
             self._backend().set_password(self._service, provider, value)
         else:

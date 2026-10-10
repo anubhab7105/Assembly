@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from src.api.executions import _build_preflight
 from src.api.request_context import build_request_context
 from src.core.config import settings
-from src.core.rate_limit import check_rate_limit
+from src.core.rate_limit import check_rate_limit, client_ip
 from src.database.schemas import PreflightResponse, RunRequest
 
 router = APIRouter(prefix="/api", tags=["preflight"])
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api", tags=["preflight"])
 @router.post("/preflight", response_model=PreflightResponse)
 async def preflight(req: RunRequest, request: Request):
     """Capacity verdict for this request's keys + selection, without running."""
-    ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
     await check_rate_limit(
         f"ip:{ip}", "preflight", settings.rate_limit_preflight_per_min_per_ip, 60
     )

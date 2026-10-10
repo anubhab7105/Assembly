@@ -42,6 +42,17 @@ class BadResponse(ProviderError):
     malformed JSON, empty choices). Never retry blindly."""
 
 
+class TruncatedResponse(BadResponse):
+    """The provider answered but returned no usable text (MAX_TOKENS,
+    safety block, or empty parts).
+
+    Distinct from AuthError on purpose: the key worked, the turn did
+    not produce content. Callers that only care about key validity
+    (e.g. the key Test) treat this as valid; runs treat it as a
+    retry-or-fallback like any other BadResponse.
+    """
+
+
 class ToolCallError(BadResponse):
     """The model tried to call a native tool (e.g. web search) that the
     request did not define, so the provider refused the turn.

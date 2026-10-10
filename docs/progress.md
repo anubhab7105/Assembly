@@ -457,3 +457,10 @@
 - Navigation: landing CTAs → `<Link>`; `internal-links.test.ts` guard green.
 - Vault: load-first mount, unlock prompt, explicit forget, memory-only banner; `key-vault.test.ts` 5/5; Playwright `keys-persist.spec.ts` passes (mocked, canary only).
 - Tests: backend group-1 files green; full offline suite as final gate (see commit).
+
+## 2026-10-10 — Gemini key-Test fix (valid key showed invalid)
+
+- Branch `main` (no branch ops, no push). Live diag (2 Gemini calls, httpx, no SDK retry, script deleted): list 200 / 50 models / `gemini-3.8-flash` listed; generation timeout at 20 s → case = timeout, key valid, generation probe misreported it.
+- Backend: Test now uses one auth-only list GET (15 s, no retries, never 500) classified by status only (200 valid, 400 API_KEY_INVALID/401/403 invalid, 429 rate-limited amber, 404/missing model = key-valid + alternatives, transport = unreachable); `clean_key()` trim at every key entry point; Gemini safe candidate/parts extraction + `TruncatedResponse` (never auth); legacy SDK has no thinking-budget param (verified, none set).
+- Frontend: `testKey` maps valid/rate_limited/invalid/model_unavailable/unreachable (+ endpoint-429 → rate_limited, network failure → unreachable, never invalid); KeysManager shows message, copy-spaces hint on invalid, usable-model list on model_unavailable; readiness counts valid + rate_limited only.
+- Tests: `tests/test_gemini_key_test.py` (12 mocked incl. trimming + canary) green; `api-client.test.ts` (8) green; vitest 9 files / 38 green; ruff check + format clean on touched files; canary/key-leak/key-setup/stateless (26) green. Full offline suite as final gate (see commit); one pre-existing failure (`test_run_with_failing_researcher_reports_reduced_research`) reproduces on clean HEAD, unrelated.
