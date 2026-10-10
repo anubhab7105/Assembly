@@ -41,6 +41,7 @@ def _clean_salt_cache():
 
 # ── 1. Web ignores server-side search key by default ─────────────────────
 
+
 def test_web_ignores_server_tavily_key(web_mode, monkeypatch) -> None:
     from src.core.config import settings
     from src.research.search import SearchEngine
@@ -72,6 +73,7 @@ def test_explicit_search_key_wins_in_web_mode(web_mode, monkeypatch) -> None:
 
 
 # ── 2. Web startup fails with server-side provider keys ──────────────────
+
 
 def test_web_startup_fails_with_provider_key_in_env(web_mode, monkeypatch) -> None:
     from src.core.keystore import enforce_web_key_policy
@@ -116,6 +118,7 @@ def test_web_tavily_warning_once(web_mode, monkeypatch, caplog) -> None:
 
 # ── 3. search_keys never leak (logs / 422) ───────────────────────────────
 
+
 def test_search_keys_absent_from_422(web_mode, caplog) -> None:
     from src.main import app
 
@@ -137,7 +140,9 @@ def test_search_keys_absent_from_422(web_mode, caplog) -> None:
     assert CANARY_PROV not in caplog.text
 
 
-def test_search_keys_flow_to_tavily_without_logging(web_mode, monkeypatch, caplog) -> None:
+def test_search_keys_flow_to_tavily_without_logging(
+    web_mode, monkeypatch, caplog
+) -> None:
     import src.api.run as run_mod
     from src.main import app
     from src.providers.mock_provider import MockProvider
@@ -186,6 +191,7 @@ def test_search_keys_flow_to_tavily_without_logging(web_mode, monkeypatch, caplo
 
 # ── 4. Keyless research end to end with mocks ────────────────────────────
 
+
 class _StubSearchProvider:
     """Offline stand-in for a keyless search backend (no network)."""
 
@@ -203,7 +209,11 @@ class _StubSearchProvider:
 
         self.calls += 1
         return [
-            SearchResult(title=f"{self.provider_name} hit", url="https://example.com/x", snippet="s")
+            SearchResult(
+                title=f"{self.provider_name} hit",
+                url="https://example.com/x",
+                snippet="s",
+            )
             for _ in range(self._hits)
         ]
 
@@ -242,6 +252,7 @@ async def test_tavily_without_key_never_calls_http(monkeypatch) -> None:
 
 # ── 5. BLOCKED returns 400 ───────────────────────────────────────────────
 
+
 def test_blocked_returns_400_with_code(web_mode, caplog) -> None:
     from src.main import app
 
@@ -268,6 +279,7 @@ def test_blocked_returns_400_with_code(web_mode, caplog) -> None:
 
 
 # ── 6. Salt per mode ─────────────────────────────────────────────────────
+
 
 def test_explicit_salt_wins_everywhere(monkeypatch) -> None:
     from src.core.config import settings
@@ -320,6 +332,6 @@ def test_salt_never_empty_or_constant(monkeypatch, tmp_path) -> None:
         monkeypatch.setattr(settings, "quota_salt", SecretStr(""))
         if mode == "desktop":
             target = tmp_path / f"salt-{mode}"
-            monkeypatch.setattr(quota_mod, "_desktop_salt_path", lambda: target)
+            monkeypatch.setattr(quota_mod, "_desktop_salt_path", lambda _t=target: _t)
         salt = quota_mod.get_quota_salt()
         assert salt not in ("", "assembly-dev-quota")

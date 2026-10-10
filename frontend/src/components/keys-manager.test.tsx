@@ -87,7 +87,14 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
     expect((await screen.findByTestId("signup-note-groq")).textContent).toContain(
       "skip this provider",
     );
-    // Snapshot: stable rendered structure for the setup page.
-    expect(container.querySelectorAll("[data-testid^='provider-card-']").length).toBe(2);
+    // Snapshot: stable rendered structure for the setup page
+    // (2 catalog providers + the standalone Tavily search-key card).
+    expect(container.querySelectorAll("[data-testid^='provider-card-']").length).toBe(3);
+    expect(await screen.findByTestId("provider-card-tavily")).toBeDefined();
+    expect((await screen.findByTestId("provider-card-tavily")).textContent).toContain(
+      "keyless sources",
+    );
+    expect(await screen.findByTestId("tavily-input")).toBeDefined();
+    expect(await screen.findByTestId("tavily-save")).toBeDefined();
   });
 });

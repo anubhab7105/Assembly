@@ -24,6 +24,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Self
 
 from src.core.logging_config import logger
@@ -77,18 +78,16 @@ def _explicit_salt() -> str:
         return ""
 
 
-def _desktop_salt_path() -> "Path":
+def _desktop_salt_path() -> Path:
     """File holding the desktop installation's persistent quota salt."""
-    from pathlib import Path as _Path
-
     try:
         import platformdirs
 
-        data_dir = _Path(platformdirs.user_data_dir("Assembly", "Assembly"))
+        data_dir = Path(platformdirs.user_data_dir("Assembly", "Assembly"))
     except Exception:  # noqa: BLE001 — fall back to temp dir
         import tempfile
 
-        data_dir = _Path(tempfile.gettempdir()) / "assembly"
+        data_dir = Path(tempfile.gettempdir()) / "assembly"
     return data_dir / "quota_salt"
 
 
@@ -159,9 +158,7 @@ def get_quota_salt() -> str:
             _process_salt = secrets.token_hex(32)
         salt = _process_salt
     if not salt or salt in _FORBIDDEN_SALTS:
-        raise RuntimeError(
-            "Quota salt misconfigured: refusing empty or constant salt."
-        )
+        raise RuntimeError("Quota salt misconfigured: refusing empty or constant salt.")
     return salt
 
 

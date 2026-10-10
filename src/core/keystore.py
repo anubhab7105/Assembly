@@ -243,10 +243,11 @@ def server_keys_present() -> list[str]:
             found.append(name)
             continue
         try:
-            if reveal(getattr(settings, name.lower(), None)):
-                found.append(name)
-        except Exception:  # noqa: BLE001 — one unreadable field skips
-            continue
+            configured = bool(reveal(getattr(settings, name.lower(), None)))
+        except Exception:  # noqa: BLE001 — one unreadable field reads as unset
+            configured = False
+        if configured:
+            found.append(name)
     return found
 
 
@@ -292,7 +293,9 @@ def resolve_tavily_key(explicit: KeyValue = None) -> SecretStr:
     set. Never logs the value; callers must treat the result as secret.
     """
     if reveal(explicit):
-        return explicit if isinstance(explicit, SecretStr) else SecretStr(reveal(explicit))
+        if isinstance(explicit, SecretStr):
+            return explicit
+        return SecretStr(reveal(explicit))
     from src.core.config import settings
 
     if settings.is_web and not settings.allow_server_search_key:
