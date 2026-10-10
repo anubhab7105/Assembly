@@ -396,3 +396,9 @@
   - **Frontend "remember" mode:** Keys in IndexedDB, AES-GCM encrypted with PBKDF2-derived key from user passphrase. Persist until "Clear all keys."
   - **Web mode:** Keys in-memory only, wiped after each run (ephemeral by design — most secure).
   - **Dev mode:** Keys in `.env` file (git-ignored). Persist until user removes from `.env`.
+
+## 2026-10-10 — Privacy notice consent (FR-35)
+
+- Backend: `ProviderSpec.privacy_note` optional + gemini note in `models.yaml` + `GET /api/catalog` exposes it (`src/api/catalog.py`).
+- Frontend: `frontend/src/lib/privacy-notice.ts` single source (`PRIVACY_NOTICE_VERSION=1`); `PrivacyDialog` blocks first run in web/desktop; ack `{version, acknowledged_at}` via `StorageService`; Settings Privacy section with "Review again"; `docs/privacy.md` matches dialog exactly.
+- Tests: `tests/test_privacy_notice.py` (3) + `frontend/src/lib/privacy-notice.test.ts` + `privacy-dialog.test.tsx` (9 vitest). New backend total 444 collected (441 before + 3).

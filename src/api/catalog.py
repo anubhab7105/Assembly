@@ -23,6 +23,7 @@ class CatalogProvider(BaseModel):
     id: str
     enabled: bool
     key_url: str = ""
+    privacy_note: str | None = None
     models: list[CatalogModel]
 
 
@@ -46,7 +47,11 @@ def get_catalog() -> CatalogResponse:
         ]
         providers.append(
             CatalogProvider(
-                id=pid, enabled=spec.enabled, key_url=spec.key_url, models=models
+                id=pid,
+                enabled=spec.enabled,
+                key_url=spec.key_url,
+                privacy_note=spec.privacy_note,
+                models=models,
             )
         )
         if spec.enabled:

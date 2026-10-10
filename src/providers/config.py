@@ -139,6 +139,10 @@ class ProviderSpec(BaseModel):
     enabled: bool = True
     headers: dict[str, str] = Field(default_factory=dict)
     timeout_seconds: float | None = Field(default=None, gt=0)
+    privacy_note: str | None = Field(
+        default=None,
+        description="Optional free-tier data-use notice shown in the privacy dialog.",
+    )
     models: list[ModelSpec] = Field(default_factory=list)
 
     @field_validator("base")

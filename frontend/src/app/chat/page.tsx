@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation"
 import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type UsageEntry } from "@/lib/api-client"
 import { storage } from "@/lib/storage"
+import { env } from "@/lib/env"
+import {
+  PRIVACY_ACK_KEY,
+  PRIVACY_NOTICE_VERSION,
+} from "@/lib/privacy-notice"
+import { PrivacyDialog } from "@/components/privacy-dialog"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -29,10 +35,44 @@ export default function Home() {
   const [status, setStatus] = useState<string | null>(null)
   const [selection, setSelection] = useState<ModelSelection>({ selected: [], pins: {} })
   const [hasKeys, setHasKeys] = useState(false)
+  const [privacyAcked, setPrivacyAcked] = useState(false)
+  const [showPrivacy, setShowPrivacy] = useState(false)
+  const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
+  const [enabledIds, setEnabledIds] = useState<string[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  const appMode = env.NEXT_PUBLIC_APP_MODE === "desktop" ? "desktop" : "web"
+
   useEffect(() => {
-    globalVault.allKeys().then((k) => setHasKeys(Object.keys(k).length > 0)).catch(() => {})
+    globalVault.allKeys().then((k) => { setHasKeys(Object.keys(k).length > 0); setEnabledIds(Object.keys(k)) }).catch(() => {})
+    ApiClient.catalog()
+      .then((c) =>
+        setCatalogNotes(
+          c.providers
+            .filter((p) => p.enabled)
+            .map((p) => ({ id: p.id, privacy_note: (p as { privacy_note?: string | null }).privacy_note ?? null })),
+        ),
+      )
+      .catch(() => {})
+    storage
+      .getSetting(PRIVACY_ACK_KEY)
+      .then((raw) => {
+        if (!raw) {
+          setShowPrivacy(true)
+          return
+        }
+        try {
+          const ack = JSON.parse(raw) as { version?: number }
+          if (ack.version !== PRIVACY_NOTICE_VERSION) {
+            setShowPrivacy(true)
+          } else {
+            setPrivacyAcked(true)
+          }
+        } catch {
+          setShowPrivacy(true)
+        }
+      })
+      .catch(() => setShowPrivacy(true))
   }, [])
 
   useEffect(() => {
@@ -42,8 +82,22 @@ export default function Home() {
     }
   }, [question])
 
+  const handleAcknowledge = async () => {
+    await storage.setSetting(
+      PRIVACY_ACK_KEY,
+      JSON.stringify({ version: PRIVACY_NOTICE_VERSION, acknowledged_at: new Date().toISOString() }),
+    )
+    setPrivacyAcked(true)
+    setShowPrivacy(false)
+  }
+
   const handleLaunch = async () => {
     if (!question.trim() || loading) return
+    if (!privacyAcked) {
+      setShowPrivacy(true)
+      setStatus("Please acknowledge the privacy notice first.")
+      return
+    }
     setLoading(true)
     setStatus("Checking capacity…")
     try {
@@ -169,6 +223,15 @@ export default function Home() {
           ))}
         </div>
       </main>
+      {showPrivacy && (
+        <PrivacyDialog
+          mode={appMode}
+          providers={catalogNotes.filter((p) =>
+            enabledIds.length > 0 ? enabledIds.includes(p.id) : true,
+          )}
+          onAcknowledge={() => void handleAcknowledge()}
+        />
+      )}
     </div>
   )
 }

@@ -12,6 +12,7 @@ export interface CatalogProvider {
   id: string
   enabled: boolean
   key_url: string
+  privacy_note?: string | null
   models: CatalogModel[]
 }
 
