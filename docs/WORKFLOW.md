@@ -1,6 +1,6 @@
 # Assembly — Workflow
 
-*v1.0 · October 8, 2026 · Companion to the PRD v1.0 and TECH_STACK.md*
+*v1.1 · October 10, 2026 · Companion to the PRD v1.1 and TECH_STACK.md*
 
 This document has two parts: **Part A** is how one execution runs inside Assembly. **Part B** is how you build and ship it for the hackathon.
 
@@ -176,7 +176,8 @@ Final answer wording:
 | Bad JSON from agent | Validator | Retry once; then fallback model |
 | Two agents strongly disagree | Pairwise disagreement high | Create a verification task: search or code test, then re-evaluate |
 | All but one family lost | Capacity check | Warn, continue single-family with extra caution, label answer lower confidence |
-| Client disconnects | WebSocket close | Keep running; client re-attaches by execution ID |
+| Desktop client disconnects | WebSocket close | Keep running; desktop client re-attaches by execution ID (`after_seq` replay, `src/api/executions.py`) |
+| Web client disconnects | SSE close | Cancel the run (stateless cancel, `src/api/run.py`); use the recorded replay as the demo fallback |
 | Deadline reached | Timer | Stop new work; synthesize from current positions; state uncertainty |
 
 ## 8. Progress events (backend → UI)
@@ -197,7 +198,7 @@ Final answer wording:
 | `execution.completed` | answer, sources, confidence label, summary stats |
 | `execution.failed_partial` | reason, best-effort answer |
 
-Insight Mode (if approved) subscribes to an extra stream with who-disagreed-with-whom and the evidence that changed a position. It is off by default.
+Insight Mode is Optional and not built: there is no extra stream or toggle — the timeline above is always visible. (PRD v1.1 §11.4.)
 
 ## 9. Key (BYOK) flow
 
@@ -207,10 +208,11 @@ Settings: user pastes key → Test call → store in Windows Credential Manager
 Execution: backend reads key just-in-time → calls provider directly → never logs it
 ```
 
-**Website**
+**Website** (`POST /api/run`, SSE, stateless)
 ```text
-Browser holds key in memory → sends with execution request (HTTPS)
-Backend keeps it in memory for that run only → calls provider → deletes at completion
+Browser vault holds keys in memory (opt-in encrypted persistence only) → sends keys + model selection with the run request (HTTPS body)
+Backend keeps them in memory for that run only → calls provider → wipes them in the run's finally path
+A disconnect cancels the run; there is no re-attach and no history on the server
 ```
 
 ## 10. Worked example (5-minute tier, medium question)
@@ -258,7 +260,7 @@ Question: "Is React better than Vue for a large cybersecurity platform?"
 - [ ] Next.js + TypeScript + Tailwind project
 - [ ] Key Setup wizard with Test buttons
 - [ ] Chat, time selector, progress view, answer view, history
-- [ ] WebSocket client with re-attach
+- [ ] Desktop WebSocket client with `after_seq` re-attach; web SSE client with cancel-on-disconnect
 
 **Phase 4 — Windows app**
 - [ ] Next.js static export
@@ -268,14 +270,14 @@ Question: "Is React better than Vue for a large cybersecurity platform?"
 - [ ] Installer builds and installs on a clean machine
 
 **Phase 5 — Demo polish**
-- [ ] Insight Mode (if approved)
 - [ ] Recorded replay fallback
 - [ ] Benchmark results slide
 - [ ] 10 full rehearsals; fix every failure you see
 
-**Phase 6 — Website (only if time allows or required)**
-- [ ] Supabase auth, per-request keys, long-running backend host
-- [ ] Never rely on this for the live demo
+**Phase 6 — Website R1 (stateless; only if time allows or required)**
+- [ ] Per-request keys over HTTPS, no login, no server storage (D8)
+- [ ] Long-running backend host; one full 5-minute run tested on the host
+- [ ] Never rely on an untested host for the live demo (see the PRD section 12.4 ladder)
 
 ## 12. Daily working loop
 
@@ -299,7 +301,7 @@ Grading rules: shuffle and hide system names; auto-check answers where possible;
 
 - [ ] Keys from at least 3 families added and tested that morning
 - [ ] Provider dashboards checked for remaining daily quota
-- [ ] App runs from the local installer or script, not a sleeping free server
+- [ ] Demo rung chosen from the PRD section 12.4 ladder (deployed R1 only if tested on the host; otherwise local stack, R2 app, or replay)
 - [ ] Recorded replay ready and tested
 - [ ] 3 rehearsed questions (one with a known single-model failure)
 - [ ] Benchmark slide ready
