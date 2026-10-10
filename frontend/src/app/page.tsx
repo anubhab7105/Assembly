@@ -181,9 +181,23 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-border/50 py-6 text-center">
-        <p className="text-xs text-muted-foreground">
-          Assembly &middot; Temporary teams of AI agents that produce measurably better answers
-        </p>
+        <div className="flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground sm:flex-row sm:gap-3">
+          <p>
+            Assembly &middot; Temporary teams of AI agents that produce measurably better answers
+          </p>
+          <span className="hidden sm:inline" aria-hidden>&middot;</span>
+          <p>
+            Developed by{" "}
+            <a
+              href="https://anubhab-protfolio.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-foreground underline decoration-brand/50 underline-offset-4 transition-colors hover:text-brand hover:decoration-brand"
+            >
+              Anubhab Das
+            </a>
+          </p>
+        </div>
       </footer>
     </div>
   )
