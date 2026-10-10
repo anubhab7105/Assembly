@@ -111,7 +111,7 @@ export default function Home() {
         {!hasKeys && (
           <div className="rounded-xl border border-warning/30 bg-warning-subtle p-4 flex items-center justify-between gap-4">
             <p className="text-sm text-warning">Add provider keys first — runs use your keys, never a server account.</p>
-            <Button variant="outline" size="sm" onClick={() => router.push("/setup")}>
+            <Button variant="outline" size="sm" onClick={() => router.push("/settings")}>
               <Settings className="size-4 mr-2" />
               Configure Keys
             </Button>
