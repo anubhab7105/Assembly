@@ -107,7 +107,7 @@ export default function LandingPage() {
                 <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
               </a>
               <a
-                href="/setup"
+                href="/settings"
                 className="inline-flex h-12 items-center gap-2 rounded-xl border border-border bg-card px-8 text-base font-semibold text-foreground transition-all hover:border-brand/50 hover:text-brand hover:-translate-y-0.5"
               >
                 Configure Keys

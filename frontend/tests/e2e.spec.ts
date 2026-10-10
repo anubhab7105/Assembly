@@ -40,7 +40,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
   })
 
   test("1. Setup flow with test keys and verify zero leakage", async ({ page }) => {
-    await page.goto("/setup")
+    await page.goto("/settings")
 
     const geminiCard = page.locator(".flex-col").filter({ hasText: "gemini" }).first()
     await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
