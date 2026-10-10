@@ -41,6 +41,7 @@ from bench.bench_common import (
     load_secrets_best_effort,
     print_summary,
     remaining_questions,
+    resolve_questions_path,
 )
 from src.core.logging_config import logger
 from src.providers.router import ModelRouter
@@ -56,7 +57,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = add_common_args(argparse.ArgumentParser(description=__doc__))
     parser.add_argument("--provider", default=None)
     parser.add_argument("--model", default=None)
+    parser.add_argument(
+        "--models",
+        default=None,
+        help="Comma-separated model ids to pilot (e.g. a,b,c); runs each in turn.",
+    )
     return parser.parse_args(argv)
+
+
+def _pilot_models(args: argparse.Namespace) -> list[str] | None:
+    if not getattr(args, "models", None):
+        return None
+    models = [m.strip() for m in str(args.models).split(",") if m.strip()]
+    return models or None
 
 
 async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
@@ -69,6 +82,17 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
             "ABORT: no live providers — add keys (dev: .env.dev, "
             "desktop: OS keyring) so the key store is non-empty."
         )
+    pilot = _pilot_models(args)
+    if pilot:
+        # Pilot several models in turn (e.g. --models a,b,c): each gets its
+        # own sub run id; verification/limit/seed apply per model.
+        all_results: list[BenchResult] = []
+        for pilot_model in pilot:
+            sub_args = argparse.Namespace(**{**vars(args), "model": pilot_model})
+            sub_id = f"{run_id}-{pilot_model.replace('/', '_').replace(':', '_')[:40]}"
+            print(f"Pilot model: {pilot_model} (run {sub_id})")
+            all_results.extend(await _run_one_model(router, sub_args, sub_id))
+        return all_results
     decision = router.route("solver", prefer_provider=args.provider)
     if args.model is not None:
         offered = decision.provider.get_available_models()
@@ -78,15 +102,35 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
                 f"{decision.provider_name} (offers: {', '.join(offered)})."
             )
         decision.model = args.model
+    return await _run_with_decision(router, decision, args, run_id)
+
+
+async def _run_one_model(
+    router: object, args: argparse.Namespace, run_id: str
+) -> list[BenchResult]:
+    decision = router.route("solver", prefer_provider=args.provider)
+    if args.model is not None:
+        decision.model = str(args.model)
+    return await _run_with_decision(router, decision, args, run_id)
+
+
+async def _run_with_decision(
+    router: object, decision: object, args: argparse.Namespace, run_id: str
+) -> list[BenchResult]:
     print(
         f"Single model: {decision.provider_name}/{decision.model} "
         f"(family {decision.family or 'unknown'})"
     )
 
-    questions = load_questions(args.questions)
+    questions = load_questions(resolve_questions_path(args))
     store = ResultStore(args.results_dir / f"{run_id}.jsonl")
     pending = remaining_questions(
-        questions, store.done_ids(), args.category, args.limit
+        questions,
+        store.done_ids(),
+        args.category,
+        args.limit,
+        getattr(args, "verified_only", True),
+        getattr(args, "seed", None),
     )
     print(f"Questions: {len(pending)} pending ({len(questions)} total)")
 
@@ -130,6 +174,10 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
             seconds=round(elapsed, 2),
             consensus_score=1.0 if outcome.text else 0.0,
             errors=outcome.errors,
+            live=True,
+            verification_status=(
+                item.verification.status if item.verification else "unverified"
+            ),
         )
         store.append(record)
         results.append(record)

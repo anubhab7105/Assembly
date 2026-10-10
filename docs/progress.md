@@ -428,3 +428,12 @@
 
 - Backend: `stagnation.py` (RoundDelta, needs_debate, note) + `Settings` thresholds + `round.stagnated` event + orchestrator skip/stagnant/adversarial-once/force-finalize; `event-schema.json` regenerated (19 types).
 - Tests: `tests/test_stagnation.py` (9: static/converging/thrashing/partial-failure, epsilon config, needs_debate, event contract, static ≤1 debate, stagnant→adversarial→finalize). Updated `tests/test_events.py` 18→19 (new event, justified). Backend total 478 collected (469 + 9).
+
+## 2026-10-10 — Benchmark verification and guards (D)
+
+- Schema: `bench/questions.jsonl` gains `verification` (40× `unverified`); reference answers untouched.
+- Tool: `bench/verify_questions.py` (interactive, method/source required, atomic, `--status`/`--export/import-csv`).
+- Runners/grader: `--verified-only` (default ON), `--questions-file`, `--limit`, `--seed`; rows carry `live` + `verification_status`; `run_single.py --models a,b,c` pilot (not run).
+- Guards: `analyze.py` header + preview-only refusal + watermark; demo results moved to `bench/results/demo/` + README; docs scrubbed (demo-script, slides-outline → `[insert verified number]`).
+- Schedule: `bench/plan_schedule.py` offline estimator.
+- Tests: `tests/test_bench_verify.py` (9) + updated `tests/test_bench_grade.py` (verified fixtures + new args, justified by new schema). Backend total 487 collected (478 + 9). No live calls made; no benchmark run.

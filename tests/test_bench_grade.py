@@ -61,6 +61,13 @@ def test_auto_grade_writes_spotcheck_free_csv(tmp_path: Path) -> None:
                         "reference_answer": "NEEDS HUMAN VERIFICATION - draft: 4",
                         "rubric": None,
                         "difficulty": "easy",
+                        "verification": {
+                            "status": "verified",
+                            "verified_by": "Tester",
+                            "verified_at": None,
+                            "method": "computed",
+                            "source": None,
+                        },
                     }
                 ),
                 json.dumps(
@@ -72,6 +79,13 @@ def test_auto_grade_writes_spotcheck_free_csv(tmp_path: Path) -> None:
                         "reference_answer": "NEEDS HUMAN VERIFICATION - draft: invalid",
                         "rubric": None,
                         "difficulty": "easy",
+                        "verification": {
+                            "status": "verified",
+                            "verified_by": "Tester",
+                            "verified_at": None,
+                            "method": "computed",
+                            "source": None,
+                        },
                     }
                 ),
             ]
@@ -107,6 +121,7 @@ def test_auto_grade_writes_spotcheck_free_csv(tmp_path: Path) -> None:
     )
     args = argparse.Namespace(
         questions=questions,
+        questions_file=None,
         results_dir=results_dir,
         run_ids=["demo"],
         output_run_id="demo",
@@ -119,6 +134,8 @@ def test_auto_grade_writes_spotcheck_free_csv(tmp_path: Path) -> None:
         env_file=None,
         app_mode=None,
         seed=1,
+        limit=None,
+        verified_only=True,
     )
 
     rows, judge_usage = asyncio.run(grade.grade_all(args))
