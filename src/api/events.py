@@ -36,7 +36,7 @@ from src.database.models import ExecutionEvent
 
 
 class ProgressEventType(str, Enum):
-    """Canonical event names (WORKFLOW §8 + execution.cancelled + plan.adjusted)."""
+    """Canonical event names (WORKFLOW §8 + execution.cancelled + plan.adjusted + round.stagnated)."""
 
     EXECUTION_STARTED = "execution.started"
     PLAN_READY = "plan.ready"
@@ -45,6 +45,7 @@ class ProgressEventType(str, Enum):
     AGENT_STATUS = "agent.status"
     ROUND_STARTED = "round.started"
     ROUND_FINISHED = "round.finished"
+    ROUND_STAGNATED = "round.stagnated"
     DISAGREEMENT_OPENED = "disagreement.opened"
     DISAGREEMENT_RESOLVED = "disagreement.resolved"
     SOURCE_FOUND = "source.found"
@@ -112,6 +113,12 @@ class RoundStartedPayload(_Strict):
 class RoundFinishedPayload(_Strict):
     round: int = Field(ge=1)
     outcome: str = Field(min_length=1, max_length=500)
+
+
+class RoundStagnatedPayload(_Strict):
+    round: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=500)
+    delta: dict = Field(default_factory=dict)
 
 
 class DisagreementOpenedPayload(_Strict):
@@ -190,6 +197,7 @@ PAYLOAD_MODELS: dict[ProgressEventType, type[BaseModel]] = {
     ProgressEventType.AGENT_STATUS: AgentStatusPayload,
     ProgressEventType.ROUND_STARTED: RoundStartedPayload,
     ProgressEventType.ROUND_FINISHED: RoundFinishedPayload,
+    ProgressEventType.ROUND_STAGNATED: RoundStagnatedPayload,
     ProgressEventType.DISAGREEMENT_OPENED: DisagreementOpenedPayload,
     ProgressEventType.DISAGREEMENT_RESOLVED: DisagreementResolvedPayload,
     ProgressEventType.SOURCE_FOUND: SourcePayload,

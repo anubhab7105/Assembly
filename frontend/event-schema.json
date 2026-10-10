@@ -8,6 +8,7 @@
     "agent.status",
     "round.started",
     "round.finished",
+    "round.stagnated",
     "disagreement.opened",
     "disagreement.resolved",
     "source.found",
@@ -23,7 +24,7 @@
   "envelope": {
     "$defs": {
       "ProgressEventType": {
-        "description": "Canonical event names (WORKFLOW \u00a78 + execution.cancelled + plan.adjusted).",
+        "description": "Canonical event names (WORKFLOW \u00a78 + execution.cancelled + plan.adjusted + round.stagnated).",
         "enum": [
           "execution.started",
           "plan.ready",
@@ -32,6 +33,7 @@
           "agent.status",
           "round.started",
           "round.finished",
+          "round.stagnated",
           "disagreement.opened",
           "disagreement.resolved",
           "source.found",
@@ -307,6 +309,33 @@
         "outcome"
       ],
       "title": "RoundFinishedPayload",
+      "type": "object"
+    },
+    "round.stagnated": {
+      "additionalProperties": false,
+      "properties": {
+        "round": {
+          "minimum": 1,
+          "title": "Round",
+          "type": "integer"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "delta": {
+          "additionalProperties": true,
+          "title": "Delta",
+          "type": "object"
+        }
+      },
+      "required": [
+        "round",
+        "reason"
+      ],
+      "title": "RoundStagnatedPayload",
       "type": "object"
     },
     "disagreement.opened": {

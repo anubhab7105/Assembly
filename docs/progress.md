@@ -423,3 +423,8 @@
 
 - Backend: `core_roles.py` guarantee + `Planner` double-call + `plan.adjusted` event + preflight `final_roles` + single-family warning/confidence cap; `event-schema.json` regenerated (18 types).
 - Tests: `tests/test_core_roles.py` (9: no-critic/no-solver adds, researcher-first drop, 3-min keeps trio, never-drop-last, preflight roles, single-family warning+cap, event contract, orchestrator emit). Updated `tests/test_events.py` (17→18 counts + `plan.adjusted` minimal payload, justified by new event) and fixed `test_events_canary_end_to_end` + `test_log_canary::test_canary_end_to_end_api_db_ws` to mock routing (pre-existing live-call slowness under TestClient portals caused `cancelled` instead of `completed`; now offline hermetic, still canary-scanned). Backend total 469 collected (460 + 9).
+
+## 2026-10-10 — FR-5 stop stagnant debates (C)
+
+- Backend: `stagnation.py` (RoundDelta, needs_debate, note) + `Settings` thresholds + `round.stagnated` event + orchestrator skip/stagnant/adversarial-once/force-finalize; `event-schema.json` regenerated (19 types).
+- Tests: `tests/test_stagnation.py` (9: static/converging/thrashing/partial-failure, epsilon config, needs_debate, event contract, static ≤1 debate, stagnant→adversarial→finalize). Updated `tests/test_events.py` 18→19 (new event, justified). Backend total 478 collected (469 + 9).
