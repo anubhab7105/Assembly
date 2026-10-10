@@ -143,6 +143,18 @@ class ProviderSpec(BaseModel):
         default=None,
         description="Optional free-tier data-use notice shown in the privacy dialog.",
     )
+    key_steps: list[str] | None = Field(
+        default=None,
+        description="Generic safe key-setup steps shown in the setup stepper.",
+    )
+    key_notes: list[str] | None = Field(
+        default=None,
+        description="Optional extra setup notes shown below the stepper.",
+    )
+    sensitive_signup: str | None = Field(
+        default=None,
+        description="Provider-specific signup fact or null when unconfirmed.",
+    )
     models: list[ModelSpec] = Field(default_factory=list)
 
     @field_validator("base")

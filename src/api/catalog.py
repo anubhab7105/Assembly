@@ -7,6 +7,17 @@ from src.providers.config import load_models_config
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 
+#: Shown in the setup UI whenever a provider-specific signup fact is
+#: unconfirmed (sensitive_signup is null). Free-tier only: never suggest
+#: paying for a key.
+SENSITIVE_SIGNUP_FALLBACK = (
+    "Check this during signup; if it asks for payment, "
+    "skip this provider (Assembly is free-tier only)"
+)
+
+#: Minimum distinct model families for a healthy team (2 works with warning).
+MIN_FAMILIES_TO_START = 3
+
 
 class CatalogModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -24,6 +35,9 @@ class CatalogProvider(BaseModel):
     enabled: bool
     key_url: str = ""
     privacy_note: str | None = None
+    key_steps: list[str] | None = None
+    key_notes: list[str] | None = None
+    sensitive_signup: str | None = None
     models: list[CatalogModel]
 
 
@@ -32,6 +46,37 @@ class CatalogResponse(BaseModel):
 
     providers: list[CatalogProvider]
     families: list[str]
+    recommended_order: list[str] = []
+    minimum_families: int = MIN_FAMILIES_TO_START
+    sensitive_signup_fallback: str = SENSITIVE_SIGNUP_FALLBACK
+
+
+def recommended_provider_order(catalog: object) -> list[str]:
+    """Enabled providers, most capacity first (names only, never keys).
+
+    Score = sum of integer rpd + rpm/10 across models; unknown limits
+    score 0 so unfilled providers sort last. Pure helper for the setup
+    banner's recommended order.
+    """
+    scored: list[tuple[float, str]] = []
+    providers = getattr(catalog, "providers", {}) or {}
+    for pid, spec in providers.items():
+        if not getattr(spec, "enabled", False):
+            continue
+        total = 0.0
+        for model in getattr(spec, "models", []) or []:
+            limits = getattr(model, "limits", None)
+            if limits is None:
+                continue
+            rpd = getattr(limits, "rpd", None)
+            rpm = getattr(limits, "rpm", None)
+            if isinstance(rpd, int) and not isinstance(rpd, bool):
+                total += float(rpd)
+            if isinstance(rpm, int) and not isinstance(rpm, bool):
+                total += float(rpm) / 10.0
+        scored.append((total, str(pid)))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [pid for _, pid in scored]
 
 
 @router.get("", response_model=CatalogResponse)
@@ -51,9 +96,18 @@ def get_catalog() -> CatalogResponse:
                 enabled=spec.enabled,
                 key_url=spec.key_url,
                 privacy_note=spec.privacy_note,
+                key_steps=list(spec.key_steps) if spec.key_steps else None,
+                key_notes=list(spec.key_notes) if spec.key_notes else None,
+                sensitive_signup=spec.sensitive_signup,
                 models=models,
             )
         )
         if spec.enabled:
             families.update(m.family for m in spec.models)
-    return CatalogResponse(providers=providers, families=sorted(families))
+    return CatalogResponse(
+        providers=providers,
+        families=sorted(families),
+        recommended_order=recommended_provider_order(catalog),
+        minimum_families=MIN_FAMILIES_TO_START,
+        sensitive_signup_fallback=SENSITIVE_SIGNUP_FALLBACK,
+    )

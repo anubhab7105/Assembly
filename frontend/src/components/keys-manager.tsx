@@ -7,8 +7,15 @@ import { Badge } from "@/components/ui/badge"
 import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type Catalog } from "@/lib/api-client"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
+import {
+  isKeyFormatOk,
+  keyPrefixHint,
+  minimumToStartBanner,
+  sensitiveSignupText,
+  whyProviderLine,
+} from "@/lib/key-setup"
 import { useToast } from "@/components/ui/toast"
-import { Shield, Key, CheckCircle2, Trash2, ExternalLink } from "lucide-react"
+import { Shield, Key, Trash2, ExternalLink, Copy } from "lucide-react"
 
 type KeyStatus = "unknown" | "valid" | "invalid" | "rate_limited" | "testing"
 
@@ -59,6 +66,8 @@ export function KeysManager() {
   const handleSaveAndTest = async (providerId: string) => {
     const rawKey = inputs[providerId] || savedKeys[providerId]
     if (!rawKey) return
+    // Soft prefix hint never blocks saving (FR-30): validation is advisory only.
+    void isKeyFormatOk(providerId, rawKey)
     await globalVault.setKey(providerId, rawKey)
     setSavedKeys((prev) => ({ ...prev, [providerId]: rawKey }))
     setInputs((prev) => ({ ...prev, [providerId]: "" }))
@@ -106,8 +115,26 @@ export function KeysManager() {
 
   if (!vaultLoaded) return null
 
+  const recommendedOrder = catalog?.recommended_order ?? providers.map((p) => p.id)
+  const banner = minimumToStartBanner(readyFamilies.size, recommendedOrder)
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      toast({ title: "Link copied", description: url })
+    } catch {
+      toast({ title: "Copy failed", description: url, variant: "warning" })
+    }
+  }
+
   return (
     <div className="w-full space-y-8">
+      <Card data-testid="minimum-to-start-banner">
+        <CardHeader className="pb-3">
+          <CardTitle>Minimum to start</CardTitle>
+          <CardDescription data-testid="minimum-to-start-text">{banner}</CardDescription>
+        </CardHeader>
+      </Card>
       <Card className={gate.level === "OK" ? "border-success/30" : "border-warning/30"}>
         <CardHeader className="pb-3">
           <CardTitle>Team Readiness</CardTitle>
@@ -166,8 +193,12 @@ export function KeysManager() {
         {providers.map((provider) => {
           const hasSavedKey = !!savedKeys[provider.id]
           const st = statuses[provider.id] || "unknown"
+          const steps = provider.key_steps ?? []
+          const hint = keyPrefixHint(provider.id)
+          const why = whyProviderLine(provider)
+          const signupNote = sensitiveSignupText(provider.sensitive_signup)
           return (
-            <Card key={provider.id} className="flex flex-col">
+            <Card key={provider.id} className="flex flex-col" data-testid={`provider-card-${provider.id}`}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Key className="size-4 text-brand" />
@@ -176,16 +207,43 @@ export function KeysManager() {
                 <CardDescription className="text-xs mt-1 font-mono">
                   {provider.models.map((m) => m.family).filter((v, i, a) => a.indexOf(v) === i).join(", ")}
                 </CardDescription>
+                <CardDescription data-testid={`why-${provider.id}`} className="text-xs mt-1">
+                  {why}
+                </CardDescription>
               </CardHeader>
               <CardContent className="flex-1 space-y-4">
+                <details data-testid={`stepper-${provider.id}`}>
+                  <summary className="text-xs font-medium cursor-pointer">How to get a key</summary>
+                  <ol className="mt-2 space-y-1 text-xs list-decimal list-inside">
+                    {steps.map((step, i) => (
+                      <li key={i}>{step}</li>
+                    ))}
+                  </ol>
+                  <p data-testid={`signup-note-${provider.id}`} className="mt-2 text-xs opacity-70">
+                    {signupNote}
+                  </p>
+                </details>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-medium">API Key</label>
-                    {provider.key_url && (
-                      <a href={provider.key_url} target="_blank" rel="noreferrer noopener" className="text-xs flex items-center gap-1 text-brand hover:underline">
-                        Get free key <ExternalLink className="size-3" />
-                      </a>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {provider.key_url && (
+                        <>
+                          <a href={provider.key_url} target="_blank" rel="noreferrer noopener" className="text-xs flex items-center gap-1 text-brand hover:underline">
+                            Get free key <ExternalLink className="size-3" />
+                          </a>
+                          <button
+                            type="button"
+                            aria-label={`Copy key link for ${provider.id}`}
+                            data-testid={`copy-link-${provider.id}`}
+                            className="text-xs text-brand hover:underline flex items-center gap-1"
+                            onClick={() => void copyLink(provider.key_url)}
+                          >
+                            <Copy className="size-3" /> Copy link
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <input
                     type="password"
@@ -196,6 +254,14 @@ export function KeysManager() {
                     spellCheck="false"
                     className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-mono"
                   />
+                  <p data-testid={`prefix-hint-${provider.id}`} className="text-[10px] text-muted-foreground pt-1">
+                    {hint} This hint never blocks saving.
+                  </p>
+                  {st !== "unknown" && st !== "testing" && (
+                    <p data-testid={`test-result-${provider.id}`} className="text-xs">
+                      Test result: {st}
+                    </p>
+                  )}
                   <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
                     <Shield className="size-3 shrink-0" />
                     Keys never leave this device except to authenticate with the provider.
