@@ -133,6 +133,9 @@ export default function Home() {
     setStatus("Checking capacity…")
     try {
       const keys = await globalVault.allKeys()
+      // The Tavily search key travels separately; it is never a model key.
+      const { tavily, ...providerKeys } = keys
+      const searchKeys = tavily ? { tavily } : undefined
       const usage: UsageEntry[] = await storage.getUsage()
       const preflight = await ApiClient.preflight(question, minutes, usage)
       if (!preflight.feasible) {
@@ -148,7 +151,8 @@ export default function Home() {
         {
           question,
           minutes,
-          providerKeys: keys,
+          providerKeys,
+          searchKeys,
           selection: { selected: selection.selected, pins: selection.pins },
           usage,
         },

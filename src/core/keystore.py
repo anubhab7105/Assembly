@@ -220,3 +220,81 @@ def get_keystore(mode: str | None = None) -> KeyStore:
     if resolved == "desktop":
         return KeyringKeyStore()
     raise ValueError(f"unknown APP_MODE {resolved!r}; expected dev, web, or desktop")
+
+
+def provider_key_env_names() -> list[str]:
+    """Server-side provider-key variable names (never values)."""
+    return [f"{provider.upper()}_API_KEY" for provider in EnvKeyStore._key_attrs()]
+
+
+def server_keys_present() -> list[str]:
+    """Provider/search key variable names set in this process (names only).
+
+    Checks the process environment and the loaded settings (which may have
+    read a dotenv file). Never returns values.
+    """
+    import os
+
+    from src.core.config import settings
+
+    found: list[str] = []
+    for name in provider_key_env_names():
+        if os.environ.get(name):
+            found.append(name)
+            continue
+        try:
+            if reveal(getattr(settings, name.lower(), None)):
+                found.append(name)
+        except Exception:  # noqa: BLE001 — one unreadable field skips
+            continue
+    return found
+
+
+def enforce_web_key_policy() -> None:
+    """Fail web-mode startup when server-side provider keys are configured.
+
+    Web mode is BYOK: provider keys must arrive per request, never from the
+    server environment or files. Raises RuntimeError naming the offending
+    variables (names only, never values). Desktop/dev modes are unaffected.
+
+    A server-side Tavily key is not fatal: it is ignored unless
+    ALLOW_SERVER_SEARCH_KEY is set (see resolve_tavily_key), with one
+    startup warning here.
+    """
+    from src.core.config import settings
+    from src.core.logging_config import logger
+
+    if not settings.is_web:
+        return
+    offenders = server_keys_present()
+    if offenders:
+        raise RuntimeError(
+            "Web mode is BYOK: server-side provider keys are configured "
+            f"({', '.join(sorted(offenders))}). Unset them; clients send "
+            "keys per request."
+        )
+    import os
+
+    tavily_set = bool(os.environ.get("TAVILY_API_KEY")) or bool(
+        reveal(settings.tavily_api_key)
+    )
+    if tavily_set and not settings.allow_server_search_key:
+        logger.warning(
+            "Server   │ TAVILY_API_KEY is set but ALLOW_SERVER_SEARCH_KEY "
+            "is false — the server key will be ignored in web mode."
+        )
+
+
+def resolve_tavily_key(explicit: KeyValue = None) -> SecretStr:
+    """Per-request Tavily key if given, else the server key where allowed.
+
+    Web mode ignores the server-side key unless ALLOW_SERVER_SEARCH_KEY is
+    set. Never logs the value; callers must treat the result as secret.
+    """
+    if reveal(explicit):
+        return explicit if isinstance(explicit, SecretStr) else SecretStr(reveal(explicit))
+    from src.core.config import settings
+
+    if settings.is_web and not settings.allow_server_search_key:
+        return SecretStr("")
+    return settings.tavily_api_key

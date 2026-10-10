@@ -86,6 +86,7 @@ export class ApiClient {
       question: string
       minutes: number
       providerKeys: Record<string, string>
+      searchKeys?: Record<string, string>
       selection: ModelSelection
       usage: UsageEntry[]
       signal?: AbortSignal
@@ -99,13 +100,26 @@ export class ApiClient {
         question: args.question,
         time_budget_minutes: args.minutes,
         provider_keys: args.providerKeys,
+        // Omitted when no search key exists: the server then uses its own
+        // key where allowed, else keyless sources.
+        ...(args.searchKeys && Object.keys(args.searchKeys).length > 0
+          ? { search_keys: args.searchKeys }
+          : {}),
         model_selection: args.selection,
         usage_snapshot: args.usage,
       }),
       signal: args.signal,
     })
     if (!response.ok || !response.body) {
-      throw new Error(`Run failed: ${response.status}`)
+      // Surface machine-readable server errors (e.g. blocked_no_usable_keys).
+      let detail = `Run failed: ${response.status}`
+      try {
+        const data = (await response.json()) as { detail?: unknown; code?: unknown }
+        if (typeof data.detail === "string" && data.detail) detail = data.detail
+      } catch {
+        // Non-JSON error body: keep the status text.
+      }
+      throw new Error(detail)
     }
     const reader = response.body.getReader()
     const decoder = new TextDecoder()

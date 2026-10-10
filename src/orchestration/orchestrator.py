@@ -43,8 +43,8 @@ from src.orchestration.time_controller import (
 )
 from src.orchestration.workspace import workspace
 from src.providers.router import ModelRouter
+from src.research.router import SearchRouter, default_providers
 from src.research.sanitize import sanitize_search_results, summarize_flags
-from src.research.search import SearchEngine
 
 
 def cap_label_for_degraded(label: str, degraded: bool) -> str:
@@ -141,7 +141,8 @@ class Orchestrator:
     """
     def __init__(self):
         self.router = ModelRouter()
-        self.search_engine = SearchEngine()
+        # Search is built per execution (per-request keys + keyless
+        # fallback); no shared search state across runs.
         # Live per-execution deadlines, keyed by execution id. Populated on
         # execute() entry, removed when the run settles. request_cancel()
         # flips the flag here; the API layer also cancels the task itself.
@@ -168,6 +169,7 @@ class Orchestrator:
         time_budget_minutes: int,
         on_progress: Callable[[dict], Awaitable[None]] | None = None,
         provider_keys: dict[str, str] | None = None,
+        search_keys: dict[str, str] | None = None,
         deadline: Deadline | None = None,
         router_override=None,
     ) -> ExecutionResult:
@@ -182,6 +184,9 @@ class Orchestrator:
             provider_keys: Per-request BYOK keys (web mode). Held in memory
                 for this run only via RequestKeyStore and wiped afterwards;
                 when None, the router's own (mode) key set is used.
+            search_keys: Per-request search keys (e.g. {"tavily": ...}).
+                In memory only for this run; without a Tavily key the
+                research router uses keyless providers. Never logged.
             deadline: Wall-clock budget. Built from time_budget_minutes when
                 omitted; tests inject short/fake-clock deadlines directly.
             router_override: Optional router instance to use instead of the default.
@@ -209,6 +214,16 @@ class Orchestrator:
             router = (
                 ModelRouter(keys=key_store.get_keys()) if key_store else self.router
             )
+
+        # Per-request search keys for this run only (names never logged).
+        # Without a Tavily key the router still serves keyless providers.
+        # A present-but-empty field means "no search key"; an absent field
+        # keeps the legacy server-key behavior where allowed.
+        if search_keys is None:
+            tavily_key = None
+        else:
+            tavily_key = (search_keys or {}).get("tavily", "")
+        search_router = SearchRouter(providers=default_providers(tavily_key=tavily_key))
 
         # Initialize components
         budget = BudgetController(time_budget_minutes)
@@ -535,8 +550,35 @@ class Orchestrator:
                     },
                 )
 
-                search_results = await self.search_engine.search(question)
+                search_results = await search_router.search(
+                    question, problem_type=getattr(plan, "problem_type", "general")
+                )
                 budget.record_search(len(search_results))
+                used_sources = search_router.last_providers_used
+                if search_results and used_sources:
+                    await emit_event(
+                        ProgressEventType.AGENT_STATUS,
+                        {
+                            "role": "researcher",
+                            "activity": (
+                                "Web search via "
+                                f"{', '.join(used_sources)}."
+                            )[:500],
+                            "state": ExecState.TEAM_READY.value,
+                        },
+                    )
+                elif not search_results:
+                    await emit_event(
+                        ProgressEventType.AGENT_STATUS,
+                        {
+                            "role": "researcher",
+                            "activity": (
+                                "Web search returned nothing; "
+                                "no external sources were used."
+                            ),
+                            "state": ExecState.TEAM_READY.value,
+                        },
+                    )
                 scan = sanitize_search_results(search_results)
                 if scan.flags:
                     logger.warning(

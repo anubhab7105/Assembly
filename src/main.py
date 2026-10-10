@@ -44,6 +44,23 @@ async def lifespan(app: FastAPI):
         logger.info("Server   │ Mode: desktop/dev (local SQLite)")
     logger.info(f"Server   │ Environment: {settings.app_env}")
     logger.info(f"Server   │ CORS origins: {settings.cors_origins or 'none (same-origin)'}")
+
+    try:
+        from src.core.keystore import enforce_web_key_policy
+
+        enforce_web_key_policy()
+    except RuntimeError as exc:
+        logger.error(f"Server   │ {exc}")
+        raise
+    try:
+        from src.providers.quota import get_quota_salt
+
+        if not get_quota_salt():
+            raise RuntimeError("Quota salt misconfigured.")
+    except RuntimeError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — salt trouble must fail loudly
+        raise RuntimeError(f"Quota salt misconfigured: {exc}") from exc
     logger.info("====================================================")
 
     try:

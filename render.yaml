@@ -23,3 +23,7 @@ services:
         generateValue: true
       - key: TAVILY_API_KEY
         sync: false
+      # Web mode ignores a server-side search key unless this is "true"
+      # (per-request search keys are the default; see ALLOW_SERVER_SEARCH_KEY).
+      - key: ALLOW_SERVER_SEARCH_KEY
+        value: "false"

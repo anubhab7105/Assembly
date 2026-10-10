@@ -35,6 +35,7 @@ export function KeysManager() {
   const [remember, setRemember] = useState(false)
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
+  const [tavilyInput, setTavilyInput] = useState("")
 
   useEffect(() => {
     async function load() {
@@ -62,6 +63,17 @@ export function KeysManager() {
   }, [remember])
 
   const providers = catalog?.providers.filter((p) => p.enabled) ?? []
+  const tavilySaved = !!savedKeys["tavily"]
+
+  const handleSaveTavily = async () => {
+    const rawKey = (tavilyInput || savedKeys["tavily"] || "").trim()
+    if (!rawKey) return
+    // No server-side probe exists for search keys: store only.
+    await globalVault.setKey("tavily", rawKey)
+    setSavedKeys((prev) => ({ ...prev, tavily: rawKey }))
+    setTavilyInput("")
+    toast({ title: "Search key saved", description: "Tavily key stored with your other keys.", variant: "success" })
+  }
 
   const handleSaveAndTest = async (providerId: string) => {
     const rawKey = inputs[providerId] || savedKeys[providerId]
@@ -283,6 +295,51 @@ export function KeysManager() {
           )
         })}
       </div>
+
+      <Card className="flex flex-col" data-testid="provider-card-tavily">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Key className="size-4 text-brand" />
+            tavily <Badge variant="secondary">search · optional</Badge>
+          </CardTitle>
+          <CardDescription className="text-xs mt-1">
+            Why this provider: web search for researchers. Without it
+            Assembly uses keyless sources (Wikipedia, arXiv, Semantic
+            Scholar, DuckDuckGo).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex-1 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium">Search Key (Tavily)</label>
+            <input
+              type="password"
+              placeholder={tavilySaved ? maskKey(savedKeys["tavily"]) : "paste key…"}
+              value={tavilyInput}
+              onChange={(e) => setTavilyInput(e.target.value)}
+              autoComplete="off"
+              spellCheck="false"
+              data-testid="tavily-input"
+              className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-mono"
+            />
+            <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
+              <Shield className="size-3 shrink-0" />
+              Stored with your other keys; sent only with your runs.
+            </p>
+          </div>
+        </CardContent>
+        <CardFooter className="pt-0">
+          <Button
+            variant={tavilySaved ? "secondary" : "default"}
+            size="sm"
+            className="w-full"
+            disabled={!tavilyInput && !tavilySaved}
+            onClick={() => void handleSaveTavily()}
+            data-testid="tavily-save"
+          >
+            {tavilyInput ? "Save Search Key" : "Saved"}
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   )
 }

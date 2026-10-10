@@ -64,10 +64,15 @@ def normalize_problem_type(problem_type: str) -> str:
     return value or "general"
 
 
-def default_providers() -> list[SearchProvider]:
-    """Build the standard five-provider set (Tavily self-gates on its key)."""
+def default_providers(tavily_key=None) -> list[SearchProvider]:
+    """Build the standard five-provider set (Tavily self-gates on its key).
+
+    An explicit per-request Tavily key enables the keyed provider;
+    otherwise the keyless providers (Wikipedia, arXiv, Semantic Scholar,
+    DuckDuckGo) still serve.
+    """
     return [
-        TavilySearchProvider(),
+        TavilySearchProvider(api_key=tavily_key),
         WikipediaSearchProvider(),
         ArxivSearchProvider(),
         SemanticScholarSearchProvider(),
@@ -93,6 +98,9 @@ class SearchRouter:
         self._default_max_results: int = max(1, int(default_max_results))
         self._cache: dict[tuple[str, int, str], list[SearchResult]] = {}
         self._local_used: int = 0
+        # Provider names that returned results in the latest search()
+        # (names only — safe to surface to the user).
+        self._last_used: list[str] = []
 
     @property
     def providers(self) -> list[SearchProvider]:
@@ -103,6 +111,11 @@ class SearchRouter:
     def cache_size(self) -> int:
         """Number of cached query results in this run."""
         return len(self._cache)
+
+    @property
+    def last_providers_used(self) -> list[str]:
+        """Provider names behind the latest search results (names only)."""
+        return list(self._last_used)
 
     @property
     def searches_used(self) -> int:
@@ -178,6 +191,7 @@ class SearchRouter:
 
         attempted = False
         succeeded = False
+        used: list[str] = []
         for provider in ordered:
             try:
                 results = await provider.search(query, max_results=limit)
@@ -196,9 +210,11 @@ class SearchRouter:
             succeeded = True
             if not results:
                 continue
+            used.append(provider.provider_name)
             trimmed = list(results[:limit])
             self._record_search(1)
             self._cache[cache_key] = trimmed
+            self._last_used = used
             return list(trimmed)
 
         # All providers empty or failed: spend the attempt once. Cache the
@@ -208,4 +224,5 @@ class SearchRouter:
             self._record_search(1)
         if succeeded:
             self._cache[cache_key] = []
+        self._last_used = used
         return []
