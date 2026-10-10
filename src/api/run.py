@@ -15,13 +15,17 @@ from dataclasses import dataclass, field
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from src.api.request_context import (
+    _diversity_is_blocked,
+    _filtered_router,
+    build_request_context,
+    diversity_payload,
+)
 from src.core.config import settings
-from src.core.keystore import wrap_keys
 from src.core.logging_config import logger
 from src.core.rate_limit import check_rate_limit
 from src.database.schemas import RunRequest
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
-from src.providers.config import load_models_config
 from src.providers.quota import get_limiter
 
 router = APIRouter(prefix="/api/run", tags=["run"])
@@ -65,136 +69,6 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _resolve_selection(selected: list[str]) -> tuple[set[str], dict[str, str]]:
-    """Validate selected model ids against the catalog.
-
-    Returns (allowed model ids, model id -> provider). Empty selection
-    means Auto (all catalog models allowed).
-    """
-    wanted = [s.strip() for s in (selected or []) if s and s.strip()][:50]
-    if not wanted:
-        return set(), {}
-    catalog = load_models_config()
-    known: dict[str, str] = {}
-    for pid, spec in catalog.providers.items():
-        if not spec.enabled:
-            continue
-        for m in spec.models:
-            known[m.id] = pid
-    allowed = {m for m in wanted if m in known}
-    # Unknown ids are dropped (fail-soft); all-unknown falls back to Auto.
-    if not allowed:
-        return set(), {}
-    return allowed, {m: known[m] for m in allowed}
-
-
-def _diversity_is_blocked(router: object, allowed: set[str]) -> bool:
-    """True when zero model families are usable for this run's keys.
-
-    Routers with a family diversity gate use it; routers without one
-    (test doubles) fall back to catalog families under the selection.
-    """
-    gate = None
-    diversity_gate = getattr(router, "diversity_gate", None)
-    if callable(diversity_gate):
-        try:
-            gate = diversity_gate(set(allowed) if allowed else None)
-        except Exception:  # noqa: BLE001 — gate trouble reads as blocked
-            return True
-    if gate is not None:
-        return gate.level == "BLOCKED"
-    catalog = load_models_config()
-    fams: set[str] = set()
-    for spec in catalog.providers.values():
-        if not spec.enabled:
-            continue
-        for m in spec.models:
-            if not allowed or m.id in allowed:
-                fams.add(m.family)
-    return len(fams) == 0
-
-
-def _filtered_router(provider_keys: dict[str, str], allowed: set[str], pins: dict[str, str]):
-    """Build a ModelRouter restricted to selected models + pin wrapper."""
-    from src.providers.router import ModelRouter
-
-    keys = wrap_keys(provider_keys or {})
-    revealed = {p: k.get_secret_value() for p, k in keys.items() if k.get_secret_value()}
-    base_router: ModelRouter | None = None
-    if allowed:
-        catalog = load_models_config()
-        filtered_providers = {}
-        for pid, spec in catalog.providers.items():
-            kept = [m for m in spec.models if m.id in allowed]
-            if kept:
-                filtered_providers[pid] = spec.model_copy(update={"models": kept})
-        if filtered_providers:
-            from src.providers.config import ModelsConfig
-
-            base_router = ModelRouter(
-                config=ModelsConfig(providers=filtered_providers), keys=revealed
-            )
-    if base_router is None:
-        base_router = ModelRouter(keys=revealed)
-
-    valid_pins = {}
-    if pins:
-        catalog_ids: set[str] = set()
-        for spec in base_router.config.providers.values():
-            catalog_ids.update(m.id for m in spec.models)
-        if not allowed:
-            full = load_models_config()
-            for spec in full.providers.values():
-                catalog_ids.update(m.id for m in spec.models)
-        for role, model_id in list(pins.items())[:10]:
-            if model_id in catalog_ids:
-                valid_pins[str(role)] = model_id
-            else:
-                logger.warning("Run     │ ignoring unknown pin model")
-    if not valid_pins:
-        return base_router
-
-    inner = base_router
-
-    class _PinRouter:
-        """Delegate to ModelRouter, forcing pinned models per role."""
-
-        def __init__(self, wrapped: ModelRouter, pin_map: dict[str, str]) -> None:
-            self._w = wrapped
-            self._pins = pin_map
-            self.config = wrapped.config
-
-        def __getattr__(self, name: str):  # delegate everything else
-            return getattr(self._w, name)
-
-        def _apply_pin(self, decision, role: str):
-            pinned = self._pins.get(role)
-            if not pinned:
-                return decision
-            try:
-                for pid, pspec in self.config.providers.items():
-                    for m in pspec.models:
-                        if m.id == pinned:
-                            decision.model = pinned
-                            decision.provider_name = pid
-                            decision.family = m.family
-                            return decision
-            except Exception as exc:  # noqa: BLE001 — pin is best-effort
-                logger.debug(f"Run     │ pin apply skipped: {exc}")
-            return decision
-
-        def route(self, agent_type: str, *a, **k):  # type: ignore[no-untyped-def]
-            d = self._w.route(agent_type, *a, **k)
-            return self._apply_pin(d, agent_type)
-
-        def route_team(self, team: list, *a, **k):  # type: ignore[no-untyped-def]
-            routing = self._w.route_team(team, *a, **k)
-            for d, spec in zip(routing.decisions, team):
-                role = spec.get("agent_type", "") if isinstance(spec, dict) else ""
-                self._apply_pin(d, role)
-            return routing
-
-    return _PinRouter(inner, valid_pins)
 
 
 async def _execute_run(
@@ -207,13 +81,15 @@ async def _execute_run(
     usage_snapshot: list[dict],
     entry: _RunEntry,
     search_keys: dict[str, str] | None = None,
+    router_override=None,
 ) -> None:
     """Run the orchestrator, forwarding recorder events into the SSE queue."""
     from src.orchestration.orchestrator import Orchestrator
 
     limiter = get_limiter()
     limiter.set_usage_snapshot(usage_snapshot or [])
-    router_override = _filtered_router(provider_keys, allowed, pins)
+    if router_override is None:
+        router_override = _filtered_router(provider_keys, allowed, pins)
     orch = Orchestrator()
     # Use the per-run router (keys + selection) instead of the shared one.
     orch.router = router_override  # type: ignore[assignment]
@@ -294,14 +170,19 @@ async def start_run(req: RunRequest, request: Request):
     if len(req.provider_keys or {}) > 20:
         return JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
-    # Capacity check with max(client snapshot, server memory). Advisory:
-    # only an actually-infeasible verdict blocks; errors fail open.
-    allowed, _ = _resolve_selection(list(req.model_selection.selected or []))
-    pins = dict(req.model_selection.pins or {})
+    # One shared per-request context for keys, selection, and quota, so
+    # the diversity verdict here and the router used below cannot diverge.
+    ctx = build_request_context(
+        dict(req.provider_keys or {}),
+        dict(req.search_keys) if req.search_keys is not None else None,
+        list(req.model_selection.selected or []),
+        dict(req.model_selection.pins or {}),
+        [u.model_dump() for u in (req.usage_snapshot or [])],
+    )
+    allowed, pins = ctx.allowed, ctx.pins
 
     # No usable model family: refuse before streaming or spending quota.
-    gate_probe = _filtered_router(dict(req.provider_keys or {}), allowed, {})
-    if _diversity_is_blocked(gate_probe, allowed):
+    if _diversity_is_blocked(ctx.router, allowed):
         return JSONResponse(
             status_code=400,
             content={
@@ -314,13 +195,11 @@ async def start_run(req: RunRequest, request: Request):
                 "minimum_families": MINIMUM_FAMILIES,
             },
         )
+
+    # Capacity check with max(client snapshot, server memory). Advisory:
+    # only an actually-infeasible verdict blocks; errors fail open.
     try:
         limiter = get_limiter()
-        limiter.set_usage_snapshot(
-            [u.model_dump() for u in (req.usage_snapshot or [])]
-        )
-        probe = _filtered_router(dict(req.provider_keys or {}), allowed, {})
-        snap = probe.quota_snapshot() if hasattr(probe, "quota_snapshot") else []
         keys = [
             KeyBudget(
                 provider=e.get("provider", "unknown"),
@@ -329,7 +208,7 @@ async def start_run(req: RunRequest, request: Request):
                 tpm_limit=e.get("tpm_limit"),
                 tpd_remaining=e.get("tpd_remaining"),
             )
-            for e in (snap or [])
+            for e in (ctx.quota_snapshot or [])
         ]
         if keys:
             plan = plan_capacity(
@@ -358,37 +237,7 @@ async def start_run(req: RunRequest, request: Request):
         _runs[run_id] = entry
 
     # Family-diversity gate for this run's keys + selection (metadata only).
-    run_diversity: dict[str, object] = {
-        "level": "BLOCKED",
-        "families_ready": [],
-        "families_count": 0,
-        "providers_count": 0,
-        "reasons": [],
-    }
-    try:
-        gate = (
-            gate_probe.diversity_gate(set(allowed) if allowed else None)
-            if hasattr(gate_probe, "diversity_gate")
-            else None
-        )
-        if gate is not None:
-            run_diversity = gate.to_dict()  # type: ignore[assignment]
-        else:
-            catalog = load_models_config()
-            fams: set[str] = set()
-            if allowed:
-                for spec in catalog.providers.values():
-                    for m in spec.models:
-                        if m.id in allowed:
-                            fams.add(m.family)
-            else:
-                for spec in catalog.providers.values():
-                    if spec.enabled:
-                        fams.update(m.family for m in spec.models)
-            if 0 < len(fams) < 3:
-                logger.info("Run     │ fewer than 3 families selected")
-    except Exception as exc:  # noqa: BLE001 — warning only
-        logger.debug(f"Run     │ family gate skipped: {exc}")
+    run_diversity = diversity_payload(ctx.router, allowed)
 
     await entry.queue.put(
         {
@@ -415,6 +264,7 @@ async def start_run(req: RunRequest, request: Request):
             search_keys=(
                 dict(req.search_keys) if req.search_keys is not None else None
             ),
+            router_override=ctx.router,
         )
     )
 

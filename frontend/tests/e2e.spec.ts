@@ -26,7 +26,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await page.route("**/api/keys/test", async route => {
       await route.fulfill({ json: { provider: "gemini", valid: true, rate_limited: false } })
     })
-    await page.route("**/api/executions/preflight", async route => {
+    await page.route("**/api/preflight", async route => {
       await route.fulfill({ json: { feasible: true, explanation: "fits" } })
     })
     await page.route("**/api/run", async route => {

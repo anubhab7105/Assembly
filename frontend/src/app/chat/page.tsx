@@ -137,7 +137,13 @@ export default function Home() {
       const { tavily, ...providerKeys } = keys
       const searchKeys = tavily ? { tavily } : undefined
       const usage: UsageEntry[] = await storage.getUsage()
-      const preflight = await ApiClient.preflight(question, minutes, usage)
+      const preflight = await ApiClient.preflight(
+        question,
+        minutes,
+        usage,
+        providerKeys,
+        { selected: selection.selected, pins: selection.pins },
+      )
       if (!preflight.feasible) {
         setStatus(`Not feasible: ${preflight.explanation ?? "quota exhausted"}`)
         setLoading(false)

@@ -36,12 +36,13 @@ async def test_max_question_length():
 @pytest.mark.asyncio
 async def test_rate_limit_preflight():
     """Test the rate limit for preflight endpoint."""
+    body = {"question": "test", "time_budget_minutes": 5}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         for _ in range(10):
-            res = await client.get("/api/executions/preflight?question=test&time_budget_minutes=5")
+            res = await client.post("/api/preflight", json=body)
             assert res.status_code in (200, 422)
 
-        res = await client.get("/api/executions/preflight?question=test&time_budget_minutes=5")
+        res = await client.post("/api/preflight", json=body)
         assert res.status_code == 429
         assert "Rate limit exceeded" in res.json()["detail"]
 

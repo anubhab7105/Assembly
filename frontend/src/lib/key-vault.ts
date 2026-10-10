@@ -99,6 +99,16 @@ export class KeyVault {
     return { ...this.inMemoryKeys }
   }
 
+  /** Whether an encrypted blob exists (no decryption, never exposes keys). */
+  async hasPersisted(): Promise<boolean> {
+    try {
+      const stored = await get(DB_KEY)
+      return stored !== undefined
+    } catch {
+      return false
+    }
+  }
+
   async clearAll() {
     this.inMemoryKeys = {}
     this.lock()

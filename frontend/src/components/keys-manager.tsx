@@ -32,10 +32,12 @@ export function KeysManager() {
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({})
   const [statuses, setStatuses] = useState<Record<string, KeyStatus>>({})
-  const [remember, setRemember] = useState(false)
+  const [remember, setRememberUi] = useState(() => globalVault.remember)
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
   const [tavilyInput, setTavilyInput] = useState("")
+  const [needsUnlock, setNeedsUnlock] = useState(false)
+  const [unlockError, setUnlockError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -45,22 +47,56 @@ export function KeysManager() {
       } catch {
         setCatalog(null)
       }
-      setRemember(globalVault.remember)
-      setSavedKeys(await globalVault.allKeys())
+      // Load first: never touch the persisted blob before reading it.
+      // A present-but-locked blob shows the unlock prompt instead of keys.
+      const persisted = await globalVault.hasPersisted().catch(() => false)
+      if (persisted && !globalVault.unlocked) {
+        setNeedsUnlock(true)
+      } else {
+        setSavedKeys(await globalVault.allKeys())
+      }
+      setRememberUi(globalVault.remember)
       setVaultLoaded(true)
     }
     load()
   }, [])
 
-  useEffect(() => {
-    globalVault.setRemember(remember)
-    if (remember && globalVault.unlocked) {
-      Object.entries(savedKeys).forEach(([p, k]) => {
-        void globalVault.setKey(p, k)
-      })
+  const handleToggleRemember = async (next: boolean) => {
+    setRememberUi(next)
+    globalVault.setRemember(next)
+    if (next && globalVault.unlocked) {
+      for (const [p, k] of Object.entries(savedKeys)) {
+        await globalVault.setKey(p, k)
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remember])
+  }
+
+  const handleUnlock = async () => {
+    globalVault.unlock(passphrase)
+    try {
+      const keys = await globalVault.allKeys()
+      setSavedKeys(keys)
+      setNeedsUnlock(false)
+      setUnlockError(keys && Object.keys(keys).length > 0 ? null : "No keys found in the saved vault.")
+    } catch {
+      // Wrong passphrase (or a corrupted blob): keep everything, say so.
+      globalVault.lock()
+      setUnlockError("Wrong passphrase — nothing was deleted. Try again or use Forget keys.")
+    }
+  }
+
+  const handleForget = async () => {
+    await globalVault.clearAll()
+    setRememberUi(false)
+    setNeedsUnlock(false)
+    setUnlockError(null)
+    setSavedKeys({})
+    setInputs({})
+    setStatuses({})
+    setTavilyInput("")
+    setPassphrase("")
+    toast({ title: "Keys forgotten", description: "All API keys removed from memory, disk, and system keyring." })
+  }
 
   const providers = catalog?.providers.filter((p) => p.enabled) ?? []
   const tavilySaved = !!savedKeys["tavily"]
@@ -106,10 +142,13 @@ export function KeysManager() {
     } catch {
       // Backend may not be reachable; frontend vault is already cleared.
     }
-    setRemember(false)
+    setRememberUi(false)
+    setNeedsUnlock(false)
+    setUnlockError(null)
     setSavedKeys({})
     setInputs({})
     setStatuses({})
+    setTavilyInput("")
     setPassphrase("")
     toast({ title: "Keys cleared", description: "All API keys removed from memory, disk, and system keyring." })
   }
@@ -166,11 +205,42 @@ export function KeysManager() {
       </Card>
 
       <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        {needsUnlock ? (
+          <div data-testid="unlock-prompt" className="space-y-3">
+            <div className="flex flex-col">
+              <span className="font-medium">Unlock saved keys</span>
+              <span className="text-xs text-muted-foreground">
+                This device holds encrypted keys. Enter your passphrase to restore them.
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="Passphrase"
+                value={passphrase}
+                onChange={(e) => setPassphrase(e.target.value)}
+                autoComplete="off"
+                data-testid="unlock-passphrase"
+                className="flex-1 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm"
+              />
+              <Button size="sm" onClick={() => void handleUnlock()} data-testid="unlock-submit">
+                Unlock
+              </Button>
+            </div>
+            {unlockError && (
+              <p data-testid="unlock-error" className="text-xs text-warning">{unlockError}</p>
+            )}
+            <Button variant="outline" size="sm" onClick={() => void handleForget()} data-testid="forget-keys">
+              Forget keys
+            </Button>
+          </div>
+        ) : (
+        <>
         <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
           <input
             type="checkbox"
             checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
+            onChange={(e) => void handleToggleRemember(e.target.checked)}
             className="accent-brand"
           />
           <div className="flex flex-col">
@@ -180,6 +250,11 @@ export function KeysManager() {
             </span>
           </div>
         </label>
+        {!remember && (
+          <p data-testid="memory-only-banner" className="text-xs text-warning">
+            Keys live only in this tab; a refresh clears them.
+          </p>
+        )}
         {remember && (
           <div className="flex gap-2">
             <input
@@ -194,6 +269,8 @@ export function KeysManager() {
               className="flex-1 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm"
             />
           </div>
+        )}
+        </>
         )}
         <Button variant="destructive" size="sm" onClick={handleClearAll} disabled={Object.keys(savedKeys).length === 0}>
           <Trash2 className="size-4 mr-2" />

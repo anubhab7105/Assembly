@@ -31,15 +31,22 @@ def web_mode(monkeypatch, tmp_path):
 
 def _mock_filtered_router(monkeypatch):
     import src.api.run as run_mod
+    from src.api.request_context import RequestContext
     from src.providers.mock_provider import MockProvider
     from tests.conftest import MockRouter
 
-    def _fake(provider_keys, allowed, pins):
-        return MockRouter(
-            [MockProvider(provider_name="mock-a"), MockProvider(provider_name="mock-b")]
+    def _fake(provider_keys, search_keys, selected, pins, usage_snapshot):
+        return RequestContext(
+            router=MockRouter(
+                [MockProvider(provider_name="mock-a"), MockProvider(provider_name="mock-b")]
+            ),
+            allowed=set(),
+            pins={},
+            quota_snapshot=[],
+            has_search_key=False,
         )
 
-    monkeypatch.setattr(run_mod, "_filtered_router", _fake)
+    monkeypatch.setattr(run_mod, "build_request_context", _fake)
 
 
 def test_web_mode_creates_no_database_file(web_mode, tmp_path, monkeypatch) -> None:
