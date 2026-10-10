@@ -47,9 +47,18 @@ from src.research.sanitize import sanitize_search_results, summarize_flags
 from src.research.search import SearchEngine
 
 
+def cap_label_for_degraded(label: str, degraded: bool) -> str:
+    """One band down when the team had a single family (WORKFLOW).
+
+    DEGRADED teams cannot claim High confidence: High becomes Moderate.
+    """
+    if degraded and label == "High":
+        return "Moderate"
+    return label
+
+
 class ExecutionResult:
     """Final result of an orchestrated execution."""
-
     def __init__(
         self,
         answer: str,
@@ -861,6 +870,15 @@ class Orchestrator:
                         "url": url,
                     },
                 )
+            # DEGRADED (single-family) teams cannot claim High confidence:
+            # one band down per WORKFLOW, with an explicit warning.
+            raw_label = confidence_label(consensus_result.score)
+            completed_label = cap_label_for_degraded(raw_label, bool(result.degraded))
+            if raw_label == "High" and completed_label == "Moderate":
+                result.warnings.append(
+                    "Single model family: no independent verification; "
+                    "confidence reduced from High to Moderate."
+                )
             await emit_event(
                 ProgressEventType.EXECUTION_COMPLETED,
                 {
@@ -874,7 +892,7 @@ class Orchestrator:
                         }
                         for source in sources
                     ],
-                    "confidence_label": confidence_label(consensus_result.score),
+                    "confidence_label": completed_label,
                     "consensus_score": result.consensus_score,
                     "agent_count": result.agent_count,
                     "providers_used": result.providers_used,

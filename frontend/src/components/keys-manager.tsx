@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type Catalog } from "@/lib/api-client"
+import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import { useToast } from "@/components/ui/toast"
 import { Shield, Key, CheckCircle2, Trash2, ExternalLink } from "lucide-react"
 
@@ -98,22 +99,29 @@ export function KeysManager() {
       p.models.forEach((m) => readyFamilies.add(m.family))
     }
   })
+  const gate = evaluateGate(
+    [...readyFamilies],
+    providers.filter((p) => savedKeys[p.id]).length,
+  )
 
   if (!vaultLoaded) return null
 
   return (
     <div className="w-full space-y-8">
-      <Card className={readyFamilies.size >= 3 ? "border-success/30" : "border-warning/30"}>
+      <Card className={gate.level === "OK" ? "border-success/30" : "border-warning/30"}>
         <CardHeader className="pb-3">
           <CardTitle>Team Readiness</CardTitle>
-          <CardDescription>{readyFamilies.size} of 3 recommended model families ready.</CardDescription>
+          <CardDescription data-testid="readiness-chip">{gateChipText(gate)}</CardDescription>
+          {gate.level !== "OK" && (
+            <CardDescription className="text-warning">{gate.reasons[0]}</CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            {Array.from(readyFamilies).map((f) => (
+            {gate.families_ready.map((f) => (
               <Badge key={f} variant="secondary" className="font-mono">{f}</Badge>
             ))}
-            {readyFamilies.size === 0 && <span className="text-sm opacity-60">No keys configured yet.</span>}
+            {gate.families_ready.length === 0 && <span className="text-sm opacity-60">No keys configured yet.</span>}
           </div>
         </CardContent>
       </Card>

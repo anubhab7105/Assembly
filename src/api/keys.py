@@ -16,6 +16,7 @@ from src.providers.base import ChatMessage
 from src.providers.config import load_models_config
 from src.providers.errors import AuthError, BadResponse, ProviderDown, RateLimited
 from src.providers.registry import ProviderDisabledError, get_provider
+from src.providers.router import DiversityGateResponse
 
 router = APIRouter(prefix="/api", tags=["keys"])
 
@@ -65,6 +66,7 @@ class ProvidersStatusResponse(BaseModel):
     providers: list[ProviderStatus]
     families: list[str]
     capacity_3min_estimate: int | None = None
+    diversity: DiversityGateResponse = DiversityGateResponse()
 
 
 @router.post("/keys/test", response_model=KeyTestResponse)
@@ -125,6 +127,20 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
     )
 
 
+def _diversity_for_keys(held: object) -> DiversityGateResponse:
+    """Family gate for this mode's key set. Fail-open to BLOCKED."""
+    try:
+        from src.core.keystore import reveal
+        from src.providers.router import ModelRouter
+
+        raw = held if isinstance(held, dict) else {}
+        revealed = {p: reveal(k) for p, k in raw.items() if reveal(k)}
+        gate = ModelRouter(keys=revealed).diversity_gate()
+        return DiversityGateResponse(**gate.to_dict())  # type: ignore[arg-type]
+    except Exception:  # noqa: BLE001 — status must answer, never 500
+        return DiversityGateResponse()
+
+
 @router.get("/providers/status", response_model=ProvidersStatusResponse)
 async def providers_status() -> ProvidersStatusResponse:
     """Available providers, families, and rough capacity for this mode's keys."""
@@ -181,6 +197,7 @@ async def providers_status() -> ProvidersStatusResponse:
         providers=entries,
         families=sorted(families),
         capacity_3min_estimate=capacity,
+        diversity=_diversity_for_keys(held),
     )
 
 

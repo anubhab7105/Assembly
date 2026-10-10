@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.events import ProgressEvent
+from src.providers.router import DiversityGateResponse
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -155,6 +156,8 @@ class PreflightResponse(BaseModel):
     # worst, including one adversarial strike in worst case).
     expected_tokens_median: int = 0
     expected_tokens_worst: int = 0
+    # Family-diversity gate (PRD FR-10): OK/WARN/DEGRADED/BLOCKED.
+    diversity: DiversityGateResponse = DiversityGateResponse()
 
 
 # ═════════════════════════════════════════════════════════════════════

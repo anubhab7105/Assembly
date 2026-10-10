@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react"
 import { ApiClient, type Catalog } from "@/lib/api-client"
+import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle } from "lucide-react"
 
@@ -45,6 +46,7 @@ export function ModelPicker({
       }
     }
   }
+  const gate = evaluateGate([...families], catalog?.providers.length ?? 0)
 
   const allModels = catalog?.providers.flatMap((p) => p.models) ?? []
 
@@ -52,15 +54,21 @@ export function ModelPicker({
     <div className="rounded-xl border border-border bg-card p-4 space-y-4" data-testid="model-picker">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Models (Auto when none selected)</h3>
-        <Badge variant="secondary">{families.size} families</Badge>
+        <Badge variant="secondary" data-testid="picker-gate-chip">{gateChipText(gate)}</Badge>
       </div>
 
       {error && <p className="text-xs text-danger">{error}</p>}
 
-      {families.size > 0 && families.size < 3 && (
+      {gate.level !== "OK" && gate.families_count > 0 && (
         <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning-subtle p-2 text-xs text-warning">
           <AlertTriangle className="size-4 shrink-0" />
-          Fewer than 3 families selected — debate quality will suffer.
+          {gate.reasons[0]}
+        </div>
+      )}
+      {gate.level === "BLOCKED" && (
+        <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/10 p-2 text-xs text-danger">
+          <AlertTriangle className="size-4 shrink-0" />
+          {gate.reasons[0]}
         </div>
       )}
 
