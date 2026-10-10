@@ -402,3 +402,9 @@
 - Backend: `ProviderSpec.privacy_note` optional + gemini note in `models.yaml` + `GET /api/catalog` exposes it (`src/api/catalog.py`).
 - Frontend: `frontend/src/lib/privacy-notice.ts` single source (`PRIVACY_NOTICE_VERSION=1`); `PrivacyDialog` blocks first run in web/desktop; ack `{version, acknowledged_at}` via `StorageService`; Settings Privacy section with "Review again"; `docs/privacy.md` matches dialog exactly.
 - Tests: `tests/test_privacy_notice.py` (3) + `frontend/src/lib/privacy-notice.test.ts` + `privacy-dialog.test.tsx` (9 vitest). New backend total 444 collected (441 before + 3).
+
+## 2026-10-10 — Family-based gate and capacity UI (FR-10, D3)
+
+- Backend: `DiversityGate` + `diversity_gate()` + `FAMILY_GATE_THRESHOLDS={ok:3,warn:2}` in `src/providers/router.py`; `_enforce_minimum` blocks only BLOCKED; gate in providers/status, preflight (`diversity` field), `/api/run` `run.started` SSE event; `cap_label_for_degraded` caps DEGRADED High→Moderate in `src/orchestration/orchestrator.py`.
+- Frontend: `frontend/src/lib/diversity-gate.ts` mirror + chip in chat (`diversity-chip`), keys-manager (`readiness-chip`), model-picker (`picker-gate-chip`); confirm step at DEGRADED, Run disabled only at BLOCKED.
+- Tests: `tests/test_diversity_gate.py` (12: 4-family OK, llama-only DEGRADED, 2-family WARN, BLOCKED, selection narrowing, cooldown/daily-quota/unfilled-limits exclusion, enforce-only-on-zero, status+preflight shape, label cap) + `frontend/src/lib/diversity-gate.test.ts` (6 chip states). Updated `test_key_handling.py::test_execution_with_request_keys_leaks_nothing` to the disabled-provider BLOCKED path (see decisions log for why). New backend total 456 collected (444 + 12).

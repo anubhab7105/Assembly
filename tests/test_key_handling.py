@@ -149,6 +149,13 @@ def _authed_client(monkeypatch) -> TestClient:
 def test_execution_with_request_keys_leaks_nothing(
     monkeypatch, fake_key: str, caplog
 ) -> None:
+    """Per-request keys never leak; BLOCKED family gate fails fast (FR-10).
+
+    A key for a disabled provider yields 0 usable families, so the run
+    refuses immediately via the family gate (no provider calls, fast even
+    under bare-TestClient per-request portals). All leak assertions from
+    the old provider-count fail-fast path are preserved.
+    """
     import logging
 
     client = _authed_client(monkeypatch)
@@ -158,7 +165,7 @@ def test_execution_with_request_keys_leaks_nothing(
             json={
                 "question": "What is the mock answer?",
                 "time_budget_minutes": 3,
-                "provider_keys": {"groq": fake_key},
+                "provider_keys": {"cerebras": fake_key},
             },
         )
     assert created.status_code == 200, created.text

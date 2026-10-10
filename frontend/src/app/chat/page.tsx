@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { globalVault } from "@/lib/key-vault"
-import { ApiClient, type UsageEntry } from "@/lib/api-client"
+import { ApiClient, type Catalog, type UsageEntry } from "@/lib/api-client"
 import { storage } from "@/lib/storage"
 import { env } from "@/lib/env"
 import {
@@ -11,6 +11,7 @@ import {
   PRIVACY_NOTICE_VERSION,
 } from "@/lib/privacy-notice"
 import { PrivacyDialog } from "@/components/privacy-dialog"
+import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -38,21 +39,43 @@ export default function Home() {
   const [privacyAcked, setPrivacyAcked] = useState(false)
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
+  const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
+  const [degradedConfirmed, setDegradedConfirmed] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const appMode = env.NEXT_PUBLIC_APP_MODE === "desktop" ? "desktop" : "web"
 
+  const gate = React.useMemo(() => {
+    const enabled = new Set(enabledIds)
+    const fams: string[] = []
+    if (catalog) {
+      for (const p of catalog.providers) {
+        if (!p.enabled || !enabled.has(p.id)) continue
+        for (const m of p.models) {
+          if (selection.selected.length > 0 && !selection.selected.includes(m.id)) continue
+          if (!fams.includes(m.family)) fams.push(m.family)
+        }
+      }
+    }
+    return evaluateGate(fams, enabled.size)
+  }, [catalog, enabledIds, selection.selected])
+
+  useEffect(() => {
+    setDegradedConfirmed(false)
+  }, [gate.level])
+
   useEffect(() => {
     globalVault.allKeys().then((k) => { setHasKeys(Object.keys(k).length > 0); setEnabledIds(Object.keys(k)) }).catch(() => {})
     ApiClient.catalog()
-      .then((c) =>
+      .then((c) => {
+        setCatalog(c)
         setCatalogNotes(
           c.providers
             .filter((p) => p.enabled)
-            .map((p) => ({ id: p.id, privacy_note: (p as { privacy_note?: string | null }).privacy_note ?? null })),
-        ),
-      )
+            .map((p) => ({ id: p.id, privacy_note: p.privacy_note ?? null })),
+        )
+      })
       .catch(() => {})
     storage
       .getSetting(PRIVACY_ACK_KEY)
@@ -96,6 +119,14 @@ export default function Home() {
     if (!privacyAcked) {
       setShowPrivacy(true)
       setStatus("Please acknowledge the privacy notice first.")
+      return
+    }
+    if (gate.level === "BLOCKED") {
+      setStatus(gate.reasons[0] ?? "No model families ready.")
+      return
+    }
+    if (gate.level === "DEGRADED" && !degradedConfirmed) {
+      setStatus("Confirm the single-family run below before launching.")
       return
     }
     setLoading(true)
@@ -172,6 +203,16 @@ export default function Home() {
           </div>
         )}
 
+        <div data-testid="diversity-chip" className={`rounded-xl border p-3 text-sm ${gate.level === "OK" ? "border-success/30" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border"}`}>
+          <p className="font-mono">{gateChipText(gate)}</p>
+          {gate.level !== "OK" && <p className="mt-1 text-xs text-muted-foreground">{gate.reasons[0]}</p>}
+          {gate.level === "DEGRADED" && !degradedConfirmed && (
+            <Button variant="outline" size="sm" className="mt-2" data-testid="degraded-confirm" onClick={() => setDegradedConfirmed(true)}>
+              Run anyway with 1 family
+            </Button>
+          )}
+        </div>
+
         <div className="space-y-4">
           <div className="relative rounded-2xl border border-border bg-card p-2 shadow-sm focus-within:border-brand">
             <textarea
@@ -201,7 +242,7 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <Button size="sm" onClick={handleLaunch} disabled={loading || !question.trim()} className="shrink-0 h-8 rounded-lg">
+              <Button size="sm" onClick={handleLaunch} disabled={loading || !question.trim() || gate.level === "BLOCKED"} className="shrink-0 h-8 rounded-lg">
                 {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="size-4 mr-1.5" />}
                 Launch Team
               </Button>

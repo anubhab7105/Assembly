@@ -307,23 +307,47 @@ async def start_run(req: RunRequest, request: Request):
         entry = _RunEntry(run_id=run_id, created_at=_now())
         _runs[run_id] = entry
 
-    # 3-family warning (metadata only).
+    # Family-diversity gate for this run's keys + selection (metadata only).
+    run_diversity: dict[str, object] = {
+        "level": "BLOCKED",
+        "families_ready": [],
+        "families_count": 0,
+        "providers_count": 0,
+        "reasons": [],
+    }
     try:
-        catalog = load_models_config()
-        fams: set[str] = set()
-        if allowed:
-            for spec in catalog.providers.values():
-                for m in spec.models:
-                    if m.id in allowed:
-                        fams.add(m.family)
+        gate_probe = _filtered_router(dict(req.provider_keys or {}), allowed, {})
+        gate = (
+            gate_probe.diversity_gate(set(allowed) if allowed else None)
+            if hasattr(gate_probe, "diversity_gate")
+            else None
+        )
+        if gate is not None:
+            run_diversity = gate.to_dict()  # type: ignore[assignment]
         else:
-            for spec in catalog.providers.values():
-                if spec.enabled:
-                    fams.update(m.family for m in spec.models)
-        if 0 < len(fams) < 3:
-            logger.info("Run     │ fewer than 3 families selected")
+            catalog = load_models_config()
+            fams: set[str] = set()
+            if allowed:
+                for spec in catalog.providers.values():
+                    for m in spec.models:
+                        if m.id in allowed:
+                            fams.add(m.family)
+            else:
+                for spec in catalog.providers.values():
+                    if spec.enabled:
+                        fams.update(m.family for m in spec.models)
+            if 0 < len(fams) < 3:
+                logger.info("Run     │ fewer than 3 families selected")
     except Exception as exc:  # noqa: BLE001 — warning only
-        logger.debug(f"Run     │ family warning skipped: {exc}")
+        logger.debug(f"Run     │ family gate skipped: {exc}")
+
+    await entry.queue.put(
+        {
+            "event_type": "run.started",
+            "run_id": run_id,
+            "diversity": run_diversity,
+        }
+    )
 
     logger.info(
         f"Run     │ start tier={req.time_budget_minutes} "

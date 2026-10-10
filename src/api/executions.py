@@ -97,6 +97,7 @@ def _build_preflight(question: str, tier: int, snapshot: list[dict]) -> Prefligh
         TIER_MAX_ROUNDS,
         cost_of_plan,
     )
+    from src.providers.router import DiversityGateResponse
 
     ceiling_agents = TIER_MAX_AGENTS.get(plan.feasible_tier, plan.agents)
     ceiling_rounds = TIER_MAX_ROUNDS.get(plan.feasible_tier, plan.rounds)
@@ -106,6 +107,19 @@ def _build_preflight(question: str, tier: int, snapshot: list[dict]) -> Prefligh
     expected_calls_worst = cost_of_plan(
         plan.agents, max(plan.rounds, ceiling_rounds), plan.search_budget
     )
+    try:
+        gate = (
+            router_obj.diversity_gate()
+            if hasattr(router_obj, "diversity_gate")
+            else None
+        )
+        diversity = (
+            DiversityGateResponse(**gate.to_dict())  # type: ignore[arg-type]
+            if gate is not None
+            else DiversityGateResponse()
+        )
+    except Exception:  # noqa: BLE001 — preflight must answer, never 500
+        diversity = DiversityGateResponse()
 
     return PreflightResponse(
         question=question,
@@ -139,6 +153,7 @@ def _build_preflight(question: str, tier: int, snapshot: list[dict]) -> Prefligh
         expected_calls_worst=expected_calls_worst,
         expected_tokens_median=plan.estimated_tokens_median,
         expected_tokens_worst=plan.estimated_tokens_worst,
+        diversity=diversity,
     )
 
 

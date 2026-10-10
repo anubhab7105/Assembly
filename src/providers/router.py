@@ -9,14 +9,15 @@ fastest/cheapest model first; tight budgets automatically get fast models).
 Diversity is counted by MODEL FAMILY, never by provider: two providers
 serving the same family are one vote, one failure domain, one bias.
 
-Requires at least 3 live providers before accepting any work.
+Runs are gated on distinct usable families: >=3 OK, 2 WARN, 1 DEGRADED
+(confirm + lower-confidence label), 0 BLOCKED.
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 from src.core.keystore import get_keystore, reveal
 from src.core.logging_config import logger
@@ -31,8 +32,14 @@ from src.providers.config import (
 from src.providers.quota import fingerprint_key, get_limiter
 from src.providers.registry import get_provider
 
-MIN_REQUIRED_PROVIDERS = 3
+MIN_REQUIRED_PROVIDERS = 3  # Deprecated: kept for imports; the live gate is
+# FAMILY_GATE_THRESHOLDS below (PRD FR-10, D3 counts families, not providers).
 MIN_AFFORDABLE_CALLS = 2  # a routed provider should afford solve + critique
+
+# Family-diversity gate (PRD FR-10, D3): one constant, no scattered literals.
+# >= OK → run; == WARN_AT → run with visible warning; == 1 → DEGRADED
+# (confirm + lower-confidence label); == 0 → BLOCKED.
+FAMILY_GATE_THRESHOLDS: dict[str, int] = {"ok": 3, "warn": 2}
 
 # Key prefixes that mean "not configured" (mirrors Settings.has_provider).
 _PLACEHOLDER_PREFIXES = (
@@ -69,6 +76,43 @@ class TeamRouting:
     warnings: list[str] = field(default_factory=list)
     degraded: bool = False
     families: list[str] = field(default_factory=list)
+
+
+@dataclass
+class DiversityGate:
+    """Family-count gate verdict (PRD FR-10, D3).
+
+    Levels: OK (>=3 families) → run; WARN (2) → run with visible warning;
+    DEGRADED (1) → run only after user confirms, final answer labeled
+    lower-confidence; BLOCKED (0) → refuse with a clear message.
+    """
+
+    level: str = "BLOCKED"
+    families_ready: list[str] = field(default_factory=list)
+    families_count: int = 0
+    providers_count: int = 0
+    reasons: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "level": self.level,
+            "families_ready": list(self.families_ready),
+            "families_count": self.families_count,
+            "providers_count": self.providers_count,
+            "reasons": list(self.reasons),
+        }
+
+
+class DiversityGateResponse(BaseModel):
+    """Wire shape of DiversityGate (status, preflight, SSE start event)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    level: str = "BLOCKED"
+    families_ready: list[str] = []
+    families_count: int = 0
+    providers_count: int = 0
+    reasons: list[str] = []
 
 
 class ModelRouter:
@@ -153,16 +197,18 @@ class ModelRouter:
                 logger.warning(f"Router  │ ✗ {provider_id} provider — init error: {e}")
 
         live = len(self._providers)
+        gate = self.diversity_gate()
         logger.info(
-            f"Router  │ {live}/{total} providers live "
-            f"(minimum required: {MIN_REQUIRED_PROVIDERS})"
+            f"Router  │ {live}/{total} providers live; "
+            f"family gate: {gate.level} "
+            f"({gate.families_count} families: {', '.join(gate.families_ready) or 'none'})"
         )
-        if live < MIN_REQUIRED_PROVIDERS:
+        if gate.level == "BLOCKED":
             logger.error(
-                f"Router  │ ⚠ Only {live} provider(s) available. "
-                f"Assembly requires at least {MIN_REQUIRED_PROVIDERS}. "
-                f"Add more API keys to .env."
+                f"Router  │ ⚠ No usable model family. {' '.join(gate.reasons)}"
             )
+        elif gate.level in ("WARN", "DEGRADED"):
+            logger.warning(f"Router  │ {' '.join(gate.reasons)}")
 
     def get_available_providers(self) -> list[str]:
         """Return names of providers with valid credentials."""
@@ -172,15 +218,83 @@ class ModelRouter:
         """Return the number of currently live providers."""
         return len(self._providers)
 
+    def _suggest_families(self, ready: list[str]) -> str:
+        """Actionable fix hint naming catalog families the user lacks."""
+        missing: list[str] = []
+        for spec in self.config.providers.values():
+            for model in spec.models:
+                if model.family not in ready and model.family not in missing:
+                    missing.append(model.family)
+        hint = " / ".join(missing[:2]) if missing else "another provider"
+        return f"Add a {hint} key to reach 3 families."
+
+    def diversity_gate(self, allowed_models: set[str] | None = None) -> DiversityGate:
+        """Count DISTINCT usable families right now (PRD D3).
+
+        Usable means: provider enabled, key present (in this router),
+        limits filled (else the provider never joined this router), model
+        not in cooldown/exhausted, and inside the user's model selection
+        when one is given. The same family on two providers counts once.
+        """
+        allowed = set(allowed_models) if allowed_models else set()
+        families: list[str] = []
+        usable_providers: set[str] = set()
+        for provider_id in self._providers:
+            try:
+                spec = self.config.providers[provider_id]
+            except KeyError:
+                continue
+            for model in spec.models:
+                if allowed and model.id not in allowed:
+                    continue
+                if not self._usable_model(provider_id, model.id):
+                    continue
+                usable_providers.add(provider_id)
+                if model.family not in families:
+                    families.append(model.family)
+        ok_at = FAMILY_GATE_THRESHOLDS["ok"]
+        warn_at = FAMILY_GATE_THRESHOLDS["warn"]
+        count = len(families)
+        if count >= ok_at:
+            level = "OK"
+            reasons = [f"{count} families ready: {', '.join(families)}."]
+        elif count == warn_at:
+            level = "WARN"
+            reasons = [
+                f"Only {count} distinct model families ready ({', '.join(families)}): "
+                "independent reasoning is weakened. " + self._suggest_families(families)
+            ]
+        elif count == 1:
+            level = "DEGRADED"
+            reasons = [
+                f"Only 1 model family ready ({', '.join(families)}): "
+                "agents cannot reason independently. Run only after confirming; "
+                "the final answer will be labeled lower-confidence. "
+                + self._suggest_families(families)
+            ]
+        else:
+            level = "BLOCKED"
+            reasons = [
+                (
+                    "No model families ready. Add keys for at least two providers "
+                    "covering 3 model families, then try again."
+                )
+            ]
+        return DiversityGate(
+            level=level,
+            families_ready=families,
+            families_count=count,
+            providers_count=len(usable_providers),
+            reasons=reasons,
+        )
+
     def _enforce_minimum(self) -> None:
-        """Raise an error if fewer than 3 providers are live."""
-        live = len(self._providers)
-        if live < MIN_REQUIRED_PROVIDERS:
-            available = ", ".join(self._providers.keys()) if self._providers else "none"
+        """Block only when zero usable families remain (family gate)."""
+        gate = self.diversity_gate()
+        if gate.level == "BLOCKED":
             raise RuntimeError(
-                f"Assembly requires at least {MIN_REQUIRED_PROVIDERS} AI providers to be live. "
-                f"Currently only {live} available ({available}). "
-                f"Please add more API keys to your .env file."
+                "Assembly needs at least 1 usable model family to run. "
+                + " ".join(gate.reasons)
             )
 
     def _family_of(self, provider_id: str, model_id: str) -> str:
