@@ -42,7 +42,11 @@ from src.orchestration.time_controller import (
     StateMachine,
 )
 from src.orchestration.workspace import workspace
-from src.providers.router import ModelRouter
+from src.providers.router import (
+    ModelRouter,
+    PinViolationError,
+    normalize_allowed_families,
+)
 from src.research.router import SearchRouter, default_providers
 from src.research.sanitize import sanitize_search_results, summarize_flags
 
@@ -172,6 +176,7 @@ class Orchestrator:
         search_keys: dict[str, str] | None = None,
         deadline: Deadline | None = None,
         router_override=None,
+        allowed_families: list[str] | None = None,
     ) -> ExecutionResult:
         """
         Run the full orchestration pipeline.
@@ -191,6 +196,11 @@ class Orchestrator:
                 omitted; tests inject short/fake-clock deadlines directly.
             router_override: Optional router instance to use instead of the default.
                 Used for injecting ReplayRouter during demo mode.
+            allowed_families: Bench family pins — planner, team, and
+                synthesizer stay inside these families. A role with no
+                pinned candidate raises PinViolationError (loud) instead
+                of substituting silently; the planner instead falls back
+                to its zero-call heuristic. None = unconstrained.
 
         State transitions follow docs/WORKFLOW.md section 2 and are
         validated by StateMachine (CREATED → CAPACITY_CHECK → PLANNING →
@@ -203,6 +213,9 @@ class Orchestrator:
         logger.info(f"═══ EXECUTION START: {execution_id} ═══")
         logger.info(f"Question chars: {len(question)}")
         logger.info(f"Budget: {time_budget_minutes} minutes")
+        if allowed_families is not None:
+            allowed_families = normalize_allowed_families(allowed_families)
+            logger.info(f"Pins    │ family pins: {', '.join(allowed_families or [])}")
 
         # Per-request keys get an isolated in-memory store + router.
         key_store = (
@@ -413,8 +426,31 @@ class Orchestrator:
                 },
             )
 
-            async with asyncio.timeout(deadline.timeout_for_call(PLANNER_CALL_SECONDS)):
-                plan = await planner.plan(question, time_budget_minutes)
+            try:
+                async with asyncio.timeout(
+                    deadline.timeout_for_call(PLANNER_CALL_SECONDS)
+                ):
+                    plan = await planner.plan(
+                        question, time_budget_minutes, allowed_families=allowed_families
+                    )
+            except TimeoutError:
+                # The planner LLM call hung past its bound. asyncio delivers
+                # the expiry as cancellation, which escapes plan()'s
+                # never-raises contract (it only catches Exception, and
+                # CancelledError must keep propagating for user cancels) —
+                # so fall back to the zero-call heuristic here instead of
+                # failing the run. A user cancel still surfaces as
+                # CancelledError and is unaffected.
+                logger.warning(
+                    "Planner │ Classification timed out; using zero-call "
+                    "heuristic plan"
+                )
+                plan = planner.heuristic_plan(
+                    question,
+                    time_budget_minutes,
+                    "planner call timed out",
+                )
+                plan.capacity = planner.read_capacity(time_budget_minutes)
 
             if plan.planner_provider or plan.planner_total_tokens:
                 _record_call(
@@ -480,6 +516,7 @@ class Orchestrator:
                 problem_type=plan.problem_type,
                 complexity=plan.complexity,
                 time_budget_minutes=time_budget_minutes,
+                allowed_families=allowed_families,
             )
 
             for agent in agents:
@@ -930,6 +967,7 @@ class Orchestrator:
                 problem_type=plan.problem_type,
                 complexity=plan.complexity,
                 time_budget_minutes=time_budget_minutes,
+                allowed_families=allowed_families,
             )
 
             # Cast to SynthesizerAgent for the synthesize() method
@@ -1075,6 +1113,16 @@ class Orchestrator:
 
             return result
 
+        except PinViolationError:
+            # Bench family pins cannot serve a role: clean up exactly like
+            # the failure path (workspace + per-request keys) but re-raise
+            # so the bench records a PinViolation instead of a generic
+            # failure. Unreachable in production (pins are bench-only).
+            logger.error(f"═══ EXECUTION PIN-VIOLATION: {execution_id} ═══")
+            workspace.cleanup(execution_id)
+            if key_store is not None:
+                key_store.clear()
+            raise
         except asyncio.CancelledError:
             # User cancellation (API cancel endpoint or deadline flag):
             # no new work, keys wiped, state CANCELLED from anywhere.

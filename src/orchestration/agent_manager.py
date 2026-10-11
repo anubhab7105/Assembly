@@ -18,7 +18,7 @@ from src.orchestration.time_controller import TaskTracker
 from src.orchestration.workspace import EventType, WorkspaceEvent, workspace
 from src.providers.errors import ProviderDown, RateLimited, ToolCallError
 from src.providers.quota import QuotaExhausted
-from src.providers.router import ModelRouter
+from src.providers.router import ModelRouter, normalize_allowed_families
 
 # Failures worth one retry on a fallback model: transient by nature
 # (rate limit, quota, outage) plus tool-capability mismatches (a model
@@ -60,6 +60,10 @@ class AgentManager:
         self._decisions: dict[str, object] = {}
         self.last_routing: object = None
         self._agent_counter = 0
+        # Bench family pins for this execution (None = unconstrained).
+        # Set via create_team()/create_agent(); honored by routing and
+        # fallback selection so pinned runs never substitute silently.
+        self._allowed_families: list[str] | None = None
         # Per-run health: trips never leak across executions because the
         # orchestrator builds a fresh AgentManager per execute().
         self.breaker = CircuitBreaker()
@@ -72,15 +76,20 @@ class AgentManager:
         complexity: str = "medium",
         time_budget_minutes: int = 5,
         prefer_provider: str | None = None,
+        allowed_families: list[str] | None = None,
     ) -> BaseAgent:
         """
         Create a new agent with the appropriate model.
 
         The Model Router selects the best provider/model for this
-        agent type and task requirements.
+        agent type and task requirements. `allowed_families` (bench pins)
+        constrains the choice; it is remembered for fallback selection.
         """
         self._agent_counter += 1
         agent_id = f"agent_{self._agent_counter:02d}"
+
+        if allowed_families is not None:
+            self._allowed_families = normalize_allowed_families(allowed_families)
 
         # Route to the best model
         assignment = self.router.route(
@@ -89,6 +98,7 @@ class AgentManager:
             complexity=complexity,
             time_budget_minutes=time_budget_minutes,
             prefer_provider=prefer_provider,
+            allowed_families=self._allowed_families,
         )
 
         return self._instantiate(
@@ -114,6 +124,7 @@ class AgentManager:
             router=self.router,
             routing=decision,
             family=getattr(decision, "family", ""),
+            allowed_families=self._allowed_families,
         )
 
         self.agents[agent_id] = agent
@@ -130,6 +141,7 @@ class AgentManager:
         problem_type: str = "general",
         complexity: str = "medium",
         time_budget_minutes: int = 5,
+        allowed_families: list[str] | None = None,
     ) -> list[BaseAgent]:
         """
         Create an entire team from a composition plan.
@@ -139,10 +151,14 @@ class AgentManager:
 
         Args:
             team_composition: List of {agent_type, role_description} dicts.
+            allowed_families: Bench family pins — every assignment stays
+                inside these families (PinViolationError when impossible).
 
         Returns:
             List of created agent instances.
         """
+        if allowed_families is not None:
+            self._allowed_families = normalize_allowed_families(allowed_families)
         specs = [
             {
                 "agent_type": spec["agent_type"],
@@ -156,7 +172,13 @@ class AgentManager:
                 specs, problem_type, complexity, time_budget_minutes
             )
 
-        routing = route_team(specs, problem_type, complexity, time_budget_minutes)
+        routing = route_team(
+            specs,
+            problem_type,
+            complexity,
+            time_budget_minutes,
+            allowed_families=self._allowed_families,
+        )
         self.last_routing = routing
         return [
             self._instantiate(spec, decision)
@@ -307,6 +329,7 @@ class AgentManager:
                 router=self.router,
                 routing=fallback,
                 family=getattr(fallback, "family", ""),
+                allowed_families=self._allowed_families,
             )
             if hasattr(agent, "search_results"):
                 retry_agent.search_results = agent.search_results
@@ -336,15 +359,20 @@ class AgentManager:
 
         Skips models the per-run breaker opened AND models the cross-run
         memory avoids (logged: cross-run skips name the model, role, and
-        window). Walks the router's fallback chain (each step excludes the
-        previous pair, so it terminates) and returns the first healthy
-        candidate. None when routing is unavailable, no candidate exists,
-        every candidate is unhealthy, or the chain cycles.
+        window). Under bench family pins (`self._allowed_families`),
+        candidates outside the pins are skipped the same way, so a
+        quota-starved run degrades on pinned models instead of
+        substituting an outside family silently. Walks the router's
+        fallback chain (each step excludes the previous pair, so it
+        terminates) and returns the first healthy candidate. None when
+        routing is unavailable, no candidate exists, every candidate is
+        unhealthy, or the chain cycles.
         """
         router_fallback = getattr(self.router, "fallback_for", None)
         if decision is None or not callable(router_fallback):
             return None
         memory = cross_run_health()
+        allowed = self._allowed_families
         current = decision
         seen: set[tuple[str, str]] = set()
         for _ in range(3):
@@ -362,6 +390,15 @@ class AgentManager:
                 return None
             seen.add(pair)
             candidate_model = str(getattr(candidate, "model", ""))
+            candidate_family = str(getattr(candidate, "family", ""))
+            if allowed is not None and candidate_family not in allowed:
+                logger.info(
+                    f"AgentMgr │ Skipping {candidate_family} for {role}: "
+                    "outside pinned families "
+                    f"({', '.join(allowed)}); trying the next fallback."
+                )
+                current = candidate
+                continue
             if self.breaker.is_open(candidate_model, role):
                 current = candidate
                 continue

@@ -34,6 +34,31 @@ Keys come from the local key store selected by app mode (`dev` can load
 `.env.dev`; `desktop` uses the OS keyring). The scripts print provider/model
 names only, never key values.
 
+## Pinning model families (`--pin-team`, `--pin-families`)
+
+Pins are **enforced**, not advisory. The router, planner, team formation,
+synthesizer, and every retry/fallback path stay inside the pinned families:
+
+- Up-front validation aborts before the first LLM call when the pins cannot
+  serve planner, solver, critic, or synthesizer on live providers
+  (a missing researcher pin warns only — research need is per-question).
+- A role with no usable pinned model raises `PinViolationError` (loud)
+  instead of substituting an outside family; the planner then falls back to
+  its zero-call heuristic. The bench records a `PinViolation` error and
+  moves on — no sleep can fix a structural gap.
+- Every retry path is pin-aware, not just team formation: agent
+  validation-error retries walk past outside-pin fallbacks, the
+  synthesizer re-raises instead of retrying out-of-pin, the planner
+  retries on its original pinned model, and rebuilt retry agents keep
+  their pins. An out-of-pin model cannot be selected — it can only be
+  skipped, with failures degrading honestly inside the pins.
+- Quota-transient gaps still sleep-and-retry (a cooling pinned provider
+  comes back); structural gaps abort fast.
+- Pin guidance: include a **critic-eligible family outside the solver
+  families** (the critic must review from a different family), e.g.
+  `--pin-families gpt-oss,qwen,nemotron`, not `gpt-oss,qwen` (qwen models
+  offer no critic role, so the critic cannot be pinned there).
+
 ## Schema (one JSON object per line)
 
 | Field | Type | Notes |

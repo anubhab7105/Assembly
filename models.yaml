@@ -32,6 +32,15 @@ providers:
   gemini:
     base: google-genai
     key_url: https://aistudio.google.com/apikey
+    # Kept enabled 2026-10-12 (NOT disabled): the key is valid (list 200,
+    # 50 models incl. gemini-3.8-flash) and disabling hides the frontend
+    # setup card + makes POST /api/keys/test 404 ("Unknown or disabled
+    # provider") — verified by 12 test failures on the disabled variant.
+    # rpm/rpd/tpm stay null pending dashboard values or a re-probe that
+    # returns rate-limit headers (2026-10-12 60 s probe: HTTP 503
+    # high-demand, no headers); the router loud-skips until filled.
+    # Fill rpm/rpd/tpm from aistudio.google.com/rate-limit with a
+    # source + checked-date comment, then remove this note.
     enabled: true
     privacy_note: "Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information."
     key_steps:
@@ -216,10 +225,11 @@ providers:
     base: openai-compatible
     url: https://integrate.api.nvidia.com/v1
     key_url: https://build.nvidia.com
-    # Enabled 2026-10-09: ids below are the long-lived build.nvidia.com
-    # instruct models; limits pending a verify run with a user key
-    # (router loud-skips until rpm/rpd/tpm are filled).
-    enabled: true
+    # Disabled 2026-10-12: no NVIDIA_API_KEY configured and limits unfilled.
+    # Enable only if you intend to use this provider: add the key, fill
+    # rpm/rpd/tpm from build.nvidia.com limits (or a verify run), then flip
+    # this back. The frontend setup card is hidden while disabled.
+    enabled: false
     key_steps:
       - "Open the key page via the Get free key link."
       - "Sign in or create an account."

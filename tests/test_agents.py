@@ -449,6 +449,31 @@ def test_researcher_prompt_has_no_search_instructions() -> None:
 # ── Synthesizer ──────────────────────────────────────────────────────
 
 
+def test_synthesizer_prompt_forbids_invented_citations() -> None:
+    """No-sources runs must cite nothing (composer states it honestly)."""
+    agent = SynthesizerAgent(agent_id="agent_09", provider=MockProvider(), model="m")
+    system = agent.build_system_prompt()
+    assert "NO AVAILABLE SOURCES" in system
+    assert "invent NO URLs" in system
+    bare = agent.build_user_prompt("Q?", {"agent_outputs": []})
+    assert "AVAILABLE SOURCES (cite these" not in bare
+    assert "cite nothing and invent no" in bare
+    seeded = agent.build_user_prompt(
+        "Q?",
+        {
+            "agent_outputs": [],
+            "all_sources": [
+                {
+                    "title": "T",
+                    "url": "https://example.com/t",
+                    "snippet": "s",
+                }
+            ],
+        },
+    )
+    assert "AVAILABLE SOURCES" in seeded
+
+
 async def test_synthesizer_collects_sources_and_footer() -> None:
     agent = SynthesizerAgent(agent_id="agent_09", provider=MockProvider(), model="m")
     team = [

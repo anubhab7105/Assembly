@@ -72,6 +72,7 @@ class MockRouter:
         complexity: str = "medium",
         time_budget_minutes: int = 5,
         prefer_provider: str | None = None,
+        allowed_families: list[str] | None = None,
     ) -> MockAssignment:
         name = (
             prefer_provider
@@ -79,6 +80,13 @@ class MockRouter:
             else next(iter(self._providers))
         )
         provider = self._providers[name]
+        if allowed_families is not None and "mock" not in allowed_families:
+            from src.providers.router import PinViolationError
+
+            raise PinViolationError(
+                f"No usable {agent_type} model in pinned families "
+                f"({', '.join(sorted(allowed_families))})."
+            )
         return MockAssignment(
             provider=provider,
             model=provider.get_available_models()[0],
@@ -86,8 +94,10 @@ class MockRouter:
             role=agent_type,
         )
 
-    def route_for_planning(self) -> MockAssignment:
-        return self.route("planner")
+    def route_for_planning(
+        self, allowed_families: list[str] | None = None
+    ) -> MockAssignment:
+        return self.route("planner", allowed_families=allowed_families)
 
     def route_team(
         self,
@@ -95,7 +105,15 @@ class MockRouter:
         problem_type: str = "general",
         complexity: str = "medium",
         time_budget_minutes: int = 5,
+        allowed_families: list[str] | None = None,
     ) -> MockTeamRouting:
+        if allowed_families is not None and "mock" not in allowed_families:
+            from src.providers.router import PinViolationError
+
+            raise PinViolationError(
+                "No usable team model in pinned families "
+                f"({', '.join(sorted(allowed_families))})."
+            )
         decisions = [self.route(spec.get("agent_type", "solver")) for spec in team]
         return MockTeamRouting(
             decisions=decisions,

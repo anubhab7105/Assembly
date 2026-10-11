@@ -1,5 +1,6 @@
 """End-to-end orchestrator execution using only MockProvider (zero network)."""
 
+import asyncio
 from typing import Any
 
 from src.orchestration.orchestrator import Orchestrator
@@ -84,3 +85,40 @@ async def test_workspace_events_published_during_run(
     solutions = [e for e in seen if e.event_type == EventType.SOLUTION]
     assert len(solutions) >= 2
     assert {e.agent_id for e in solutions} == {"agent_01", "agent_02"}
+
+
+async def test_hung_planner_falls_back_to_heuristic(
+    orchestrator: Orchestrator, monkeypatch: Any
+) -> None:
+    """A planner call past its bound completes via heuristic (never failed).
+
+    Regression: timeout-cancellation escaped plan()'s never-raises contract
+    as an empty TimeoutError and failed the run. The orchestrator now
+    substitutes the zero-call heuristic instead.
+    """
+    import src.orchestration.orchestrator as orch_module
+
+    monkeypatch.setattr(orch_module, "PLANNER_CALL_SECONDS", 1)
+
+    class _HangingPlanner(MockProvider):
+        async def generate(self, messages, **kwargs):
+            if self.select_script_key(messages) == "plan":
+                await asyncio.sleep(5)
+            return await super().generate(messages, **kwargs)
+
+    providers = list(orchestrator.router._providers.values())
+    hanging = _HangingPlanner(provider_name="mock-a")
+    hanging._scripts = dict(providers[0]._scripts)
+    orchestrator.router._providers["mock-a"] = hanging
+
+    result = await orchestrator.execute(
+        execution_id="test-exec-hung-planner",
+        question="What is the mock answer?",
+        time_budget_minutes=3,
+    )
+    assert result.status == "completed"
+    assert result.answer != ""
+    plan_calls = [c for c in hanging.calls if c.get("script_key") == "plan"]
+    # At most one planner attempt: the hung call is cancelled mid-flight
+    # (it may never reach the mock's call log) and never retried.
+    assert len(plan_calls) <= 1

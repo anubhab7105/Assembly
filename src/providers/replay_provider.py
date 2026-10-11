@@ -488,16 +488,24 @@ class ReplayRouter:
         complexity: str = "medium",
         time_budget_minutes: int = 5,
         prefer_provider: str | None = None,
+        allowed_families: list | None = None,
     ) -> SimpleNamespace:
-        """Route one agent, spreading across recorded providers."""
-        _ = (problem_type, complexity, time_budget_minutes)
+        """Route one agent, spreading across recorded providers.
+
+        `allowed_families` is accepted and ignored: replay must reproduce
+        the recorded run exactly, pins do not apply.
+        """
+        _ = (problem_type, complexity, time_budget_minutes, allowed_families)
         name = (
             prefer_provider if prefer_provider in self._providers else self._next_name()
         )
         return self._decision(agent_type, name)
 
-    def route_for_planning(self) -> SimpleNamespace:
+    def route_for_planning(
+        self, allowed_families: list | None = None
+    ) -> SimpleNamespace:
         """The planner call is first in any recording: use provider zero."""
+        _ = allowed_families  # replay reproduces the recording; pins N/A
         return self._decision("planner", self._names[0])
 
     def route_team(
@@ -506,9 +514,10 @@ class ReplayRouter:
         problem_type: str = "general",
         complexity: str = "medium",
         time_budget_minutes: int = 5,
+        allowed_families: list | None = None,
     ) -> SimpleNamespace:
         """Route a team round-robin so roles spread like the original run."""
-        _ = (problem_type, complexity, time_budget_minutes)
+        _ = (problem_type, complexity, time_budget_minutes, allowed_families)
         decisions = [
             self._decision(
                 spec.get("agent_type", "solver"), self._names[i % len(self._names)]

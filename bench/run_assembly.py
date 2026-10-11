@@ -47,8 +47,14 @@ from bench.bench_common import (
 )
 from src.core.logging_config import logger
 from src.orchestration.orchestrator import Orchestrator
+from src.providers.router import PinViolationError
 
 VALID_TIERS = (3, 5, 10, 15)
+
+#: Roles a pin set must cover on live providers. Researcher is excluded:
+#: whether research runs is question-dependent, so a missing researcher
+#: pin is a per-question structural violation, not an up-front abort.
+PIN_REQUIRED_ROLES = ("planner", "solver", "critic", "synthesizer")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -209,6 +215,67 @@ def _check_pin_wait(max_wait: float) -> float:
     return wait
 
 
+def _pin_role_coverage(router: object) -> dict[str, list[str]]:
+    """Pinned-role feasibility input: role → families on live providers.
+
+    Reads the router catalog restricted to live (keyed, enabled,
+    limits-filled) providers. Pure read — no LLM calls, no quota spent.
+    """
+    live = set(router.get_available_providers())
+    coverage: dict[str, set[str]] = {}
+    providers = getattr(getattr(router, "config", None), "providers", {}) or {}
+    for provider_id, spec in providers.items():
+        if provider_id not in live:
+            continue
+        for model in getattr(spec, "models", []) or []:
+            for role in getattr(model, "roles", []) or []:
+                coverage.setdefault(str(role), set()).add(str(model.family))
+    return {role: sorted(fams) for role, fams in coverage.items()}
+
+
+def validate_pins(router: object, pinned: list[str]) -> None:
+    """Abort fast when pins cannot serve a required role (SystemExit).
+
+    Prints which roles are covered by which pinned families so a bad
+    --pin-families value fails before the first LLM call instead of
+    burning retries. Researcher gaps warn only (question-dependent).
+    Raises SystemExit with an actionable message on a required-role gap.
+    """
+    coverage = _pin_role_coverage(router)
+    pinned_set = set(pinned)
+    gaps: list[str] = []
+    for role in PIN_REQUIRED_ROLES:
+        offering = [fam for fam in coverage.get(role, []) if fam in pinned_set]
+        if not offering:
+            available = ", ".join(coverage.get(role, [])) or "none live"
+            gaps.append(f"{role}: pinned families offer none (live: {available})")
+    researcher_offering = [
+        fam for fam in coverage.get("researcher", []) if fam in pinned_set
+    ]
+    if not researcher_offering:
+        available = ", ".join(coverage.get("researcher", [])) or "none live"
+        print(
+            f"NOTE: pins lack a researcher family (live: {available}) — "
+            "questions needing research will abort fast with PinViolation "
+            "instead of substituting."
+        )
+    if gaps:
+        raise SystemExit(
+            "ABORT: --pin-families "
+            f"({', '.join(pinned)}) cannot serve: "
+            + "; ".join(gaps)
+            + ". Add families covering those roles (note: the critic needs "
+            "a family outside the solver families)."
+        )
+    print(
+        "Pins feasible: "
+        + ", ".join(
+            f"{role}=[{', '.join(f for f in coverage.get(role, []) if f in pinned_set)}]"
+            for role in PIN_REQUIRED_ROLES
+        )
+    )
+
+
 def _pin_wait_line(providers: list[str], wait: float) -> str:
     """Human-readable pause line naming who is cooling and until when.
 
@@ -263,6 +330,8 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
         print("Pinned families: auto (first question's answering families)")
     max_wait = _check_pin_wait(getattr(args, "pin_max_wait_seconds", 3600.0))
     max_retries = int(getattr(args, "pin_max_retries", 3) or 0)
+    if pin_team and pinned:
+        validate_pins(router, pinned)
 
     results: list[BenchResult] = []
 
@@ -300,6 +369,7 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
                     question=item.question,
                     time_budget_minutes=args.tier,
                     provider_keys=None,  # Use router's mode key store
+                    allowed_families=pinned if pin_team else None,
                 )
                 # Orchestrator logs its own errors internally; we record
                 # the execution-level status and any exposed warnings.
@@ -357,6 +427,25 @@ async def run_all(args: argparse.Namespace, run_id: str) -> list[BenchResult]:
                 )
                 debate_rounds = result.debate_rounds
 
+            except PinViolationError as exc:
+                # Structural pin gap (pins cannot serve a role): no sleep
+                # will fix it — record and move on.
+                errors.append(
+                    {
+                        "phase": "pin-team",
+                        "type": "PinViolation",
+                        "message": str(exc),
+                    }
+                )
+                answer = ""
+                consensus = 0.0
+                calls = 0
+                tokens = 0
+                providers_used = []
+                routed = []
+                answered = []
+                debate_rounds = 0
+                team_size = 0
             except Exception as exc:  # noqa: BLE001 — orchestrator must not crash the bench
                 errors.append(
                     {

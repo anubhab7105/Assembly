@@ -292,6 +292,18 @@ async def test_router_total_failure_returns_empty() -> None:
     assert await router.search("q") == []
 
 
+async def test_router_unexpected_error_falls_back() -> None:
+    """Non-provider exceptions (e.g. validation) never escape search()."""
+    first = _StubProvider("tavily", error=ValueError("bad shape"))
+    second = _StubProvider("wikipedia", results=[_result("recovered")])
+    router = SearchRouter(providers=[first, second])
+    assert [r.title for r in await router.search("q")] == ["recovered"]
+    broken = SearchRouter(
+        providers=[_StubProvider("tavily", error=RuntimeError("boom"))]
+    )
+    assert await broken.search("q") == []
+
+
 # ── Router: budget ─────────────────────────────────────────────────────
 
 
