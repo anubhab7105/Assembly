@@ -479,3 +479,11 @@
 - Stale `test_orchestrator_records_routing` fixed (test-only): single-family warning asserted present per FR-2/B; routing 13 passed.
 - Batches green (mock, offline): routing+diversity+quota 48 passed; capacity+planner+consensus 80 passed; quota-migration+key-handling+preflight+core-roles 33 passed; breaker+stagnation+e2e 32 passed (earlier).
 - Pending: `test_key_leak.py` background run; full offline suite as final Phase 1 gate; then Phase 2 benchmark.
+
+## 2026-10-11 — WORKFLOW Phase 2 pilot (benchmark loop, 5 questions)
+
+- `test_key_leak.py` green (1 passed, 0.53 s). Phase 1 targeted batches all green: routing+diversity+quota 48, capacity+planner+consensus 80, quota-migration+key-handling+preflight+core-roles 33, breaker+stagnation+e2e 32, canary 14. Full offline suite running in background as final gate.
+- Pilot (user chose 5-question live over full-40): `bench/pilot_questions.jsonl` (ms-01, ms-02, logic-01, logic-02, code-01; all computationally verified, main file untouched). Bench env bug fixed (`.env.dev` loaded post-import → 0 live providers; `.local/run_with_env.py` wrapper pre-loads).
+- `pilot-single` (groq gpt-oss-20b): 5/5 answered, 0 failed, 5 calls, 1702 tokens, 61.9 s; graded 5/5 mean 1.000, 0 judge calls.
+- `pilot-vote` ABANDONED: OpenRouter gemma 429 every call, 60 s sleeps (N-02); vote is Optional per WORKFLOW.
+- `pilot-assembly` launched (tier 3, `--pin-families gpt-oss,qwen`, groq-only, background). Grade + comparison pending its completion. Pilot results are UNVERIFIED loop-proofs, never slide numbers.
