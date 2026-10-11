@@ -311,4 +311,6 @@ async def test_orchestrator_records_routing(orchestrator) -> None:
     assert result.routing != []
     assert all(entry["reason"] for entry in result.routing)
     assert result.degraded is False
-    assert result.warnings == []
+    # MockRouter serves one family ("mock"): FR-2 single-family warning is
+    # intended (critic shares the solvers' family; confidence lowered).
+    assert any("model family" in w for w in result.warnings)

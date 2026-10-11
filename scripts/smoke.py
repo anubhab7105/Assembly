@@ -36,9 +36,18 @@ async def main() -> int:
     orch = Orchestrator()
     live = orch.router.get_available_providers()
     print(f"Live providers ({len(live)}): {', '.join(live)}")
-    if len(live) < 3:
-        print("ABORT: need at least 3 live providers for an execution.")
+    gate = orch.router.diversity_gate()
+    print(
+        f"Family gate: {gate.level} "
+        f"({gate.families_count} families: {', '.join(gate.families_ready)})"
+    )
+    if gate.level == "BLOCKED":
+        print("ABORT: no usable model family. " + " ".join(gate.reasons))
         return 2
+    if gate.level in ("WARN", "DEGRADED"):
+        print(
+            "NOTE: " + " ".join(gate.reasons) + " — proceeding with reduced diversity."
+        )
 
     # Count real provider calls (names only — never keys).
     calls = {"count": 0}

@@ -61,7 +61,10 @@ _PREFIX_RE = re.compile(
 # Long opaque blobs (JWT segments, signed payloads). Keep Git object IDs only
 # when they appear in Git context (e.g. `git log` or `commit <sha>`), while
 # masking other secret-like long tokens such as hex API keys.
-_LONG_TOKEN_RE = re.compile(r"\b[A-Za-z0-9_\-+/=]{40,}\b")
+# NOTE: `/` is excluded so provider/model IDs (e.g.
+# `openrouter/nvidia/nemotron-3-super-120b-a12b:free`, 44 chars) are never
+# masked — names-only attribution must survive logging (N-03).
+_LONG_TOKEN_RE = re.compile(r"\b[A-Za-z0-9_\-+=]{40,}\b")
 _GIT_CONTEXT_RE = re.compile(r"(?i)\b(?:git\s+log|commit|sha|hash)\b")
 
 

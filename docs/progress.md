@@ -464,3 +464,18 @@
 - Backend: Test now uses one auth-only list GET (15 s, no retries, never 500) classified by status only (200 valid, 400 API_KEY_INVALID/401/403 invalid, 429 rate-limited amber, 404/missing model = key-valid + alternatives, transport = unreachable); `clean_key()` trim at every key entry point; Gemini safe candidate/parts extraction + `TruncatedResponse` (never auth); legacy SDK has no thinking-budget param (verified, none set).
 - Frontend: `testKey` maps valid/rate_limited/invalid/model_unavailable/unreachable (+ endpoint-429 → rate_limited, network failure → unreachable, never invalid); KeysManager shows message, copy-spaces hint on invalid, usable-model list on model_unavailable; readiness counts valid + rate_limited only.
 - Tests: `tests/test_gemini_key_test.py` (12 mocked incl. trimming + canary) green; `api-client.test.ts` (8) green; vitest 9 files / 38 green; ruff check + format clean on touched files; canary/key-leak/key-setup/stateless (26) green. Full offline suite as final gate (see commit); one pre-existing failure (`test_run_with_failing_researcher_reports_reduced_research`) reproduces on clean HEAD, unrelated.
+
+## 2026-10-11 — WORKFLOW Phase 0 grind (MVP real)
+
+- Fixed pre-existing `test_run_with_failing_researcher_reports_reduced_research` (failed on clean HEAD): MockRouter has no `fallback_for`, so solve-phase single failure never tripped the breaker (threshold 2), and FR-5 now skips debate when no open disagreement — the old debate second-failure path is gone. Test-only fix: mock-b also `always_fail` researcher + one-step `fallback_for` mock-a → mock-b (same `mock-model` name) → 2 failures on (`mock-model`, `researcher`) trip in solve phase; `emit_breaker_trips()` emits the visible `agent.status` event. No product code touched; FR-5 savings + breaker threshold preserved. Verified: 1 passed single, 32 passed (breaker+stagnation+e2e), ruff clean.
+- DB: AppData `assembly.db` predated Alembic (`no such column: quota_usage.model_id` in live logs) → `alembic stamp db244319c60b && alembic upgrade head` → head `c41a9e2f7b3d`; `quota_report.py` clean, no warnings.
+- Smoke: `scripts/smoke.py` aborted on outdated provider-count gate (`need at least 3 live providers`; live = groq+openrouter = 2 providers, 4 families). Updated to family gate per D3 (`diversity_gate()`; BLOCKED aborts, WARN/DEGRADED notes and proceeds). ruff format clean. Live 3-min run re-launched (pending).
+- Skipped (per DoD): full offline suite re-run pending live-run completion; no keys in diff/logs (names-only).
+
+## 2026-10-11 — WORKFLOW Phase 1 grind (reliability + capacity)
+
+- Live smoke `smoke-run` COMPLETED: 3-min tier in 35.7 s, 5 calls, 7231 tokens, consensus 65% Moderate, solver+researcher+critic across gpt-oss/qwen/nemotron (groq+openrouter, gate OK 4 families). Search fell back gracefully (wikipedia/arxiv failed, semantic-scholar 429, duckduckgo 0) with 0 searches; answer completed with synth-cited sources.
+- N-03 fixed (`src/core/logging_config.py:64`): `/` dropped from `_LONG_TOKEN_RE`; canary green (14 passed, background 156 s); ruff check clean (format debt in `setup_logging` pre-existing, untouched).
+- Stale `test_orchestrator_records_routing` fixed (test-only): single-family warning asserted present per FR-2/B; routing 13 passed.
+- Batches green (mock, offline): routing+diversity+quota 48 passed; capacity+planner+consensus 80 passed; quota-migration+key-handling+preflight+core-roles 33 passed; breaker+stagnation+e2e 32 passed (earlier).
+- Pending: `test_key_leak.py` background run; full offline suite as final Phase 1 gate; then Phase 2 benchmark.
