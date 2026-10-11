@@ -37,7 +37,11 @@ from src.orchestration.capacity import (
     plan_capacity,
 )
 from src.providers.base import ChatMessage
-from src.providers.router import ModelRouter
+from src.providers.router import (
+    ModelRouter,
+    PinViolationError,
+    normalize_allowed_families,
+)
 
 KNOWN_PROBLEM_TYPES: tuple[str, ...] = (
     "math",
@@ -225,8 +229,14 @@ Respond with JSON only:
 
     def __init__(self, router: ModelRouter):
         self.router = router
+        self._allowed_families: list[str] | None = None
 
-    async def plan(self, question: str, time_budget_minutes: int) -> PlanResult:
+    async def plan(
+        self,
+        question: str,
+        time_budget_minutes: int,
+        allowed_families: list[str] | None = None,
+    ) -> PlanResult:
         """
         Classify the problem and determine team composition.
 
@@ -235,6 +245,10 @@ Respond with JSON only:
         Args:
             question: The user's question.
             time_budget_minutes: How much time is available.
+            allowed_families: Bench family pins for the planner call. When
+                the pins exclude every planner model, planning falls back
+                to the zero-call heuristic (no LLM call, so no family
+                outside the pins ever answers).
 
         Returns:
             PlanResult with validated classification and team composition.
@@ -243,9 +257,22 @@ Respond with JSON only:
         logger.info(
             f"Planner │ Classifying question (budget: {time_budget_minutes}min)"
         )
+        self._allowed_families = normalize_allowed_families(allowed_families)
 
         try:
-            assignment = self.router.route_for_planning()
+            if allowed_families is None:
+                assignment = self.router.route_for_planning()
+            else:
+                assignment = self.router.route_for_planning(
+                    allowed_families=allowed_families
+                )
+        except PinViolationError as exc:
+            logger.warning(f"Planner │ {exc} — using zero-call heuristic plan")
+            plan = self._heuristic_plan(
+                question, time_budget_minutes, "planner family not in pins"
+            )
+            plan.capacity = self._read_capacity(time_budget_minutes)
+            return plan
         except Exception as e:  # noqa: BLE001 — planning must fall back, never crash
             logger.error(f"Planner │ Planner routing failed: {e}")
             plan = self._heuristic_plan(
@@ -311,6 +338,9 @@ Respond with JSON only:
 
         Falls back to the original assignment when the router offers no
         alternative (e.g. duck-typed test routers without fallback_for).
+        Under bench family pins, an outside-pin alternative is refused and
+        the original (pinned) assignment is retried instead, so the planner
+        can never select an out-of-pin model in the first place.
         Returns (response, assignment_used) so callers can record provenance.
         """
         retry_assignment = assignment
@@ -319,11 +349,22 @@ Respond with JSON only:
             try:
                 alternative = fallback_for(assignment, error)
                 if alternative is not None:
-                    retry_assignment = alternative
-                    logger.info(
-                        "Planner │ Retrying with fallback "
-                        f"{retry_assignment.provider_name}/{retry_assignment.model}"
-                    )
+                    allowed = self._allowed_families
+                    if (
+                        allowed is not None
+                        and str(getattr(alternative, "family", "")) not in allowed
+                    ):
+                        logger.info(
+                            "Planner │ Fallback family outside pins "
+                            f"({', '.join(allowed)}); retrying on the "
+                            "original pinned model instead"
+                        )
+                    else:
+                        retry_assignment = alternative
+                        logger.info(
+                            "Planner │ Retrying with fallback "
+                            f"{retry_assignment.provider_name}/{retry_assignment.model}"
+                        )
             except Exception as e:  # noqa: BLE001 — retry must proceed regardless
                 logger.warning(f"Planner │ Fallback routing failed: {e}")
 
@@ -562,6 +603,16 @@ Respond with JSON only:
         except Exception as e:  # noqa: BLE001 — capacity is advisory only
             logger.warning(f"Planner │ Capacity estimate unavailable: {e}")
             return None
+
+    def read_capacity(self, time_budget_minutes: int) -> dict[str, object] | None:
+        """Public read-only capacity snapshot (delegates to _read_capacity)."""
+        return self._read_capacity(time_budget_minutes)
+
+    def heuristic_plan(
+        self, question: str, time_budget_minutes: int, reason: str
+    ) -> PlanResult:
+        """Public zero-call fallback plan (delegates to _heuristic_plan)."""
+        return self._heuristic_plan(question, time_budget_minutes, reason)
 
     def _heuristic_plan(
         self, question: str, time_budget_minutes: int, reason: str

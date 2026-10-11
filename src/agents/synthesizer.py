@@ -35,6 +35,9 @@ RULES:
 5. Cite sources INLINE with numbered markers [1], [2], ... matching the
    numbered AVAILABLE SOURCES list below. Never invent a marker: every [n]
    must point at a real numbered source.
+   If there is NO AVAILABLE SOURCES list (no external research ran), use NO
+   [n] markers at all, invent NO URLs, and leave the "sources" array empty —
+   the answer must honestly stand on the team's reasoning alone.
 6. Write the answer in Markdown (short paragraphs, ## headings where they
    help, - bullets for lists).
 7. Write clearly and professionally — this is what the user reads.
@@ -113,6 +116,8 @@ Create the best possible final answer for the user. Remember:
 - The user sees ONLY your answer, not the debate.
 - Write as a direct expert response, not as a summary of agent discussion.
 - Include relevant sources in your response.
+- If there is no AVAILABLE SOURCES list above, cite nothing and invent no
+  URLs — the composer will state that no external sources were used.
 - If consensus was weak, be honest about uncertainty.
 
 Respond with the JSON format specified in your instructions."""
@@ -167,13 +172,10 @@ Respond with the JSON format specified in your instructions."""
         try:
             result = await self.run(question, context=context, temperature=0.3)
         except RETRYABLE_ERRORS as e:
-            router_fallback = getattr(self._router, "fallback_for", None)
-            fallback = None
-            if self._routing is not None and router_fallback is not None:
-                try:
-                    fallback = router_fallback(self._routing, e)
-                except Exception:
-                    pass
+            # Pin-aware fallback: outside-pin candidates are walked past
+            # inside _fallback_decision, so the retry can only land in-pin
+            # (or not happen, re-raising the transport error to degrade).
+            fallback = self._fallback_decision(e)
             if fallback is None:
                 raise
             

@@ -6,6 +6,7 @@ no network, no shared state.
 
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -314,3 +315,120 @@ async def test_orchestrator_records_routing(orchestrator) -> None:
     # MockRouter serves one family ("mock"): FR-2 single-family warning is
     # intended (critic shares the solvers' family; confidence lowered).
     assert any("model family" in w for w in result.warnings)
+
+
+# ── Family pins (bench integrity) ───────────────────────────────────
+
+
+def _pin_catalog() -> dict:
+    """Production-like roles: qwen cannot critic, only nemotron synthesizes."""
+    return {
+        "pa": [
+            {
+                "id": "pa-20b",
+                "family": "gpt-oss",
+                "roles": ["solver", "critic", "planner"],
+            }
+        ],
+        "pb": [{"id": "pb-qwen", "family": "qwen", "roles": ["solver", "researcher"]}],
+        "pc": [
+            {
+                "id": "pc-nemo",
+                "family": "nemotron",
+                "roles": ["solver", "critic", "synthesizer"],
+            }
+        ],
+    }
+
+
+def _pin_keys() -> dict:
+    return {"pa": "k1", "pb": "k2", "pc": "k3"}
+
+
+def test_normalize_allowed_families() -> None:
+    from src.providers.router import normalize_allowed_families
+
+    assert normalize_allowed_families(None) is None
+    assert normalize_allowed_families([]) is None
+    assert normalize_allowed_families([" qwen ", "gpt-oss", "qwen", ""]) == [
+        "gpt-oss",
+        "qwen",
+    ]
+
+
+def test_pins_constrain_team_to_allowed_families(tmp_path) -> None:
+    router, _ = _router(tmp_path, _pin_catalog(), _pin_keys())
+    routing = router.route_team(
+        _team("solver", "researcher", "critic"),
+        allowed_families=["gpt-oss", "qwen", "nemotron"],
+    )
+    assert {d.family for d in routing.decisions} <= {"gpt-oss", "qwen", "nemotron"}
+
+
+def test_pins_raise_when_critic_infeasible(tmp_path) -> None:
+    """Pins {gpt-oss, qwen}: solver takes gpt-oss, qwen cannot critic."""
+    from src.providers.router import PinViolationError
+
+    router, _ = _router(tmp_path, _pin_catalog(), _pin_keys())
+    with pytest.raises(PinViolationError, match="critic"):
+        router.route_team(
+            _team("solver", "critic"), allowed_families=["gpt-oss", "qwen"]
+        )
+
+
+def test_pins_raise_for_role_without_pinned_model(tmp_path) -> None:
+    from src.providers.router import PinViolationError
+
+    router, _ = _router(tmp_path, _pin_catalog(), _pin_keys())
+    with pytest.raises(PinViolationError, match="synthesizer"):
+        router.route("synthesizer", allowed_families=["qwen"])
+
+
+def test_route_single_respects_pins(tmp_path) -> None:
+    from src.providers.router import PinViolationError
+
+    router, _ = _router(tmp_path, _pin_catalog(), _pin_keys())
+    decision = router.route("solver", allowed_families=["qwen"])
+    assert decision.family == "qwen"
+    with pytest.raises(PinViolationError, match="solver"):
+        router.route("solver", allowed_families=["no-such-family"])
+
+
+def test_route_for_planning_respects_pins(tmp_path) -> None:
+    from src.providers.router import PinViolationError
+
+    router, _ = _router(tmp_path, _pin_catalog(), _pin_keys())
+    decision = router.route_for_planning(allowed_families=["gpt-oss"])
+    assert decision.family == "gpt-oss"
+    with pytest.raises(PinViolationError, match="planner"):
+        router.route_for_planning(allowed_families=["qwen"])
+
+
+def test_prefer_provider_outside_pins_ignored(tmp_path) -> None:
+    router, _ = _router(tmp_path, _pin_catalog(), _pin_keys())
+    decision = router.route("solver", prefer_provider="pa", allowed_families=["qwen"])
+    assert decision.family == "qwen"
+
+
+def test_unpinned_routing_unchanged_by_pins(tmp_path) -> None:
+    """No pins → legacy behavior (last-resort and global warnings intact)."""
+    router, _ = _router(tmp_path, _pin_catalog(), _pin_keys())
+    routing = router.route_team(_team("solver", "critic"))
+    assert [d.family for d in routing.decisions] == ["gpt-oss", "nemotron"]
+
+
+def test_last_resort_warning_survives_pin_edits(tmp_path) -> None:
+    """A role with no catalog model still warns (no silent last-resort)."""
+    providers = {
+        "pa": [
+            {
+                "id": "pa-fast",
+                "family": "gpt-oss",
+                "roles": ["solver", "critic", "planner"],
+            }
+        ]
+    }
+    router, _ = _router(tmp_path, providers, {"pa": "k1"})
+    routing = router.route_team(_team("researcher"))
+    assert len(routing.decisions) == 1
+    assert any("No usable researcher model" in w for w in routing.warnings)

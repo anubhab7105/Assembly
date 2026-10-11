@@ -115,6 +115,40 @@ class DiversityGateResponse(BaseModel):
     reasons: list[str] = []
 
 
+class PinViolationError(RuntimeError):
+    """A pinned family set cannot serve a role (bench integrity).
+
+    Raised (never silently substituted) when `allowed_families` leaves a
+    role with zero usable candidates — e.g. pins without a critic-eligible
+    family outside the solver families. Callers that must never crash
+    (planner) fall back to a no-LLM path; callers that must stay honest
+    (bench) record the violation.
+    """
+
+
+def normalize_allowed_families(
+    allowed_families: list[str] | tuple[str, ...] | set[str] | None,
+) -> list[str] | None:
+    """Clean a family pin list: strip, drop empties, sort. None stays None."""
+    if allowed_families is None:
+        return None
+    cleaned = sorted({str(fam).strip() for fam in allowed_families if str(fam).strip()})
+    return cleaned or None
+
+
+def pin_error_for_role(role: str, allowed: list[str]) -> PinViolationError:
+    """Loud, actionable error for an unservable pinned role."""
+    hint = ""
+    if role == "critic":
+        hint = (
+            " Pins need a critic-eligible family outside the solver families "
+            "(the critic must review from a different family)."
+        )
+    return PinViolationError(
+        f"No usable {role} model in pinned families ({', '.join(allowed)})." + hint
+    )
+
+
 class ModelRouter:
     """
     Family-aware model selection engine.
@@ -356,12 +390,18 @@ class ModelRouter:
         return candidates
 
     def _candidates(
-        self, role: str, time_budget_minutes: int = 5
+        self,
+        role: str,
+        time_budget_minutes: int = 5,
+        allowed_families: list[str] | None = None,
     ) -> list[tuple[str, str, str]]:
         """Usable candidates: live, role-matching, unexhausted, affordable.
 
         Falls back to ignoring affordability (fail-open) when nothing can
-        afford the budget — a thin quota beats no team at all.
+        afford the budget — a thin quota beats no team at all. When
+        `allowed_families` is set, only those families are candidates;
+        an empty pin-filtered pool is returned as-is so the caller can
+        raise PinViolationError instead of substituting silently.
         """
         affordable = self._affordable(time_budget_minutes)
         usable = [
@@ -369,6 +409,8 @@ class ModelRouter:
             for pid, mid, fam in self._role_models(role)
             if self._usable_model(pid, mid) and affordable.get(pid, True)
         ]
+        if allowed_families is not None:
+            usable = [c for c in usable if c[2] in allowed_families]
         if usable:
             return usable
         fallback = [
@@ -376,6 +418,8 @@ class ModelRouter:
             for pid, mid, fam in self._role_models(role)
             if self._usable_model(pid, mid)
         ]
+        if allowed_families is not None:
+            fallback = [c for c in fallback if c[2] in allowed_families]
         if fallback:
             logger.warning(
                 f"Router  │ no provider can afford {role} on this budget; proceeding fail-open"
@@ -519,6 +563,7 @@ class ModelRouter:
         problem_type: str = "general",
         complexity: str = "medium",
         time_budget_minutes: int = 5,
+        allowed_families: list[str] | None = None,
     ) -> TeamRouting:
         """Route a whole team with family-diversity guarantees.
 
@@ -526,8 +571,12 @@ class ModelRouter:
         - The critic avoids every solver family (it reviews those positions).
         - Other roles spread across unused families, then reuse.
         - 2 available families → proceed with a warning; 1 → degraded flag.
+        - `allowed_families` (bench pins) constrains every assignment to
+          those families; a role with zero pinned candidates raises
+          PinViolationError instead of substituting silently.
         """
         self._enforce_minimum()
+        allowed = normalize_allowed_families(allowed_families)
         specs = [
             {
                 "agent_type": member.get("agent_type", "solver"),
@@ -563,14 +612,24 @@ class ModelRouter:
         for index in order:
             agent_type = specs[index]["agent_type"]
             forbid = set(solver_families) if agent_type == "critic" else set()
-            candidates = self._candidates(agent_type, time_budget_minutes)
+            candidates = self._candidates(agent_type, time_budget_minutes, allowed)
             decision = self._pick(agent_type, candidates, used_families, forbid)
             if decision is None:
+                if allowed is not None:
+                    raise pin_error_for_role(agent_type, allowed)
                 decision = self._last_resort(agent_type)
                 warnings.append(
                     f"No usable {agent_type} model available; "
                     f"fell back to {decision.provider_name}/{decision.model}."
                 )
+            elif (
+                allowed is not None
+                and agent_type == "critic"
+                and decision.family in forbid
+            ):
+                # Same-family critic stays inside the pins but destroys the
+                # independence the pins are meant to guarantee — fail loud.
+                raise pin_error_for_role(agent_type, allowed)
             by_index[index] = decision
             used_families.append(decision.family)
             if agent_type == "solver":
@@ -701,6 +760,7 @@ class ModelRouter:
         complexity: str = "medium",
         time_budget_minutes: int = 5,
         prefer_provider: str | None = None,
+        allowed_families: list[str] | None = None,
     ) -> RoutingDecision:
         """
         Route a single agent to the best available model for its role.
@@ -709,9 +769,11 @@ class ModelRouter:
         requested live provider is honored when it offers the role and is
         usable, else routing falls through to team-order candidates.
         Prefer route_team() whenever a team is formed — only it can enforce
-        family diversity.
+        family diversity. `allowed_families` (bench pins) constrains the
+        choice; no pinned candidate raises PinViolationError.
         """
         self._enforce_minimum()
+        allowed = normalize_allowed_families(allowed_families)
 
         if (
             prefer_provider
@@ -723,11 +785,13 @@ class ModelRouter:
                 (m for m in spec.models if agent_type in m.roles),
                 spec.models[0] if spec.models else None,
             )
-            if model is not None:
+            if (
+                model is not None
+                and (allowed is None or model.family in allowed)
+                and self._usable_model(prefer_provider, model.id)
+            ):
                 affordable = self._affordable(time_budget_minutes)
-                if affordable.get(prefer_provider, True) and self._usable_model(
-                    prefer_provider, model.id
-                ):
+                if affordable.get(prefer_provider, True):
                     return RoutingDecision(
                         provider=self._providers[prefer_provider],
                         model=model.id,
@@ -737,7 +801,7 @@ class ModelRouter:
                         reason=f"requested provider offers {agent_type}",
                     )
 
-        candidates = self._candidates(agent_type, time_budget_minutes)
+        candidates = self._candidates(agent_type, time_budget_minutes, allowed)
         if candidates:
             provider_id, model_id, family = candidates[0]
             return RoutingDecision(
@@ -748,14 +812,19 @@ class ModelRouter:
                 role=agent_type,
                 reason=f"first usable {agent_type} model in catalog order",
             )
+        if allowed is not None:
+            raise pin_error_for_role(agent_type, allowed)
         decision = self._last_resort(agent_type)
         logger.warning(f"Router  │ {decision.reason} for {agent_type}")
         return decision
 
-    def route_for_planning(self) -> RoutingDecision:
+    def route_for_planning(
+        self, allowed_families: list[str] | None = None
+    ) -> RoutingDecision:
         """Route specifically for the Planner (cheap classification call)."""
         self._enforce_minimum()
-        candidates = self._candidates("planner")
+        allowed = normalize_allowed_families(allowed_families)
+        candidates = self._candidates("planner", allowed_families=allowed)
         if candidates:
             provider_id, model_id, family = candidates[0]
             return RoutingDecision(
@@ -766,6 +835,8 @@ class ModelRouter:
                 role="planner",
                 reason="first usable planner model in catalog order",
             )
+        if allowed is not None:
+            raise pin_error_for_role("planner", allowed)
         decision = self._last_resort("planner")
         logger.warning(f"Router  │ {decision.reason} for planner")
         return decision

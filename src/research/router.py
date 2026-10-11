@@ -18,8 +18,6 @@ Cache: per-router in-memory dict keyed on
 are cached, so a total-failure query may be retried later in the run.
 """
 
-import httpx
-
 from src.core.logging_config import logger
 from src.orchestration.budget_controller import BudgetController
 from src.research.providers import (
@@ -199,10 +197,17 @@ class SearchRouter:
                 attempted = True
                 logger.warning(f"Search  │ Quota out, falling back ({e})")
                 continue
-            except (SearchProviderError, httpx.HTTPError) as e:
+            except SearchProviderError as e:
                 attempted = True
                 logger.warning(
                     f"Search  │ {provider.provider_name} failed "
+                    f"({type(e).__name__}: {e}); falling back"
+                )
+                continue
+            except Exception as e:  # noqa: BLE001 — total failure returns [], never raises
+                attempted = True
+                logger.warning(
+                    f"Search  │ {provider.provider_name} failed unexpectedly "
                     f"({type(e).__name__}); falling back"
                 )
                 continue

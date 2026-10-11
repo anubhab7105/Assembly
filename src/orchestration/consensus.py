@@ -211,7 +211,10 @@ class ConsensusEngine:
         logger.info(
             f"Consensus │ Round {round_number}: score={score:.0%}, "
             f"decision={decision}, agreements={report.agreement_count}, "
-            f"disagreements={report.disagreement_count}"
+            f"disagreements={report.disagreement_count}, "
+            f"factors=(agree={agreement:.2f} conf={calibrated_conf:.2f} "
+            f"evid={evidence_quality:.2f} contra={contradiction_ratio:.2f} "
+            f"stab={stability:.2f})"
         )
         return report
 

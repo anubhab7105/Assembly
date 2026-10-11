@@ -148,6 +148,7 @@ class BaseAgent:
         router: Any = None,
         routing: Any = None,
         family: str = "",
+        allowed_families: list[str] | tuple[str, ...] | set[str] | None = None,
     ):
         self.agent_id = agent_id
         self.provider = provider
@@ -158,6 +159,16 @@ class BaseAgent:
         self._router = router
         self._routing = routing
         self.family = family
+        # Bench family pins: validation-error retries never leave these
+        # families (None = unconstrained). Kept local (not imported from
+        # the router module) so this leaf module stays import-cycle free.
+        if allowed_families is None:
+            self._allowed_families: list[str] | None = None
+        else:
+            cleaned = sorted(
+                {str(f).strip() for f in allowed_families if str(f).strip()}
+            )
+            self._allowed_families = cleaned or None
 
     def build_system_prompt(self) -> str:
         """Build the system prompt for this agent type. Override in subclasses."""
@@ -301,18 +312,48 @@ class BaseAgent:
         """Ask the router for another family, or None if unavailable.
 
         Fail-open: routers without fallback_for (e.g. test doubles) simply
-        yield no fallback and the validation error propagates.
+        yield no fallback and the validation error propagates. Under bench
+        family pins, outside-pin candidates are walked past (bounded chain)
+        so the retry never selects an out-of-pin model in the first place;
+        None means "stay on this model or degrade", never "substitute".
         """
         router = self._router
         routing = self._routing
         fallback_for = getattr(router, "fallback_for", None)
         if router is None or routing is None or not callable(fallback_for):
             return None
-        try:
-            return fallback_for(routing, error)
-        except Exception as e:  # noqa: BLE001 — fallback routing must not kill the run
-            logger.warning(f"Agent   │ {self.agent_id} — fallback routing failed: {e}")
-            return None
+        allowed = self._allowed_families
+        current = routing
+        seen: set[tuple[str, str]] = set()
+        for _ in range(3):
+            try:
+                candidate = fallback_for(current, error)
+            except Exception as e:  # noqa: BLE001 — fallback routing must not kill the run
+                logger.warning(
+                    f"Agent   │ {self.agent_id} — fallback routing failed: {e}"
+                )
+                return None
+            if candidate is None:
+                return None
+            pair = (
+                str(getattr(candidate, "provider_name", "")),
+                str(getattr(candidate, "model", "")),
+            )
+            if pair in seen:
+                return None
+            seen.add(pair)
+            if (
+                allowed is not None
+                and str(getattr(candidate, "family", "")) not in allowed
+            ):
+                logger.info(
+                    f"Agent   │ {self.agent_id} — fallback family outside "
+                    f"pins ({', '.join(allowed)}); trying the next fallback"
+                )
+                current = candidate
+                continue
+            return candidate
+        return None
 
     @staticmethod
     def _valid_ids_from_context(

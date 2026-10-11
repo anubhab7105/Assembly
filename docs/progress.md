@@ -487,3 +487,35 @@
 - `pilot-single` (groq gpt-oss-20b): 5/5 answered, 0 failed, 5 calls, 1702 tokens, 61.9 s; graded 5/5 mean 1.000, 0 judge calls.
 - `pilot-vote` ABANDONED: OpenRouter gemma 429 every call, 60 s sleeps (N-02); vote is Optional per WORKFLOW.
 - `pilot-assembly` launched (tier 3, `--pin-families gpt-oss,qwen`, groq-only, background). Grade + comparison pending its completion. Pilot results are UNVERIFIED loop-proofs, never slide numbers.
+
+## 2026-10-12 — Four-task grind (pins, research, providers, consensus)
+
+- Task 1 DONE: pin enforcement end-to-end (router `PinViolationError` + allowlist on route_team/route/route_for_planning; manager fallback walk; planner zero-call fallback; orchestrator threading + re-raise; bench up-front `validate_pins` + structural fast-abort; replay compat). 15 new tests; suites green: routing+bench-assembly 37, planner+agents 89, research+agents 51, consensus 23, stagnation+composer 32, provider/quota/diversity/capacity/key/verify/setup 97+38. Ruff check clean on touched files (remaining flags pre-existing on untouched lines). Live 1-question pin verification (`gpt-oss,qwen,nemotron`) running in background.
+- Task 2 DONE: search router never-raises hardened + error detail in fallback warnings; synthesizer no-invent-citations rule (empty-search runs now honest via composer's existing "No external sources" path).
+- Task 3 DONE: gemini re-probe (list 200/50 models; probe 503, no headers → nothing to fill); disable-tried-and-reverted (12 test failures + hidden setup/Test); gemini stays enabled with dated note; nvidia disabled (no key; zero test impact). Re-enable paths in `models.yaml`.
+- Task 4 DONE: no scoring change (as-designed; reproduced 0.579 offline ≈ live); factor breakdown added to consensus logs; tuning deferred to `bench/analyze.py` with real numbers.
+- Pending: background full suite (mock-only) + old pilot-assembly (pre-fix code) + pin verification run; grade pilot-assembly vs single when jobs land.
+
+## 2026-10-12 — Verification: pins enforced live, search diagnosed
+
+- `pilot-pins-verify` (code-01, tier 3, pins gpt-oss/qwen/nemotron): validation passed up front; team solver→gpt-oss, critic→nemotron, researcher→qwen, synthesizer→gpt-oss, planner→gpt-oss — zero outside-pin calls, no violation, no retries, 26.6 s, 5 calls. Graded correct (assembly 1/0/0). Task 1 proven live.
+- Search diagnosis (Task 2): new error-detail logs identified every failure — Wikipedia HTTP 403 for any UA ("respect our robot policy", IP-level bot filtering; probed directly, must not be evaded), arXiv HTTP 500 transient (re-probe: 200, code fine), Semantic Scholar 429 rate limit, DuckDuckGo 0 results on long queries. All environmental; fallback chain is the correct handling. No provider code bug.
+- Consensus factor log verified live: `factors=(agree=0.33 conf=0.92 evid=0.78 contra=0.00 stab=0.00)` → 63%, matching the offline reconstruction. Task 4 closed with data.
+
+## 2026-10-12 — Pin audit close-out (prevention, not detection)
+
+- Audited all 12 routing/selection paths: 4 bypasses found and closed (agent validation retry, synthesizer transport retry, planner validation retry, retry-agent rebuild). Critic selection, adversarial strikes, debate rounds use existing in-pin agents (no routing); `_last_resort`/prefer paths guarded; web model-pins orthogonal.
+- Suites green: bench-assembly+routing+planner+agents 94, routing/bench/planner/agents/consensus/e2e/circuit/replay/preflight/roles/stagnation/composer 204. Ruff check clean on touched files (remaining flags pre-existing on untouched lines).
+- 19 prevention-proof tests total: pins constrain teams/singles/planner/synthesizer/fallbacks with zero out-of-pin calls asserted (not just violation detection).
+- Still uncommitted per instruction; Phase 3 not started.
+
+## 2026-10-12 — Fresh-run verification + planner-timeout fix, then commit
+
+- Fresh pinned run (`pilot-pins-fresh`, correct pins): zero pin violations; code-01 ok 63%, logic-01 ok 78% (with a real round-2 debate 58→78%); logic-02/ms-02/ms-01 FAILED on hung Groq planner calls (15 s bound, empty `TimeoutError`) — fixed via orchestrator TimeoutError→heuristic fallback (contract-restoring, cancellation-safe) + regression test.
+- Structural run (`pilot-pins-structural`, bad pins): PinViolation in 1.5 s, 0 team calls, no retries — no-sleep abort proven.
+- Full mock suite re-run as commit gate; results/CSV artifacts stay out of the commit.
+
+## 2026-10-12 — Commit gate green, changes committed
+
+- Full suite on final code: 458 + 86 = 544 passed, 1 skipped (live-excluded) across all 41 test files, in two foreground chunks (background runner kept dying with Shell.NotFoundError).
+- Committed code+tests+docs+config only (results JSONLs/CSVs, `.local/` scratch stay out).
