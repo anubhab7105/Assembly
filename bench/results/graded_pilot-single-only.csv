@@ -1,0 +1,6 @@
+run_id,system,question_id,category,answer_type,difficulty,score,max_score,correct,judge_label,judge_provider,judge_model,judge_family,judge_warning,rationale,criteria_json,manual_spot_check,answer_excerpt,live,verification_status
+pilot-single,single,code-01,coding,exact,medium,1.0,1.0,True,,,,,,normalized exact match,,False,```python def reverse_int(x: int) -> int:     INT_MAX = 2**31 - 1     INT_MIN = -2**31      sign = -1 if x < 0 else 1     x_abs = abs(x)     rev = 0      while x_abs:         pop = x_abs % 10         x_abs //= 10          # Check for overflow before multiplying by 10         if rev > INT_MAX // 10 o,True,verified
+pilot-single,single,logic-02,logic_reasoning,exact,easy,1.0,1.0,True,,,,,,normalized exact match,,False,29,True,verified
+pilot-single,single,ms-02,math_science,numeric,medium,1.0,1.0,True,,,,,,0.0 matches 0.0,,False,0,True,verified
+pilot-single,single,ms-01,math_science,numeric,medium,1.0,1.0,True,,,,,,80.0 matches 80.0,,False,80 km/h,True,verified
+pilot-single,single,logic-01,logic_reasoning,exact,easy,1.0,1.0,True,,,,,,normalized exact match,,False,5,True,verified
