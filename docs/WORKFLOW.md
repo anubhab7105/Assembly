@@ -307,3 +307,4 @@ Grading rules: shuffle and hide system names; auto-check answers where possible;
 - [ ] Benchmark slide ready
 - [ ] Backup: laptop charger, offline copy of slides, phone hotspot
 - [ ] One-sentence pitch memorized: *"Ask once; a temporary expert team solves, challenges and verifies until the answer is strong enough."*
+
