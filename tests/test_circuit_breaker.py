@@ -519,11 +519,11 @@ def _plan_with_researcher() -> dict:
 
 
 async def test_run_with_failing_researcher_reports_reduced_research() -> None:
-    from tests.conftest import MockRouter
+    from tests.conftest import MockAssignment, MockRouter
 
     providers = [
         MockProvider(provider_name="mock-a", always_fail={"researcher": "rate_limit"}),
-        MockProvider(provider_name="mock-b"),
+        MockProvider(provider_name="mock-b", always_fail={"researcher": "rate_limit"}),
         MockProvider(provider_name="mock-c"),
     ]
     scripts = dict(MockProvider()._scripts)
@@ -531,6 +531,23 @@ async def test_run_with_failing_researcher_reports_reduced_research() -> None:
     for provider in providers:
         provider._scripts = dict(scripts)
     router = MockRouter(providers)
+
+    def _fallback(current: object, error: Exception) -> object | None:
+        # FR-5 skips debate when there is no open disagreement, so the
+        # breaker must trip during solve-phase retry (not via a debate
+        # second failure). mock-a and mock-b share model "mock-model",
+        # so two failures on ("mock-model", "researcher") trip at threshold 2.
+        if getattr(current, "provider_name", "") == "mock-a":
+            pb = providers[1]
+            return MockAssignment(
+                provider=pb,
+                model=pb.get_available_models()[0],
+                provider_name="mock-b",
+                role="researcher",
+            )
+        return None
+
+    router.fallback_for = _fallback  # type: ignore[attr-defined]
     orch = Orchestrator()
     orch.router = router
 
