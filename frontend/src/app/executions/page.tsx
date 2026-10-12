@@ -94,7 +94,7 @@ function ExecutionContent() {
       {state.status === "cancelled" && (
         <div className="bg-warning-subtle text-warning px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2">
           <WifiOff className="size-4" />
-          This run ended before completing — it was cancelled when the page closed or the connection dropped.
+          This run ended before completing. It was cancelled when the page closed or the connection dropped.
         </div>
       )}
       {failedBanner && (
@@ -103,7 +103,7 @@ function ExecutionContent() {
           className="bg-danger-subtle text-danger px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2"
         >
           <XCircle className="size-4" />
-          This run failed before producing an answer — check your provider keys and quota, then start a new run.
+          This run failed before producing an answer. Check your provider keys and quota, then start a new run.
         </div>
       )}
 
@@ -213,7 +213,7 @@ function ExecutionContent() {
                   {failedBanner ? (
                     <>
                       <XCircle className="size-12" />
-                      <span className="text-sm">No consensus — the run failed.</span>
+                      <span className="text-sm">No consensus. The run failed.</span>
                     </>
                   ) : (
                     <>
@@ -262,9 +262,9 @@ function ExecutionContent() {
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-10">
                   {failedBanner
-                    ? "This run failed before a team formed — no agents to show."
+                    ? "This run failed before a team formed. No agents to show."
                     : terminal && (state.summary?.agentCount ?? 0) > 0
-                      ? `Team disbanded — ${state.summary?.agentCount} agents served this run.`
+                      ? `Team disbanded. ${state.summary?.agentCount} agents served this run.`
                       : "Forming temporary team..."}
                 </div>
               )}
@@ -292,7 +292,7 @@ function ExecutionContent() {
             <CardContent className="p-0">
               <div className="divide-y divide-border max-h-64 overflow-y-auto">
                 {state.disagreements.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-muted-foreground">No conflicts detected yet.</div>
+                  <div className="p-6 text-center text-sm text-muted-foreground">No disagreements so far. New conflicts show here.</div>
                 ) : (
                   state.disagreements.map((d) => (
                     <div key={d.id} className="p-4 flex gap-3 items-start hover:bg-muted/30 transition-colors">
@@ -327,7 +327,7 @@ function ExecutionContent() {
             <CardContent className="p-0">
               <div className="divide-y divide-border max-h-64 overflow-y-auto">
                 {state.sources.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-muted-foreground">No external sources cited yet.</div>
+                  <div className="p-6 text-center text-sm text-muted-foreground">No sources cited in this run.</div>
                 ) : (
                   state.sources.map((s, index) => (
                     <a 

@@ -7,30 +7,29 @@ export default function NotFound() {
         404
       </p>
       <h1 className="mt-4 text-4xl font-bold tracking-tight">
-        This page could not be found
+        That page does not exist
       </h1>
       <p className="mt-4 max-w-md text-muted-foreground">
-        The page you asked for does not exist. Start a new investigation or
-        configure your API keys instead.
+        Wrong turn. Your next verified answer is one click away.
       </p>
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <Link
-          href="/"
+          href="/chat"
           className="inline-flex h-11 items-center rounded-xl bg-brand px-6 font-semibold text-brand-foreground"
         >
-          Back to home
+          Run my first question
         </Link>
         <Link
-          href="/chat"
+          href="/"
           className="inline-flex h-11 items-center rounded-xl border border-border bg-card px-6 font-semibold"
         >
-          Ask a question
+          Back to home
         </Link>
         <Link
           href="/settings"
           className="inline-flex h-11 items-center rounded-xl border border-border bg-card px-6 font-semibold"
         >
-          Configure keys
+          Add my free keys
         </Link>
       </div>
     </div>

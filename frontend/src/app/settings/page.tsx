@@ -39,10 +39,9 @@ export default function SetupPage() {
               <Shield className="size-5" />
             </span>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Initial Setup</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">Add your free keys</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Configure your Bring-Your-Own-Key (BYOK) providers.
-                Assembly requires at least 3 model families for effective debate.
+                Paste two free keys. Get answers from three or more model families.
               </p>
             </div>
           </div>

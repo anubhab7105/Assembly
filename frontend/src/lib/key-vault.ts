@@ -143,8 +143,8 @@ export class KeyVault {
   async setKey(provider: string, key: string): Promise<void> {
     const p = (provider || "").trim()
     const k = (key || "").trim()
-    if (!p) throw new Error("Unknown provider — nothing was saved.")
-    if (!k) throw new Error("Empty key — nothing was saved.")
+    if (!p) throw new Error("Unknown provider. Nothing was saved.")
+    if (!k) throw new Error("Empty key. Nothing was saved.")
     await this.ensureLoaded()
     const merged = await this.enqueue(async () => {
       const cur = await this.readCanonical()
@@ -234,7 +234,7 @@ export class KeyVault {
       if (!isKeysRecord(parsed)) throw new Error("bad shape")
       decrypted = { ...parsed }
     } catch {
-      throw new Error("Wrong passphrase — nothing was deleted. Try again or use Clear all keys.")
+      throw new Error("Wrong passphrase. Nothing was deleted. Try again or use Clear all keys.")
     }
     await this.ensureLoaded()
     const merged = await this.enqueue(async () => {

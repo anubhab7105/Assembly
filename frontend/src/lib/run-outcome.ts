@@ -33,7 +33,7 @@ export function failureMessage(args: {
   }
   return (
     `Run ${args.status}${stage}${code}. ` +
-    "Check your provider keys and quota, then try again. " +
+    "Check your provider keys and quota, then run it again. " +
     "The failed run was saved to history without an answer."
   )
 }

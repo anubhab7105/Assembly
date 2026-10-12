@@ -161,7 +161,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             <p className="mx-auto mt-1 max-w-56 text-xs text-muted-foreground">
               {search
                 ? "Try a different search term."
-                : "Ask your first question and the team will appear here."}
+                : "Your first cited answer is 3 minutes away."}
             </p>
             {!search && (
               <Button
@@ -171,7 +171,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                 onClick={() => { router.push("/chat"); if (onClose) onClose() }}
               >
                 <Plus className="size-4 mr-2" />
-                Ask a question
+                Run my first question
               </Button>
             )}
           </div>

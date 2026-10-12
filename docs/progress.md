@@ -573,3 +573,10 @@
 - Console: gated layout-wrapper/use-execution/error-boundary logs to non-prod. Source maps already off (default).
 - Footer: fixed portfolio typo, added clickable mailto anubhab7105@gmail.com. robots/sitemap force-static (build green). Removed unused zod + template SVGs.
 - Verified: tsc clean, eslint clean on touched files, next build green, robots/sitemap served, Playwright overflow=0 at 360/390/768/1280, vitest 56 passed.
+
+## 2026-10-12 — Copy rewrite for one buyer (technical skeptic with free keys)
+
+- Landing: new H1 "Stop trusting one model with hard questions.", support line with 3+ families and 3 to 15 minutes, primary CTA "Run my first question", objection line under CTA (no account, keys in browser, first progress in seconds). Removed "measurably better" (unsupported) and fabricated orbit labels (ChatGPT/Claude/Grok/Midjourney/DALL-E/Copilot/Cohere/Perplexity replaced with real families Gemini/GPT-OSS/Qwen/Gemma/Nemotron plus real roles Solver/Critic/Researcher/Verifier/Synthesizer).
+- Steps rewritten benefit first; section heads specific ("One answer you can check", "Worried? Read this"). FAQ rewritten to buyer objections with matching FAQPage schema.
+- Chat: H1 "Ask one hard question", CTA "Run my question", placeholder rewritten. Settings H1 "Add your free keys". 404, error boundary, empty states, key toasts, run banners rewritten. All user-facing em dashes removed. Meta titles/descriptions rewritten per page.
+- Verified: tsc clean, eslint clean on touched files, next build green, targeted vitest 24 passed (key-setup test made case-insensitive).
