@@ -28,9 +28,13 @@ class MockWebSocket {
   }
 }
 
+type GlobalWithMockSocket = typeof globalThis & { mockWs?: MockWebSocket }
+
 /** Latest mock socket without `any` casts. */
 function mockSocket(): MockWebSocket {
-  return (globalThis as unknown as Record<string, MockWebSocket>).mockWs
+  const socket = (globalThis as GlobalWithMockSocket).mockWs
+  if (!socket) throw new Error("Expected mock WebSocket to be created")
+  return socket
 }
 
 vi.mock("@/lib/env", () => ({
@@ -49,13 +53,13 @@ describe("useExecution hook", () => {
 
   beforeEach(() => {
     originalWebSocket = globalThis.WebSocket
-    globalThis.WebSocket = MockWebSocket as any
+    globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
     vi.useFakeTimers()
   })
 
   afterEach(() => {
     globalThis.WebSocket = originalWebSocket
-    delete (globalThis as any).mockWs
+    delete (globalThis as GlobalWithMockSocket).mockWs
     vi.restoreAllMocks()
     vi.clearAllMocks()
   })
@@ -69,7 +73,7 @@ describe("useExecution hook", () => {
   it("connects to websocket and updates state on team.ready", () => {
     const { result } = renderHook(() => useExecution("exec_123"))
 
-    const mockWs = (globalThis as any).mockWs as MockWebSocket
+    const mockWs = mockSocket()
     expect(mockWs).toBeDefined()
     expect(mockWs.url).toContain("ws://localhost:8000/api/executions/ws/exec_123")
 
@@ -93,7 +97,7 @@ describe("useExecution hook", () => {
 
   it("handles out-of-order/duplicate events (seq filtering)", () => {
     const { result } = renderHook(() => useExecution("exec_123"))
-    const mockWs = (globalThis as any).mockWs as MockWebSocket
+    const mockWs = mockSocket()
 
     act(() => {
       mockWs.mockMessage({
@@ -144,7 +148,7 @@ describe("useExecution hook", () => {
     })
     expect(result.current.finalAnswer).toBe("Stored answer")
     // No websocket for local runs.
-    expect((globalThis as any).mockWs).toBeUndefined()
+    expect((globalThis as GlobalWithMockSocket).mockWs).toBeUndefined()
   })
 
   it("maps backend wire names on execution.completed (answer/confidence_label)", () => {
