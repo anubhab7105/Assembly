@@ -328,19 +328,19 @@ export default function Home() {
             <Zap className="size-8" />
           </div>
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Assembly
+            Ask one hard question
           </h1>
           <p className="text-lg text-muted-foreground mx-auto max-w-xl">
-            Turn one question into a temporary team of AI agents that reason, debate, and verify to find the best answer.
+            Get back one answer that survived a debate. Pick your time, run it, keep the sources.
           </p>
         </div>
 
         {!hasKeys && (
           <div className="rounded-xl border border-warning/30 bg-warning-subtle p-4 flex items-center justify-between gap-4">
-            <p className="text-sm text-warning">Add provider keys first — runs use your keys, never a server account.</p>
+            <p className="text-sm text-warning">Runs need your keys first. Two free providers is enough.</p>
             <Button variant="outline" size="sm" onClick={() => router.push("/settings")}>
               <Settings className="size-4 mr-2" />
-              Configure Keys
+              Add my free keys
             </Button>
           </div>
         )}
@@ -367,7 +367,7 @@ export default function Home() {
               ref={textareaRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="What do you want the team to research?"
+              placeholder="Paste the question you would not trust to one model"
               aria-describedby="question-status"
               className="w-full resize-none bg-transparent px-4 pt-3 pb-16 text-base text-foreground placeholder:text-muted-foreground focus:outline-none sm:pb-12"
               rows={2}
@@ -396,7 +396,7 @@ export default function Home() {
               </div>
               <Button size="sm" onClick={handleLaunch} disabled={loading || !question.trim() || gate.level === "BLOCKED"} className="shrink-0 min-h-11 rounded-lg">
                 {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="size-4 mr-1.5" />}
-                Launch Team
+                Run my question
               </Button>
             </div>
           </div>

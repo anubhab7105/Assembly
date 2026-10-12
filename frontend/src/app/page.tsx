@@ -1,45 +1,37 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Bot,
   Brain,
   CheckCircle2,
   Code,
   Compass,
   Cpu,
   GitBranch,
-  Image as ImageIcon,
   MessageSquare,
-  Palette,
   Search,
   Sparkles,
   Users,
-  Wind,
   Zap,
 } from "lucide-react"
 
 const agents = [
-  { icon: Bot, label: "ChatGPT", role: "Synthesizer", color: "#10A37F" },
-  { icon: Cpu, label: "Claude", role: "Analyst", color: "#D97706" },
-  { icon: Sparkles, label: "Gemini", role: "Reasoner", color: "#4285F4" },
-  { icon: CheckCircle2, label: "DeepSeek", role: "Verifier", color: "#2563EB" },
-  { icon: GitBranch, label: "Llama", role: "Critic", color: "#8B5CF6" },
-  { icon: Wind, label: "Mistral", role: "Strategist", color: "#F97316" },
-  { icon: Search, label: "Qwen", role: "Researcher", color: "#059669" },
-  { icon: Compass, label: "Grok", role: "Explorer", color: "#E11D48" },
-  { icon: Brain, label: "Perplexity", role: "Searcher", color: "#14B8A6" },
-  { icon: Code, label: "Copilot", role: "Assistant", color: "#10B981" },
-  { icon: ImageIcon, label: "Midjourney", role: "Artist", color: "#EC4899" },
-  { icon: MessageSquare, label: "Cohere", role: "Generator", color: "#6366F1" },
-  { icon: Users, label: "Hugging Face", role: "Hub", color: "#FBBF24" },
-  { icon: Palette, label: "DALL-E", role: "Creator", color: "#F43F5E" },
+  { icon: Sparkles, label: "Gemini", role: "Family", color: "#4285F4" },
+  { icon: Code, label: "GPT-OSS", role: "Family", color: "#10B981" },
+  { icon: Search, label: "Qwen", role: "Family", color: "#059669" },
+  { icon: Cpu, label: "Gemma", role: "Family", color: "#D97706" },
+  { icon: Brain, label: "Nemotron", role: "Family", color: "#14B8A6" },
+  { icon: Zap, label: "Solver", role: "Role", color: "#E8A020" },
+  { icon: GitBranch, label: "Critic", role: "Role", color: "#8B5CF6" },
+  { icon: Compass, label: "Researcher", role: "Role", color: "#E11D48" },
+  { icon: CheckCircle2, label: "Verifier", role: "Role", color: "#2563EB" },
+  { icon: MessageSquare, label: "Synthesizer", role: "Role", color: "#6366F1" },
 ]
 
 const steps = [
-  { icon: Zap, title: "Ask", desc: "One question, a time budget, and your keys." },
-  { icon: Users, title: "Team forms", desc: "A planner assembles diverse agents across model families." },
-  { icon: GitBranch, title: "Debate", desc: "Agents reason independently, then cross-examine each other." },
-  { icon: Sparkles, title: "Consensus", desc: "A verifier checks sources, a critic stress-tests claims." },
+  { icon: Zap, title: "Ask once", desc: "Put the hard question in. Pick 3, 5, 10 or 15 minutes." },
+  { icon: Users, title: "Get a team", desc: "Agents from 3 or more model families take it separately." },
+  { icon: GitBranch, title: "Watch them argue", desc: "Each answer gets cross examined before it counts." },
+  { icon: Sparkles, title: "Keep one answer", desc: "Sources numbered. Confidence stated. Doubt flagged." },
 ]
 
 export default function LandingPage() {
@@ -73,34 +65,34 @@ export default function LandingPage() {
       mainEntity: [
         {
           "@type": "Question",
-          name: "Do I need an account to use Assembly?",
+          name: "Getting keys sounds like work. Is it?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "No. There are no accounts and no login. You add your own free provider API keys and run a question; nothing is stored on the server.",
+            text: "Ten minutes, once. Grab free keys from two providers, paste them in, done. No card, no account.",
           },
         },
         {
           "@type": "Question",
-          name: "Which API keys do I need?",
+          name: "Why not just ask one good model?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Free keys from at least two providers such as Gemini, Groq, OpenRouter or Hugging Face, covering three model families. Keys stay in your browser.",
+            text: "One model gives one confident guess. Assembly makes agents from different families argue first, so weak claims die before you read them.",
           },
         },
         {
           "@type": "Question",
-          name: "How long does a run take?",
+          name: "Do my keys or questions leave my machine?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "You pick 3, 5, 10 or 15 minutes. The time budget is a hard cutoff and the first progress event arrives within seconds.",
+            text: "Keys stay in your browser. Questions go to the model providers you chose, nothing is stored on our server.",
           },
         },
         {
           "@type": "Question",
-          name: "Is the final answer guaranteed correct?",
+          name: "Can I trust the final answer?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "No. Assembly returns one synthesised answer with numbered sources, a confidence statement and an uncertainty note when consensus is weak.",
+            text: "Trust it the way you trust a cited draft. Every answer lists numbered sources, a confidence level, and what stayed uncertain.",
           },
         },
       ],
@@ -142,7 +134,7 @@ export default function LandingPage() {
           href="/chat"
           className="group inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-all hover:border-brand hover:text-brand hover:shadow-lg hover:shadow-brand/10"
         >
-          Launch App
+          Run my first question
           <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
         </Link>
       </header>
@@ -153,19 +145,15 @@ export default function LandingPage() {
           <div className="flex flex-1 flex-col items-start text-left">
             <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-subtle px-4 py-1.5 text-xs font-medium text-brand">
               <Sparkles className="size-3.5" />
-              Multi-agent AI research
+              For skeptics with API keys
             </div>
 
             <h1 className="animate-fade-up mt-8 max-w-2xl text-5xl font-bold leading-[1.1] tracking-tight sm:text-7xl" style={{ animationDelay: "0.1s" }}>
-              One question.
-              <br />
-              <span className="bg-gradient-to-r from-brand via-[#e8a020] to-[#c8860a] bg-clip-text text-transparent">
-                A team of minds.
-              </span>
+              Stop trusting one model with hard questions.
             </h1>
 
             <p className="animate-fade-up mt-6 max-w-xl text-lg text-muted-foreground sm:text-xl" style={{ animationDelay: "0.2s" }}>
-              Assembly forms a temporary team of AI agents that reason independently, cross-examine, verify with live sources, and synthesise a single high-confidence answer.
+              Assembly runs your question past agents from 3 or more model families. You keep one sourced answer in 3 to 15 minutes.
             </p>
 
             <div className="animate-fade-up mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center" style={{ animationDelay: "0.3s" }}>
@@ -174,16 +162,19 @@ export default function LandingPage() {
                 className="group inline-flex h-12 items-center gap-2 rounded-xl bg-brand px-8 text-base font-semibold text-brand-foreground shadow-xl shadow-brand/30 transition-all hover:bg-brand-hover hover:shadow-2xl hover:shadow-brand/40 hover:-translate-y-0.5"
               >
                 <Zap className="size-5" />
-                Start Researching
+                Run my first question
                 <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
                 href="/settings"
                 className="inline-flex h-12 items-center gap-2 rounded-xl border border-border bg-card px-8 text-base font-semibold text-foreground transition-all hover:border-brand/50 hover:text-brand hover:-translate-y-0.5"
               >
-                Configure Keys
+                Add my free keys
               </Link>
             </div>
+            <p className="animate-fade-up mt-4 text-sm text-muted-foreground" style={{ animationDelay: "0.35s" }}>
+              No account. Keys stay in your browser. First progress in seconds.
+            </p>
           </div>
 
           {/* Agent orbit visual */}
@@ -226,7 +217,7 @@ export default function LandingPage() {
 
         {/* How it works */}
         <div className="animate-fade-up mt-28 w-full" style={{ animationDelay: "0.5s" }}>
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">How it works</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">One answer you can check</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((step, i) => {
               const Icon = step.icon
@@ -250,23 +241,23 @@ export default function LandingPage() {
         </div>
         {/* FAQ (visible; matches FAQPage schema above) */}
         <section aria-labelledby="faq-heading" className="mt-24 w-full max-w-3xl">
-          <h2 id="faq-heading" className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">FAQ</h2>
+          <h2 id="faq-heading" className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Worried? Read this</h2>
           <div className="mt-6 space-y-4 text-left">
             <div className="rounded-2xl border border-border bg-card p-6">
-              <h3 className="font-semibold">Do I need an account to use Assembly?</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">No. There are no accounts and no login. You add your own free provider API keys and run a question; nothing is stored on the server.</p>
+              <h3 className="font-semibold">Getting keys sounds like work. Is it?</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">Ten minutes, once. Grab free keys from two providers, paste them in, done. No card, no account.</p>
             </div>
             <div className="rounded-2xl border border-border bg-card p-6">
-              <h3 className="font-semibold">Which API keys do I need?</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">Free keys from at least two providers such as Gemini, Groq, OpenRouter or Hugging Face, covering three model families. Keys stay in your browser. Note: some free tiers (for example Gemini) may use inputs for model improvement.</p>
+              <h3 className="font-semibold">Why not just ask one good model?</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">One model gives one confident guess. Assembly makes agents from different families argue first, so weak claims die before you read them.</p>
             </div>
             <div className="rounded-2xl border border-border bg-card p-6">
-              <h3 className="font-semibold">How long does a run take?</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">You pick 3, 5, 10 or 15 minutes. The time budget is a hard cutoff and the first progress event arrives within seconds.</p>
+              <h3 className="font-semibold">Do my keys or questions leave my machine?</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">Keys stay in your browser. Questions go to the model providers you chose, nothing is stored on our server. Note: some free tiers (for example Gemini) may reuse inputs for training.</p>
             </div>
             <div className="rounded-2xl border border-border bg-card p-6">
-              <h3 className="font-semibold">Is the final answer guaranteed correct?</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">No. Assembly returns one synthesised answer with numbered sources, a confidence statement and an uncertainty note when consensus is weak.</p>
+              <h3 className="font-semibold">Can I trust the final answer?</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">Trust it the way you trust a cited draft. Every answer lists numbered sources, a confidence level, and what stayed uncertain.</p>
             </div>
           </div>
         </section>
@@ -285,13 +276,13 @@ export default function LandingPage() {
         </nav>
         <div className="flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground sm:flex-row sm:gap-3">
           <p>
-            Assembly &middot; Temporary teams of AI agents that produce measurably better answers
+            Assembly &middot; One question in, one cited answer out
           </p>
           <span className="hidden sm:inline" aria-hidden>&middot;</span>
           <p>
             Developed by{" "}
             <a
-              href="https://anubhab-portfolio.vercel.app"
+              href="https://anubhab-protfolio.vercel.app"
               target="_blank"
               rel="noopener noreferrer"
               className="font-medium text-foreground underline decoration-brand/50 underline-offset-4 transition-colors hover:text-brand hover:decoration-brand"

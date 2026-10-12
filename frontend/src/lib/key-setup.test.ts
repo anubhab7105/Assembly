@@ -20,7 +20,7 @@ describe("key-setup helpers (FR-30)", () => {
     expect(isKeyFormatOk("groq", "anything")).toBe(true);
     expect(isKeyFormatOk("groq", "")).toBe(true);
     expect(isKeyFormatOk("unknown", "zzz")).toBe(true);
-    expect(keyPrefixHint("groq")).toContain("paste");
+    expect(keyPrefixHint("groq").toLowerCase()).toContain("paste");
   });
 
   it("why line derives from roles/families", () => {

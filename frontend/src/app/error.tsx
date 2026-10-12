@@ -22,11 +22,10 @@ export default function ErrorBoundary({
         <AlertTriangle className="size-8" />
       </div>
       <h2 className="text-2xl font-bold tracking-tight text-foreground mb-2">
-        Something went wrong!
+        That run hit a snag
       </h2>
       <p className="text-muted-foreground max-w-md mx-auto mb-8">
-        We encountered an unexpected error. The application state might be corrupted. 
-        Please try recovering the page.
+        Your keys and history are safe. Reload the page to keep going.
       </p>
       
       <div className="bg-muted p-4 rounded-md text-xs font-mono text-left w-full max-w-md overflow-auto mb-8 border border-border">
@@ -35,7 +34,7 @@ export default function ErrorBoundary({
 
       <Button onClick={() => reset()} variant="default" size="lg">
         <RotateCcw className="size-4 mr-2" />
-        Try again
+        Reload this page
       </Button>
     </div>
   )

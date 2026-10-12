@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Run History",
+  title: "My past runs",
   description:
-    "Review past Assembly runs on this device, with consensus scores, sources and uncertainty notes.",
+    "Your run history on this device, with sources and confidence levels.",
   alternates: { canonical: "/executions" },
 }
 export default function ExecutionsLayout({ children }: { children: React.ReactNode }) {

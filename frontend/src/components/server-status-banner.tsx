@@ -19,7 +19,7 @@ export function ServerStatusBanner({ url, onRetry }: { url: string; onRetry: () 
         </p>
         <p className="mt-1 text-xs opacity-80">
           Check the backend is running and reachable from this browser. This is a
-          connection problem — not a login, key, or permission issue.
+          connection problem, not a key or permission issue.
         </p>
       </div>
       <Button size="sm" variant="outline" onClick={onRetry}>

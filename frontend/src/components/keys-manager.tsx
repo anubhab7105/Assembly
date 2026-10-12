@@ -82,7 +82,7 @@ export function KeysManager() {
     } catch (e) {
       // Wrong passphrase (or a corrupted blob): keep everything, say so.
       setUnlockError(
-        e instanceof Error ? e.message : "Wrong passphrase — nothing was deleted. Try again or use Clear all keys.",
+        e instanceof Error ? e.message : "Wrong passphrase. Nothing was deleted. Try again or use Clear all keys.",
       )
     }
   }
@@ -167,7 +167,7 @@ export function KeysManager() {
       } else if (res.status === "unreachable") {
         toast({ title: "Couldn't reach provider", description: res.message ?? "Try again.", variant: "warning" })
       } else {
-        toast({ title: "Invalid key", description: `${res.message ?? `Could not authenticate with ${providerId}.`} Check the key was copied without spaces.`, variant: "danger" })
+        toast({ title: "That key did not work", description: `${res.message ?? `Could not authenticate with ${providerId}.`} Copy it again with no extra spaces.`, variant: "danger" })
       }
     } catch {
       setStatuses((prev) => ({ ...prev, [providerId]: "unreachable" }))
@@ -469,7 +469,7 @@ export function KeysManager() {
           <CardDescription className="text-xs mt-1">
             Why this provider: web search for researchers. Without it
             Assembly uses keyless sources (Wikipedia, arXiv, Semantic
-            Scholar, DuckDuckGo) on a best-effort basis — they are rate
+            Scholar, DuckDuckGo) on a best-effort basis. They are rate
             limited and sometimes blocked, so research may run with no
             external sources.
           </CardDescription>

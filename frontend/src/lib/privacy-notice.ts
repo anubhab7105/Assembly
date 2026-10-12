@@ -21,11 +21,11 @@ export interface EnabledProviderNote {
 /** Web-mode dialog paragraphs (a)–(f), in order. */
 export const WEB_PRIVACY_PARAGRAPHS: string[] = [
   "Assembly web mode processes your question, API keys and model choices in memory for the duration of one run and stores nothing on the server.",
-  "Server logs contain metadata only (run id, tier, timings, counts) — never your questions, answers or keys.",
+  "Server logs contain metadata only (run id, tier, timings, counts). Never your questions, answers or keys.",
   "Your history and settings stay in this browser (IndexedDB). Nothing is stored on the server.",
   "Each model provider handles your inputs under its own policy:",
   "Avoid sending sensitive or confidential information.",
-  "The desktop app keeps keys in the Windows Credential Manager and sends requests straight from your PC — keys never leave your machine except to authenticate with the provider.",
+  "The desktop app keeps keys in the Windows Credential Manager and sends requests straight from your PC. Keys never leave your machine except to authenticate with the provider.",
 ];
 
 /** Desktop-mode dialog paragraphs (shorter, no server wording). */
@@ -34,7 +34,7 @@ export const DESKTOP_PRIVACY_PARAGRAPHS: string[] = [
   "Your history and settings stay in this browser (IndexedDB).",
   "Each model provider handles your inputs under its own policy:",
   "Avoid sending sensitive or confidential information.",
-  "Keys are kept in the Windows Credential Manager and requests go straight from your PC — keys never leave your machine except to authenticate with the provider.",
+  "Keys are kept in the Windows Credential Manager and requests go straight from your PC. Keys never leave your machine except to authenticate with the provider.",
 ];
 
 export function providerNoteFor(provider: EnabledProviderNote): string {
