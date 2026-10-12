@@ -198,3 +198,75 @@ def test_cancel_on_disconnect(web_mode, monkeypatch) -> None:
         return first["status"]
 
     assert asyncio.run(_scenario()) == "cancelled"
+
+
+def test_invalid_failures_do_not_consume_run_budget(web_mode) -> None:
+    """Validation failures hit the loose invalid budget, never run starts."""
+    from src.core.rate_limit import _rate_limit_history
+    from src.main import app
+
+    client = TestClient(app)
+    for _ in range(3):
+        res = client.post(
+            "/api/run",
+            json={"question": "", "time_budget_minutes": 3},
+        )
+        assert res.status_code == 422
+    invalid_keys = [k for k in _rate_limit_history if k[1] == "invalid"]
+    assert invalid_keys, "invalid attempts must be counted"
+    run_keys = [k for k in _rate_limit_history if k[1] == "run"]
+    assert run_keys == [], "rejected requests must not spend the run budget"
+
+
+def test_per_ip_concurrency_cap(web_mode, monkeypatch) -> None:
+    """One IP holding MAX_RUNS_PER_IP slots gets 429; freed slots run."""
+    import src.api.run as run_mod
+    from src.core.rate_limit import MAX_RUNS_PER_IP
+    from src.main import app
+
+    _mock_filtered_router(monkeypatch)
+    peer = "testclient"
+    held = []
+    try:
+        for i in range(MAX_RUNS_PER_IP):
+            entry = run_mod._RunEntry(
+                run_id=f"run-held-{i}", created_at=run_mod._now(), ip=peer
+            )
+            run_mod._runs[entry.run_id] = entry
+            held.append(entry.run_id)
+        client = TestClient(app)
+        res = client.post(
+            "/api/run",
+            json={
+                "question": "Canary question concurrency: why do hummingbirds hum?",
+                "time_budget_minutes": 3,
+                "provider_keys": {"groq": CANARY_KEY},
+                "model_selection": {"selected": [], "pins": {}},
+                "usage_snapshot": [],
+            },
+        )
+        assert res.status_code == 429
+        assert "Concurrent execution limit" in res.json()["detail"]
+    finally:
+        for rid in held:
+            run_mod._runs.pop(rid, None)
+
+    client = TestClient(app)
+    with client.stream(
+        "POST",
+        "/api/run",
+        json={
+            "question": CANARY_QUESTION,
+            "time_budget_minutes": 3,
+            "provider_keys": {"groq": CANARY_KEY},
+            "model_selection": {"selected": [], "pins": {}},
+            "usage_snapshot": [],
+        },
+    ) as res:
+        assert res.status_code == 200, res.text
+        blob_lines = []
+        for line in res.iter_lines():
+            blob_lines.append(line)
+            if line.startswith("data: ") and '"run.finished"' in line:
+                break
+    assert CANARY_KEY not in "\n".join(blob_lines)

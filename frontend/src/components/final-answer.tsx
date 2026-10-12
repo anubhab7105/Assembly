@@ -127,7 +127,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
               remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[rehypeKatex, rehypeHighlight]}
               components={{
-                a: ({ node, ...props }) => {
+                a: ({ ...props }) => {
                   // Custom handler for inline citations like [1]
                   if (props.href?.startsWith("#source-")) {
                     return (

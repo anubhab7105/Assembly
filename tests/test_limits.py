@@ -82,3 +82,97 @@ async def test_websocket_origin_check(monkeypatch):
         ) as ws,
     ):
         ws.receive_text()
+
+
+# ── Trusted-proxy boundary (fix-backlog item 8) ─────────────────────
+
+
+def _spoofed_request(peer="10.0.0.1", headers=None):
+    """Starlette request from `peer` carrying attacker-chosen headers."""
+    from starlette.requests import Request
+
+    raw = [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()]
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": raw,
+            "client": (peer, 5000),
+        }
+    )
+
+
+def test_forwarded_headers_ignored_by_default(monkeypatch):
+    """TRUSTED_PROXY_COUNT=0: spoofed XFF/Forwarded cannot move buckets."""
+    from src.core.rate_limit import client_ip
+
+    monkeypatch.setattr(settings, "trusted_proxy_count", 0)
+    spoofed = _spoofed_request(
+        peer="10.0.0.1",
+        headers={"x-forwarded-for": "9.9.9.9, 10.0.0.2", "forwarded": "for=8.8.8.8"},
+    )
+    assert client_ip(spoofed) == "10.0.0.1"
+
+
+def test_trusted_proxy_honors_nth_from_right(monkeypatch):
+    from src.core.rate_limit import client_ip
+
+    headers = {"x-forwarded-for": "9.9.9.9, 10.0.0.2, 10.0.0.3"}
+    monkeypatch.setattr(settings, "trusted_proxy_count", 1)
+    assert client_ip(_spoofed_request(headers=headers)) == "10.0.0.3"
+    monkeypatch.setattr(settings, "trusted_proxy_count", 2)
+    assert client_ip(_spoofed_request(headers=headers)) == "10.0.0.2"
+
+
+def test_short_chain_falls_back_to_leftmost(monkeypatch):
+    from src.core.rate_limit import client_ip
+
+    monkeypatch.setattr(settings, "trusted_proxy_count", 5)
+    req = _spoofed_request(headers={"x-forwarded-for": "9.9.9.9, 10.0.0.2"})
+    assert client_ip(req) == "9.9.9.9"
+
+
+def test_rfc_forwarded_header_supported(monkeypatch):
+    from src.core.rate_limit import client_ip
+
+    monkeypatch.setattr(settings, "trusted_proxy_count", 1)
+    req = _spoofed_request(headers={"forwarded": "for=9.9.9.9"})
+    assert client_ip(req) == "9.9.9.9"
+
+
+def test_no_headers_uses_peer_ip(monkeypatch):
+    from src.core.rate_limit import client_ip
+
+    monkeypatch.setattr(settings, "trusted_proxy_count", 2)
+    assert client_ip(_spoofed_request(peer="10.0.0.7")) == "10.0.0.7"
+
+
+def test_invalid_proxy_count_fails_closed(monkeypatch):
+    """Negative/garbage TRUSTED_PROXY_COUNT behaves as 0 (ignore headers)."""
+    from src.core.rate_limit import client_ip
+
+    for bad in (-3, "many"):
+        monkeypatch.setattr(settings, "trusted_proxy_count", bad)
+        req = _spoofed_request(headers={"x-forwarded-for": "9.9.9.9"})
+        assert client_ip(req) == "10.0.0.1"
+
+
+@pytest.mark.asyncio
+async def test_spoofed_ips_share_one_bucket_by_default(monkeypatch):
+    """End-to-end: two spoofed identities exhaust the same peer bucket."""
+    from fastapi import HTTPException
+
+    from src.core.rate_limit import check_rate_limit, client_ip
+
+    monkeypatch.setattr(settings, "trusted_proxy_count", 0)
+    buckets = {
+        client_ip(_spoofed_request(headers={"x-forwarded-for": "1.1.1.1"})),
+        client_ip(_spoofed_request(headers={"x-forwarded-for": "2.2.2.2"})),
+    }
+    assert buckets == {"10.0.0.1"}
+    for _ in range(3):
+        await check_rate_limit("ip:10.0.0.1", "spoof-probe", 3, 60)
+    with pytest.raises(HTTPException) as exc_info:
+        await check_rate_limit("ip:10.0.0.1", "spoof-probe", 3, 60)
+    assert exc_info.value.status_code == 429

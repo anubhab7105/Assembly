@@ -1,7 +1,7 @@
 """Assembly — stateless web run (POST /api/run, SSE).
 
 Web mode stores nothing: no database file, no disk writes. Runs live in
-an in-memory registry with a TTL and a global concurrency cap. Keys,
+an in-memory registry with a TTL and global + per-IP concurrency caps. Keys,
 questions and answers are held in memory for the run only and never
 stored; logs carry metadata (run prefix, tier, timings, counts) only.
 """
@@ -23,7 +23,12 @@ from src.api.request_context import (
 )
 from src.core.config import settings
 from src.core.logging_config import logger
-from src.core.rate_limit import check_rate_limit, client_ip, count_invalid_request
+from src.core.rate_limit import (
+    MAX_RUNS_PER_IP,
+    check_rate_limit,
+    client_ip,
+    count_invalid_request,
+)
 from src.database.schemas import RunRequest
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
 from src.providers.quota import get_limiter
@@ -45,6 +50,8 @@ class _RunEntry:
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     done: bool = False
     usage: list[dict] = field(default_factory=list)
+    #: Peer IP owning the run (per-IP concurrency cap; names only, no keys).
+    ip: str = ""
 
 
 _runs: dict[str, _RunEntry] = {}
@@ -248,8 +255,19 @@ async def start_run(req: RunRequest, request: Request):
             return JSONResponse(
                 status_code=429, content={"detail": "Server busy, try again later."}
             )
+        ip_active = sum(1 for e in _runs.values() if not e.done and e.ip == ip)
+        if ip_active >= MAX_RUNS_PER_IP:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": (
+                        f"Concurrent execution limit reached ({MAX_RUNS_PER_IP}). "
+                        "Wait for your current run to finish."
+                    )
+                },
+            )
         run_id = f"run-{uuid.uuid4().hex[:12]}"
-        entry = _RunEntry(run_id=run_id, created_at=_now())
+        entry = _RunEntry(run_id=run_id, created_at=_now(), ip=ip)
         _runs[run_id] = entry
 
     # Family-diversity gate for this run's keys + selection (metadata only).

@@ -84,10 +84,20 @@ export interface ActivityFeedEntry {
 }
 
 export interface ExecutionCompletedData {
-  final_answer: string
-  confidence?: "High" | "Moderate" | "Low"
+  // Wire names sent by the backend (orchestrator execution.completed).
+  answer: string
+  confidence_label?: "High" | "Moderate" | "Low"
+  consensus_score?: number
+  agent_count?: number
+  providers_used?: string[]
+  debate_rounds?: number
+  tokens_used?: number
+  elapsed_seconds?: number
   uncertainty_note?: string
   question?: string
+  // Legacy aliases (never sent by current backends; read tolerantly).
+  final_answer?: string
+  confidence?: "High" | "Moderate" | "Low"
 }
 
 export interface ProgressEvent extends BaseEvent {
