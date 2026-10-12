@@ -182,6 +182,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               <Link
                 key={ex.id}
                 href={`/executions?id=${ex.id}`}
+                prefetch={false}
                 onClick={onClose}
                 className={`group flex items-start gap-2 rounded-md px-2 py-2 text-sm ${
                   isActive ? "bg-brand/10 text-brand" : "text-foreground hover:bg-muted"
