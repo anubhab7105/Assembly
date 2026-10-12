@@ -4,8 +4,10 @@ Covers:
 - orchestrator exception before any agent exists (stage orchestrator_start)
 - run that fails after initial progress (stage = last lifecycle state)
 - failed ExecutionResult (no exception) still carries diagnostics
+- router-construction and orchestrator-construction failures inside the
+  protected init block (stages router_init / orchestrator_init)
 - successful run returns completed + final answer with no error fields
-- key secrecy: canary key never appears in logs or SSE, even when the
+- key secrecy: canary never appears in logs or SSE, even when the
   raw exception message contains it
 """
 
@@ -14,7 +16,10 @@ import logging
 
 import pytest
 
-CANARY_KEY = "sk-CANARY-RUNDIAG-9f8e7d6c5b4a"
+#: Synthetic test marker. Deliberately not credential-shaped (no ``sk-``
+#: prefix, no high-entropy token) so secret scanners stay quiet; the tests
+#: still assert it never appears in logs or SSE events.
+CANARY_KEY = "TEST-ONLY-CANARY-NOT-A-REAL-CREDENTIAL"
 CANARY_QUESTION = "Canary rundiag ZULU-77: why do hummingbirds hum?"
 
 
@@ -193,3 +198,79 @@ def test_failure_code_mapping_sanitizes_class_names():
     code = run_mod._failure_code_for(WeirdError("boom"))
     assert code == "weirderror_drop_table"
     assert run_mod._sanitized_code("") == "internal_error"
+
+
+@pytest.mark.asyncio()
+async def test_router_construction_failure_finishes_run(monkeypatch, caplog):
+    """A router-init raise still ends the stream with run.finished failed."""
+    import src.api.run as run_mod
+
+    def _boom(provider_keys, allowed, pins):
+        raise RuntimeError(f"router boom with marker {CANARY_KEY} inside")
+
+    monkeypatch.setattr(run_mod, "_filtered_router", _boom)
+
+    entry = run_mod._RunEntry(run_id="run-diag-router", created_at=run_mod._now())
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        await run_mod._execute_run(
+            "run-diag-router",
+            CANARY_QUESTION,
+            3,
+            {"groq": CANARY_KEY},
+            set(),
+            {},
+            [],
+            entry,
+            search_keys=None,
+            router_override=None,
+        )
+    events = _drain(entry)
+    assert entry.done is True
+    fin = _finished(events)
+    assert fin["run_id"] == "run-diag-router"
+    assert fin["status"] == "failed"
+    assert fin["stage"] == "router_init"
+    assert fin["error_class"] == "RuntimeError"
+    assert "Check your provider keys" in fin["message"]
+    blob = str(events)
+    assert CANARY_KEY not in blob
+    assert CANARY_KEY not in caplog.text
+
+
+@pytest.mark.asyncio()
+async def test_orchestrator_construction_failure_finishes_run(monkeypatch, caplog):
+    """An Orchestrator() raise still ends the stream with run.finished failed."""
+    import src.api.run as run_mod
+    import src.orchestration.orchestrator as orch_mod
+
+    class BoomOrch:
+        def __init__(self):
+            raise ConnectionError(f"orchestrator boom {CANARY_KEY}")
+
+    monkeypatch.setattr(orch_mod, "Orchestrator", BoomOrch)
+
+    entry = run_mod._RunEntry(run_id="run-diag-orch", created_at=run_mod._now())
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        await run_mod._execute_run(
+            "run-diag-orch",
+            CANARY_QUESTION,
+            3,
+            {"groq": CANARY_KEY},
+            set(),
+            {},
+            [],
+            entry,
+            search_keys=None,
+            router_override=object(),
+        )
+    events = _drain(entry)
+    assert entry.done is True
+    fin = _finished(events)
+    assert fin["run_id"] == "run-diag-orch"
+    assert fin["status"] == "failed"
+    assert fin["stage"] == "orchestrator_init"
+    assert fin["error_class"] == "ConnectionError"
+    assert fin["error_code"] == "provider_unavailable"
+    blob = str(events)
+    assert CANARY_KEY not in blob
+    assert CANARY_KEY not in caplog.text
