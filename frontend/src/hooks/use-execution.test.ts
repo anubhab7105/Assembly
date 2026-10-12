@@ -18,7 +18,7 @@ class MockWebSocket {
   }
 
   close() {}
-  send(_data: string) {}
+  send(data: string) { void data }
 
   // Test helper to simulate server sending a message
   mockMessage(event: ProgressEvent) {
