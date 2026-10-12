@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, Suspense } from "react"
+import React, { useState, useEffect, useSyncExternalStore, Suspense } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ToastProvider, useToast } from "@/components/ui/toast"
@@ -11,22 +11,30 @@ import {
   Zap, Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload,
 } from "lucide-react"
 
+function subscribeOnlineStatus(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {}
+  window.addEventListener("online", onStoreChange)
+  window.addEventListener("offline", onStoreChange)
+  return () => {
+    window.removeEventListener("online", onStoreChange)
+    window.removeEventListener("offline", onStoreChange)
+  }
+}
+
+function getOnlineStatusSnapshot() {
+  return typeof navigator === "undefined" ? true : navigator.onLine
+}
+
+function getOnlineStatusServerSnapshot() {
+  return true
+}
+
 function useOfflineStatus() {
-  const [isOffline, setIsOffline] = useState(false)
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false)
-    const handleOffline = () => setIsOffline(true)
-    if (typeof navigator !== "undefined") {
-      setIsOffline(!navigator.onLine)
-    }
-    window.addEventListener("online", handleOnline)
-    window.addEventListener("offline", handleOffline)
-    return () => {
-      window.removeEventListener("online", handleOnline)
-      window.removeEventListener("offline", handleOffline)
-    }
-  }, [])
-  return isOffline
+  return !useSyncExternalStore(
+    subscribeOnlineStatus,
+    getOnlineStatusSnapshot,
+    getOnlineStatusServerSnapshot,
+  )
 }
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
@@ -51,7 +59,21 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   }
 
   useEffect(() => {
-    loadExecutions()
+    let cancelled = false
+    storage
+      .listHistory()
+      .then((items) => {
+        if (!cancelled) setExecutions(items)
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) console.error(error)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [pathname])
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
