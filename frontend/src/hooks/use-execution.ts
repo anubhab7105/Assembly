@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, type SetStateAction } from "react"
 import { env } from "@/lib/env"
 import { storage } from "@/lib/storage"
 import type {
@@ -74,7 +74,20 @@ const initialState: ExecutionState = {
 }
 
 export function useExecution(executionId: string | null) {
-  const [state, setState] = useState<ExecutionState>(initialState)
+  const [stateRecord, setStateRecord] = useState<{
+    executionId: string | null
+    state: ExecutionState
+  }>({ executionId, state: initialState })
+  const state = stateRecord.executionId === executionId ? stateRecord.state : initialState
+  const setState = useCallback((nextState: SetStateAction<ExecutionState>) => {
+    setStateRecord((current) => {
+      const previous = current.executionId === executionId ? current.state : initialState
+      return {
+        executionId,
+        state: typeof nextState === "function" ? nextState(previous) : nextState,
+      }
+    })
+  }, [executionId])
 
   const wsRef = useRef<WebSocket | null>(null)
   const lastSeqRef = useRef<number>(0)
@@ -191,9 +204,9 @@ export function useExecution(executionId: string | null) {
       }
       return next
     })
-  }, [])
+  }, [setState])
 
-  const connectWs = useCallback(async () => {
+  const connectWs = useCallback(async function connectWebSocket() {
     if (!executionId || executionId.startsWith("local-")) return
 
     setState((p) => ({ ...p, connectionState: reconnectAttemptsRef.current > 0 ? "reconnecting" : "connected" }))
@@ -229,17 +242,16 @@ export function useExecution(executionId: string | null) {
       if (reconnectAttemptsRef.current < WS_RECONNECT_MAX_ATTEMPTS) {
         reconnectAttemptsRef.current++
         setState((p) => ({ ...p, connectionState: "reconnecting" }))
-        setTimeout(connectWs, WS_RECONNECT_DELAY_MS * reconnectAttemptsRef.current)
+        setTimeout(connectWebSocket, WS_RECONNECT_DELAY_MS * reconnectAttemptsRef.current)
       } else {
         setState((p) => ({ ...p, connectionState: "polling" }))
       }
     }
-  }, [executionId, processEvent])
+  }, [executionId, processEvent, setState])
 
   useEffect(() => {
     lastSeqRef.current = 0
     reconnectAttemptsRef.current = 0
-    setState(initialState)
 
     if (!executionId) return
     // Local (stateless web) runs render from device history.
