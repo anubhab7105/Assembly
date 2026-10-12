@@ -143,18 +143,14 @@ async def _execute_run(
     search_keys: dict[str, str] | None = None,
     router_override=None,
 ) -> None:
-    """Run the orchestrator, forwarding recorder events into the SSE queue."""
-    from src.orchestration.orchestrator import Orchestrator
+    """Run the orchestrator, forwarding recorder events into the SSE queue.
 
-    limiter = get_limiter()
-    limiter.set_usage_snapshot(usage_snapshot or [])
-    if router_override is None:
-        router_override = _filtered_router(provider_keys, allowed, pins)
-    orch = Orchestrator()
-    # Use the per-run router (keys + selection) instead of the shared one.
-    orch.router = router_override  # type: ignore[assignment]
-
-    stage_holder = {"stage": "orchestrator_start", "events": 0}
+    All initialization (import, limiter, router, orchestrator) runs inside
+    the protected block so every failure — not just execute() errors —
+    ends the run with a ``run.finished`` event and terminates the stream
+    instead of leaving the client on heartbeats.
+    """
+    stage_holder = {"stage": "run_init", "events": 0}
 
     async def on_progress(event: dict) -> None:
         # Track the last lifecycle stage for failure diagnostics (envelope
@@ -168,7 +164,21 @@ async def _execute_run(
 
     result_status = "failed"
     usage: list[dict] = []
+    limiter = None
     try:
+        from src.orchestration.orchestrator import Orchestrator
+
+        stage_holder["stage"] = "limiter_init"
+        limiter = get_limiter()
+        limiter.set_usage_snapshot(usage_snapshot or [])
+        if router_override is None:
+            stage_holder["stage"] = "router_init"
+            router_override = _filtered_router(provider_keys, allowed, pins)
+        stage_holder["stage"] = "orchestrator_init"
+        orch = Orchestrator()
+        # Use the per-run router (keys + selection) instead of the shared one.
+        orch.router = router_override  # type: ignore[assignment]
+        stage_holder["stage"] = "orchestrator_start"
         result = await orch.execute(
             execution_id=run_id,
             question=question,
@@ -262,7 +272,11 @@ async def _execute_run(
     finally:
         entry.done = True
         await entry.queue.put(None)  # type: ignore[arg-type] — SSE terminator
-        limiter.set_usage_snapshot([])
+        if limiter is not None:
+            try:
+                limiter.set_usage_snapshot([])
+            except Exception:  # noqa: BLE001, S110 — cleanup must not raise
+                pass
 
 
 @router.post("", response_class=StreamingResponse)
