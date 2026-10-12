@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "audit:high": "node scripts/audit-high.mjs"
+    "audit:high": "node scripts/audit-high.mjs",
+    "audit:test": "node --test scripts/audit-high.test.mjs"
   },
   "overrides": {
     "katex": "$katex"
