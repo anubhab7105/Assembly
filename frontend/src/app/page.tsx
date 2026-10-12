@@ -43,8 +43,78 @@ const steps = [
 ]
 
 export default function LandingPage() {
+  const base = "https://assembly-murex.vercel.app"
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Assembly",
+      url: `${base}/`,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Assembly",
+      url: `${base}/`,
+      founder: { "@type": "Person", name: "Anubhab Das" },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${base}/` },
+        { "@type": "ListItem", position: 2, name: "Ask", item: `${base}/chat` },
+        { "@type": "ListItem", position: 3, name: "Setup", item: `${base}/settings` },
+      ],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: [
+        {
+          "@type": "Question",
+          name: "Do I need an account to use Assembly?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "No. There are no accounts and no login. You add your own free provider API keys and run a question; nothing is stored on the server.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Which API keys do I need?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Free keys from at least two providers such as Gemini, Groq, OpenRouter or Hugging Face, covering three model families. Keys stay in your browser.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "How long does a run take?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "You pick 3, 5, 10 or 15 minutes. The time budget is a hard cutoff and the first progress event arrives within seconds.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Is the final answer guaranteed correct?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "No. Assembly returns one synthesised answer with numbered sources, a confidence statement and an uncertainty note when consensus is weak.",
+          },
+        },
+      ],
+    },
+  ]
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
+      {jsonLd.map((schema, i) => (
+        <script
+          key={i}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+        />
+      ))}
       {/* Ambient background */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
         <div className="animate-aurora absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-brand/20 blur-[140px]" />
@@ -178,10 +248,41 @@ export default function LandingPage() {
             })}
           </div>
         </div>
+        {/* FAQ (visible; matches FAQPage schema above) */}
+        <section aria-labelledby="faq-heading" className="mt-24 w-full max-w-3xl">
+          <h2 id="faq-heading" className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">FAQ</h2>
+          <div className="mt-6 space-y-4 text-left">
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h3 className="font-semibold">Do I need an account to use Assembly?</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">No. There are no accounts and no login. You add your own free provider API keys and run a question; nothing is stored on the server.</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h3 className="font-semibold">Which API keys do I need?</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">Free keys from at least two providers such as Gemini, Groq, OpenRouter or Hugging Face, covering three model families. Keys stay in your browser. Note: some free tiers (for example Gemini) may use inputs for model improvement.</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h3 className="font-semibold">How long does a run take?</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">You pick 3, 5, 10 or 15 minutes. The time budget is a hard cutoff and the first progress event arrives within seconds.</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h3 className="font-semibold">Is the final answer guaranteed correct?</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">No. Assembly returns one synthesised answer with numbered sources, a confidence statement and an uncertainty note when consensus is weak.</p>
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-border/50 py-6 text-center">
+        <nav aria-label="Breadcrumb" className="mb-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Link href="/" className="hover:text-brand">Home</Link>
+          <span aria-hidden>/</span>
+          <Link href="/chat" className="hover:text-brand">Ask</Link>
+          <span aria-hidden>/</span>
+          <Link href="/settings" className="hover:text-brand">Setup</Link>
+          <span aria-hidden>/</span>
+          <Link href="/executions" className="hover:text-brand">History</Link>
+        </nav>
         <div className="flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground sm:flex-row sm:gap-3">
           <p>
             Assembly &middot; Temporary teams of AI agents that produce measurably better answers
