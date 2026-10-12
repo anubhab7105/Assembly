@@ -580,3 +580,9 @@
 - Steps rewritten benefit first; section heads specific ("One answer you can check", "Worried? Read this"). FAQ rewritten to buyer objections with matching FAQPage schema.
 - Chat: H1 "Ask one hard question", CTA "Run my question", placeholder rewritten. Settings H1 "Add your free keys". 404, error boundary, empty states, key toasts, run banners rewritten. All user-facing em dashes removed. Meta titles/descriptions rewritten per page.
 - Verified: tsc clean, eslint clean on touched files, next build green, targeted vitest 24 passed (key-setup test made case-insensitive).
+
+## 2026-10-12 — Legal audit + draft pages (NOT legal advice, lawyer review required)
+
+- Added /privacy, /terms, /cookies, /refunds pages (server components, footer-linked, sitemap-listed), each with a visible draft notice. Content based on actual behavior: no accounts, no cookies/analytics, browser-only keys/history, transient server runs, provider data sharing, India + GDPR rights, no payments.
+- Added informational cookie banner (nothing to block: zero cookies set) with localStorage dismissal. Privacy dialog now requires a consent checkbox before I understand. Skip-to-content link + global focus-visible style.
+- Verified: tsc clean, eslint clean, next build green (12 routes), privacy/key-setup tests pass.

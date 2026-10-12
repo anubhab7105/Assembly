@@ -219,6 +219,12 @@
     font-family: var(--font-mono);
   }
 
+  /* Visible keyboard focus everywhere (WCAG 2.4.7). */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
   /* 8-point scale as CSS vars for components */
   :root {
     --space-1: 4px;

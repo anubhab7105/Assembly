@@ -18,6 +18,7 @@ export function PrivacyDialog({
   providers: EnabledProviderNote[];
   onAcknowledge: () => void;
 }) {
+  const [checked, setChecked] = React.useState(false);
   const paragraphs =
     mode === "desktop" ? DESKTOP_PRIVACY_PARAGRAPHS : WEB_PRIVACY_PARAGRAPHS;
   return (
@@ -52,9 +53,25 @@ export function PrivacyDialog({
             ),
           )}
         </div>
+        <label
+          htmlFor="privacy-consent"
+          className="mt-5 flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm"
+        >
+          <input
+            id="privacy-consent"
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => setChecked(e.target.checked)}
+            className="mt-0.5 size-5 shrink-0 accent-brand"
+          />
+          <span>
+            I understand my question is sent to the model providers I chose, under their policies.
+          </span>
+        </label>
         <Button
           data-testid="privacy-acknowledge"
-          className="mt-5 w-full"
+          className="mt-3 w-full"
+          disabled={!checked}
           onClick={onAcknowledge}
         >
           I understand
