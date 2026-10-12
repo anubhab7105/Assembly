@@ -177,11 +177,6 @@ class Settings(BaseSettings):
         return self.app_env == "production"
 
     @property
-    def is_postgres(self) -> bool:
-        """Postgres/Supabase removed: always False (kept for compat)."""
-        return False
-
-    @property
     def cors_origins(self) -> list[str]:
         """Allowed CORS origins.
 

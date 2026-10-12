@@ -62,23 +62,6 @@ jobs:
 
   backend-test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        database: [sqlite, postgres]
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: assembly
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: assembly
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
     - name: Checkout repository
@@ -91,14 +74,12 @@ jobs:
         cache: 'pip'
 
     - name: Install dependencies
-      run: pip install -r requirements.txt -r requirements-dev.txt alembic psycopg2-binary pip-audit
+      run: pip install -r requirements.txt -r requirements-dev.txt alembic pip-audit
 
     - name: Run pip-audit
       run: pip-audit || echo "Audit failed but ignoring for now, review later" # Or remove echo to enforce
 
-    - name: Run tests
-      env:
-        DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgresql+psycopg2://assembly:password@localhost:5432/assembly' || 'sqlite:///./assembly.db' }}
+    - name: Run SQLite migrations and tests
       run: |
         alembic upgrade head
         pytest

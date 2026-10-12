@@ -14,7 +14,7 @@
 | **User AI provider keys** | BYOK keys (Gemini, Groq, Cerebras, OpenRouter, HuggingFace, Tavily). Web: in-memory per-request; desktop: Windows Credential Manager. | **Critical** |
 | **JWT secret key** | Signs all user sessions in web mode. Compromise = full user impersonation. | **Critical** |
 | **Desktop token** | secrets.token_hex(32) generated at sidecar startup. Authorizes all local HTTP calls. | **High** |
-| **Conversation history** | User questions and final answers stored in SQLite (desktop) or PostgreSQL (web). | **High** |
+| **Conversation history** | Web: browser IndexedDB. Desktop: local SQLite. Web runs are not persisted by the backend. | **High** |
 | **User account credentials** | Email + bcrypt-hashed passwords in the database (web mode). | **High** |
 | **Execution events** | Intermediate agent reasoning, positions, debate transcripts. | **Medium** |
 | **Model routing telemetry** | Provider names, model names, family tags, token counts. No keys. | **Low** |
@@ -31,7 +31,7 @@ WEB MODE
                             |
                    [FastAPI on Render] <--TB1
                         |   |
-                   [SQLite/Postgres]  <--TB2
+              [No database in web mode]
                         |
         [Gemini API]  [Groq API]  [Tavily API]  <--TB3
 
@@ -47,7 +47,7 @@ DESKTOP MODE
 
 Boundary definitions:
 - TB1 Internet to FastAPI: CORS + JWT (web), desktop_token (desktop)
-- TB2 FastAPI to Database: SQLAlchemy ORM (parameterized; no raw SQL)
+- TB2 Desktop/dev persistence: SQLAlchemy ORM over local SQLite; web mode has no database boundary.
 - TB3 FastAPI to External APIs: HTTPS; keys in headers/body only
 - TB4 Tauri WebView to Sidecar: localhost 127.0.0.1 only; desktop_token
 - TB5 Sidecar to OS Keyring: Windows Credential Manager via keyring
@@ -219,7 +219,6 @@ Fix applied: Startup check refuses web+production mode when JWT_SECRET_KEY match
 | python-jose[cryptography] | >=3.3.0 | Community-maintained; slow releases. Consider migrating to PyJWT. |
 | passlib[bcrypt] | >=1.7.4 | passlib is unmaintained (last release 2023). Consider bcrypt directly or argon2-cffi. |
 | google-generativeai | >=0.8.0 | No upper bound; breaking 0.x change could auto-install. Pin to minor version. |
-| psycopg2-binary | >=2.9.0 | Binary wheel supply-chain risk. Consider psycopg[binary] (psycopg3). |
 | aiohttp | >=3.9.0 | Not used in codebase (httpx used instead). Remove to reduce surface area. |
 
 ---
