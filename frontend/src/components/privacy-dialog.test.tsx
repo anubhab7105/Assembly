@@ -3,10 +3,13 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { PrivacyDialog } from "./privacy-dialog";
 
 describe("PrivacyDialog", () => {
-  it("blocks with an explicit I understand button", () => {
+  it("blocks with an explicit consent checkbox before I understand", () => {
     const onAck = vi.fn();
     render(<PrivacyDialog mode="web" providers={[{ id: "groq" }]} onAcknowledge={onAck} />);
     expect(screen.getByTestId("privacy-dialog")).toBeDefined();
+    // Button stays disabled until the consent box is ticked.
+    expect(screen.getByTestId("privacy-acknowledge")).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByLabelText(/my question is sent/i));
     fireEvent.click(screen.getByTestId("privacy-acknowledge"));
     expect(onAck).toHaveBeenCalledTimes(1);
   });

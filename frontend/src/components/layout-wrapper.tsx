@@ -261,6 +261,12 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastProvider>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-100 focus:rounded-lg focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-brand-foreground"
+      >
+        Skip to content
+      </a>
       <div className="flex h-screen overflow-hidden bg-background">
         {!isLandingPage && (
           <aside className="hidden md:block w-72 shrink-0 h-full relative z-20">
@@ -318,7 +324,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          <main className="flex-1 overflow-y-auto overflow-x-hidden relative focus-visible:outline-none" tabIndex={-1}>
+          <main id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden relative focus-visible:outline-none" tabIndex={-1}>
             {children}
           </main>
         </div>

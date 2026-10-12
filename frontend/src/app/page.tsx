@@ -265,7 +265,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-border/50 py-6 text-center">
-        <nav aria-label="Breadcrumb" className="mb-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <nav aria-label="Breadcrumb" className="mb-4 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
           <Link href="/" className="hover:text-brand">Home</Link>
           <span aria-hidden>/</span>
           <Link href="/chat" className="hover:text-brand">Ask</Link>
@@ -273,6 +273,14 @@ export default function LandingPage() {
           <Link href="/settings" className="hover:text-brand">Setup</Link>
           <span aria-hidden>/</span>
           <Link href="/executions" className="hover:text-brand">History</Link>
+          <span aria-hidden>/</span>
+          <Link href="/privacy" className="hover:text-brand">Privacy</Link>
+          <span aria-hidden>/</span>
+          <Link href="/terms" className="hover:text-brand">Terms</Link>
+          <span aria-hidden>/</span>
+          <Link href="/cookies" className="hover:text-brand">Cookies</Link>
+          <span aria-hidden>/</span>
+          <Link href="/refunds" className="hover:text-brand">Refunds</Link>
         </nav>
         <div className="flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground sm:flex-row sm:gap-3">
           <p>

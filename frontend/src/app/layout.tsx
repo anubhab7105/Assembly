@@ -47,6 +47,7 @@ export const metadata: Metadata = {
 }
 
 import { LayoutWrapper } from "@/components/layout-wrapper"
+import { CookieBanner } from "@/components/cookie-banner"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <LayoutWrapper>{children}</LayoutWrapper>
+        <CookieBanner />
       </body>
     </html>
   )
