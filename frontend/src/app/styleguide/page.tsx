@@ -540,7 +540,7 @@ export default function StyleguidePage() {
                 </TabsContent>
                 <TabsContent value="debate" className="pt-3">
                   <p className="text-sm text-muted-foreground">
-                    Round 2 complete · Critic challenged Agent Beta's timeline claim · Researcher found contradicting evidence.
+                    Round 2 complete · Critic challenged Agent Beta&apos;s timeline claim · Researcher found contradicting evidence.
                   </p>
                 </TabsContent>
                 <TabsContent value="synthesis" className="pt-3">
