@@ -45,7 +45,7 @@ export default function Home() {
   const [catalogFailed, setCatalogFailed] = useState(false)
   const [catalogTick, setCatalogTick] = useState(0)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
-  const [degradedConfirmed, setDegradedConfirmed] = useState(false)
+  const [confirmedGateSignature, setConfirmedGateSignature] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const appMode = env.NEXT_PUBLIC_APP_MODE === "desktop" ? "desktop" : "web"
@@ -65,9 +65,14 @@ export default function Home() {
     return evaluateGate(fams, enabled.size)
   }, [catalog, enabledIds, selection.selected])
 
-  useEffect(() => {
-    setDegradedConfirmed(false)
-  }, [gate.level])
+  const gateSignature = JSON.stringify({
+    level: gate.level,
+    reasons: gate.reasons,
+    enabledIds: [...enabledIds].sort(),
+    selected: [...selection.selected].sort(),
+    pins: selection.pins,
+  })
+  const degradedConfirmed = confirmedGateSignature === gateSignature
 
   useEffect(() => {
     const refreshKeys = () => {
@@ -344,7 +349,7 @@ export default function Home() {
           <p className="font-mono">{gateChipText(gate)}</p>
           {gate.level !== "OK" && <p className="mt-1 text-xs text-muted-foreground">{gate.reasons[0]}</p>}
           {gate.level === "DEGRADED" && !degradedConfirmed && (
-            <Button variant="outline" size="sm" className="mt-2" data-testid="degraded-confirm" onClick={() => setDegradedConfirmed(true)}>
+            <Button variant="outline" size="sm" className="mt-2" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
               Run anyway with 1 family
             </Button>
           )}
