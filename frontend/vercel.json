@@ -29,14 +29,6 @@
     {
       "source": "/setup",
       "destination": "/settings"
-    },
-    {
-      "source": "/landing",
-      "destination": "/landing.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
     }
   ]
 }

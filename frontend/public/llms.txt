@@ -1,0 +1,23 @@
+# Assembly — llms.txt
+# https://assembly-murex.vercel.app/llms.txt
+
+> Assembly is a free multi-agent AI consensus platform. One question plus a time
+> budget forms a temporary team of AI agents that solve independently,
+> cross-examine, verify with web sources, and synthesise one final answer with
+> numbered sources and an uncertainty note. Users bring their own free API keys
+> (BYOK). No accounts, no login, nothing stored on the server.
+
+## Docs
+
+- [Home](https://assembly-murex.vercel.app/): what Assembly does and how it works
+- [Ask](https://assembly-murex.vercel.app/chat): ask a question and run Assembly
+- [Setup](https://assembly-murex.vercel.app/settings): add free provider API keys
+- [History](https://assembly-murex.vercel.app/executions): past runs on this device
+
+## Key facts
+
+- Time budgets: 3, 5, 10 or 15 minutes (hard cutoff).
+- Providers: Gemini, Groq, OpenRouter, Hugging Face (free tiers, models.yaml).
+- Web history lives in the browser (IndexedDB). No server-side user storage.
+- Some free tiers (for example Gemini) may use inputs for model improvement.
+- Consensus is scored; weak consensus is stated as uncertain, never promised correct.

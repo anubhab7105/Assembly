@@ -15,17 +15,34 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://assembly-murex.vercel.app"),
   title: {
-    default: "Assembly — AI Research Platform",
+    default: "Assembly — Multi-Agent AI Consensus Platform",
     template: "%s | Assembly",
   },
   description:
-    "Assembly turns one question into a temporary team of AI agents that reason independently, cross-examine, and verify before synthesising a final answer.",
-  keywords: ["AI agents", "research", "consensus", "multi-agent", "LLM"],
+    "Assembly turns one question into a temporary team of AI agents that reason independently, cross-examine, and verify before synthesising a final answer with sources.",
+  keywords: ["AI agents", "research", "consensus", "multi-agent", "LLM", "BYOK"],
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   openGraph: {
-    title: "Assembly — AI Research Platform",
-    description: "Multi-agent AI research that produces measurably better answers.",
+    title: "Assembly — Multi-Agent AI Consensus Platform",
+    description:
+      "One question, a temporary team of AI agents, one verified answer with sources. Bring your own free API keys.",
+    url: "/",
+    siteName: "Assembly",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Assembly — Multi-Agent AI Consensus Platform",
+    description:
+      "One question, a temporary team of AI agents, one verified answer with sources.",
   },
 }
 
