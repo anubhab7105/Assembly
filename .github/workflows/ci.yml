@@ -36,7 +36,7 @@ jobs:
       run: npm ci --legacy-peer-deps
 
     - name: Run npm audit
-      run: npm audit --audit-level=high
+      run: npm run audit:high
 
     - name: Lint
       run: npm run lint
