@@ -82,7 +82,6 @@
 - [ ] Add API keys to `.env` (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, HUGGINGFACE_API_KEY — minimum 3 required)
 - [ ] End-to-end execution test (ask question → get AI answer)
 - [ ] Add Tavily API key for web search capability
-- [ ] Migrate to PostgreSQL for production
 - [ ] Add Google OAuth
 - [ ] Add rate limiting and cost tracking
 - [ ] Migrate frontend to Next.js + TypeScript

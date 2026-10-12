@@ -10,12 +10,12 @@
 6. Keys are BYOK: each user brings their own free-tier provider keys; there is no shared operator key.
 7. Demo target: hackathon judges see a live run plus a benchmark slide in ~3 minutes.
 8. Primary platform is a Windows desktop app (local orchestrator, keys never leave the machine); the hosted website is secondary.
-9. Current MVP state: FastAPI backend works end-to-end (auth, conversations, executions over WebSocket); Next.js/desktop/bench migrations are still pending — don't assume that code exists.
+9. Current MVP state: the hosted web path uses stateless `POST /api/run` SSE; browser history is in IndexedDB. Local SQLite remains for desktop/dev backend history; there is no web database or account system.
 10. SINGLE HYPOTHESIS TO PROVE: a temporary team that reasons independently, cross-examines, and verifies produces measurably better answers than the best single free model on the same question.
 
 ## 2. Stack and folder layout
 
-- Backend (`src/`): FastAPI + asyncio + httpx + Pydantic; SQLAlchemy (SQLite for local/desktop, Postgres/Supabase hosted); in-memory asyncio event bus, no Redis. Entry: `src/main.py`, app `src.main:app`.
+- Backend (`src/`): FastAPI + asyncio + httpx + Pydantic; SQLAlchemy/SQLite for local and future desktop persistence; web mode has no database and uses an in-memory run registry. Entry: `src/main.py`, app `src.main:app`.
 - Frontend (`frontend/`): Next.js + TypeScript + Tailwind is the target; current code is a vanilla-JS SPA served statically.
 - Desktop (`desktop/`): Tauri 2 shell + bundled Python backend sidecar (PyInstaller); keys in Windows Credential Manager via `keyring`; Electron only as fallback.
 - Benchmark (`bench/`): `questions.jsonl`, `run_single.py`, `run_assembly.py` (`run_vote.py` optional), `grade.py` → results CSV/slide.

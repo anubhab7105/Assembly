@@ -82,7 +82,7 @@
 - [ ] Add API keys to `.env` (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, HUGGINGFACE_API_KEY — minimum 3 required)
 - [ ] End-to-end execution test (ask question → get AI answer)
 - [ ] Add Tavily API key for web search capability
-- [x] Migrate to PostgreSQL for production
+- [x] Database portability experiment (historical; PostgreSQL hosting was superseded by D8, the stateless-web decision; SQLite remains for desktop/dev)
 - [ ] Add Google OAuth
 - [ ] Add rate limiting and cost tracking
 - [ ] Migrate frontend to Next.js + TypeScript
@@ -555,3 +555,11 @@
 - Hardened `frontend/scripts/audit-high.mjs`: `validateReport()` fails closed on `error` payloads, non-object reports, and missing/non-object `vulnerabilities`; advisory matching is now `ghsa@package` (same GHSA on another package blocks); exception carries `owner: assembly-maintainers`, `reviewBy: 2027-01-12`, printed on every run.
 - Regression tests: `frontend/scripts/audit-high.test.mjs` (`npm run audit:test`, node:test 8/8 pass — service-error/malformed rejection, empty-via blocking, braces chain, synthetic new-GHSA block, package enforcement, metadata); `frontend/src/components/math-pipeline.test.tsx` (vitest 1/1 — inline `$…$` + block `$$…$$` through the real ReactMarkdown/remark-math/rehype-katex stack assert `.katex` x2, `.katex-display`, no `.katex-error`). This keeps the katex 0.19.0 override despite it forcing a version outside consumers' declared `^0.16.0` (wording corrected above — not semver-safe).
 - Verified: `npm run audit:high` PASS (9 allowlisted, header shows owner/review date); `npm run audit:test` 8/8; math test 1/1; `npx tsc --noEmit` clean. `npm run lint` still fails repo-wide on pre-existing chat/settings errors — explicitly NOT claimed as passing; separate cleanup task. Backend suites untouched by this frontend-only change; blank-run fix stays provisional pending those suites per review.
+
+
+## 2026-10-12 — Remove PostgreSQL from active setup
+
+- Removed the PostgreSQL service/matrix and `psycopg2-binary` install from backend CI; CI now validates migrations and tests against SQLite only.
+- Removed the unused `Settings.is_postgres` compatibility flag. Kept SQLAlchemy, Alembic, SQLite configuration/models, and desktop/dev local persistence for the future Windows app.
+- Rewrote deployment instructions for stateless web hosting, corrected the active stack/security storage descriptions, and removed the obsolete production PostgreSQL checklist item.
+- Validation status: implementation committed; CI is the next verification gate. No PostgreSQL runtime support is retained or claimed.
