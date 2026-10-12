@@ -111,6 +111,11 @@ app = FastAPI(
     description="Multi-Agent AI Consensus Platform",
     version="0.1.0",
     lifespan=lifespan,
+    # Production serves no interactive docs: /docs, /redoc and
+    # /openapi.json are dev-only (prevents catalog/schema enumeration).
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
 )
 
 # ── CORS: explicit allow-list in web; open locally ───────────────────
@@ -180,6 +185,10 @@ async def limit_upload_size(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    # API serves JSON/SSE only: lock framing, no active content permissions.
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
 
     return response
 

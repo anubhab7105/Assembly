@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV APP_ENV=production
 ENV APP_MODE=web
+ENV DEBUG=false
 
 # Create a non-root user and group
 RUN groupadd -r assembly && useradd -r -g assembly assembly

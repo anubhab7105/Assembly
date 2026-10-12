@@ -5,6 +5,8 @@
 !.env.example
 assembly.db
 .local/
+# Never bake git history (may contain old dev DB blobs) into the image.
+.git/
 # Python caches / builds.
 __pycache__/
 *.pyc
