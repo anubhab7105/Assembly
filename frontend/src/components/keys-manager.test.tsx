@@ -20,15 +20,14 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 
 vi.mock("@/lib/key-vault", () => ({
   globalVault: {
-    remember: false,
-    unlocked: false,
-    setRemember: vi.fn(),
     setKey: vi.fn(),
+    removeKey: vi.fn(),
+    getKey: vi.fn(),
     allKeys: vi.fn().mockResolvedValue({}),
     hasPersisted: vi.fn().mockResolvedValue(false),
+    hasLegacyEncrypted: vi.fn().mockResolvedValue(false),
+    migrateLegacy: vi.fn(),
     clearAll: vi.fn(),
-    unlock: vi.fn(),
-    lock: vi.fn(),
   },
 }));
 
@@ -98,10 +97,12 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
     );
     expect(await screen.findByTestId("tavily-input")).toBeDefined();
     expect(await screen.findByTestId("tavily-save")).toBeDefined();
-    // Memory-only mode shows the refresh warning; no unlock prompt without a blob.
-    expect((await screen.findByTestId("memory-only-banner")).textContent).toContain(
-      "a refresh clears them",
+    // Persistent vault: saving restores after refresh; the legacy unlock
+    // prompt appears only for pre-fix encrypted blobs.
+    expect((await screen.findByTestId("persisted-banner")).textContent).toContain(
+      "restored after refresh",
     );
+    expect(screen.queryByTestId("memory-only-banner")).toBeNull();
     expect(screen.queryByTestId("unlock-prompt")).toBeNull();
   });
 });

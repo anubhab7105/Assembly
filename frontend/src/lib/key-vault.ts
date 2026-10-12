@@ -1,20 +1,37 @@
 import { get, set, del } from "idb-keyval"
 
 /**
- * KeyVault: API keys live in memory by default (lost on reload).
+ * KeyVault: one canonical browser-side store for provider credentials.
  *
- * "Remember on this device" encrypts keys with WebCrypto AES-GCM, the
- * data key wrapped by a key derived from a USER PASSPHRASE via PBKDF2.
- * No passphrase = no persistence. The passphrase itself is never stored.
+ * Every `setKey` writes through to persistent storage (IndexedDB via
+ * idb-keyval, with a localStorage mirror used only when IndexedDB throws),
+ * so a plain Save survives a normal page refresh with no extra step.
+ * Reads load from the same store before serving, so initialization can
+ * never overwrite saved values with empty defaults.
+ *
+ * Keys travel to the backend only transiently inside `/api/run` and
+ * `/api/keys/test` HTTPS bodies; they are never written to the server,
+ * URLs, or logs from here.
  */
 
-const DB_KEY = "assembly_keys_encrypted_v2"
+export const KEYS_STORE_KEY = "assembly_keys_v1"
+const LS_FALLBACK_KEY = "assembly:keys_v1"
 
-function bufToB64(buf: ArrayBuffer | Uint8Array): string {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf)
-  let s = ""
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])
-  return btoa(s)
+const LEGACY_ENCRYPTED_KEY = "assembly_keys_encrypted_v2"
+const LEGACY_BLOBS = [LEGACY_ENCRYPTED_KEY, "assembly_keys_encrypted", "assembly_master_key"]
+
+export class KeyStorageError extends Error {
+  constructor(message = "Couldn't save keys on this device (storage unavailable or full). Nothing was saved.") {
+    super(message)
+    this.name = "KeyStorageError"
+  }
+}
+
+function isKeysRecord(v: unknown): v is Record<string, string> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false
+  return Object.entries(v as Record<string, unknown>).every(
+    ([k, val]) => typeof k === "string" && typeof val === "string",
+  )
 }
 
 function b64ToBuf(b64: string): Uint8Array {
@@ -41,120 +58,209 @@ async function deriveKek(passphrase: string, salt: Uint8Array): Promise<CryptoKe
   )
 }
 
+function lsGet(): Record<string, string> | null {
+  try {
+    if (typeof window === "undefined") return null
+    const raw = window.localStorage.getItem(LS_FALLBACK_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    return isKeysRecord(parsed) ? { ...parsed } : null
+  } catch {
+    return null
+  }
+}
+
 export class KeyVault {
-  private inMemoryKeys: Record<string, string> = {}
-  public remember: boolean = false
-  private passphrase: string | null = null
+  private cache: Record<string, string> = {}
+  private loadOnce: Promise<void> | null = null
+  private writeChain: Promise<void> = Promise.resolve()
 
-  constructor() {
-    if (typeof window !== "undefined") {
-      this.remember = window.localStorage.getItem("assembly_remember_keys") === "true"
+  private ensureLoaded(): Promise<void> {
+    if (!this.loadOnce) this.loadOnce = this.loadFromStores()
+    return this.loadOnce
+  }
+
+  private async loadFromStores(): Promise<void> {
+    // Primary first; the localStorage mirror is consulted only when the
+    // primary is absent (never written while the primary is healthy, so a
+    // deliberate clear cannot resurrect stale fallback copies).
+    try {
+      const v = await get<unknown>(KEYS_STORE_KEY)
+      if (v !== undefined) {
+        if (isKeysRecord(v)) this.cache = { ...v }
+        return
+      }
+    } catch {
+      // IndexedDB unavailable: fall through to the mirror.
+    }
+    const fb = lsGet()
+    if (fb) this.cache = fb
+  }
+
+  private async readCanonical(): Promise<Record<string, string>> {
+    try {
+      const v = await get<unknown>(KEYS_STORE_KEY)
+      if (v !== undefined) return isKeysRecord(v) ? { ...v } : { ...this.cache }
+    } catch {
+      // Fall through to the mirror.
+    }
+    return lsGet() ?? { ...this.cache }
+  }
+
+  private async writeCanonical(next: Record<string, string>): Promise<void> {
+    const snapshot = { ...next }
+    try {
+      await set(KEYS_STORE_KEY, snapshot)
+      // Primary healthy: drop any stale fallback copy (best effort).
+      try {
+        if (typeof window !== "undefined") window.localStorage.removeItem(LS_FALLBACK_KEY)
+      } catch {
+        // Mirror cleanup failure is harmless while the primary holds truth.
+      }
+      return
+    } catch {
+      // IndexedDB failed: mirror to localStorage so the save still survives.
+    }
+    try {
+      if (typeof window === "undefined") throw new Error("no window")
+      window.localStorage.setItem(LS_FALLBACK_KEY, JSON.stringify(snapshot))
+      return
+    } catch {
+      throw new KeyStorageError()
     }
   }
 
-  /** Unlock persistence with the user's passphrase (kept in memory only). */
-  unlock(passphrase: string) {
-    this.passphrase = passphrase
+  private enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.writeChain.then(work, work)
+    // Keep the chain alive for later writes even if this one rejects.
+    this.writeChain = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
   }
 
-  lock() {
-    this.passphrase = null
+  async setKey(provider: string, key: string): Promise<void> {
+    const p = (provider || "").trim()
+    const k = (key || "").trim()
+    if (!p) throw new Error("Unknown provider — nothing was saved.")
+    if (!k) throw new Error("Empty key — nothing was saved.")
+    await this.ensureLoaded()
+    const merged = await this.enqueue(async () => {
+      const cur = await this.readCanonical()
+      const next = { ...cur, [p]: k }
+      await this.writeCanonical(next)
+      return next
+    })
+    this.cache = merged
   }
 
-  get unlocked(): boolean {
-    return this.passphrase !== null && this.passphrase.length >= 8
-  }
-
-  setRemember(remember: boolean) {
-    this.remember = remember
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("assembly_remember_keys", String(remember))
-    }
-    if (!remember) {
-      this.lock()
-      void this.clearPersisted()
-    }
-  }
-
-  async setKey(provider: string, key: string) {
-    this.inMemoryKeys[provider] = key
-    if (this.remember && this.unlocked) {
-      await this.persist()
-    }
+  async removeKey(provider: string): Promise<void> {
+    const p = (provider || "").trim()
+    if (!p) return
+    await this.ensureLoaded()
+    const merged = await this.enqueue(async () => {
+      const cur = await this.readCanonical()
+      if (!(p in cur)) return cur
+      const next = { ...cur }
+      delete next[p]
+      await this.writeCanonical(next)
+      return next
+    })
+    this.cache = merged
   }
 
   async getKey(provider: string): Promise<string | null> {
-    if (this.inMemoryKeys[provider]) return this.inMemoryKeys[provider]
-    if (this.remember && this.unlocked) {
-      await this.loadPersisted()
-      return this.inMemoryKeys[provider] || null
-    }
-    return null
+    await this.ensureLoaded()
+    const cur = await this.readCanonical().catch(() => ({ ...this.cache }))
+    this.cache = cur
+    return cur[provider] ?? null
   }
 
   async allKeys(): Promise<Record<string, string>> {
-    if (this.remember && this.unlocked && Object.keys(this.inMemoryKeys).length === 0) {
-      await this.loadPersisted()
-    }
-    return { ...this.inMemoryKeys }
+    await this.ensureLoaded()
+    const cur = await this.readCanonical().catch(() => ({ ...this.cache }))
+    this.cache = cur
+    return { ...cur }
   }
 
-  /** Whether an encrypted blob exists (no decryption, never exposes keys). */
+  /** Whether the canonical store holds any keys (no decryption involved). */
   async hasPersisted(): Promise<boolean> {
+    const keys = await this.allKeys().catch(() => ({} as Record<string, string>))
+    return Object.keys(keys).length > 0
+  }
+
+  async clearAll(): Promise<void> {
+    await this.ensureLoaded()
+    const merged = await this.enqueue(async () => {
+      const next: Record<string, string> = {}
+      await this.writeCanonical(next)
+      await this.clearLegacyBlobs()
+      return next
+    })
+    this.cache = merged
+  }
+
+  /** A pre-fix encrypted blob exists but the canonical store is empty. */
+  async hasLegacyEncrypted(): Promise<boolean> {
     try {
-      const stored = await get(DB_KEY)
+      const stored = await get<unknown>(LEGACY_ENCRYPTED_KEY)
       return stored !== undefined
     } catch {
       return false
     }
   }
 
-  async clearAll() {
-    this.inMemoryKeys = {}
-    this.lock()
-    this.setRemember(false)
-    await this.clearPersisted()
-  }
-
-  private async persist() {
-    if (!this.passphrase) return
-    const salt = crypto.getRandomValues(new Uint8Array(16))
-    const iv = crypto.getRandomValues(new Uint8Array(12))
-    const kek = await deriveKek(this.passphrase, salt)
-    const encoded = new TextEncoder().encode(JSON.stringify(this.inMemoryKeys))
-    const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv as BufferSource }, kek, encoded)
-    await set(DB_KEY, {
-      v: 2,
-      salt: bufToB64(salt),
-      iv: bufToB64(iv),
-      ciphertext: bufToB64(ciphertext),
-    })
-    // Drop legacy v1 blob if present.
-    await del("assembly_keys_encrypted")
-    await del("assembly_master_key")
-  }
-
-  private async loadPersisted() {
-    const stored = await get<{ v: number; salt: string; iv: string; ciphertext: string } | undefined>(DB_KEY)
-    if (!stored || !this.passphrase) return
+  /**
+   * One-time migration for pre-fix users: decrypt the legacy passphrase
+   * blob into the canonical store, then delete the legacy blobs.
+   * Wrong passphrase (or corruption) throws and deletes nothing.
+   */
+  async migrateLegacy(passphrase: string): Promise<Record<string, string>> {
+    if (!passphrase || passphrase.length < 8) throw new Error("Passphrase must be at least 8 characters.")
+    const stored = await get<{ v: number; salt: string; iv: string; ciphertext: string } | undefined>(
+      LEGACY_ENCRYPTED_KEY,
+    ).catch(() => undefined)
+    if (!stored) throw new Error("No saved vault found on this device.")
+    let decrypted: Record<string, string>
     try {
-      const kek = await deriveKek(this.passphrase, b64ToBuf(stored.salt))
-      const decrypted = await crypto.subtle.decrypt(
+      const kek = await deriveKek(passphrase, b64ToBuf(stored.salt))
+      const bytes = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv: b64ToBuf(stored.iv) as BufferSource },
         kek,
         b64ToBuf(stored.ciphertext) as BufferSource,
       )
-      this.inMemoryKeys = JSON.parse(new TextDecoder().decode(decrypted))
+      const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes))
+      if (!isKeysRecord(parsed)) throw new Error("bad shape")
+      decrypted = { ...parsed }
     } catch {
-      this.inMemoryKeys = {}
-      throw new Error("Wrong passphrase or corrupted vault.")
+      throw new Error("Wrong passphrase — nothing was deleted. Try again or use Clear all keys.")
     }
+    await this.ensureLoaded()
+    const merged = await this.enqueue(async () => {
+      const cur = await this.readCanonical()
+      const next = { ...cur, ...decrypted }
+      await this.writeCanonical(next)
+      await this.clearLegacyBlobs()
+      return next
+    })
+    this.cache = merged
+    return { ...merged }
   }
 
-  private async clearPersisted() {
-    await del(DB_KEY)
-    await del("assembly_keys_encrypted")
-    await del("assembly_master_key")
+  private async clearLegacyBlobs(): Promise<void> {
+    for (const k of LEGACY_BLOBS) {
+      try {
+        await del(k)
+      } catch {
+        // Best effort: one stuck legacy key must not fail an explicit clear.
+      }
+    }
+    try {
+      if (typeof window !== "undefined") window.localStorage.removeItem("assembly_remember_keys")
+    } catch {
+      // ignore
+    }
   }
 }
 

@@ -69,19 +69,18 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
       })
     }
 
-    // Client-side navigation: page.goto reloads and wipes the memory-only
-    // vault (same constraint as keys-persist.spec.ts). The settings
-    // sidebar has no chat link, so go via landing like a user would.
+    // Client-side navigation keeps the persistent vault (verified in
+    // keys-persist.spec.ts). The settings sidebar has no chat link, so go
+    // via landing like a user would.
     await page.locator('a[href="/"]').first().click()
     await expect(page).toHaveURL(/\/$/)
     await page.locator('a[href="/chat"]').first().click()
     await expect(page).toHaveURL(/\/chat/)
 
-    // Privacy gate blocks interacting until acknowledged.
-    const ack = page.getByTestId("privacy-acknowledge")
-    if (await ack.isVisible().catch(() => false)) {
-      await ack.click()
-    }
+    // Privacy gate blocks interacting until acknowledged (fresh contexts
+    // always prompt; wait for the async storage read instead of racing it).
+    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
+    await page.getByTestId("privacy-acknowledge").click()
 
     // Catalog-backed picker renders checkboxes grouped by provider/family.
     await expect(page.getByTestId("model-picker")).toBeVisible()
