@@ -14,15 +14,15 @@ export default function SetupPage() {
   const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
-    setCatalogFailed(false);
     ApiClient.catalog()
-      .then((c) =>
+      .then((c) => {
+        setCatalogFailed(false);
         setNotes(
           c.providers
             .filter((p) => p.enabled)
             .map((p) => ({ id: p.id, privacy_note: (p as { privacy_note?: string | null }).privacy_note ?? null })),
-        ),
-      )
+        );
+      })
       .catch(() => {
         setNotes([]);
         setCatalogFailed(true);

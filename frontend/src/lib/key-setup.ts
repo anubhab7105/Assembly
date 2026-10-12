@@ -29,7 +29,10 @@ export function keyPrefixHint(providerId: string): string {
 }
 
 /** Prefix hint never blocks saving: always true by design. */
-export function isKeyFormatOk(_providerId: string, _key: string): boolean {
+export function isKeyFormatOk(providerId: string, key: string): boolean {
+  // Prefix hints intentionally never block saving a provider key.
+  void providerId;
+  void key;
   return true;
 }
 

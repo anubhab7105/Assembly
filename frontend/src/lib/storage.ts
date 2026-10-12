@@ -164,6 +164,6 @@ export class BrowserStorage extends BaseStorage {}
 export class DesktopStorage extends BaseStorage {}
 
 export const storage: StorageService =
-  typeof window !== "undefined" && (window as any).ASSEMBLY_APP_MODE === "desktop"
+  typeof window !== "undefined" && window.ASSEMBLY_APP_MODE === "desktop"
     ? new DesktopStorage()
     : new BrowserStorage();

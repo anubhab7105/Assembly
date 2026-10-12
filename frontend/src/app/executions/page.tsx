@@ -1,13 +1,12 @@
 "use client"
 
-import React, { useEffect, useState, Suspense } from "react"
+import React, { Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useExecution } from "@/hooks/use-execution"
 import { ApiClient } from "@/lib/api-client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress"
 import {
   Users,
   Target,
