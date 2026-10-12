@@ -100,7 +100,14 @@ export class ApiClient {
       signal?: AbortSignal
     },
     onEvent: (event: RunStreamEvent) => void,
-  ): Promise<{ status: string; usage: UsageEntry[] }> {
+  ): Promise<{
+    status: string
+    usage: UsageEntry[]
+    stage?: string
+    errorCode?: string
+    errorClass?: string
+    message?: string
+  }> {
     const response = await fetch(`${env.apiUrl}/api/run`, {
       method: "POST",
       headers: this.headers(),
@@ -134,6 +141,11 @@ export class ApiClient {
     let buffer = ""
     let status = "unknown"
     let usage: UsageEntry[] = []
+    let finished = false
+    let stage: string | undefined
+    let errorCode: string | undefined
+    let errorClass: string | undefined
+    let message: string | undefined
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break
@@ -146,13 +158,23 @@ export class ApiClient {
           const event = JSON.parse(line.slice(6))
           onEvent(event)
           if (event.event_type === "run.finished") {
+            finished = true
             status = event.status ?? "unknown"
             usage = event.usage ?? []
+            if (typeof event.stage === "string") stage = event.stage
+            if (typeof event.error_code === "string") errorCode = event.error_code
+            if (typeof event.error_class === "string") errorClass = event.error_class
+            if (typeof event.message === "string") message = event.message
           }
         }
       }
     }
-    return { status, usage }
+    if (!finished) {
+      throw new Error(
+        "Run stream closed without completion (no run.finished). Check your connection and try again.",
+      )
+    }
+    return { status, usage, stage, errorCode, errorClass, message }
   }
 
   static async cancelExecution(id: string): Promise<{ status: string }> {

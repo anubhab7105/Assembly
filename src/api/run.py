@@ -8,6 +8,7 @@ stored; logs carry metadata (run prefix, tier, timings, counts) only.
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -40,6 +41,48 @@ BLOCKED_CODE = "blocked_no_usable_keys"
 
 #: Minimum distinct model families for a healthy team (mirrors catalog).
 MINIMUM_FAMILIES = 3
+
+
+def _sanitized_code(name: str) -> str:
+    """Lowercase alphanumeric failure code (safe for logs and SSE)."""
+    code = re.sub(r"[^a-z0-9]+", "_", (name or "").lower()).strip("_")
+    return code[:64] or "internal_error"
+
+
+def _failure_code_for(exc: BaseException) -> str:
+    """Map an exception to a safe, low-cardinality failure code.
+
+    Only the exception *type* (and a few well-known safe substrings)
+    influence the code. The raw message is never logged or emitted, since
+    provider errors can echo credentials or request bodies.
+    """
+    from src.providers.router import PinViolationError
+
+    if isinstance(exc, PinViolationError):
+        return "pin_violation"
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return "timeout"
+    if isinstance(exc, RuntimeError):
+        try:
+            msg = str(exc).lower()
+        except Exception:  # noqa: BLE001 — str() must never break classification
+            msg = ""
+        if "usable model" in msg or "model family" in msg or "family" in msg:
+            return "no_usable_models"
+        return "runtime_error"
+    if isinstance(exc, ValueError):
+        return "invalid_state"
+    if isinstance(exc, ConnectionError):
+        return "provider_unavailable"
+    return _sanitized_code(type(exc).__name__)
+
+
+def _safe_failure_message(stage: str, code: str) -> str:
+    """Actionable client message with no secrets, bodies, or raw errors."""
+    return (
+        f"Run failed during {stage} ({code}). "
+        "Check your provider keys and quota, then try again."
+    )
 
 
 @dataclass
@@ -111,7 +154,16 @@ async def _execute_run(
     # Use the per-run router (keys + selection) instead of the shared one.
     orch.router = router_override  # type: ignore[assignment]
 
+    stage_holder = {"stage": "orchestrator_start", "events": 0}
+
     async def on_progress(event: dict) -> None:
+        # Track the last lifecycle stage for failure diagnostics (envelope
+        # `state` when present, else the event name). Names only, no content.
+        if isinstance(event, dict):
+            state = event.get("state") or event.get("event_type")
+            if isinstance(state, str) and state:
+                stage_holder["stage"] = state[:64]
+            stage_holder["events"] += 1
         await entry.queue.put(dict(event))
 
     result_status = "failed"
@@ -146,22 +198,66 @@ async def _execute_run(
             }
         )
         entry.usage = usage
+        if result_status == "completed":
+            await entry.queue.put(
+                {
+                    "event_type": "run.finished",
+                    "run_id": run_id,
+                    "status": result_status,
+                    "usage": usage,
+                }
+            )
+        else:
+            # The orchestrator settled without an exception but did not
+            # complete (e.g. status "failed"): emit safe diagnostics so the
+            # client can show a failure state instead of a blank team.
+            stage = stage_holder["stage"]
+            code = "execution_failed"
+            logger.error(
+                f"Run     │ {run_id} failed stage={stage} code={code} "
+                f"events={stage_holder['events']} status={result_status}"
+            )
+            await entry.queue.put(
+                {
+                    "event_type": "run.finished",
+                    "run_id": run_id,
+                    "status": result_status,
+                    "usage": usage,
+                    "stage": stage,
+                    "error_code": code,
+                    "error_class": "ExecutionResult",
+                    "message": _safe_failure_message(stage, code),
+                }
+            )
+    except asyncio.CancelledError:
         await entry.queue.put(
             {
                 "event_type": "run.finished",
                 "run_id": run_id,
-                "status": result_status,
-                "usage": usage,
+                "status": "cancelled",
+                "stage": stage_holder["stage"],
             }
         )
-    except asyncio.CancelledError:
-        await entry.queue.put(
-            {"event_type": "run.finished", "run_id": run_id, "status": "cancelled"}
+    except Exception as exc:  # noqa: BLE001 — run must finish as an event, not a crash
+        # Safe diagnostics only: run ID, stage, exception class, sanitized
+        # code. Never log keys, bodies, auth headers, or the raw message.
+        stage = stage_holder["stage"]
+        error_class = type(exc).__name__[:64]
+        code = _failure_code_for(exc)
+        logger.error(
+            f"Run     │ {run_id} failed stage={stage} "
+            f"error={error_class} code={code} events={stage_holder['events']}"
         )
-    except Exception:  # noqa: BLE001 — run must finish as an event, not a crash
-        logger.error("Run     │ background run failed")
         await entry.queue.put(
-            {"event_type": "run.finished", "run_id": run_id, "status": "failed"}
+            {
+                "event_type": "run.finished",
+                "run_id": run_id,
+                "status": "failed",
+                "stage": stage,
+                "error_code": code,
+                "error_class": error_class,
+                "message": _safe_failure_message(stage, code),
+            }
         )
     finally:
         entry.done = True

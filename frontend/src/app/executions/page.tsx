@@ -57,6 +57,10 @@ function ExecutionContent() {
   }
 
   const terminal = ["completed", "cancelled", "failed"].includes(state.status)
+  // A failed run with no answer is a failure state, never an active team:
+  // surface it explicitly instead of "Forming temporary team...".
+  // Legacy/unknown histories read as failures for display (never active).
+  const failedBanner = state.status === "failed" || state.status === "unknown"
   // After the run ends the live countdown is meaningless: freeze the
   // final elapsed time instead of a dead --:--.
   const timerDisplay =
@@ -92,6 +96,15 @@ function ExecutionContent() {
         <div className="bg-warning-subtle text-warning px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2">
           <WifiOff className="size-4" />
           This run ended before completing — it was cancelled when the page closed or the connection dropped.
+        </div>
+      )}
+      {failedBanner && (
+        <div
+          data-testid="run-failed-banner"
+          className="bg-danger-subtle text-danger px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2"
+        >
+          <XCircle className="size-4" />
+          This run failed before producing an answer — check your provider keys and quota, then start a new run.
         </div>
       )}
 
@@ -198,8 +211,17 @@ function ExecutionContent() {
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 opacity-50">
-                  <PlayCircle className="size-12 animate-pulse" />
-                  <span className="text-sm">Awaiting first debate round...</span>
+                  {failedBanner ? (
+                    <>
+                      <XCircle className="size-12" />
+                      <span className="text-sm">No consensus — the run failed.</span>
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="size-12 animate-pulse" />
+                      <span className="text-sm">Awaiting first debate round...</span>
+                    </>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -240,9 +262,11 @@ function ExecutionContent() {
                 </div>
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-10">
-                  {terminal && (state.summary?.agentCount ?? 0) > 0
-                    ? `Team disbanded — ${state.summary?.agentCount} agents served this run.`
-                    : "Forming temporary team..."}
+                  {failedBanner
+                    ? "This run failed before a team formed — no agents to show."
+                    : terminal && (state.summary?.agentCount ?? 0) > 0
+                      ? `Team disbanded — ${state.summary?.agentCount} agents served this run.`
+                      : "Forming temporary team..."}
                 </div>
               )}
             </CardContent>

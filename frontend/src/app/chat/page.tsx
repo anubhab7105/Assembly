@@ -13,6 +13,7 @@ import {
 import { PrivacyDialog } from "@/components/privacy-dialog"
 import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
+import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -222,6 +223,36 @@ export default function Home() {
           }
         },
       )
+      // Explicit terminal handling: only a completed run with a non-empty
+      // final answer is presentable. Failed/incomplete runs keep their
+      // failure history but never navigate to the active-run screen.
+      if (!isPresentableRun({ status: result.status, finalAnswer })) {
+        const failedStatus = result.status === "completed" ? "failed" : result.status
+        await storage.saveHistory({
+          id: runId,
+          question,
+          answer: finalAnswer,
+          status: failedStatus,
+          created_at: new Date().toISOString(),
+          minutes,
+          consensus,
+          confidence,
+          agentCount,
+          providers,
+          debateRounds,
+          tokens,
+          elapsedSeconds,
+        })
+        setStatus(
+          failureMessage({
+            status: failedStatus,
+            stage: result.stage,
+            errorCode: result.errorCode,
+          }),
+        )
+        setLoading(false)
+        return
+      }
       await storage.saveHistory({
         id: runId,
         question,
@@ -239,17 +270,21 @@ export default function Home() {
       })
       router.push(`/executions?id=${runId}`)
     } catch (err) {
-      // A closed tab kills the stream mid-run: persist a cancelled record
-      // so the executions view can say the run was cancelled when the page
-      // closed. Pre-stream rejections (no run started) only show the error.
+      // Mid-stream failures (abort vs. broken stream) keep distinct states:
+      // a user abort is cancelled; a stream that dies without run.finished
+      // is a failure, never a silent empty run. Pre-stream rejections (no
+      // run started) only show the error.
       const message = err instanceof Error ? err.message : "Run failed"
+      const aborted =
+        (err instanceof DOMException && err.name === "AbortError") ||
+        /abort/i.test(message)
       if (streamStarted) {
         try {
           await storage.saveHistory({
-            id: `local-${Date.now()}`,
+            id: runId,
             question,
             answer: finalAnswer,
-            status: "cancelled",
+            status: aborted ? "cancelled" : "failed",
             created_at: new Date().toISOString(),
             minutes,
             consensus,

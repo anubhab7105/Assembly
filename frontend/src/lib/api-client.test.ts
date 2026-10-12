@@ -91,3 +91,82 @@ describe("ApiClient.testKey UI states", () => {
     expect(document.body.innerHTML).not.toContain(canary);
   });
 });
+
+describe("ApiClient.startRunStream terminal handling", () => {
+  function mockStreamFetch(chunks: string[]) {
+    const encoder = new TextEncoder();
+    const queue = chunks.map((c) => encoder.encode(c));
+    let i = 0;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      body: {
+        getReader() {
+          return {
+            async read() {
+              if (i >= queue.length) return { done: true, value: undefined };
+              const value = queue[i++];
+              return { done: false, value };
+            },
+          };
+        },
+      },
+    }) as unknown as typeof fetch;
+  }
+
+  const baseArgs = {
+    question: "Why do hummingbirds hum?",
+    minutes: 3,
+    providerKeys: { groq: "k" },
+    selection: { selected: [], pins: {} },
+    usage: [],
+  };
+
+  it("resolves a successful run with the final answer events", async () => {
+    mockStreamFetch([
+      `data: ${JSON.stringify({ event_type: "execution.completed", data: { answer: "42" } })}\n\n`,
+      `data: ${JSON.stringify({ event_type: "run.finished", status: "completed", usage: [] })}\n\n`,
+    ]);
+    const seen: unknown[] = [];
+    const res = await ApiClient.startRunStream(baseArgs, (e) => seen.push(e));
+    expect(res.status).toBe("completed");
+    expect(seen).toHaveLength(2);
+  });
+
+  it("resolves a failed run with safe diagnostics (does not reject)", async () => {
+    mockStreamFetch([
+      `data: ${JSON.stringify({ event_type: "execution.started" })}\n\n`,
+      `data: ${JSON.stringify({
+        event_type: "run.finished",
+        status: "failed",
+        usage: [],
+        stage: "planning",
+        error_code: "no_usable_models",
+        error_class: "RuntimeError",
+        message: "Run failed during planning (no_usable_models). Check your provider keys and quota, then try again.",
+      })}\n\n`,
+    ]);
+    const res = await ApiClient.startRunStream(baseArgs, () => {});
+    expect(res.status).toBe("failed");
+    expect(res.stage).toBe("planning");
+    expect(res.errorCode).toBe("no_usable_models");
+    expect(res.errorClass).toBe("RuntimeError");
+  });
+
+  it("rejects a stream that closes without run.finished", async () => {
+    mockStreamFetch([
+      `data: ${JSON.stringify({ event_type: "execution.started" })}\n\n`,
+    ]);
+    await expect(ApiClient.startRunStream(baseArgs, () => {})).rejects.toThrow(
+      /no run\.finished/i,
+    );
+  });
+
+  it("rejects an empty stream that closes immediately", async () => {
+    mockStreamFetch([]);
+    await expect(ApiClient.startRunStream(baseArgs, () => {})).rejects.toThrow(
+      /no run\.finished/i,
+    );
+  });
+});
