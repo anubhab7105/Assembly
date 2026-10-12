@@ -563,3 +563,13 @@
 - Removed the unused `Settings.is_postgres` compatibility flag. Kept SQLAlchemy, Alembic, SQLite configuration/models, and desktop/dev local persistence for the future Windows app.
 - Rewrote deployment instructions for stateless web hosting, corrected the active stack/security storage descriptions, and removed the obsolete production PostgreSQL checklist item.
 - Validation status: implementation committed; CI is the next verification gate. No PostgreSQL runtime support is retained or claimed.
+
+## 2026-10-12 — Mobile polish + contrast + SEO static fixes
+
+- Fixed horizontal overflow: body overflow-x clip, orbit radius 140px to 104px on <=480px, pre/code overflow-x auto, executions ID break-all, min-w-0 flex fixes.
+- Light-mode contrast to WCAG AA: brand/primary to #8a5e00, accent text #7a5200, success #146c46, warning #8a4e00, muted #5f5a54 (dark already passed).
+- Mobile menu: aria labels/expanded, Escape close, dialog semantics, 44px targets; history delete visible on touch with aria-label; designed history empty state.
+- Forms: chat label + alert-style errors, 44px time buttons; keys inputs labelled with alert errors; model-picker labels + 44px controls.
+- Console: gated layout-wrapper/use-execution/error-boundary logs to non-prod. Source maps already off (default).
+- Footer: fixed portfolio typo, added clickable mailto anubhab7105@gmail.com. robots/sitemap force-static (build green). Removed unused zod + template SVGs.
+- Verified: tsc clean, eslint clean on touched files, next build green, robots/sitemap served, Playwright overflow=0 at 360/390/768/1280, vitest 56 passed.

@@ -78,15 +78,15 @@
   --card-foreground: #1a1815;
   --popover-foreground: #1a1815;
   --secondary-foreground: #1a1815;
-  --muted-foreground: #6b6560;
+  --muted-foreground: #5f5a54;
 
   /* Structural */
   --border: #d4d0c8;
-  --ring: #c8860a;
+  --ring: #8a5e00;
   --radius: 0.625rem;
 
   /* Primary (maps to amber for light mode) */
-  --primary: #c8860a;
+  --primary: #8a5e00;
   --primary-foreground: #ffffff;
 
   /* Secondary */
@@ -94,21 +94,21 @@
 
   /* Accent (subtle amber bg) */
   --accent: #fdf3e0;
-  --accent-foreground: #c8860a;
+  --accent-foreground: #7a5200;
 
   /* Destructive */
   --destructive: #b83030;
 
   /* Assembly brand palette */
-  --brand: #c8860a;
+  --brand: #8a5e00;
   --brand-subtle: #fdf3e0;
-  --brand-hover: #b07508;
+  --brand-hover: #755000;
   --brand-foreground: #ffffff;
 
   /* Semantic status */
-  --success: #1a8a5a;
+  --success: #146c46;
   --success-subtle: #e6f7f1;
-  --warning: #c07000;
+  --warning: #8a4e00;
   --warning-subtle: #fff8e6;
   --danger: #b83030;
   --danger-subtle: #fde8e8;
@@ -118,12 +118,12 @@
   /* Sidebar */
   --sidebar: #efefec;
   --sidebar-foreground: #1a1815;
-  --sidebar-primary: #c8860a;
+  --sidebar-primary: #8a5e00;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #fdf3e0;
-  --sidebar-accent-foreground: #c8860a;
+  --sidebar-accent-foreground: #7a5200;
   --sidebar-border: #d4d0c8;
-  --sidebar-ring: #c8860a;
+  --sidebar-ring: #8a5e00;
 }
 
 /* ─── Dark mode tokens ──────────────────────────────────────────────────────── */
@@ -203,11 +203,13 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: clip;
   }
 
   body {
     @apply bg-background text-foreground min-h-full;
     font-family: var(--font-sans);
+    overflow-x: clip;
   }
 
   code,
@@ -233,6 +235,13 @@
 
 /* ─── Utilities layer ───────────────────────────────────────────────────────── */
 @layer utilities {
+  /* Long code / IDs / URLs must wrap or scroll, never push the viewport. */
+  pre,
+  code {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-wrap: break-word;
+  }
   /* Shimmer animation for Skeleton */
   @keyframes shimmer {
     0% {
@@ -393,6 +402,17 @@
     }
     to {
       transform: rotate(360deg) translateX(140px) rotate(-360deg);
+    }
+  }
+
+  @media (max-width: 480px) {
+    @keyframes orbit {
+      from {
+        transform: rotate(0deg) translateX(104px) rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg) translateX(104px) rotate(-360deg);
+      }
     }
   }
 

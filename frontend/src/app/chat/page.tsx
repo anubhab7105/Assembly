@@ -361,40 +361,46 @@ export default function Home() {
 
         <div className="space-y-4">
           <div className="relative rounded-2xl border border-border bg-card p-2 shadow-sm focus-within:border-brand">
+            <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
             <textarea
+              id="research-question"
               ref={textareaRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="What do you want the team to research?"
-              className="w-full resize-none bg-transparent px-4 pt-3 pb-12 text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
+              aria-describedby="question-status"
+              className="w-full resize-none bg-transparent px-4 pt-3 pb-16 text-base text-foreground placeholder:text-muted-foreground focus:outline-none sm:pb-12"
               rows={2}
               maxLength={2000}
+              required
             />
-            <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+            <div className="absolute bottom-2 left-2 right-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary" className="bg-muted px-2 py-1 font-mono text-muted-foreground">
                   Mode: Auto
                 </Badge>
-                <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-                  <Clock className="size-3.5 text-muted-foreground ml-2 mr-1" />
+                <div className="flex items-center rounded-md border border-border bg-background p-0.5" role="group" aria-label="Time budget">
+                  <Clock className="size-3.5 text-muted-foreground ml-2 mr-1" aria-hidden />
                   {TIME_BUDGETS.map((m) => (
                     <button
                       key={m}
                       onClick={() => setMinutes(m)}
-                      className={`px-2 py-1 text-xs font-medium rounded-sm ${minutes === m ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+                      aria-pressed={minutes === m}
+                      aria-label={`${m} minutes`}
+                      className={`min-h-11 min-w-11 px-2.5 py-2 text-xs font-medium rounded-sm ${minutes === m ? "bg-muted text-foreground" : "text-muted-foreground"}`}
                     >
                       {m}m
                     </button>
                   ))}
                 </div>
               </div>
-              <Button size="sm" onClick={handleLaunch} disabled={loading || !question.trim() || gate.level === "BLOCKED"} className="shrink-0 h-8 rounded-lg">
+              <Button size="sm" onClick={handleLaunch} disabled={loading || !question.trim() || gate.level === "BLOCKED"} className="shrink-0 min-h-11 rounded-lg">
                 {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="size-4 mr-1.5" />}
                 Launch Team
               </Button>
             </div>
           </div>
-          {status && <p className="px-2 text-xs text-muted-foreground">{status}</p>}
+          {status && <p id="question-status" role="alert" className="rounded-lg border border-danger/40 bg-danger-subtle px-3 py-2 text-xs font-medium text-danger">{status}</p>}
         </div>
 
         <ModelPicker value={selection} onChange={setSelection} keyedProviderIds={enabledIds} />

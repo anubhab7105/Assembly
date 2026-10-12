@@ -291,12 +291,21 @@ export default function LandingPage() {
           <p>
             Developed by{" "}
             <a
-              href="https://anubhab-protfolio.vercel.app"
+              href="https://anubhab-portfolio.vercel.app"
               target="_blank"
               rel="noopener noreferrer"
               className="font-medium text-foreground underline decoration-brand/50 underline-offset-4 transition-colors hover:text-brand hover:decoration-brand"
             >
               Anubhab Das
+            </a>
+          </p>
+          <span className="hidden sm:inline" aria-hidden>&middot;</span>
+          <p>
+            <a
+              href="mailto:anubhab7105@gmail.com"
+              className="inline-flex min-h-11 items-center font-medium text-foreground underline decoration-brand/50 underline-offset-4 transition-colors hover:text-brand hover:decoration-brand"
+            >
+              anubhab7105@gmail.com
             </a>
           </p>
         </div>

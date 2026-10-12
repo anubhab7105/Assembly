@@ -362,19 +362,19 @@ export function KeysManager() {
                   </p>
                 </details>
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium">API Key</label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor={`key-${provider.id}`} className="text-xs font-medium">API Key</label>
                     <div className="flex items-center gap-2">
                       {provider.key_url && (
                         <>
-                          <a href={provider.key_url} target="_blank" rel="noreferrer noopener" className="text-xs flex items-center gap-1 text-brand hover:underline">
+                          <a href={provider.key_url} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-11 items-center gap-1 text-xs text-brand hover:underline">
                             Get free key <ExternalLink className="size-3" />
                           </a>
                           <button
                             type="button"
                             aria-label={`Copy key link for ${provider.id}`}
                             data-testid={`copy-link-${provider.id}`}
-                            className="text-xs text-brand hover:underline flex items-center gap-1"
+                            className="inline-flex min-h-11 items-center gap-1 text-xs text-brand hover:underline"
                             onClick={() => void copyLink(provider.key_url)}
                           >
                             <Copy className="size-3" /> Copy link
@@ -384,19 +384,21 @@ export function KeysManager() {
                     </div>
                   </div>
                   <input
+                    id={`key-${provider.id}`}
                     type="password"
                     placeholder={hasSavedKey ? maskKey(savedKeys[provider.id]) : "paste key…"}
                     value={inputs[provider.id] || ""}
                     onChange={(e) => setInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))}
                     autoComplete="off"
                     spellCheck="false"
-                    className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-mono"
+                    aria-describedby={`prefix-hint-${provider.id}`}
+                    className="w-full rounded-md border border-border bg-muted/50 px-3 py-2.5 text-sm font-mono"
                   />
-                  <p data-testid={`prefix-hint-${provider.id}`} className="text-[10px] text-muted-foreground pt-1">
+                  <p id={`prefix-hint-${provider.id}`} data-testid={`prefix-hint-${provider.id}`} className="text-[10px] text-muted-foreground pt-1">
                     {hint} This hint never blocks saving.
                   </p>
                   {saveErrors[provider.id] && (
-                    <p data-testid={`save-error-${provider.id}`} className="text-xs text-danger">
+                    <p role="alert" data-testid={`save-error-${provider.id}`} className="rounded-md border border-danger/40 bg-danger-subtle px-2.5 py-2 text-xs font-medium text-danger">
                       {saveErrors[provider.id]}
                     </p>
                   )}

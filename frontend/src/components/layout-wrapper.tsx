@@ -52,7 +52,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
     try {
       setExecutions(await storage.listHistory())
     } catch (e) {
-      console.error(e)
+      if (process.env.NODE_ENV !== "production") console.error(e)
     } finally {
       setLoading(false)
     }
@@ -66,7 +66,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         if (!cancelled) setExecutions(items)
       })
       .catch((error: unknown) => {
-        if (!cancelled) console.error(error)
+        if (!cancelled && process.env.NODE_ENV !== "production") console.error(error)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -134,13 +134,15 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
         <div className="px-1 pb-3">
           <div className="relative">
-            <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+            <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" aria-hidden />
+            <label htmlFor="history-search" className="sr-only">Search history</label>
             <input
+              id="history-search"
               type="text"
               placeholder="Search..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-md border border-border bg-muted/30 pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
+              className="w-full rounded-md border border-border bg-muted/30 pl-8 pr-3 py-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
             />
           </div>
         </div>
@@ -151,8 +153,27 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             <Skeleton className="h-12 w-full rounded-md" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="px-2 py-8 text-center text-xs text-muted-foreground">
-            {search ? "No matching executions found." : "No history yet."}
+          <div className="mx-1 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
+            <MessageSquare className="mx-auto size-8 text-muted-foreground" aria-hidden />
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              {search ? "No matching runs" : "No runs yet"}
+            </p>
+            <p className="mx-auto mt-1 max-w-56 text-xs text-muted-foreground">
+              {search
+                ? "Try a different search term."
+                : "Ask your first question and the team will appear here."}
+            </p>
+            {!search && (
+              <Button
+                variant="default"
+                size="sm"
+                className="mt-4 min-h-11"
+                onClick={() => { router.push("/chat"); if (onClose) onClose() }}
+              >
+                <Plus className="size-4 mr-2" />
+                Ask a question
+              </Button>
+            )}
           </div>
         ) : (
           filtered.map((ex) => {
@@ -176,10 +197,11 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                 </div>
                 <button
                   onClick={(e) => handleDelete(e, ex.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:text-danger rounded shrink-0"
+                  aria-label={`Delete run: ${ex.question.slice(0, 60)}`}
+                  className="rounded p-2.5 hover:text-danger shrink-0 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                   title="Delete execution"
                 >
-                  <Trash2 className="size-3.5" />
+                  <Trash2 className="size-4" />
                 </button>
               </Link>
             )
@@ -225,6 +247,15 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [mobileMenuOpen])
+
   // The landing page renders its own nav; hide the app sidebar there.
   const isLandingPage = pathname === "/"
 
@@ -240,15 +271,20 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         )}
 
         {mobileMenuOpen && (
-          <div className="md:hidden fixed inset-0 z-50 flex">
-            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
+          <div className="md:hidden fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Menu">
+            <button
+              aria-label="Close menu"
+              className="fixed inset-0 bg-background/80 backdrop-blur-sm cursor-default"
+              onClick={() => setMobileMenuOpen(false)}
+            />
             <div className="relative w-4/5 max-w-sm h-full shadow-2xl">
               <Suspense fallback={<div className="p-4">Loading menu...</div>}>
                 <SidebarContent onClose={() => setMobileMenuOpen(false)} />
               </Suspense>
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="absolute top-4 right-4 p-2 bg-background/50 rounded-full hover:bg-muted"
+                aria-label="Close menu"
+                className="absolute top-4 right-4 p-3 min-h-11 min-w-11 bg-background/50 rounded-full hover:bg-muted"
               >
                 <X className="size-5" />
               </button>
@@ -263,7 +299,13 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                 <Zap className="size-5 text-brand" />
                 <span className="font-bold tracking-tight">Assembly</span>
               </div>
-              <button onClick={() => setMobileMenuOpen(true)} className="p-1 -mr-1 rounded hover:bg-muted">
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Open menu"
+                aria-expanded={mobileMenuOpen}
+                aria-controls="mobile-menu"
+                className="p-3 -mr-1 min-h-11 min-w-11 rounded hover:bg-muted"
+              >
                 <Menu className="size-6" />
               </button>
             </header>
