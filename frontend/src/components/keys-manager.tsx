@@ -422,7 +422,9 @@ export function KeysManager() {
           <CardDescription className="text-xs mt-1">
             Why this provider: web search for researchers. Without it
             Assembly uses keyless sources (Wikipedia, arXiv, Semantic
-            Scholar, DuckDuckGo).
+            Scholar, DuckDuckGo) on a best-effort basis — they are rate
+            limited and sometimes blocked, so research may run with no
+            external sources.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex-1 space-y-4">

@@ -304,6 +304,49 @@ async def test_router_unexpected_error_falls_back() -> None:
     assert await broken.search("q") == []
 
 
+async def test_orchestrator_total_search_failure_reports_nothing() -> None:
+    """needs_research + every provider down → nothing-event, honest finish."""
+    from src.orchestration.orchestrator import Orchestrator
+    from src.providers.mock_provider import MockProvider
+    from tests.conftest import MockRouter
+
+    providers = [MockProvider(provider_name="mock-a")]
+    scripts = dict(MockProvider()._scripts)
+    scripts["plan"] = {
+        "problem_type": "general",
+        "complexity": "medium",
+        "needs_research": True,
+        "team": [
+            {"agent_type": "solver", "role_description": "Problem solver"},
+            {"agent_type": "researcher", "role_description": "Evidence gatherer"},
+            {"agent_type": "critic", "role_description": "Answer verifier"},
+        ],
+        "reasoning": "Research-gate probe plan.",
+    }
+    for provider in providers:
+        provider._scripts = dict(scripts)
+    orch = Orchestrator()
+    orch.router = MockRouter(providers)
+
+    events: list[dict] = []
+
+    async def on_progress(event: dict) -> None:
+        events.append(event)
+
+    result = await orch.execute(
+        execution_id="test-exec-no-search",
+        question="What is the mock answer?",
+        time_budget_minutes=3,
+        on_progress=on_progress,
+    )
+    assert result.status == "completed"
+    assert any(
+        "returned nothing" in str(e.get("data", {}).get("activity", ""))
+        for e in events
+        if e.get("event_type") == "agent.status"
+    ), "total search failure must surface as a visible nothing-found event"
+
+
 # ── Router: budget ─────────────────────────────────────────────────────
 
 

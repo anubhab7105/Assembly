@@ -16,9 +16,13 @@ const ROLES = ["solver", "researcher", "critic", "synthesizer", "planner"] as co
 export function ModelPicker({
   value,
   onChange,
+  keyedProviderIds,
 }: {
   value: ModelSelection
   onChange: (v: ModelSelection) => void
+  /** Provider ids holding a usable key. Families count only from these —
+   * counting keyless providers overpromises coverage the run cannot use. */
+  keyedProviderIds?: string[]
 }) {
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -37,8 +41,13 @@ export function ModelPicker({
   }
 
   const families = new Set<string>()
+  let keyedProviders = 0
   if (catalog) {
+    const keyed = keyedProviderIds ? new Set(keyedProviderIds) : null
     for (const p of catalog.providers) {
+      if (!p.enabled) continue
+      if (keyed && !keyed.has(p.id)) continue
+      keyedProviders += 1
       for (const m of p.models) {
         if (value.selected.length === 0 || value.selected.includes(m.id)) {
           families.add(m.family)
@@ -46,7 +55,7 @@ export function ModelPicker({
       }
     }
   }
-  const gate = evaluateGate([...families], catalog?.providers.length ?? 0)
+  const gate = evaluateGate([...families], keyedProviders)
 
   const allModels = catalog?.providers.flatMap((p) => p.models) ?? []
 

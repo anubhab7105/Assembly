@@ -11,6 +11,7 @@ import {
   PRIVACY_NOTICE_VERSION,
 } from "@/lib/privacy-notice"
 import { PrivacyDialog } from "@/components/privacy-dialog"
+import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
@@ -40,6 +41,8 @@ export default function Home() {
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
   const [catalog, setCatalog] = useState<Catalog | null>(null)
+  const [catalogFailed, setCatalogFailed] = useState(false)
+  const [catalogTick, setCatalogTick] = useState(0)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
   const [degradedConfirmed, setDegradedConfirmed] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -67,16 +70,6 @@ export default function Home() {
 
   useEffect(() => {
     globalVault.allKeys().then((k) => { setHasKeys(Object.keys(k).length > 0); setEnabledIds(Object.keys(k)) }).catch(() => {})
-    ApiClient.catalog()
-      .then((c) => {
-        setCatalog(c)
-        setCatalogNotes(
-          c.providers
-            .filter((p) => p.enabled)
-            .map((p) => ({ id: p.id, privacy_note: p.privacy_note ?? null })),
-        )
-      })
-      .catch(() => {})
     storage
       .getSetting(PRIVACY_ACK_KEY)
       .then((raw) => {
@@ -97,6 +90,23 @@ export default function Home() {
       })
       .catch(() => setShowPrivacy(true))
   }, [])
+
+  useEffect(() => {
+    ApiClient.catalog()
+      .then((c) => {
+        setCatalog(c)
+        setCatalogFailed(false)
+        setCatalogNotes(
+          c.providers
+            .filter((p) => p.enabled)
+            .map((p) => ({ id: p.id, privacy_note: p.privacy_note ?? null })),
+        )
+      })
+      .catch(() => {
+        setCatalog(null)
+        setCatalogFailed(true)
+      })
+  }, [catalogTick])
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -131,6 +141,18 @@ export default function Home() {
     }
     setLoading(true)
     setStatus("Checking capacity…")
+    // Run state hoisted above try: the catch block persists a cancelled
+    // record on mid-stream failure, so it must see these bindings.
+    let finalAnswer = ""
+    let consensus: number | null = null
+    let confidence: "High" | "Moderate" | "Low" | null = null
+    let agentCount: number | null = null
+    let providers: string[] = []
+    let debateRounds: number | null = null
+    let tokens: number | null = null
+    let elapsedSeconds: number | null = null
+    let streamStarted = false
+    const runId = `local-${Date.now()}`
     try {
       const keys = await globalVault.allKeys()
       // The Tavily search key travels separately; it is never a model key.
@@ -150,9 +172,6 @@ export default function Home() {
         return
       }
       setStatus("Running team… (streaming)")
-      let finalAnswer = ""
-      let consensus: number | null = null
-      const runId = `local-${Date.now()}`
       const result = await ApiClient.startRunStream(
         {
           question,
@@ -162,10 +181,30 @@ export default function Home() {
           selection: { selected: selection.selected, pins: selection.pins },
           usage,
         },
-        (event: { event_type?: string; data?: { answer?: string; consensus_score?: number }; usage?: UsageEntry[] }) => {
+        (event: {
+          event_type?: string
+          data?: {
+            answer?: string
+            consensus_score?: number
+            confidence_label?: "High" | "Moderate" | "Low"
+            agent_count?: number
+            providers_used?: string[]
+            debate_rounds?: number
+            tokens_used?: number
+            elapsed_seconds?: number
+          }
+          usage?: UsageEntry[]
+        }) => {
+          streamStarted = true
           if (event.event_type === "execution.completed") {
             finalAnswer = event.data?.answer ?? ""
             consensus = event.data?.consensus_score ?? null
+            confidence = event.data?.confidence_label ?? null
+            agentCount = event.data?.agent_count ?? null
+            providers = event.data?.providers_used ?? []
+            debateRounds = event.data?.debate_rounds ?? null
+            tokens = event.data?.tokens_used ?? null
+            elapsedSeconds = event.data?.elapsed_seconds ?? null
           }
           if (event.event_type === "run.finished" && Array.isArray(event.usage)) {
             void storage.setUsage(event.usage)
@@ -180,13 +219,55 @@ export default function Home() {
         created_at: new Date().toISOString(),
         minutes,
         consensus,
+        confidence,
+        agentCount,
+        providers,
+        debateRounds,
+        tokens,
+        elapsedSeconds,
       })
       router.push(`/executions?id=${runId}`)
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Run failed")
+      // A closed tab kills the stream mid-run: persist a cancelled record
+      // so the executions view can say the run was cancelled when the page
+      // closed. Pre-stream rejections (no run started) only show the error.
+      const message = err instanceof Error ? err.message : "Run failed"
+      if (streamStarted) {
+        try {
+          await storage.saveHistory({
+            id: `local-${Date.now()}`,
+            question,
+            answer: finalAnswer,
+            status: "cancelled",
+            created_at: new Date().toISOString(),
+            minutes,
+            consensus,
+            confidence,
+            agentCount,
+            providers,
+            debateRounds,
+            tokens,
+            elapsedSeconds,
+          })
+        } catch {
+          // Storage failure must not hide the original error.
+        }
+      }
+      setStatus(message)
       setLoading(false)
     }
   }
+
+  // Warn before a refresh/tab-close kills a running team (the server
+  // cancels the run on disconnect; there is no resume for web runs).
+  useEffect(() => {
+    if (!loading) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [loading])
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
@@ -222,6 +303,10 @@ export default function Home() {
             </Button>
           )}
         </div>
+
+        {catalogFailed && (
+          <ServerStatusBanner url={env.apiUrl} onRetry={() => setCatalogTick((t) => t + 1)} />
+        )}
 
         <div className="space-y-4">
           <div className="relative rounded-2xl border border-border bg-card p-2 shadow-sm focus-within:border-brand">
@@ -261,7 +346,7 @@ export default function Home() {
           {status && <p className="px-2 text-xs text-muted-foreground">{status}</p>}
         </div>
 
-        <ModelPicker value={selection} onChange={setSelection} />
+        <ModelPicker value={selection} onChange={setSelection} keyedProviderIds={enabledIds} />
 
         <div className="grid gap-3 sm:grid-cols-2">
           {EXAMPLES.map((ex, i) => (

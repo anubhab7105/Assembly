@@ -17,6 +17,12 @@ export interface HistoryRecord {
   created_at: string
   minutes: number
   consensus?: number | null
+  confidence?: "High" | "Moderate" | "Low" | null
+  agentCount?: number | null
+  providers?: string[]
+  debateRounds?: number | null
+  tokens?: number | null
+  elapsedSeconds?: number | null
 }
 
 export interface StorageService {

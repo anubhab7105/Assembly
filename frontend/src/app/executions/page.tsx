@@ -56,6 +56,12 @@ function ExecutionContent() {
     return `${m}:${s.toString().padStart(2, "0")}`
   }
 
+  const terminal = ["completed", "cancelled", "failed"].includes(state.status)
+  // After the run ends the live countdown is meaningless: freeze the
+  // final elapsed time instead of a dead --:--.
+  const timerDisplay =
+    state.timerSeconds ?? (terminal ? state.summary?.elapsedSeconds ?? null : null)
+
   // Agent State styling
   const getAgentStyles = (status: string) => {
     switch (status) {
@@ -82,6 +88,12 @@ function ExecutionContent() {
           {state.degradedMode && <Badge variant="outline" className="ml-2 border-danger text-danger">Degraded Mode</Badge>}
         </div>
       )}
+      {state.status === "cancelled" && (
+        <div className="bg-warning-subtle text-warning px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2">
+          <WifiOff className="size-4" />
+          This run ended before completing — it was cancelled when the page closed or the connection dropped.
+        </div>
+      )}
 
       {/* ─── Header ──────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-xl">
@@ -101,7 +113,7 @@ function ExecutionContent() {
               <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">Time Remaining</span>
               <div className="flex items-center gap-1.5 font-mono text-2xl font-semibold tracking-tight text-foreground tabular-nums">
                 <Clock className="size-5 text-brand" />
-                {formatTime(state.timerSeconds)}
+                {formatTime(timerDisplay)}
               </div>
             </div>
 
@@ -115,6 +127,25 @@ function ExecutionContent() {
 
       {/* ─── Main Content ────────────────────────────────────────────────────── */}
       <main className="mx-auto max-w-7xl px-6 pt-10 space-y-8">
+
+        {/* ─── Frozen run summary (post-run totals, not live state) ─────────── */}
+        {terminal && state.summary && (
+          <div data-testid="run-summary-strip" className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-border bg-card px-4 py-2.5 text-xs text-muted-foreground font-mono">
+            <span>{state.summary.agentCount ?? 0} agents</span>
+            {state.summary.providers.length > 0 && (
+              <span>providers: {state.summary.providers.join(", ")}</span>
+            )}
+            {state.summary.debateRounds !== null && (
+              <span>{state.summary.debateRounds} debate rounds</span>
+            )}
+            {state.summary.tokens !== null && (
+              <span>{state.summary.tokens.toLocaleString()} tokens</span>
+            )}
+            {state.summary.elapsedSeconds !== null && (
+              <span>finished in {formatTime(Math.round(state.summary.elapsedSeconds))}</span>
+            )}
+          </div>
+        )}
         
         {/* ─── Top Row: Consensus & Final Answer ──────────────────────────────── */}
         <div className="grid gap-6 lg:grid-cols-3">
@@ -187,8 +218,7 @@ function ExecutionContent() {
             <CardContent>
               {state.team.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {state.team.map((agent) => (
-                    <div key={agent.id} className={`flex flex-col rounded-xl border p-3.5 transition-colors ${getAgentStyles(agent.state)}`}>
+                  {state.team.map((agent) => (                    <div key={agent.id} className={`flex flex-col rounded-xl border p-3.5 transition-colors ${getAgentStyles(agent.state)}`}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-semibold tracking-tight">{agent.role}</span>
                         <Badge variant="outline" className="font-mono text-[10px] uppercase border-current bg-transparent opacity-80">
@@ -210,7 +240,9 @@ function ExecutionContent() {
                 </div>
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-10">
-                  Forming temporary team...
+                  {terminal && (state.summary?.agentCount ?? 0) > 0
+                    ? `Team disbanded — ${state.summary?.agentCount} agents served this run.`
+                    : "Forming temporary team..."}
                 </div>
               )}
             </CardContent>

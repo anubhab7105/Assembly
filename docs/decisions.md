@@ -267,6 +267,48 @@ Append-only log of significant technical and product decisions.
 - Decision: Orchestrator catches `TimeoutError` around the planner bound and substitutes the zero-call heuristic (`Planner.heuristic_plan`/`read_capacity` public wrappers added); user cancellation still surfaces as `CancelledError` and is unaffected (`TimeoutError` from `asyncio.timeout` implies expiry, never user cancel; inter-phase `raise_if_cancelled` still guards).
 - Consequences: Planner hangs degrade to heuristic completion instead of killing runs. Regression test (hung planner double + 1 s bound → completed, ≤1 planner attempt). Live re-run of the 3 deferred to save quota; the path is proven by test.
 
+## 2026-10-12 — Phase 3 batch 1: N-04/N-05/N-07/N-09 (frontend)
+
+- Context: Live-test issues with the executions/answer view: confidence chip contradicted the answer text (N-04), the model picker promised keyless families (N-05), post-run pages showed dead timer/empty team (N-07), refresh mid-run killed silently (N-09).
+- Decision: (1) N-04 root-caused to a field mismatch — frontend read `final_answer`/`confidence` which the backend never sends (`answer`/`confidence_label`, already capped server-side). `ExecutionCompletedData` now matches the wire; hook maps both dialects; label persists through history so chip and answer text share one source. (2) N-05: picker counts keyed providers only (new `keyedProviderIds` prop from chat vault keys). (3) N-07: completed event summary (agents/providers/rounds/tokens/elapsed) persisted in history; executions view freezes timer, shows a totals strip and "team disbanded" instead of forming-state. (4) N-09: `beforeunload` guard while running; mid-stream aborts persist a cancelled record so the view states the run was cancelled when the page closed (pre-stream rejections only show the error).
+- Consequences: tsc clean, vitest 42 green (+4), static `next build` green, eslint clean on touched lines (remaining flags pre-existing). Per-provider call/timing breakdown needs a backend event addition — filed as follow-up, totals + provider list shown meanwhile.
+
+## 2026-10-12 — Group 2 task 1: trusted-proxy boundary proven
+
+- Context: All rate limiting keys off `client_ip()`, but no test proved spoofed forwarding headers cannot move buckets (fix-backlog item 8 explicitly requires spoofing tests).
+- Decision: Test-only change (`tests/test_limits.py`, +7): default ignores XFF/RFC-Forwarded, Nth-from-right with trust, short-chain leftmost fallback, no-header peer, negative/garbage config fails closed to 0, and two spoofed identities exhaust one peer bucket end-to-end. No product change — the boundary (`TRUSTED_PROXY_COUNT`, default 0) was already correct in `src/core/rate_limit.py:21`.
+- Consequences: 11 passed, ruff check clean (format flags pre-existing on untouched lines). Rate-limit tuning can now build on a verified client-IP foundation.
+
+## 2026-10-12 — Group 2 task 2: rate-limit budgets verified + per-IP cap
+
+- Context: `/api/run` had a 5/min/IP start budget and a global 20-slot cap but no per-IP concurrency limit — one IP could starve all global slots (the desktop API already caps 2/IP via `ExecutionTracker`). Also unproven: rejected requests must not spend the run budget (fix-backlog item 7 requires the test).
+- Decision: (1) `_RunEntry.ip` + per-IP active-run check (`MAX_RUNS_PER_IP`, same constant/message shape as the desktop API) in `src/api/run.py`; disconnect-cancel and TTL sweep free slots via the existing `done` lifecycle, so no leak path was added. (2) Tests: invalid bodies consume only the loose invalid budget (white-box history assertion), and a peer holding all its slots gets 429 while freed slots run (`tests/test_stateless_web.py`, mock router, canary-scanned).
+- Consequences: 20 passed (stateless+limits), ruff check clean (format flags pre-existing). Proxy interplay needs no change — every limiter funnels through the verified `client_ip()`.
+
+## 2026-10-12 — Group 2 task 3: CORS banner states connection, not auth
+
+- Context: The unreachable-server banner lived only on Settings; chat swallowed catalog failures into an honest-but-unexplained BLOCKED chip. Any wording near CORS must not frame it as login/permission.
+- Decision: Banner gains an explicit connection-problem line disclaiming login/key/permission framing (with a test asserting that disclaimer + Retry); chat now tracks catalog failure and renders the same banner with retry instead of a silent empty picker (catalog effect split so retry does not re-run vault/privacy setup).
+- Consequences: tsc clean, vitest 43 green, no new eslint flags (one pre-existing setState-in-effect untouched).
+
+## 2026-10-12 — Group 2 task 4: keyless-search wording made honest
+
+- Context: The Tavily card promised keyless sources flatly, but live evidence shows Wikipedia 403s, arXiv 500s, Scholar 429s, and DuckDuckGo zeros — research often runs sourceless.
+- Decision: Card now says best-effort, rate-limited, sometimes blocked, may run sourceless. Empty-search honesty already holds end-to-end (backend event + composer section + synthesizer no-invent rule); landing-pitch wording left alone.
+- Consequences: tsc clean, keys-manager test green (asserts the keyless phrase).
+
+## 2026-10-12 — Group 2 task 5: research-gate spec before thresholds
+
+- Context: N-08 asked for gate tuning, but borderline/incomplete/failed behavior was never written down — tuning blind risks honest-failure regressions.
+- Decision: New `docs/research-behavior.md` case table (gate OR-rule, unreachable budget-exhaustion with required future behavior, fallback chain, nothing-event, researcher-failure reporting, 0.50 evidence floor, weak-consensus wording) + threshold inventory, all frozen pending benchmark data. One reachable gap closed by test: full provider failure through a real run emits the nothing-found event and completes honestly (`tests/test_research.py`, offline via DNS-block fail-fast). A budget-exhausted `elif` was drafted then reverted — unreachable in the single-search design, documented instead of dead-coded. Zero product-code change: the behavior was already correct.
+- Consequences: 23 research tests green, ruff clean. Thresholds (evidence floor, hints, breaker, stagnation) untouched.
+
+## 2026-10-12 — Group 2 task 6: Playwright green, specs cover new flows
+
+- Context: All 3 e2e specs failed on drift (fragile `.flex-col` locator, picker on the wrong route, history asserted on landing which has no sidebar). The suite could not have caught any Phase 3 change.
+- Decision: Repaired specs to the updated flows with mocked network (zero live calls): stable `provider-card-*` testids; settings→landing→chat client-side journey (goto wipes the memory vault); keyed picker counts asserted ("2 families ready"); mocked `confidence_label: Moderate` asserted on the chip (N-04) plus the frozen summary strip (N-07, new `run-summary-strip` testid); history/export/import asserted on `/chat` where the sidebar lives. Privacy ack handled before interacting.
+- Consequences: 4/4 Playwright green (chromium), vitest 43 green, tsc clean, no new eslint flags. Pre-existing failures were spec drift, not product regressions.
+
 ## 2026-10-12 — Research graceful-failure + honest citations (Task 2)
 
 - Context: Live runs show wikipedia/arxiv `SearchProviderError`, Semantic Scholar 429s, DuckDuckGo zeros — all handled by fallback today — plus one honesty gap: the smoke answer cited URLs no search ever retrieved (synthesizer invents citations when no sources exist).

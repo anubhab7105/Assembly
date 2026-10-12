@@ -40,6 +40,14 @@ export interface ExecutionState {
   degradedMode: boolean
   quotaWarning: string | null
   feed: ActivityFeedEntry[]
+  // Frozen post-run summary (from device history for local runs).
+  summary: {
+    agentCount: number | null
+    providers: string[]
+    debateRounds: number | null
+    tokens: number | null
+    elapsedSeconds: number | null
+  } | null
 }
 
 const WS_RECONNECT_MAX_ATTEMPTS = 5
@@ -62,6 +70,7 @@ const initialState: ExecutionState = {
   degradedMode: false,
   quotaWarning: null,
   feed: [],
+  summary: null,
 }
 
 export function useExecution(executionId: string | null) {
@@ -155,10 +164,21 @@ export function useExecution(executionId: string | null) {
           break
         case "execution.completed": {
           const compData = event.data as ExecutionCompletedData
-          next.finalAnswer = compData.final_answer
-          next.confidence = compData.confidence || "High"
+          // Backend wire names first (answer/confidence_label), legacy
+          // aliases tolerated. The label is already capped server-side
+          // (e.g. single-family High→Moderate), so the chip always matches
+          // the "Confidence:" line the composer writes into the answer.
+          next.finalAnswer = compData.answer ?? compData.final_answer ?? null
+          next.confidence = compData.confidence_label ?? compData.confidence ?? null
           next.uncertaintyNote = compData.uncertainty_note || null
           next.question = compData.question || null
+          next.summary = {
+            agentCount: compData.agent_count ?? null,
+            providers: compData.providers_used ?? [],
+            debateRounds: compData.debate_rounds ?? null,
+            tokens: compData.tokens_used ?? null,
+            elapsedSeconds: compData.elapsed_seconds ?? null,
+          }
           pushFeed("Execution completed. Final answer synthesised.", "success")
           break
         }
@@ -232,6 +252,14 @@ export function useExecution(executionId: string | null) {
             finalAnswer: h.answer || null,
             question: h.question,
             consensusScore: h.consensus ?? null,
+            confidence: h.confidence ?? null,
+            summary: {
+              agentCount: h.agentCount ?? null,
+              providers: h.providers ?? [],
+              debateRounds: h.debateRounds ?? null,
+              tokens: h.tokens ?? null,
+              elapsedSeconds: h.elapsedSeconds ?? null,
+            },
           }))
         }
       })
