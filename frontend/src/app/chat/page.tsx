@@ -69,7 +69,14 @@ export default function Home() {
   }, [gate.level])
 
   useEffect(() => {
-    globalVault.allKeys().then((k) => { setHasKeys(Object.keys(k).length > 0); setEnabledIds(Object.keys(k)) }).catch(() => {})
+    const refreshKeys = () => {
+      globalVault.allKeys().then((k) => { setHasKeys(Object.keys(k).length > 0); setEnabledIds(Object.keys(k)) }).catch(() => {})
+    }
+    refreshKeys()
+    // The vault is persistent: re-read when the tab regains focus so the
+    // picker gate and the execution request always agree on readiness.
+    window.addEventListener("focus", refreshKeys)
+    document.addEventListener("visibilitychange", refreshKeys)
     storage
       .getSetting(PRIVACY_ACK_KEY)
       .then((raw) => {
@@ -89,6 +96,10 @@ export default function Home() {
         }
       })
       .catch(() => setShowPrivacy(true))
+    return () => {
+      window.removeEventListener("focus", refreshKeys)
+      document.removeEventListener("visibilitychange", refreshKeys)
+    }
   }, [])
 
   useEffect(() => {

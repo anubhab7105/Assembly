@@ -1,7 +1,9 @@
 /**
- * Internal navigation must use Next <Link> (client-side) so the
- * memory-only key vault survives page changes. A plain <a href="/…">
- * forces a full reload and silently wipes the user's keys.
+ * Internal navigation must use Next <Link> (client-side) so React state
+ * (test statuses, inputs, catalog) survives page changes without refetch.
+ * A plain <a href="/…"> forces a full reload. Vault keys now survive
+ * reloads via persistent storage, but client-side routing is still the
+ * intended UX (and preserves all other in-memory UI state).
  *
  * Allowed plain anchors: external URLs (https:), fragment links (#…),
  * and fully dynamic hrefs. Everything else fails this test.

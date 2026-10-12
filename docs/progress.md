@@ -519,3 +519,9 @@
 
 - Full suite on final code: 458 + 86 = 544 passed, 1 skipped (live-excluded) across all 41 test files, in two foreground chunks (background runner kept dying with Shell.NotFoundError).
 - Committed code+tests+docs+config only (results JSONLs/CSVs, `.local/` scratch stay out).
+
+## 2026-10-12 — P0 key-persistence fix (refresh regression closed, uncommitted)
+
+- Root cause (reproduced in real Chromium, mocked network, canary only): default Save never wrote to any persistent store (memory-only vault), so reload wiped everything; Remember+passphrase users still faced an unlock prompt plus a readiness gate on memory-only Test statuses. No stray deleter or key mismatch found.
+- Fix: canonical persistent `KeyVault` (IndexedDB `assembly_keys_v1` + localStorage fallback, serialized read-modify-write, honest `KeyStorageError`); Remember/passphrase gate removed from save path with one-time legacy migration; presence-based readiness (invalid excluded) so Settings/chat/picker agree post-refresh; per-provider Remove; chat focus re-read.
+- Gates: `tsc` clean, vitest 48/48, `next build` green, eslint clean on touched lines (1 pre-existing untouched), Playwright 12/12 (9 new refresh scenarios + 3 e2e). Backend suite running as final gate. Diff canary-only, no secrets. Not committed per task instruction (commit only after regression reproduced as fixed + gates green — backend pending).

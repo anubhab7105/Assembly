@@ -39,7 +39,7 @@ export function KeysManager() {
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({})
   const [statuses, setStatuses] = useState<Record<string, KeyStatus>>({})
   const [details, setDetails] = useState<Record<string, StatusDetail>>({})
-  const [remember, setRememberUi] = useState(() => globalVault.remember)
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
   const [tavilyInput, setTavilyInput] = useState("")
@@ -54,56 +54,55 @@ export function KeysManager() {
       } catch {
         setCatalog(null)
       }
-      // Load first: never touch the persisted blob before reading it.
-      // A present-but-locked blob shows the unlock prompt instead of keys.
-      const persisted = await globalVault.hasPersisted().catch(() => false)
-      if (persisted && !globalVault.unlocked) {
-        setNeedsUnlock(true)
-      } else {
-        setSavedKeys(await globalVault.allKeys())
+      // Load first: read the canonical store before rendering anything that
+      // could write. A legacy encrypted blob with an empty canonical store
+      // shows the one-time migration prompt instead of keys.
+      try {
+        const keys = await globalVault.allKeys()
+        if (Object.keys(keys).length > 0) {
+          setSavedKeys(keys)
+        } else if (await globalVault.hasLegacyEncrypted().catch(() => false)) {
+          setNeedsUnlock(true)
+        }
+      } catch {
+        setSavedKeys({})
       }
-      setRememberUi(globalVault.remember)
       setVaultLoaded(true)
     }
     load()
   }, [])
 
-  const handleToggleRemember = async (next: boolean) => {
-    setRememberUi(next)
-    globalVault.setRemember(next)
-    if (next && globalVault.unlocked) {
-      for (const [p, k] of Object.entries(savedKeys)) {
-        await globalVault.setKey(p, k)
-      }
-    }
-  }
-
   const handleUnlock = async () => {
-    globalVault.unlock(passphrase)
     try {
-      const keys = await globalVault.allKeys()
+      const keys = await globalVault.migrateLegacy(passphrase)
       setSavedKeys(keys)
       setNeedsUnlock(false)
       setUnlockError(keys && Object.keys(keys).length > 0 ? null : "No keys found in the saved vault.")
-    } catch {
+      toast({ title: "Keys restored", description: "Saved keys were restored on this device.", variant: "success" })
+    } catch (e) {
       // Wrong passphrase (or a corrupted blob): keep everything, say so.
-      globalVault.lock()
-      setUnlockError("Wrong passphrase — nothing was deleted. Try again or use Forget keys.")
+      setUnlockError(
+        e instanceof Error ? e.message : "Wrong passphrase — nothing was deleted. Try again or use Clear all keys.",
+      )
     }
   }
 
   const handleForget = async () => {
-    await globalVault.clearAll()
-    setRememberUi(false)
+    try {
+      await globalVault.clearAll()
+    } catch {
+      // Explicit removal is best-effort across every blob; the UI still resets.
+    }
     setNeedsUnlock(false)
     setUnlockError(null)
     setSavedKeys({})
     setInputs({})
     setStatuses({})
     setDetails({})
+    setSaveErrors({})
     setTavilyInput("")
     setPassphrase("")
-    toast({ title: "Keys forgotten", description: "All API keys removed from memory, disk, and system keyring." })
+    toast({ title: "Keys forgotten", description: "All API keys removed from this device." })
   }
 
   const providers = catalog?.providers.filter((p) => p.enabled) ?? []
@@ -113,7 +112,16 @@ export function KeysManager() {
     const rawKey = cleanPastedKey(tavilyInput || savedKeys["tavily"] || "")
     if (!rawKey) return
     // No server-side probe exists for search keys: store only.
-    await globalVault.setKey("tavily", rawKey)
+    try {
+      await globalVault.setKey("tavily", rawKey)
+    } catch (e) {
+      toast({
+        title: "Couldn't save search key",
+        description: e instanceof Error ? e.message : "Storage unavailable.",
+        variant: "danger",
+      })
+      return
+    }
     setSavedKeys((prev) => ({ ...prev, tavily: rawKey }))
     setTavilyInput("")
     toast({ title: "Search key saved", description: "Tavily key stored with your other keys.", variant: "success" })
@@ -124,7 +132,22 @@ export function KeysManager() {
     if (!rawKey) return
     // Soft prefix hint never blocks saving (FR-30): validation is advisory only.
     void isKeyFormatOk(providerId, rawKey)
-    await globalVault.setKey(providerId, rawKey)
+    try {
+      await globalVault.setKey(providerId, rawKey)
+    } catch (e) {
+      // Honest failure: storage refused the write, so the UI must not claim
+      // the key was saved.
+      const message = e instanceof Error ? e.message : "Storage unavailable."
+      setSaveErrors((prev) => ({ ...prev, [providerId]: message }))
+      toast({ title: "Couldn't save key", description: message, variant: "danger" })
+      return
+    }
+    setSaveErrors((prev) => {
+      if (!(providerId in prev)) return prev
+      const next = { ...prev }
+      delete next[providerId]
+      return next
+    })
     setSavedKeys((prev) => ({ ...prev, [providerId]: rawKey }))
     setInputs((prev) => ({ ...prev, [providerId]: "" }))
     setStatuses((prev) => ({ ...prev, [providerId]: "testing" }))
@@ -152,30 +175,69 @@ export function KeysManager() {
     }
   }
 
+  const handleRemove = async (providerId: string) => {
+    try {
+      await globalVault.removeKey(providerId)
+    } catch {
+      // Removal is best-effort; the UI still drops the row's key.
+    }
+    setSavedKeys((prev) => {
+      if (!(providerId in prev)) return prev
+      const next = { ...prev }
+      delete next[providerId]
+      return next
+    })
+    setInputs((prev) => {
+      if (!(providerId in prev)) return prev
+      const next = { ...prev }
+      delete next[providerId]
+      return next
+    })
+    setStatuses((prev) => {
+      if (!(providerId in prev)) return prev
+      const next = { ...prev }
+      delete next[providerId]
+      return next
+    })
+    setDetails((prev) => {
+      if (!(providerId in prev)) return prev
+      const next = { ...prev }
+      delete next[providerId]
+      return next
+    })
+    toast({ title: "Key removed", description: `${providerId} key removed. Other providers are unchanged.` })
+  }
+
   const handleClearAll = async () => {
-    await globalVault.clearAll()
+    try {
+      await globalVault.clearAll()
+    } catch {
+      // Backend may not be reachable; frontend vault clear is attempted first.
+    }
     try {
       await ApiClient.clearAllKeys()
     } catch {
       // Backend may not be reachable; frontend vault is already cleared.
     }
-    setRememberUi(false)
     setNeedsUnlock(false)
     setUnlockError(null)
     setSavedKeys({})
     setInputs({})
     setStatuses({})
     setDetails({})
+    setSaveErrors({})
     setTavilyInput("")
     setPassphrase("")
-    toast({ title: "Keys cleared", description: "All API keys removed from memory, disk, and system keyring." })
+    toast({ title: "Keys cleared", description: "All API keys removed from this device." })
   }
 
   const readyFamilies = new Set<string>()
   providers.forEach((p) => {
-    // Only a working key counts: valid or quota-hit. Model-unavailable and
-    // unreachable keys cannot serve runs, invalid keys never could.
-    if (savedKeys[p.id] && (statuses[p.id] === "valid" || statuses[p.id] === "rate_limited")) {
+    // A saved key counts toward readiness: the Test result is advisory and
+    // statuses reset every session, so gating on them would show restored
+    // keys as unconfigured after every refresh. Only a proven-invalid key
+    // is excluded; the backend preflight/run stays authoritative.
+    if (savedKeys[p.id] && statuses[p.id] !== "invalid") {
       p.models.forEach((m) => readyFamilies.add(m.family))
     }
   })
@@ -230,13 +292,13 @@ export function KeysManager() {
             <div className="flex flex-col">
               <span className="font-medium">Unlock saved keys</span>
               <span className="text-xs text-muted-foreground">
-                This device holds encrypted keys. Enter your passphrase to restore them.
+                This device holds keys saved before an update. Enter your previous passphrase once to move them into current storage.
               </span>
             </div>
             <div className="flex gap-2">
               <input
                 type="password"
-                placeholder="Passphrase"
+                placeholder="Previous passphrase"
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
                 autoComplete="off"
@@ -255,42 +317,9 @@ export function KeysManager() {
             </Button>
           </div>
         ) : (
-        <>
-        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => void handleToggleRemember(e.target.checked)}
-            className="accent-brand"
-          />
-          <div className="flex flex-col">
-            <span className="font-medium">Remember on this device</span>
-            <span className="text-xs text-muted-foreground">
-              Encrypted with your passphrase (PBKDF2 + AES-GCM). In-memory only when off.
-            </span>
-          </div>
-        </label>
-        {!remember && (
-          <p data-testid="memory-only-banner" className="text-xs text-warning">
-            Keys live only in this tab; a refresh clears them.
+          <p data-testid="persisted-banner" className="text-xs text-muted-foreground">
+            Keys are stored on this device and restored after refresh. Clearing site data removes them.
           </p>
-        )}
-        {remember && (
-          <div className="flex gap-2">
-            <input
-              type="password"
-              placeholder="Passphrase (min 8 chars)"
-              value={passphrase}
-              onChange={(e) => {
-                setPassphrase(e.target.value)
-                globalVault.unlock(e.target.value)
-              }}
-              autoComplete="off"
-              className="flex-1 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm"
-            />
-          </div>
-        )}
-        </>
         )}
         <Button variant="destructive" size="sm" onClick={handleClearAll} disabled={Object.keys(savedKeys).length === 0}>
           <Trash2 className="size-4 mr-2" />
@@ -366,6 +395,11 @@ export function KeysManager() {
                   <p data-testid={`prefix-hint-${provider.id}`} className="text-[10px] text-muted-foreground pt-1">
                     {hint} This hint never blocks saving.
                   </p>
+                  {saveErrors[provider.id] && (
+                    <p data-testid={`save-error-${provider.id}`} className="text-xs text-danger">
+                      {saveErrors[provider.id]}
+                    </p>
+                  )}
                   {st !== "unknown" && st !== "testing" && (
                     <div className="space-y-1">
                       <p data-testid={`test-result-${provider.id}`} className="text-xs">
@@ -397,7 +431,7 @@ export function KeysManager() {
                   </p>
                 </div>
               </CardContent>
-              <CardFooter className="pt-0">
+              <CardFooter className="pt-0 flex flex-col gap-2">
                 <Button
                   variant={hasSavedKey ? "secondary" : "default"}
                   size="sm"
@@ -407,6 +441,17 @@ export function KeysManager() {
                 >
                   {st === "testing" ? "Testing…" : inputs[provider.id] ? "Save & Test" : "Test Saved Key"}
                 </Button>
+                {hasSavedKey && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => void handleRemove(provider.id)}
+                    data-testid={`remove-${provider.id}`}
+                  >
+                    Remove
+                  </Button>
+                )}
               </CardFooter>
             </Card>
           )
@@ -446,7 +491,7 @@ export function KeysManager() {
             </p>
           </div>
         </CardContent>
-        <CardFooter className="pt-0">
+        <CardFooter className="pt-0 flex flex-col gap-2">
           <Button
             variant={tavilySaved ? "secondary" : "default"}
             size="sm"
@@ -457,6 +502,17 @@ export function KeysManager() {
           >
             {tavilyInput ? "Save Search Key" : "Saved"}
           </Button>
+          {tavilySaved && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => void handleRemove("tavily")}
+              data-testid="remove-tavily"
+            >
+              Remove
+            </Button>
+          )}
         </CardFooter>
       </Card>
     </div>
