@@ -91,7 +91,7 @@ export function ModelPicker({
               {p.models.map((m) => (
                 <label
                   key={m.id}
-                  className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-mono transition-colors ${
+                  className={`flex min-h-11 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
                     value.selected.includes(m.id)
                       ? "border-brand bg-brand/10 text-foreground"
                       : "border-border text-muted-foreground hover:text-foreground"
@@ -113,11 +113,12 @@ export function ModelPicker({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-        <span className="text-xs text-muted-foreground">Pin role:</span>
+        <label htmlFor="pin-role" className="text-xs text-muted-foreground">Pin role:</label>
         <select
+          id="pin-role"
           value={pinRole}
           onChange={(e) => setPinRole(e.target.value)}
-          className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+          className="min-h-11 rounded-md border border-border bg-background px-2 py-2 text-xs"
         >
           {ROLES.map((r) => (
             <option key={r} value={r}>
@@ -126,9 +127,11 @@ export function ModelPicker({
           ))}
         </select>
         <select
+          id="pin-model"
+          aria-label="Pin model"
           value={pinModel}
           onChange={(e) => setPinModel(e.target.value)}
-          className="rounded-md border border-border bg-background px-2 py-1 text-xs max-w-56"
+          className="min-h-11 rounded-md border border-border bg-background px-2 py-2 text-xs max-w-56"
         >
           <option value="">none</option>
           {allModels.map((m) => (
@@ -138,7 +141,7 @@ export function ModelPicker({
           ))}
         </select>
         <button
-          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
+          className="min-h-11 rounded-md border border-border px-3 py-2 text-xs hover:bg-muted"
           onClick={() => {
             if (!pinModel) {
               const next = { ...value.pins }

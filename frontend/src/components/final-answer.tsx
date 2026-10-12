@@ -122,7 +122,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
           )}
 
           {/* Markdown Content */}
-          <div className="prose prose-invert max-w-none prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border">
+          <div className="prose prose-invert max-w-full min-w-0 overflow-x-auto prose-pre:max-w-full prose-pre:overflow-x-auto prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[rehypeKatex, rehypeHighlight]}

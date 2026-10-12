@@ -13,7 +13,7 @@ export default function ErrorBoundary({
 }) {
   useEffect(() => {
     // Log the error to an error reporting service if needed
-    console.error("Global Error Boundary caught:", error)
+    if (process.env.NODE_ENV !== "production") console.error("Global Error Boundary caught:", error)
   }, [error])
 
   return (

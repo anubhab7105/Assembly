@@ -109,14 +109,14 @@ function ExecutionContent() {
 
       {/* ─── Header ──────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-xl">
-        <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/10 text-brand shadow-inner">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand shadow-inner">
               <Zap className="size-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-bold tracking-tight">Research Team</h1>
-              <p className="text-xs text-muted-foreground font-mono">ID: {id}</p>
+              <p className="max-w-full break-all text-xs text-muted-foreground font-mono">ID: {id}</p>
             </div>
           </div>
           
@@ -246,13 +246,13 @@ function ExecutionContent() {
                           {agent.model_family}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        {agent.state === "working" && <span className="size-2 rounded-full bg-current animate-ping" />}
-                        {agent.state === "done" && <CheckCircle2 className="size-3" />}
-                        {agent.state === "failed-replaced" && <XCircle className="size-3" />}
-                        {agent.state === "idle" && <div className="size-2 rounded-full border-2 border-current" />}
+                      <div className="flex min-w-0 items-center gap-2 text-xs">
+                        {agent.state === "working" && <span className="size-2 shrink-0 rounded-full bg-current animate-ping" />}
+                        {agent.state === "done" && <CheckCircle2 className="size-3 shrink-0" />}
+                        {agent.state === "failed-replaced" && <XCircle className="size-3 shrink-0" />}
+                        {agent.state === "idle" && <div className="size-2 shrink-0 rounded-full border-2 border-current" />}
                         
-                        <span className="truncate opacity-90 font-medium" title={agent.activity}>
+                        <span className="min-w-0 flex-1 truncate opacity-90 font-medium" title={agent.activity}>
                           {agent.activity}
                         </span>
                       </div>

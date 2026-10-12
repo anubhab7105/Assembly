@@ -225,7 +225,7 @@ export function useExecution(executionId: string | null) {
         const payload = JSON.parse(event.data) as ProgressEvent
         processEvent(payload)
       } catch (err) {
-        console.error("Failed to parse WS message", err)
+        if (process.env.NODE_ENV !== "production") console.error("Failed to parse WS message", err)
       }
     }
 
