@@ -363,3 +363,10 @@ Append-only log of significant technical and product decisions.
 - Context: D8 makes the hosted web application stateless; browser IndexedDB owns web history, while SQLite is retained for local/dev and the future Windows desktop application. The CI PostgreSQL matrix was still starting an unused service and installing a PostgreSQL driver.
 - Decision: Remove PostgreSQL from active CI, delete the unused `Settings.is_postgres` compatibility property, and align current deployment/security docs with the stateless-web + local-SQLite design. Keep SQLAlchemy, Alembic, SQLite models and desktop/dev initialization intact.
 - Consequences: Backend CI runs the supported SQLite path only. PostgreSQL is not a supported runtime target; adding it later would require an explicit new architectural decision and real driver/config/tests.
+
+
+## 2026-10-13 — Keep investigation creation inside the chat workspace
+
+- Context: The persistent sidebar labeled its primary action "New Investigation" but routed to the promotional landing page. The chat composer also kept advanced model and role selection expanded, with long prompt examples taking up unnecessary space.
+- Decision: Route that action to `/chat`; keep the initial composer focused on the question, time budget, run action, and compact examples; expose advanced model/role controls in a dialog. Preserve explicit readiness and connection states so reducing text does not conceal blockers.
+- Consequences: The primary navigation matches its label and the composer is less cluttered. Playwright regression coverage was updated; run CI/build before considering the branch verified.

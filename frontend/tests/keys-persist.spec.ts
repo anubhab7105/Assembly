@@ -151,8 +151,8 @@ test.describe("Keys survive refresh (P0)", () => {
     const ack = page.getByTestId("privacy-acknowledge")
     await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
     await ack.click()
-    await page.getByPlaceholder(/What do you want the team/i).fill("Does the picker agree with the run?")
-    await page.getByRole("button", { name: /Launch Team/i }).click()
+    await page.locator("#research-question").fill("Does the picker agree with the run?")
+    await page.getByRole("button", { name: /^Run$/i }).click()
     await expect(page).toHaveURL(/\/executions\?id=local-.+/, { timeout: 15000 })
 
     expect(preflightBody).not.toBeNull()
