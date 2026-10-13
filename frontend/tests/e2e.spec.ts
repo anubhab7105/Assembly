@@ -102,9 +102,10 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
     // Optional per-role pin.
     await page.getByRole("button", { name: /Apply pin/i }).click()
+    await page.getByRole("button", { name: /Done/i }).click()
 
-    await page.getByPlaceholder(/What do you want the team/i).fill("Will quantum computing win?")
-    await page.getByRole("button", { name: /Launch Team/i }).click()
+    await page.locator("#research-question").fill("Will quantum computing win?")
+    await page.getByRole("button", { name: /^Run$/i }).click()
     await expect(page).toHaveURL(/\/executions\?id=local-.+/)
     await expect(page.getByRole("heading", { name: /Research Team/i })).toBeVisible()
     // N-04: chip carries the capped server label, not a default.
