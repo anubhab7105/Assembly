@@ -1,83 +1,78 @@
-# Assembly Architecture
+# Assembly architecture
 
-Assembly orchestrates a dynamic, temporary team of AI agents to answer complex user questions within a fixed time budget.
+Assembly coordinates a temporary team of AI agents around a user question and time budget. Agents first work independently, then compare evidence and disagreement, and finally synthesize a response with remaining uncertainty.
 
-## Component Diagram
-
-```mermaid
-graph TD
-    %% Core Components
-    User((User)) --> |Question + Time Budget| Backend[FastAPI Backend]
-    
-    subgraph "Clients"
-        Web[Vanilla JS / Next.js]
-        Desktop[Tauri 2 App]
-    end
-    
-    Web --> Backend
-    Desktop --> |Local Sidecar| Backend
-
-    subgraph "Orchestration Engine"
-        Backend --> Orchestrator
-        Orchestrator --> Planner[Planner]
-        Planner --> AgentManager[Agent Manager]
-        AgentManager --> Agents[Temporary Team of Agents]
-        Agents --> IndependentSolve[Independent Solving]
-        IndependentSolve --> Debate[Debate Manager]
-        Debate <--> Consensus[Consensus Engine]
-        Consensus --> Synthesizer[Synthesizer]
-        Synthesizer --> Composer[Final Composer]
-    end
-    
-    subgraph "Support Services"
-        Router[Model Router]
-        WebResearch[Web Search]
-        KeyStore[Request Key Store]
-    end
-
-    Planner -.-> Router
-    AgentManager -.-> Router
-    Agents -.-> WebResearch
-    Router -.-> KeyStore
-```
-
-## Execution State Machine
-
-The core `Orchestrator` relies on a strict state machine to manage the execution lifecycle. 
+## Component overview
 
 ```mermaid
-stateDiagram-v2
-    [*] --> CREATED: User submits question
-    CREATED --> CAPACITY_CHECK: Evaluate budget & tokens
-    CAPACITY_CHECK --> PLANNING: Allocate roles & strategy
-    PLANNING --> TEAM_READY: Instantiate Agent instances
-    TEAM_READY --> SOLVING: Agents solve independently
-    SOLVING --> EVALUATING: Score consensus
-    
-    EVALUATING --> DEBATING: Consensus < Threshold (or Adversarial round triggered)
-    DEBATING --> EVALUATING: Re-score after debate round
-    
-    EVALUATING --> SYNTHESIZING: Consensus reached or time up
-    SYNTHESIZING --> COMPLETED: Final Answer compiled
-    
-    CREATED --> CANCELLED: User aborted
-    CAPACITY_CHECK --> CANCELLED
-    PLANNING --> CANCELLED
-    TEAM_READY --> CANCELLED
-    SOLVING --> CANCELLED
-    EVALUATING --> CANCELLED
-    DEBATING --> CANCELLED
-    SYNTHESIZING --> CANCELLED
-
-    COMPLETED --> [*]
-    CANCELLED --> [*]
+flowchart TD
+    User[User] --> Frontend[Next.js / React frontend]
+    Frontend -->|HTTP API + streamed run events| API[FastAPI backend]
+    API --> Preflight[Preflight and capacity checks]
+    Preflight --> Orchestrator[Orchestrator]
+    Orchestrator --> Planner[Planner]
+    Planner --> Manager[Agent manager and role assignment]
+    Manager --> Router[Model router]
+    Router --> Config[models.yaml]
+    Router --> ModelAPIs[External model provider APIs]
+    Manager --> Solve[Independent solve phase]
+    Solve --> Consensus[Consensus and evidence scoring]
+    Consensus --> Debate[Debate / research / adversarial check]
+    Debate --> Consensus
+    Consensus --> Synthesis[Synthesis and uncertainty notes]
+    Synthesis --> Frontend
 ```
 
-## Overview of Phases
+## Main components
 
-1. **Capacity Check**: A heuristic evaluation of available rate limits and time. 
-2. **Planning**: A planner agent classifies the problem complexity, determines if research is needed, and outputs a required team composition.
-3. **Team Ready**: The Agent Manager instantiates diverse agents based on the plan. Diversity is strictly enforced by model family.
-4. **Independent Solving**: Agents solve the question entirely independently to avoid groupthink.
-5. **Evaluating / Debating**: The Consensus Engine evaluates answers based on agreement, confidence, evidence, contradiction, and stability. If consensus isn't reached (or if an adversarial strike is triggered to challenge premature consensus), a Debate Round runs where agents cross-examine each other.
-6. **Synthesizing**: A synthesizer takes all arguments, debate history, and source references to compose a final output with an uncertainty note.
+| Component | Responsibility |
+|---|---|
+| `frontend/` | Next.js static-export frontend; user settings, provider-key configuration, execution controls, progress display, and results. |
+| `src/main.py` | FastAPI app setup, middleware, health endpoints, and API router registration. |
+| `src/api/` | HTTP endpoints for preflight, catalog, provider-key testing, run execution, event streaming, and cancellation. |
+| `src/orchestration/` | Capacity checks, planning, temporary agent teams, independent solving, debate, consensus scoring, and synthesis. |
+| `src/providers/` | Provider adapters, model routing, quota handling, mock/replay providers, and configuration validation. |
+| `models.yaml` | Configured provider/model catalog, family/role assignments, and model-specific quota metadata. |
+| `tests/` | Python unit/regression tests designed to use mock providers and local test fixtures. |
+| `frontend/tests/` | Playwright browser regression tests. |
+
+## Request lifecycle
+
+1. **Preflight and capacity:** Assembly checks the requested budget and the models/quotas available to the caller.
+2. **Planning:** a planner estimates the task and proposes roles and strategy.
+3. **Team formation:** the router selects configured models, accounting for model families and available keys.
+4. **Independent solving:** agents generate first-pass answers without seeing one another's responses.
+5. **Consensus scoring:** the engine compares agreement, evidence, confidence, contradictions, and new information.
+6. **Challenge rounds:** if needed and time remains, agents debate, research, or challenge premature agreement; the engine scores the result again.
+7. **Synthesis:** a final answer is assembled with supporting sources and explicit uncertainty where possible. Runs may also end due to a time limit, cancellation, or provider failure.
+
+A consensus score is a heuristic, not a calibrated probability that an answer is correct. Distinct model families may still share training data, incentives, or blind spots.
+
+## Interfaces and events
+
+The frontend calls FastAPI endpoints for the model catalog, preflight checks, key testing, and run execution. Run execution streams progress events to the browser; cancellation is exposed separately. The frontend API client in `frontend/src/lib/api-client.ts` is the best starting point for understanding request and event payloads. The backend route modules in `src/api/` define server-side behavior.
+
+## Configuration and provider boundaries
+
+Model IDs, family classification, roles, and quota metadata belong in `models.yaml`; do not duplicate them as hard-coded values in application code. Provider limits change over time. Verify changes against the provider's current dashboard or documentation and include a source/date note when updating configuration.
+
+Normal tests should use mock or replay providers. Tests that need live provider access must be explicitly marked `@pytest.mark.live` and must not run as part of the default suite.
+
+## Storage and secrets
+
+- **Web mode:** designed not to persist questions, answers, or provider keys in a server database. Run coordination uses in-memory state; an in-memory run may still temporarily exist while it is executing.
+- **Development and desktop modes:** use local SQLite for local history/state. Desktop integration may also use the operating system keyring.
+- **Browser:** saved provider-key configuration can persist in browser storage. Treat it as sensitive local data and use trusted devices/builds.
+- **Logs and tests:** keys must never be written to logs, URLs, fixtures, screenshots, or API responses. Keep redaction and key-leak regression tests intact.
+
+Do not describe Assembly as end-to-end encrypted or as a guarantee of privacy. Provider APIs receive the data necessary to complete requests, and each provider's own terms and privacy practices apply.
+
+## Where to make changes
+
+- User experience and accessible UI: `frontend/src/`
+- API behavior and request validation: `src/api/`
+- Core execution pipeline: `src/orchestration/`
+- Model/provider catalog and routing: `models.yaml`, `src/providers/`
+- Regressions and deterministic fixtures: `tests/`, `frontend/tests/`
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for local setup, test commands, and the pull-request workflow.
