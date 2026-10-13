@@ -1,5 +1,9 @@
 # Assembly — Workflow
 
+> **Contributor note (October 2026):** Part A describes the intended execution lifecycle. The build/shipping notes in Part B include historical planning context and may not describe the current release process. For current setup and validation commands, follow the root [README](../README.md) and [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+
+
 *v1.1 · October 10, 2026 · Companion to the PRD v1.1 and TECH_STACK.md*
 
 This document has two parts: **Part A** is how one execution runs inside Assembly. **Part B** is how you build and ship it for the hackathon.

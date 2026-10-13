@@ -1,206 +1,177 @@
 # Assembly
 
-**Assembly turns a question into a time-boxed team of AI agents that solve independently, challenge one another, check evidence, and synthesize a final answer with sources and uncertainty.**
+Assembly is an experimental multi-agent AI workspace. Give it a question and a time budget, and it coordinates a temporary team of AI agents that work independently, examine disagreements, and produce a synthesized answer with sources and uncertainty notes where available.
 
-Assembly is an experimental multi-agent orchestration project being prepared for open-source collaboration. It is for people who want to study, improve, or use structured AI collaboration instead of relying on one model response. Users bring their own provider API keys (BYOK); Assembly does not provide a shared pool of model credits.
+Assembly is a research project, not a promise of correctness. Multiple models can share the same blind spots, citations may be incomplete, and a confident-looking consensus can still be wrong.
 
-## Why contribute?
+## What Assembly does
 
-Assembly is at the stage where thoughtful contributions can materially improve the project. Work on a real Python orchestration backend, a modern Next.js interface, provider reliability, testing, documentation, and safe handling of user-supplied keys.
+A typical run goes through these stages:
 
-Contributions are especially useful when they make Assembly more **reliable, verifiable, accessible, privacy-conscious, or easier to run**. First contributions do not need to be large: a reproducible bug report, a focused test, a clearer setup step, or a small accessibility fix can help every future user.
+1. **Plan:** estimate the task and choose agent roles for the available time and configured models.
+2. **Solve independently:** selected agents work on the problem before seeing one another's answers.
+3. **Compare and challenge:** Assembly scores agreement, evidence, confidence, contradictions, and new information. If useful, agents debate, research, or run an adversarial check.
+4. **Synthesize:** the system combines the results into one answer and exposes remaining uncertainty.
 
-- Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
-- Review the [documentation index](docs/README.md) and [architecture overview](docs/architecture.md).
-- Browse [all open issues](https://github.com/anubhab7105/Assembly/issues). Good first contributions: [setup/documentation smoke check #8](https://github.com/anubhab7105/Assembly/issues/8), [keyboard accessibility tests #9](https://github.com/anubhab7105/Assembly/issues/9), and [provider development guide #10](https://github.com/anubhab7105/Assembly/issues/10).
+Execution budgets currently include 3, 5, 10, and 15 minutes. Actual results depend on model availability, configured keys, quotas, latency, and the question.
 
-## How Assembly works
+## Who it is for
 
-1. **Plan:** inspect the question, time budget, available keys, and provider capacity.
-2. **Solve independently:** create a temporary team of agents so the first answers are not built on one shared response.
-3. **Challenge and verify:** use debate, research, and verification rounds when time and provider quotas allow.
-4. **Evaluate and synthesize:** assess agreement, evidence, contradictions, and stability, then prepare an answer with sources and a note about remaining uncertainty.
+Assembly is for developers, researchers, and curious users who want to experiment with model diversity, structured debate, evidence checks, and multi-agent orchestration. It is also for contributors interested in Python APIs, frontend UX, provider integrations, testing, documentation, privacy, and reliability.
 
-The UI streams progress from the backend while an execution is running. Model-family diversity and available provider capacity influence which plans can be run.
+**Do not rely on Assembly as the sole source for medical, legal, financial, security-critical, emergency, or other high-stakes decisions.** Always independently verify important claims.
 
 ## Architecture at a glance
 
-~~~mermaid
-flowchart TD
-    U[User question and time budget] --> W[Next.js frontend]
-    W -->|Run request and progress stream| API[FastAPI backend]
-    W <--> LOCAL[Browser-local history and settings]
-    API --> ORCH[Orchestration engine]
-    ORCH --> CAP[Capacity and planning]
-    CAP --> ROUTER[Model router and provider configuration]
-    ROUTER --> AGENTS[Independent agent calls]
-    AGENTS --> LOOP[Debate, research, verification and consensus loop]
-    LOOP --> SYNTH[Synthesis and uncertainty notes]
-    SYNTH --> API
-    ROUTER <--> PROVIDERS[External model and search APIs]
-    API -. dev / desktop modes .-> DB[Local SQLite and OS keyring where supported]
-~~~
+The web UI is a Next.js static-export frontend. It talks to a FastAPI backend, which coordinates agents and calls external model and optional search providers.
 
-**Main components**
+```mermaid
+flowchart LR
+    User[User] --> UI[Next.js / React UI]
+    UI -->|REST + streamed run events| API[FastAPI API]
+    API --> Preflight[Capacity and preflight checks]
+    Preflight --> Orchestrator[Orchestration engine]
+    Orchestrator --> Planner[Planner and role assignment]
+    Planner --> Router[Model router]
+    Router --> Catalog[models.yaml provider catalog]
+    Router --> Providers[External model APIs]
+    Orchestrator --> Solve[Independent agent responses]
+    Solve --> Consensus[Consensus and evidence scoring]
+    Consensus --> Debate[Debate / research / adversarial checks]
+    Debate --> Consensus
+    Consensus --> Synthesis[Synthesized answer + uncertainty]
+    Synthesis --> UI
+```
 
-- **Frontend:** Next.js, React, TypeScript, and Tailwind CSS in the **frontend/** directory.
-- **Backend:** Python and FastAPI; orchestration, capacity checks, provider routing, and API endpoints live under **src/**.
-- **Providers:** calls go to external model and search services. In hosted web mode, provider keys are supplied with requests; development mode can read local environment configuration.
-- **Local data:** hosted web mode is designed to keep run state in memory rather than store server-side user history. Browser-side history and settings are local to the user's browser. Development/desktop code can use local SQLite; desktop key storage uses the operating system keyring where supported.
+- **Frontend:** Next.js, React, TypeScript, and Tailwind CSS under `frontend/`.
+- **Backend:** FastAPI and Python under `src/`; the API exposes catalog, preflight, key-testing, and streamed run endpoints.
+- **Orchestration:** planner, agent manager, model router, consensus, debate, research, and synthesis modules.
+- **Configuration:** `models.yaml` is the source of truth for configured provider/model IDs, roles, families, and quota metadata.
+- **Storage:** web mode is designed to be stateless on the server, apart from in-memory run coordination. Development and desktop modes use local SQLite. The browser can persist key configuration, so use only a trusted local build and protect your browser profile.
+- **Desktop:** Tauri-related code exists in the repository, but the quickest contributor path to verify is the web frontend plus FastAPI backend described below.
 
-See [docs/architecture.md](docs/architecture.md) for more detail.
-
-## Who Assembly is for
-
-- **Developers** experimenting with agent orchestration, async Python, event streaming, and modern web interfaces.
-- **Researchers and evaluators** exploring model-family diversity, evidence-aware synthesis, and consensus mechanisms.
-- **Contributors** who want to improve reliability, provider integration, UX, accessibility, security, testing, or developer documentation.
-- **Power users** who have their own supported provider API keys and want to try time-boxed multi-agent workflows.
-
-## Current status and limitations
-
-Assembly is **experimental and pre-1.0**. Treat it as a project under active development, not as a guarantee of correctness or an audited decision system.
-
-- **Consensus is not proof.** Multiple agents can agree and still be wrong. Verify important claims and sources independently.
-- **External dependencies matter.** Model/search APIs may be unavailable, change their models or limits, or throttle requests. Free quotas and provider features change; check each provider's current terms and limits.
-- **Bring your own keys.** Running real model tasks requires valid credentials for supported providers. Usage is subject to each provider's policies, quota, and billing settings.
-- **Benchmark results are not yet a general quality guarantee.** Treat small samples, estimates, and synthetic benchmark fixtures as development evidence, not as proof of real-world accuracy.
-- **No user accounts or hosted conversation database.** Hosted web mode is designed to be stateless, but browser data can be lost when site data is cleared. External providers receive the request content required to answer it; do not send secrets or sensitive data unless you have assessed the relevant policies.
-- **Desktop packaging is experimental.** Do not assume that every desktop installer or platform is ready for production use. Check the current release notes and issues before relying on a packaged build.
-- **Compatibility may change.** Before version 1.0, interfaces, configuration, and behavior may change without a migration guarantee.
-
-## Run Assembly locally
+## Quick start
 
 ### Prerequisites
 
-- Python 3.11 or newer (CI currently uses Python 3.11).
-- Node.js 20 and npm (CI currently uses Node.js 20).
-- Git.
-- API keys for the providers you plan to use for real model calls. You can still work on many UI and test tasks without live provider credentials.
+- Python 3.11 or newer
+- Node.js 20 or newer and npm
+- Git
 
-### 1. Clone and install backend dependencies
+Run the backend and frontend in separate terminals.
 
-~~~bash
+### 1. Clone and prepare Python
+
+Once the repository is public, clone it with:
+
+```bash
 git clone https://github.com/anubhab7105/Assembly.git
 cd Assembly
-
 python -m venv .venv
-~~~
+```
 
 Activate the virtual environment:
 
-~~~bash
+```bash
 # macOS / Linux
 source .venv/bin/activate
 
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
-~~~
+```
 
-Install the project and development/test dependencies:
+Install application and development dependencies:
 
-~~~bash
+```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
-~~~
-
-### 2. Configure the backend
-
-Create a local environment file. It is ignored by Git; never commit it.
-
-~~~bash
-# macOS / Linux
 cp .env.example .env
+```
 
-# Windows PowerShell
-Copy-Item .env.example .env
-~~~
+On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`.
 
-Generate a unique quota salt:
+Generate a fresh local quota salt:
 
-~~~bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-~~~
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
 
-Copy the generated value into **QUOTA_SALT** in **.env**. For local development, keep **APP_MODE=dev**. Replace the example provider-key placeholders with your own valid keys, or clear the values for providers you are not using. Do not use real production credentials in local examples, tests, screenshots, or logs.
+Copy the output into `QUOTA_SALT` in your local `.env` file. Do not commit `.env`. The example file intentionally does not contain a real secret.
 
-### 3. Start the backend
+Apply local database migrations and start FastAPI:
 
-From the repository root, with the virtual environment active:
+```bash
+alembic upgrade head
+uvicorn src.main:app --reload
+```
 
-~~~bash
-python -m uvicorn src.main:app --reload
-~~~
+The backend should be available at `http://localhost:8000`. In development, the API docs are at `http://localhost:8000/docs`.
 
-The API should be available at **http://localhost:8000**. In development mode, the interactive API docs are available at **http://localhost:8000/docs**.
+### 2. Start the frontend
 
-### 4. Install and start the frontend
+Open a second terminal in the cloned repository directory, then run:
 
-Open a second terminal:
-
-~~~bash
+```bash
 cd frontend
 npm ci --legacy-peer-deps
-~~~
-
-Create **frontend/.env.local** if you need to override the local API endpoint:
-
-~~~dotenv
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_APP_MODE=dev
-~~~
-
-Start the frontend:
-
-~~~bash
 npm run dev
-~~~
+```
 
-Open **http://localhost:3000**. Leave both the backend and frontend running while developing. If your local environment already provides these frontend values, do not create a duplicate file.
+If your backend is not at the default `http://localhost:8000`, set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` to the backend base URL (without a trailing slash). The default already targets local FastAPI.
 
-## Tests and quality checks
+Open [http://localhost:3000](http://localhost:3000).
 
-Run the checks relevant to your change. Most contributions should run the matching checks locally before opening a pull request; CI runs the standard suite for pull requests to **main**.
+### 3. Configure model access
 
-### Backend
+Assembly follows a **Bring Your Own Keys (BYOK)** model. Add working provider keys in the application's Settings UI and follow its readiness checks. For local development, you can also configure server-side keys in `.env`; never use production credentials in test runs or screenshots. Provider names, model IDs, free quotas, and rate limits change frequently, so check the live provider dashboard and `models.yaml` before relying on a configuration.
 
-From the repository root:
+### Run tests
 
-~~~bash
-python -m pytest -q
-make lint
-# For changed Python files not covered by make lint:
-python -m ruff check path/to/changed/files
-python -m ruff format --check path/to/changed/files
-~~~
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full test and pull-request workflow. At a minimum:
 
-The repository Makefile also provides **make test**, **make lint**, and **make run**. The **make lint** target currently checks a defined subset of backend paths, so run Ruff directly on any additional Python files you changed.
+```bash
+# From the repository root
+alembic upgrade head
+pytest
 
-### Frontend
-
-From **frontend/**:
-
-~~~bash
+# From frontend/
 npm run lint
 npx tsc --noEmit
-npm run audit:high
-npx playwright install chromium
 npx playwright test
-~~~
+```
 
-Playwright starts the frontend through its test configuration. The CI workflow also runs the high-severity frontend audit, Gitleaks, backend migrations/tests, and a Python dependency audit (currently configured as advisory/non-blocking).
+## Current limitations
 
-Do not put real provider keys in tests. Prefer mocked network responses and deterministic fixtures so the suite can run without a paid API account.
+- **Experimental quality:** there is no claim that consensus is objectively correct or that the system has been validated for high-stakes use.
+- **External dependencies:** model and search APIs can rate-limit, return errors, change models, or be unavailable. Free-tier terms and quotas are controlled by each provider.
+- **Model diversity:** distinct families can reduce some shared failure modes, but they do not guarantee independent reasoning or factual accuracy.
+- **Credential hygiene:** never commit API keys, paste them into issues, or include them in logs and screenshots. Browser-persisted keys should be treated as sensitive local data.
+- **Desktop maturity:** desktop packaging and sidecar behavior may not be as straightforward to reproduce as the documented web development path.
+- **Performance and test coverage:** large or long-running tasks can be slow; not every provider/model combination is exercised against live APIs in CI.
 
-## Documentation
+## Ways to contribute
 
-Start at [docs/README.md](docs/README.md) for the architecture, workflow, technology stack, deployment guide, product requirements, and known documentation drift.
+You don't have to build a new agent to make Assembly better. High-impact contributions include:
 
-## Contributing and security
+- **Reliability:** improve retry/fallback behavior, cancellation, streaming, quota handling, and clear error messages.
+- **Evaluation:** add offline tests, replay fixtures, reproducible benchmarks, and evidence-quality checks.
+- **Provider support:** improve catalog validation and adapter behavior without hard-coding model IDs outside `models.yaml`.
+- **UX and accessibility:** improve keyboard navigation, mobile layouts, progress visibility, onboarding, and privacy explanations.
+- **Security and privacy:** strengthen key handling, redaction, safe defaults, dependency review, and threat-model documentation.
+- **Docs and developer experience:** make setup clearer, reduce first-run friction, and add small reproducible examples.
 
-- Contributions: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Community expectations: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Vulnerability reports: [SECURITY.md](SECURITY.md)
-- License: [Apache-2.0](LICENSE)
+Good first contributions are already tracked: [add a setup/documentation smoke check (#8)](https://github.com/anubhab7105/Assembly/issues/8), [add keyboard-accessibility checks (#9)](https://github.com/anubhab7105/Assembly/issues/9), or [document how to add and test a model provider (#10)](https://github.com/anubhab7105/Assembly/issues/10). You can also open an issue to discuss a substantial change before investing time in it. Every contribution that improves reproducibility, safety, clarity, or reliability is valuable.
 
-Thanks for helping make Assembly more useful, transparent, and dependable.
+## Project documentation
+
+- [Contributor guide](CONTRIBUTING.md) — development setup, checks, and pull requests.
+- [Security policy](SECURITY.md) — private vulnerability reporting and credential handling.
+- [Code of Conduct](CODE_OF_CONDUCT.md) — community expectations and enforcement.
+- [Documentation index](docs/README.md) — architecture and design notes.
+- [Architecture detail](docs/architecture.md) — components, run pipeline, state, and storage boundaries.
+- [Execution workflow](docs/WORKFLOW.md) — the intended run lifecycle.
+- [Tech stack notes](docs/TECH_STACK.md) — implementation choices and historical design context.
+
+## License
+
+Assembly is distributed under the Apache License 2.0. See [LICENSE](LICENSE).
