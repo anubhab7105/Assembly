@@ -593,3 +593,10 @@
 - Context: The sidebar's New Investigation action routed to `/` (the marketing landing page) rather than the question composer. The chat screen also displayed the full model picker and long example cards on every visit, making the primary task feel crowded.
 - Decision: Route New Investigation to `/chat` and send users to the composer if they delete the currently open history item. Move model/role configuration into an accessible dialog; use compact prompt suggestions and shorter copy in the composer while retaining key readiness, family-gate, and API connection warnings. Separate the history delete button from its link to avoid nested interactive controls. Add a Playwright regression for navigation and align run-flow selectors with the compact composer.
 - Verification status: Regression coverage updated. Browser suite/build have not yet been run from this connector session; do not treat the UI change as live-browser verified until CI passes.
+
+
+## 2026-10-13 — Follow-up: privacy test flow and hydration mismatch
+
+- Context: Post-merge Playwright run had 10/13 passing. Two tests clicked the privacy acknowledgement while its required consent checkbox was unchecked; another expected the model picker to be in the chat page after it had moved to advanced settings. The same run logged a cookie-banner server/client hydration mismatch and Next.js workspace-root / scroll-behavior warnings.
+- Decision: Update those tests to check consent and open advanced model settings before reading the picker. Make the cookie banner render hidden on both server and first client render, then read localStorage in an effect. Set the Turbopack root to the frontend working directory and add `data-scroll-behavior="smooth"` to the root HTML.
+- Verification status: Fixes are committed on a follow-up branch. Await CI on that branch before claiming the end-to-end suite passes.

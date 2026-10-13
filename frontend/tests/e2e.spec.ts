@@ -87,6 +87,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     // Privacy gate blocks interacting until acknowledged (fresh contexts
     // always prompt; wait for the async storage read instead of racing it).
     await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
+    await page.getByLabel(/my question is sent to the model providers/i).check()
     await page.getByTestId("privacy-acknowledge").click()
 
     // Advanced model controls are intentionally tucked into a dialog.

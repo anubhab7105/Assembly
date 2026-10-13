@@ -370,3 +370,10 @@ Append-only log of significant technical and product decisions.
 - Context: The persistent sidebar labeled its primary action "New Investigation" but routed to the promotional landing page. The chat composer also kept advanced model and role selection expanded, with long prompt examples taking up unnecessary space.
 - Decision: Route that action to `/chat`; keep the initial composer focused on the question, time budget, run action, and compact examples; expose advanced model/role controls in a dialog. Preserve explicit readiness and connection states so reducing text does not conceal blockers.
 - Consequences: The primary navigation matches its label and the composer is less cluttered. Playwright regression coverage was updated; run CI/build before considering the branch verified.
+
+
+## 2026-10-13 — Keep browser storage out of the initial render
+
+- Context: The cookie banner used localStorage in its state initializer, so the server rendered no banner while a client with no saved dismissal immediately rendered one. Playwright reported a hydration mismatch. Moving model controls into a dialog also required browser tests to acknowledge privacy consent and open that dialog explicitly.
+- Decision: Use a stable initial hidden state and read the saved banner preference after hydration. Configure Turbopack's root explicitly for the `frontend/` app, and set Next.js's scroll-behavior marker. Adjust E2E flows to honor the privacy checkbox and modal-based model configuration.
+- Consequences: Initial server/client markup should match; banner preference is applied after mount. Re-run browser and backend CI on this follow-up branch.
