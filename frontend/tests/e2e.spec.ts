@@ -46,7 +46,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await page.goto("/executions")
     await page.getByRole("button", { name: /New Investigation/i }).click()
     await expect(page).toHaveURL(/\/chat$/)
-    await expect(page.getByRole("heading", { name: /Ask one hard question/i })).toBeVisible()
+    await expect(page.locator("#research-question")).toBeVisible()
   })
 
   test("1. Setup flow with test keys and verify zero leakage", async ({ page }) => {
