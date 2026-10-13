@@ -179,32 +179,39 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           filtered.map((ex) => {
             const isActive = pathname === `/executions` && searchParams?.get("id") === ex.id
             return (
-              <Link
+              <div
                 key={ex.id}
-                href={`/executions?id=${ex.id}`}
-                prefetch={false}
-                onClick={onClose}
-                className={`group flex items-start gap-2 rounded-md px-2 py-2 text-sm ${
-                  isActive ? "bg-brand/10 text-brand" : "text-foreground hover:bg-muted"
+                className={`group relative rounded-md text-sm transition-colors ${
+                  isActive ? "bg-brand/10" : "hover:bg-muted"
                 }`}
               >
-                <MessageSquare className={`size-4 mt-0.5 shrink-0 ${isActive ? "text-brand" : "text-muted-foreground"}`} />
-                <div className="flex-1 overflow-hidden">
-                  <p className="truncate text-xs font-medium">{ex.question}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] text-muted-foreground">{new Date(ex.created_at).toLocaleDateString()}</span>
-                    <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-sm bg-muted text-muted-foreground">{ex.status}</span>
+                <Link
+                  href={`/executions?id=${ex.id}`}
+                  prefetch={false}
+                  onClick={onClose}
+                  className={`flex items-start gap-2 px-2 py-2 pr-10 ${
+                    isActive ? "text-brand" : "text-foreground"
+                  }`}
+                >
+                  <MessageSquare className={`mt-0.5 size-4 shrink-0 ${isActive ? "text-brand" : "text-muted-foreground"}`} />
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    <p className="truncate text-xs font-medium">{ex.question}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">{new Date(ex.created_at).toLocaleDateString()}</span>
+                      <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[9px] uppercase text-muted-foreground">{ex.status}</span>
+                    </div>
                   </div>
-                </div>
+                </Link>
                 <button
+                  type="button"
                   onClick={(e) => handleDelete(e, ex.id)}
                   aria-label={`Delete run: ${ex.question.slice(0, 60)}`}
-                  className="rounded p-2.5 hover:text-danger shrink-0 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                  className="absolute right-1 top-1 rounded p-2.5 text-muted-foreground hover:text-danger md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                   title="Delete execution"
                 >
                   <Trash2 className="size-4" />
                 </button>
-              </Link>
+              </div>
             )
           })
         )}
