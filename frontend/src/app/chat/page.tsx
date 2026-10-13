@@ -21,7 +21,7 @@ import { Zap, Send, Settings, Clock, SlidersHorizontal } from "lucide-react"
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
-  { label: "Room-temperature superconductors", question: "What are the most viable methods for replicating room-temperature superconductors?" },
+  { label: "Superconductors", question: "What are the most viable methods for replicating room-temperature superconductors?" },
   { label: "AGI timeline", question: "Analyse the timeline and economic impacts of AGI given current scaling laws." },
   { label: "EV battery chemistry", question: "Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?" },
 ]
@@ -458,7 +458,7 @@ export default function Home() {
           <DialogHeader>
             <DialogTitle>Models and roles</DialogTitle>
             <DialogDescription>
-              Automatic selection is the default. Choose specific models or pin a model to a role when needed.
+              Auto selection by default. Optional model overrides and role pins.
             </DialogDescription>
           </DialogHeader>
           <ModelPicker value={selection} onChange={setSelection} keyedProviderIds={enabledIds} />
