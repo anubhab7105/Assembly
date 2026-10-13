@@ -1,46 +1,32 @@
 # Security Policy
 
-Assembly handles user-supplied questions and provider credentials, and depends on external services. Security reports are welcome. Please help us fix issues responsibly.
+Assembly is experimental software that calls third-party model and optional search APIs. Please report security issues responsibly and give maintainers a chance to investigate before public disclosure.
 
-## Report a vulnerability privately
+## Reporting a vulnerability
 
-**Do not disclose an unresolved vulnerability in a public issue, discussion, pull request, or social post.**
+**Do not open a public GitHub issue or pull request for a suspected vulnerability.**
 
-Preferred route, once enabled: open the repository's **Security** or **Security and quality** tab and select **Report a vulnerability** to submit a private GitHub security advisory. The private reporting form is separate from this file and must be enabled in repository settings by an owner or administrator.
+Preferred method, once enabled: open the repository's **Security** tab and use **Report a vulnerability** to submit a private report. GitHub private vulnerability reporting is a repository setting; the maintainers must enable it after the repository is made public. If the private report button is not available, contact the maintainer privately through the contact method listed on the maintainer's GitHub profile. Do not publish exploit details while arranging contact.
 
-If the private reporting option is not available, use the maintainer's private contact channel listed on the [GitHub profile](https://github.com/anubhab7105) and ask for a secure disclosure route. Do not attach exploit details or secrets to a public issue.
+A useful report includes the affected commit or version, deployment/configuration context, impact, reproduction steps, and a minimal proof of concept. Redact keys, tokens, personal data, and any information belonging to other users. Test only systems and accounts you own or are explicitly authorized to assess.
 
-A useful report includes:
+Please allow maintainers reasonable time to confirm the issue, assess impact, prepare a fix, and coordinate disclosure. Do not assume a report has been received until you get an acknowledgement.
 
-- A concise summary and affected component/commit or release.
-- Impact, preconditions, and realistic attack scenarios.
-- Minimal, safe reproduction steps or a proof of concept that does not access other people's data.
-- Any relevant sanitized logs, request/response details, and a suggested mitigation if known.
+## Exposed API keys or credentials
 
-Please allow the maintainer time to investigate and coordinate a fix before public disclosure. Do not test against systems or data you do not own or have permission to test.
+If a real key or credential may have been exposed:
 
-## If an API key or secret is exposed
+1. Revoke or rotate it immediately in the relevant provider or service dashboard. Deleting the text from a commit is not enough.
+2. If it entered Git history, logs, CI output, screenshots, a browser capture, an issue, or a pull request, describe the exposure privately without repeating the secret.
+3. Remove the secret from the affected location, inspect related logs/artifacts, and determine whether other credentials could have been exposed.
+4. Never send a live key to maintainers as part of a report. Use a short masked prefix/suffix or a newly generated disposable test key where necessary.
 
-Treat an exposed key as compromised, even if it was removed from the latest commit.
-
-1. Revoke or rotate the key at the provider immediately; create a replacement and update your local secret store.
-2. Check provider usage and billing for unexpected activity.
-3. Remove the value from tracked files and, if appropriate, coordinate a history rewrite. History cleanup does **not** make the old key safe; rotation is the priority.
-4. If the exposure occurred in Assembly itself, privately notify the maintainer with the provider, approximate exposure time, and affected locations. Do not send the replacement secret.
-5. Never paste active keys into an issue, pull request, log, screenshot, test fixture, or support message.
-
-For a key leaked from your own fork or development environment, rotate it first and review your own logs and deployment environment.
+Contributors must not commit `.env`, tokens, provider keys, browser storage exports, production logs, or realistic secrets in test fixtures. Report accidental exposure promptly even if the credential has already been rotated.
 
 ## Supported versions
 
-Assembly is currently pre-1.0 and does not promise stable APIs or release branches.
-
-- **Supported:** the latest commit on **main** and the latest official release, if one is published.
-- **Not supported:** older commits, unmaintained forks, and prerelease builds that have been superseded.
-- Security fixes are not guaranteed to be backported to older versions. Upgrade to the latest supported version when practical.
+Until Assembly publishes a stable, versioned release policy, **the current `main` branch is the primary supported development line**. A published release is supported only if its release notes explicitly say so. Old commits, forks, and unmaintained deployments may not receive fixes. Users should update to the latest supported code before reporting a vulnerability.
 
 ## Scope and limitations
 
-Reports are most useful when they demonstrate a security impact in Assembly's code, configuration, or documented deployment path. A provider outage, rate limit, or vulnerability wholly within a third-party service should be reported to that provider, though a security consequence caused by Assembly's handling may still be relevant.
-
-No bug-bounty program or response-time SLA is currently promised.
+Assembly does not guarantee factual correctness, model independence, or suitability for high-stakes use. A model/provider vulnerability should also be reported to the relevant provider when appropriate. Denial-of-service testing, credential attacks, or testing against other people's deployments without permission are not authorized by this policy.

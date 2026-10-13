@@ -2,41 +2,39 @@
 
 ## Our pledge
 
-We are committed to making participation in Assembly a welcoming, respectful, and harassment-free experience for everyone, regardless of age, body size, disability, ethnicity, gender identity or expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
+We are committed to making participation in Assembly welcoming and respectful. Contributors and maintainers should treat people with patience, assume good faith where reasonable, and focus criticism on ideas and work rather than personal traits.
 
-As contributors and maintainers, we pledge to make participation a positive experience built on respect, curiosity, constructive feedback, and shared responsibility for the project.
+This policy applies to project spaces, including issues, pull requests, code reviews, discussions, and project-related public communication.
 
 ## Expected behavior
 
-Examples of behavior that contributes to a healthy community include:
+Examples of behavior that helps build a healthy community include:
 
-- Being respectful, considerate, and constructive.
-- Critiquing ideas and code rather than attacking people.
-- Welcoming questions and explaining context without condescension.
-- Accepting responsibility for mistakes, correcting them, and learning from feedback.
-- Respecting privacy and keeping private security reports, credentials, and personal information confidential.
-- Focusing on what is best for the project and its community.
+- Being respectful, inclusive, and constructive when disagreeing.
+- Giving and accepting actionable feedback without personal attacks.
+- Explaining technical concerns with examples and evidence where practical.
+- Respecting privacy and consent; never publish another person's private information.
+- Keeping reports, reviews, and discussions focused on the project and its goals.
+- Acknowledging mistakes and correcting inaccurate statements.
 
 ## Unacceptable behavior
 
-Examples include harassment, insults or personal attacks, discriminatory or sexualized language, threats, deliberate intimidation, doxxing, publishing private information without consent, sustained disruption, and unwanted attention after someone asks for it to stop.
+Examples of unacceptable behavior include harassment, discrimination, threats, intimidation, sustained personal attacks, sexualized attention without consent, doxxing, publishing private credentials or data, and deliberately disrupting project work. Unwelcome conduct does not need to be repeated to be taken seriously.
 
-Good-faith disagreement about implementation, priorities, or technical evidence is welcome. Personal abuse is not.
+Good-faith technical disagreement, respectful criticism, and reports of security or project problems are not violations merely because they are uncomfortable.
 
 ## Maintainer responsibilities and enforcement
 
-The project maintainer is responsible for clarifying and enforcing these standards in project spaces, including issues, pull requests, discussions, and project-related public communication.
+Project maintainers are responsible for clarifying and enforcing this code. They will consider the context and impact of a report, seek relevant information privately when practical, and act consistently. They may remove or edit inappropriate comments or content, decline or close a contribution, issue a warning, temporarily restrict participation, or permanently exclude a participant for conduct that violates this policy.
 
-To report a concern, contact the maintainer privately through the contact information available on the [GitHub profile](https://github.com/anubhab7105). Do not use a public issue to report harassment involving private information. Include links or context when safe to do so.
+Maintainers will communicate the action taken where appropriate while protecting the privacy of people who report problems. Enforcement may be handled by the maintainer who is not directly involved in the report; if no independent maintainer is available, the project owner should seek a trusted neutral reviewer where practical.
 
-Reports will be reviewed as promptly as practical, handled as confidentially as circumstances allow, and assessed fairly. The maintainer may ask for additional context, remove or edit harmful content, issue a warning, temporarily restrict participation, or permanently exclude a participant from project spaces. The response will be proportionate to the conduct and its impact. Retaliation against someone who reports a concern in good faith is not acceptable.
+## Reporting a concern
 
-The maintainer will communicate the outcome to the people who need to know, while respecting privacy. This process is intended to be enforced consistently; it is not a promise of a particular response time or outcome.
+For conduct in project spaces, contact the repository owner privately through the contact method listed on the maintainer's GitHub profile. Include links and a brief description, but do not post private information in a public issue. Reports will be reviewed as promptly as practical, and information will be shared only with those who need it to respond.
 
-## Scope
-
-This Code applies within project spaces and when an individual is officially representing Assembly in public spaces. It also applies when conduct outside project spaces materially harms the safety or participation of the community.
+For security vulnerabilities, follow [SECURITY.md](SECURITY.md) rather than posting details in a public issue.
 
 ## Attribution
 
-This Code of Conduct is adapted from the principles and structure of the Contributor Covenant. Community standards may be updated as the project grows.
+This policy is adapted from the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/). The project adopts it with the enforcement and reporting process described above.

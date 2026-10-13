@@ -1,5 +1,5 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Report a security vulnerability privately
+  - name: Security vulnerability reporting
     url: https://github.com/anubhab7105/Assembly/security/advisories/new
-    about: Do not report vulnerabilities, exposed API keys, or private data in a public issue. If private reporting is unavailable, follow SECURITY.md.
+    about: Use this private form once private vulnerability reporting is enabled. Do not post security details publicly.

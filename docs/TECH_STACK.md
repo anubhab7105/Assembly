@@ -1,5 +1,9 @@
 # Assembly — Tech Stack
 
+> **Implementation status note (October 2026):** This document contains both implemented choices and historical design recommendations. For current runtime behavior, use [the architecture guide](architecture.md), `frontend/package.json`, `requirements.txt`, `src/`, and `models.yaml`. In particular, provider availability and quota data may have changed since this document was written; verify before changing configuration.
+
+
+
 *v1.1 · October 10, 2026 · Companion to the PRD v1.1 · Goal: hackathon demo first, free-tier only, BYOK*
 
 > **Verify before you rely on it.** Free-tier limits and model names change often. The numbers below come from third-party summaries read in October 2026. Open each provider's dashboard and confirm your own limits before the demo. Keep every limit and model name in a config file (`models.yaml`), never hard-coded.

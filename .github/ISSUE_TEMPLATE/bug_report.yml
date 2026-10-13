@@ -1,48 +1,68 @@
 name: Bug report
-description: Report a reproducible problem in Assembly.
+description: Report a reproducible problem with Assembly.
 title: "[Bug]: "
+labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Search existing issues first. For security vulnerabilities or exposed keys, do not use this form; follow SECURITY.md for private reporting.
+        Please do not include API keys, private information, full browser-storage exports, or unsanitized production logs. For suspected vulnerabilities, use SECURITY.md and report privately.
   - type: textarea
     id: summary
     attributes:
       label: What happened?
-      description: Describe the observed behavior and why it is a problem.
-      placeholder: A short, concrete description.
+      description: Describe the actual behavior and what you expected instead.
+      placeholder: Clear, concise description.
     validations:
       required: true
   - type: textarea
     id: reproduce
     attributes:
       label: Steps to reproduce
-      description: Include the smallest set of steps that demonstrates the issue.
+      description: Include the smallest sequence that reproduces the problem.
       placeholder: |
-        1. Start Assembly...
-        2. Open...
-        3. Observe...
+        1. Open...
+        2. Configure...
+        3. Select...
     validations:
       required: true
-  - type: textarea
-    id: expected
+  - type: dropdown
+    id: area
     attributes:
-      label: Expected behavior
-      description: What should have happened?
+      label: Area
+      options:
+        - Frontend / UI
+        - Backend / API
+        - Orchestration / consensus
+        - Provider / model catalog
+        - Setup / installation
+        - Tests / CI
+        - Documentation
+        - Other
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
       label: Environment
-      description: OS, browser, Python/Node versions, commit or release, and whether web or local dev mode was used.
+      description: OS, Python version, Node version, browser, commit/branch, and run mode if known.
+      placeholder: "OS / browser / versions / web or desktop mode"
     validations:
       required: true
   - type: textarea
-    id: evidence
+    id: logs
     attributes:
-      label: Logs, screenshots, or other evidence
-      description: Include sanitized evidence only. Remove API keys, tokens, private prompts, and personal data.
+      label: Sanitized output
+      description: Include only the relevant redacted error or logs. Never include secrets.
+      render: text
     validations:
       required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I removed credentials, personal data, and sensitive logs.
+          required: true
