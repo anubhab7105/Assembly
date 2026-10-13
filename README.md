@@ -168,8 +168,10 @@ From the repository root:
 
 ~~~bash
 python -m pytest -q
-python -m ruff check src tests scripts
-python -m ruff format --check src tests scripts
+make lint
+# For changed Python files not covered by make lint:
+python -m ruff check path/to/changed/files
+python -m ruff format --check path/to/changed/files
 ~~~
 
 The repository Makefile also provides **make test**, **make lint**, and **make run**. The **make lint** target currently checks a defined subset of backend paths, so run Ruff directly on any additional Python files you changed.
