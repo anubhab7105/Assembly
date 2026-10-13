@@ -42,6 +42,13 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     })
   })
 
+  test("New Investigation opens the composer, not the landing page", async ({ page }) => {
+    await page.goto("/executions")
+    await page.getByRole("button", { name: /New Investigation/i }).click()
+    await expect(page).toHaveURL(/\/chat$/)
+    await expect(page.getByRole("heading", { name: /Ask one hard question/i })).toBeVisible()
+  })
+
   test("1. Setup flow with test keys and verify zero leakage", async ({ page }) => {
     await page.goto("/settings")
 
@@ -82,6 +89,9 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
     await page.getByTestId("privacy-acknowledge").click()
 
+    // Advanced model controls are intentionally tucked into a dialog.
+    await page.getByRole("button", { name: /Open model and role settings/i }).click()
+    await expect(page.getByRole("dialog")).toBeVisible()
     // Catalog-backed picker renders checkboxes grouped by provider/family.
     await expect(page.getByTestId("model-picker")).toBeVisible()
     await expect(page.getByTestId("picker-gate-chip")).toContainText("2 families ready")
