@@ -600,3 +600,10 @@
 - Context: Post-merge Playwright run had 10/13 passing. Two tests clicked the privacy acknowledgement while its required consent checkbox was unchecked; another expected the model picker to be in the chat page after it had moved to advanced settings. The same run logged a cookie-banner server/client hydration mismatch and Next.js workspace-root / scroll-behavior warnings.
 - Decision: Update those tests to check consent and open advanced model settings before reading the picker. Make the cookie banner render hidden on both server and first client render, then read localStorage in an effect. Set the Turbopack root to the frontend working directory and add `data-scroll-behavior="smooth"` to the root HTML.
 - Verification status: Fixes are committed on a follow-up branch. Await CI on that branch before claiming the end-to-end suite passes.
+
+
+## 2026-10-13 — Cookie banner hydration fix refined to satisfy lint
+
+- Context: The first hydration fix moved the localStorage read into an effect, but CI lint rejected synchronous state updates inside effects.
+- Decision: Use `useSyncExternalStore` with a stable server snapshot and browser snapshot for the cookie-banner preference. Dismissal is broadcast to same-tab subscribers and stored in localStorage when available.
+- Verification status: Awaiting the latest PR CI run; do not claim lint or browser tests are green until confirmed.
