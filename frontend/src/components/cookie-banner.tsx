@@ -1,34 +1,56 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useSyncExternalStore } from "react"
 import Link from "next/link"
 
 const CHOICE_KEY = "assembly:cookie-choice"
+const COOKIE_CHOICE_EVENT = "assembly:cookie-choice-change"
+let dismissedInMemory = false
+
+function subscribeCookieChoice(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {}
+  window.addEventListener("storage", onStoreChange)
+  window.addEventListener(COOKIE_CHOICE_EVENT, onStoreChange)
+  return () => {
+    window.removeEventListener("storage", onStoreChange)
+    window.removeEventListener(COOKIE_CHOICE_EVENT, onStoreChange)
+  }
+}
+
+function getCookieBannerSnapshot() {
+  if (dismissedInMemory) return false
+  try {
+    return !window.localStorage.getItem(CHOICE_KEY)
+  } catch {
+    return true
+  }
+}
+
+// Match the server's first render. useSyncExternalStore switches to the
+// browser snapshot after hydration, so reading localStorage won't mismatch SSR.
+function getServerCookieBannerSnapshot() {
+  return false
+}
 
 /** Informational banner: Assembly sets no cookies and runs no analytics. */
 export function CookieBanner() {
-  // Keep the server and first client render identical. Read browser storage
-  // after hydration to avoid an SSR/client tree mismatch.
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    try {
-      setVisible(!window.localStorage.getItem(CHOICE_KEY))
-    } catch {
-      setVisible(true)
-    }
-  }, [])
-
-  if (!visible) return null
+  const visible = useSyncExternalStore(
+    subscribeCookieChoice,
+    getCookieBannerSnapshot,
+    getServerCookieBannerSnapshot,
+  )
 
   const dismiss = () => {
+    dismissedInMemory = true
     try {
       window.localStorage.setItem(CHOICE_KEY, "dismissed")
     } catch {
-      // Banner dismissal is best-effort only.
+      // Dismissal remains effective for this page session if storage is blocked.
     }
-    setVisible(false)
+    window.dispatchEvent(new Event(COOKIE_CHOICE_EVENT))
   }
+
+  if (!visible) return null
 
   return (
     <div
