@@ -17,7 +17,7 @@ import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Zap, Send, Settings, Sparkles, Clock, SlidersHorizontal } from "lucide-react"
+import { Zap, Send, Settings, Clock, SlidersHorizontal } from "lucide-react"
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
@@ -73,6 +73,9 @@ export default function Home() {
     pins: selection.pins,
   })
   const degradedConfirmed = confirmedGateSignature === gateSignature
+  const statusIsError = Boolean(
+    status && status !== "Checking capacity…" && status !== "Running team… (streaming)",
+  )
 
   useEffect(() => {
     const refreshKeys = () => {
@@ -419,7 +422,19 @@ export default function Home() {
               </Button>
             </div>
           </div>
-          {status && <p id="question-status" role="alert" className="rounded-lg border border-danger/40 bg-danger-subtle px-3 py-2 text-xs font-medium text-danger">{status}</p>}
+          {status && (
+            <p
+              id="question-status"
+              role={statusIsError ? "alert" : "status"}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                statusIsError
+                  ? "border-danger/40 bg-danger-subtle text-danger"
+                  : "border-border bg-muted/40 text-muted-foreground"
+              }`}
+            >
+              {status}
+            </p>
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2" aria-label="Suggested questions">
