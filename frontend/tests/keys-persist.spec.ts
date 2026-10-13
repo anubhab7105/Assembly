@@ -89,6 +89,7 @@ test.describe("Keys survive refresh (P0)", () => {
     // First visit shows the blocking privacy dialog: wait for it, then
     // acknowledge before using sidebar navigation.
     await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
+    await page.getByLabel(/my question is sent to the model providers/i).check()
     await page.getByTestId("privacy-acknowledge").click()
     await page.getByRole("link", { name: /Settings/i }).click()
     await expect(page).toHaveURL(/\/settings/)
@@ -146,11 +147,15 @@ test.describe("Keys survive refresh (P0)", () => {
     await page.locator('a[href="/"]').first().click()
     await page.locator('a[href="/chat"]').first().click()
     await expect(page.getByTestId("diversity-chip")).toContainText("gpt-oss", { timeout: 10000 })
-    await expect(page.getByTestId("picker-gate-chip")).toContainText("2 families ready", { timeout: 10000 })
 
-    const ack = page.getByTestId("privacy-acknowledge")
     await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
-    await ack.click()
+    await page.getByLabel(/my question is sent to the model providers/i).check()
+    await page.getByTestId("privacy-acknowledge").click()
+
+    // Model selection is advanced configuration, so inspect it in its dialog.
+    await page.getByRole("button", { name: /Open model and role settings/i }).click()
+    await expect(page.getByTestId("picker-gate-chip")).toContainText("2 families ready", { timeout: 10000 })
+    await page.getByRole("button", { name: /Done/i }).click()
     await page.locator("#research-question").fill("Does the picker agree with the run?")
     await page.getByRole("button", { name: /^Run$/i }).click()
     await expect(page).toHaveURL(/\/executions\?id=local-.+/, { timeout: 15000 })
