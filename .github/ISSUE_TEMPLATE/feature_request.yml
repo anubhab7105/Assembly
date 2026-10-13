@@ -1,8 +1,6 @@
 name: Feature request
 description: Propose a focused improvement to Assembly.
 title: "[Feature]: "
-labels:
-  - enhancement
 body:
   - type: textarea
     id: problem
