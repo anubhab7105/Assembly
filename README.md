@@ -12,7 +12,7 @@ Contributions are especially useful when they make Assembly more **reliable, ver
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
 - Review the [documentation index](docs/README.md) and [architecture overview](docs/architecture.md).
-- Browse [open issues](https://github.com/anubhab7105/Assembly/issues) or propose a focused improvement before beginning a large change.
+- Browse [all open issues](https://github.com/anubhab7105/Assembly/issues). Good first contributions: [setup/documentation smoke check #8](https://github.com/anubhab7105/Assembly/issues/8), [keyboard accessibility tests #9](https://github.com/anubhab7105/Assembly/issues/9), and [provider development guide #10](https://github.com/anubhab7105/Assembly/issues/10).
 
 ## How Assembly works
 
