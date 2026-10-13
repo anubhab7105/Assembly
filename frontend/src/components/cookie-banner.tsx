@@ -1,20 +1,23 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import Link from "next/link"
 
 const CHOICE_KEY = "assembly:cookie-choice"
 
 /** Informational banner: Assembly sets no cookies and runs no analytics. */
 export function CookieBanner() {
-  const [visible, setVisible] = useState(() => {
-    if (typeof window === "undefined") return false
+  // Keep the server and first client render identical. Read browser storage
+  // after hydration to avoid an SSR/client tree mismatch.
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
     try {
-      return !window.localStorage.getItem(CHOICE_KEY)
+      setVisible(!window.localStorage.getItem(CHOICE_KEY))
     } catch {
-      return true
+      setVisible(true)
     }
-  })
+  }, [])
 
   if (!visible) return null
 
