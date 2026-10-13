@@ -160,7 +160,14 @@ You don't have to build a new agent to make Assembly better. High-impact contrib
 - **Security and privacy:** strengthen key handling, redaction, safe defaults, dependency review, and threat-model documentation.
 - **Docs and developer experience:** make setup clearer, reduce first-run friction, and add small reproducible examples.
 
-Good first contributions are already tracked: [add a setup/documentation smoke check (#8)](https://github.com/anubhab7105/Assembly/issues/8), [add keyboard-accessibility checks (#9)](https://github.com/anubhab7105/Assembly/issues/9), or [document how to add and test a model provider (#10)](https://github.com/anubhab7105/Assembly/issues/10). You can also open an issue to discuss a substantial change before investing time in it. Every contribution that improves reproducibility, safety, clarity, or reliability is valuable.
+Five focused contributor tasks are open:
+- **Frontend and UX** — [#9, a good first issue](https://github.com/anubhab7105/Assembly/issues/9): responsive layout, accessibility, chat interactions, execution progress, and Playwright coverage.
+- **Model provider integrations** — [#10](https://github.com/anubhab7105/Assembly/issues/10): adapter behavior, quotas, rate-limit recovery, and model configuration.
+- **Testing and evaluation** — [#11](https://github.com/anubhab7105/Assembly/issues/11): expand tests and compare Assembly with individual-model baselines using a documented protocol.
+- **Security and reliability** — [#12](https://github.com/anubhab7105/Assembly/issues/12): test key privacy, error recovery, and concurrency boundaries.
+- **Documentation** — [#8](https://github.com/anubhab7105/Assembly/issues/8): keep setup, API contracts, architecture diagrams, and troubleshooting current.
+
+Start with one small, reproducible improvement. If you have a different idea, open an issue to discuss its scope before investing in a large change.
 
 ## Project documentation
 
