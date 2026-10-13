@@ -160,7 +160,7 @@ You don't have to build a new agent to make Assembly better. High-impact contrib
 - **Security and privacy:** strengthen key handling, redaction, safe defaults, dependency review, and threat-model documentation.
 - **Docs and developer experience:** make setup clearer, reduce first-run friction, and add small reproducible examples.
 
-Start with issues labelled `good first issue` or `help wanted`, or open an issue to discuss a substantial change before investing time in it. Every contribution that improves reproducibility, safety, clarity, or reliability is valuable.
+Good first contributions are already tracked: [add a setup/documentation smoke check (#8)](https://github.com/anubhab7105/Assembly/issues/8), [add keyboard-accessibility checks (#9)](https://github.com/anubhab7105/Assembly/issues/9), or [document how to add and test a model provider (#10)](https://github.com/anubhab7105/Assembly/issues/10). You can also open an issue to discuss a substantial change before investing time in it. Every contribution that improves reproducibility, safety, clarity, or reliability is valuable.
 
 ## Project documentation
 
