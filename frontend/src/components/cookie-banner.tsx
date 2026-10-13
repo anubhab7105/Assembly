@@ -18,6 +18,7 @@ function subscribeCookieChoice(onStoreChange: () => void) {
 }
 
 function getCookieBannerSnapshot() {
+  if (typeof window === "undefined") return false
   if (dismissedInMemory) return false
   try {
     return !window.localStorage.getItem(CHOICE_KEY)
