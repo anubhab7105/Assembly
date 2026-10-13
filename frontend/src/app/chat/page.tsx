@@ -16,15 +16,14 @@ import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Zap, Send, Settings, Sparkles, Clock } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Zap, Send, Settings, Clock, SlidersHorizontal } from "lucide-react"
 
 const EXAMPLES = [
-  "Will quantum computing achieve commercial advantage before 2030?",
-  "What are the most viable methods for replicating room-temperature superconductors?",
-  "Analyse the timeline and economic impacts of AGI given current scaling laws.",
-  "Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?"
+  { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
+  { label: "Superconductors", question: "What are the most viable methods for replicating room-temperature superconductors?" },
+  { label: "AGI timeline", question: "Analyse the timeline and economic impacts of AGI given current scaling laws." },
+  { label: "EV battery chemistry", question: "Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?" },
 ]
 
 const TIME_BUDGETS = [3, 5, 10, 15]
@@ -44,6 +43,7 @@ export default function Home() {
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [catalogFailed, setCatalogFailed] = useState(false)
   const [catalogTick, setCatalogTick] = useState(0)
+  const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
   const [confirmedGateSignature, setConfirmedGateSignature] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -73,6 +73,9 @@ export default function Home() {
     pins: selection.pins,
   })
   const degradedConfirmed = confirmedGateSignature === gateSignature
+  const statusIsError = Boolean(
+    status && status !== "Checking capacity…" && status !== "Running team… (streaming)",
+  )
 
   useEffect(() => {
     const refreshKeys = () => {
@@ -321,101 +324,150 @@ export default function Home() {
   }, [loading])
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
-      <main className="w-full max-w-2xl space-y-8">
-        <div className="text-center space-y-4">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10 text-brand mb-4">
-            <Zap className="size-8" />
+    <div className="flex min-h-screen flex-col bg-background">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-8 sm:px-6 sm:py-12">
+        <div className="mb-7 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-brand/10 text-brand">
+            <Zap className="size-6" aria-hidden />
           </div>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
             Ask one hard question
           </h1>
-          <p className="text-lg text-muted-foreground mx-auto max-w-xl">
-            Get back one answer that survived a debate. Pick your time, run it, keep the sources.
+          <p className="mt-2 text-sm text-muted-foreground">
+            Independent analysis. One sourced answer.
           </p>
         </div>
 
         {!hasKeys && (
-          <div className="rounded-xl border border-warning/30 bg-warning-subtle p-4 flex items-center justify-between gap-4">
-            <p className="text-sm text-warning">Runs need your keys first. Two free providers is enough.</p>
-            <Button variant="outline" size="sm" onClick={() => router.push("/settings")}>
-              <Settings className="size-4 mr-2" />
-              Add my free keys
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-3 py-2.5">
+            <p className="text-xs font-medium text-warning">Add provider keys to run an investigation.</p>
+            <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0">
+              <Settings className="mr-1.5 size-3.5" />
+              Add keys
             </Button>
           </div>
         )}
 
-        <div data-testid="diversity-chip" className={`rounded-xl border p-3 text-sm ${gate.level === "OK" ? "border-success/30" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border"}`}>
-          <p className="font-mono">{gateChipText(gate)}</p>
-          {gate.level !== "OK" && <p className="mt-1 text-xs text-muted-foreground">{gate.reasons[0]}</p>}
+        <div
+          data-testid="diversity-chip"
+          className={`mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
+            gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
+          }`}
+        >
+          <span className="font-medium">{gateChipText(gate)}</span>
+          {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
           {gate.level === "DEGRADED" && !degradedConfirmed && (
-            <Button variant="outline" size="sm" className="mt-2" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
-              Run anyway with 1 family
+            <Button variant="outline" size="sm" className="min-h-8" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
+              Run anyway
             </Button>
           )}
         </div>
 
         {catalogFailed && (
-          <ServerStatusBanner url={env.apiUrl} onRetry={() => setCatalogTick((t) => t + 1)} />
+          <div className="mb-3">
+            <ServerStatusBanner url={env.apiUrl} onRetry={() => setCatalogTick((t) => t + 1)} />
+          </div>
         )}
 
-        <div className="space-y-4">
-          <div className="relative rounded-2xl border border-border bg-card p-2 shadow-sm focus-within:border-brand">
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-border bg-card p-3 shadow-sm transition-colors focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10">
             <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
             <textarea
               id="research-question"
               ref={textareaRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Paste the question you would not trust to one model"
+              placeholder="Ask anything worth checking across multiple models…"
               aria-describedby="question-status"
-              className="w-full resize-none bg-transparent px-4 pt-3 pb-16 text-base text-foreground placeholder:text-muted-foreground focus:outline-none sm:pb-12"
-              rows={2}
+              className="max-h-56 min-h-24 w-full resize-y bg-transparent px-2 py-2 text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
+              rows={3}
               maxLength={2000}
               required
             />
-            <div className="absolute bottom-2 left-2 right-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className="bg-muted px-2 py-1 font-mono text-muted-foreground">
-                  Mode: Auto
-                </Badge>
-                <div className="flex items-center rounded-md border border-border bg-background p-0.5" role="group" aria-label="Time budget">
-                  <Clock className="size-3.5 text-muted-foreground ml-2 mr-1" aria-hidden />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-9"
+                  onClick={() => setShowModelSettings(true)}
+                  aria-haspopup="dialog"
+                  aria-label="Open model and role settings"
+                >
+                  <SlidersHorizontal className="mr-1.5 size-3.5" />
+                  Models{selection.selected.length > 0 ? ` · ${selection.selected.length}` : " · Auto"}
+                </Button>
+                <div className="flex items-center rounded-lg border border-border bg-background p-0.5" role="group" aria-label="Time budget">
+                  <Clock className="ml-2 mr-1 size-3.5 text-muted-foreground" aria-hidden />
                   {TIME_BUDGETS.map((m) => (
                     <button
                       key={m}
+                      type="button"
                       onClick={() => setMinutes(m)}
                       aria-pressed={minutes === m}
                       aria-label={`${m} minutes`}
-                      className={`min-h-11 min-w-11 px-2.5 py-2 text-xs font-medium rounded-sm ${minutes === m ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+                      className={`min-h-9 min-w-9 rounded-md px-2 text-xs font-medium transition-colors ${
+                        minutes === m ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                      }`}
                     >
                       {m}m
                     </button>
                   ))}
                 </div>
               </div>
-              <Button size="sm" onClick={handleLaunch} disabled={loading || !question.trim() || gate.level === "BLOCKED"} className="shrink-0 min-h-11 rounded-lg">
-                {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="size-4 mr-1.5" />}
-                Run my question
+              <Button size="default" onClick={handleLaunch} disabled={loading || !question.trim() || gate.level === "BLOCKED"} className="min-h-10 rounded-xl px-4">
+                {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="mr-1.5 size-4" />}
+                {loading ? "Running…" : "Run"}
               </Button>
             </div>
           </div>
-          {status && <p id="question-status" role="alert" className="rounded-lg border border-danger/40 bg-danger-subtle px-3 py-2 text-xs font-medium text-danger">{status}</p>}
+          {status && (
+            <p
+              id="question-status"
+              role={statusIsError ? "alert" : "status"}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                statusIsError
+                  ? "border-danger/40 bg-danger-subtle text-danger"
+                  : "border-border bg-muted/40 text-muted-foreground"
+              }`}
+            >
+              {status}
+            </p>
+          )}
         </div>
 
-        <ModelPicker value={selection} onChange={setSelection} keyedProviderIds={enabledIds} />
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          {EXAMPLES.map((ex, i) => (
-            <Card key={i} className="cursor-pointer hover:-translate-y-0.5 bg-card" onClick={() => { setQuestion(ex); textareaRef.current?.focus() }}>
-              <CardContent className="p-4 flex gap-3">
-                <Sparkles className="size-4 shrink-0 text-brand mt-0.5" />
-                <p className="text-sm text-muted-foreground">{ex}</p>
-              </CardContent>
-            </Card>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2" aria-label="Suggested questions">
+          <span className="mr-1 text-xs text-muted-foreground">Try</span>
+          {EXAMPLES.map((example) => (
+            <button
+              key={example.label}
+              type="button"
+              onClick={() => { setQuestion(example.question); textareaRef.current?.focus() }}
+              className="min-h-9 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-brand/40 hover:bg-brand/5 hover:text-foreground"
+              title={example.question}
+            >
+              {example.label}
+            </button>
           ))}
         </div>
       </main>
+
+      <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Models and roles</DialogTitle>
+            <DialogDescription>
+              Auto selection by default. Optional model overrides and role pins.
+            </DialogDescription>
+          </DialogHeader>
+          <ModelPicker value={selection} onChange={setSelection} keyedProviderIds={enabledIds} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowModelSettings(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {showPrivacy && (
         <PrivacyDialog
           mode={appMode}

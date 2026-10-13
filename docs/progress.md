@@ -586,3 +586,10 @@
 - Added /privacy, /terms, /cookies, /refunds pages (server components, footer-linked, sitemap-listed), each with a visible draft notice. Content based on actual behavior: no accounts, no cookies/analytics, browser-only keys/history, transient server runs, provider data sharing, India + GDPR rights, no payments.
 - Added informational cookie banner (nothing to block: zero cookies set) with localStorage dismissal. Privacy dialog now requires a consent checkbox before I understand. Skip-to-content link + global focus-visible style.
 - Verified: tsc clean, eslint clean, next build green (12 routes), privacy/key-setup tests pass.
+
+
+## 2026-10-13 — Frontend navigation and compact composer UX
+
+- Context: The sidebar's New Investigation action routed to `/` (the marketing landing page) rather than the question composer. The chat screen also displayed the full model picker and long example cards on every visit, making the primary task feel crowded.
+- Decision: Route New Investigation to `/chat` and send users to the composer if they delete the currently open history item. Move model/role configuration into an accessible dialog; use compact prompt suggestions and shorter copy in the composer while retaining key readiness, family-gate, and API connection warnings. Separate the history delete button from its link to avoid nested interactive controls. Add a Playwright regression for navigation and align run-flow selectors with the compact composer.
+- Verification status: Regression coverage updated. Browser suite/build have not yet been run from this connector session; do not treat the UI change as live-browser verified until CI passes.
