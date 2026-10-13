@@ -109,10 +109,10 @@ The backend should be available at `http://localhost:8000`. In development, the 
 
 ### 2. Start the frontend
 
-Open a second terminal:
+Open a second terminal in the cloned repository directory, then run:
 
 ```bash
-cd Assembly/frontend
+cd frontend
 npm ci --legacy-peer-deps
 npm run dev
 ```
@@ -131,8 +131,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full test and pull-request workfl
 
 ```bash
 # From the repository root
-pytest
 alembic upgrade head
+pytest
 
 # From frontend/
 npm run lint
