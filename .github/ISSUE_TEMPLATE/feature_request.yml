@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose a focused improvement to Assembly.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user problem or workflow gap does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful approach, including alternatives considered.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or examples
+      description: Include a use case, mock-up, benchmark plan, or reproducible example if available.
+    validations:
+      required: false
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Trade-offs and limitations
+      description: Note privacy, security, compatibility, complexity, or performance concerns.
+    validations:
+      required: false
