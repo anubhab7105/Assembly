@@ -2,7 +2,7 @@
 
 **Assembly turns a question into a time-boxed team of AI agents that solve independently, challenge one another, check evidence, and synthesize a final answer with sources and uncertainty.**
 
-It is an experimental, open-source multi-agent orchestration project for people who want to study, improve, or use structured AI collaboration instead of relying on one model response. Users bring their own provider API keys (BYOK); Assembly does not provide a shared pool of model credits.
+Assembly is an experimental multi-agent orchestration project being prepared for open-source collaboration. It is for people who want to study, improve, or use structured AI collaboration instead of relying on one model response. Users bring their own provider API keys (BYOK); Assembly does not provide a shared pool of model credits.
 
 ## Why contribute?
 
