@@ -10,7 +10,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "export",
   /* config options here */
+  // The Next.js app and lockfile live under frontend/ in this monorepo.
   turbopack: {
+    root: process.cwd(),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],
