@@ -282,7 +282,7 @@ export function useExecution(executionId: string | null) {
     return () => {
       wsRef.current?.close()
     }
-  }, [executionId, connectWs])
+  }, [executionId, connectWs, setState])
 
   return state
 }

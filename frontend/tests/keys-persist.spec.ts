@@ -91,6 +91,14 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
     await page.getByLabel(/my question is sent to the model providers/i).check()
     await page.getByTestId("privacy-acknowledge").click()
+
+    // The informational cookie notice is fixed to the viewport bottom and can
+    // overlap the sidebar's bottom Settings link in browser automation.
+    const cookieNotice = page.getByRole("region", { name: /Cookie notice/i })
+    if (await cookieNotice.isVisible()) {
+      await cookieNotice.getByRole("button", { name: /Got it/i }).click()
+    }
+
     await page.getByRole("link", { name: /Settings/i }).click()
     await expect(page).toHaveURL(/\/settings/)
     await expect(page.getByTestId("readiness-chip")).toContainText("gpt-oss", { timeout: 10000 })
