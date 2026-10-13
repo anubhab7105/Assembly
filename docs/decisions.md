@@ -377,3 +377,10 @@ Append-only log of significant technical and product decisions.
 - Context: The cookie banner used localStorage in its state initializer, so the server rendered no banner while a client with no saved dismissal immediately rendered one. Playwright reported a hydration mismatch. Moving model controls into a dialog also required browser tests to acknowledge privacy consent and open that dialog explicitly.
 - Decision: Use a stable initial hidden state and read the saved banner preference after hydration. Configure Turbopack's root explicitly for the `frontend/` app, and set Next.js's scroll-behavior marker. Adjust E2E flows to honor the privacy checkbox and modal-based model configuration.
 - Consequences: Initial server/client markup should match; banner preference is applied after mount. Re-run browser and backend CI on this follow-up branch.
+
+
+## 2026-10-13 — Subscribe to cookie preference without effect-driven state
+
+- Context: Reading localStorage during a state initializer caused hydration mismatch; setting state synchronously in a mount effect fixed markup consistency but failed the repository's React lint rule.
+- Decision: Model the browser-only banner visibility as an external store with `useSyncExternalStore`. The server snapshot is always hidden, while the browser snapshot applies saved preference after hydration. Dismissal emits an in-tab event and persists when storage is available.
+- Consequences: No hydration-dependent state initializer or synchronous setState effect is needed. Verify through CI before release.
