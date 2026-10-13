@@ -84,7 +84,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
     setExecutions((prev) => prev.filter((x) => x.id !== id))
     toast({ title: "Deleted", description: "Execution removed from history." })
     if (pathname === `/executions` && searchParams?.get("id") === id) {
-      router.push("/")
+      router.push("/chat")
       if (onClose) onClose()
     }
   }
@@ -120,7 +120,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           </div>
           <span className="font-bold tracking-tight">Assembly</span>
         </Link>
-        <Button variant="default" className="w-full justify-start" onClick={() => { router.push("/"); if (onClose) onClose() }}>
+        <Button variant="default" className="w-full justify-start" onClick={() => { router.push("/chat"); if (onClose) onClose() }}>
           <Plus className="size-4 mr-2" />
           New Investigation
         </Button>
