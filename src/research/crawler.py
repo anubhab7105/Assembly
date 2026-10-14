@@ -243,7 +243,7 @@ class WebCrawler:
                 async with httpx.AsyncClient(
                     headers={
                         "User-Agent": USER_AGENT,
-                        "Accept": "text/html,application/xhtml+xml",
+                        "Accept": "text/html,application/xhtml+xml,text/plain",
                     },
                     follow_redirects=False,
                     timeout=self.request_timeout_seconds,
