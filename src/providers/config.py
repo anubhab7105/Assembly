@@ -225,6 +225,21 @@ def validate_provider_limits(provider_id: str, spec: ProviderSpec) -> None:
         )
 
 
+
+def provider_limits_issue(provider_id: str, spec: ProviderSpec) -> str | None:
+    """Return a safe, actionable reason a provider cannot be routed.
+
+    Provider limit gaps are a capability/readiness issue, not a reason to
+    crash the whole API. The router and catalog use this shared policy so
+    a provider is never advertised as runnable while its limits are unknown.
+    """
+    try:
+        validate_provider_limits(provider_id, spec)
+    except LimitsNotFilledError as exc:
+        return str(exc)
+    return None
+
+
 def validate_limits_filled(config: ModelsConfig) -> None:
     """Raise LimitsNotFilledError if any enabled provider has null limits."""
     for provider_id, spec in config.providers.items():
