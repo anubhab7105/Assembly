@@ -620,3 +620,9 @@
 - Found that `ModelRouter` already skips providers with null required limits, but `GET /api/catalog` still listed those families as available and the Settings UI counted a saved key as ready. Startup logged the validation error without stopping the API.
 - Added a shared provider-limit issue helper, catalog readiness fields, filtered capacity recommendation/family output, explicit Settings warnings, and a clearer startup diagnostic. Gemini remains enabled for key validation, but unavailable for runs until RPM/RPD/TPM are verified; no quotas were guessed.
 - Verification: pending CI on the issue branch. Google AI Studio's model/project usage tier is account-specific; public docs do not establish these values for this project.
+
+
+## 2026-10-14 — Issue #17 CI follow-up
+
+- The first full CI run passed frontend lint, TypeScript, npm audit, and Gitleaks. Playwright exposed stale cases in `frontend/tests/keys-persist.spec.ts` whose mocked catalog did not include the new `limits_ready`/limits-issue contract and still counted the Gemini family as run-ready. Updated the fixture to mark Gemini enabled but not routable, and changed checks to assert the explicit warning while other configured families remain ready.
+- Backend pytest was still running at the time of this entry; rerun CI and record the final result before merge.
