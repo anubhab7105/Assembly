@@ -10,11 +10,11 @@ const CANARY_OPENROUTER = "sk-or-CANARY-PERSIST-OR-03";
 
 const CATALOG = {
   providers: [
-    { id: "groq", enabled: true, key_url: "", models: [{ id: "openai/gpt-oss-20b", family: "gpt-oss", roles: ["solver"], scope: "model" }] },
-    { id: "gemini", enabled: true, key_url: "", models: [{ id: "gemini-3.8-flash", family: "gemini", roles: ["solver"], scope: "model" }] },
-    { id: "openrouter", enabled: true, key_url: "", models: [{ id: "google/gemma-4-26b-a4b-it:free", family: "gemma", roles: ["solver"], scope: "account" }] },
+    { id: "groq", enabled: true, limits_ready: true, limits_issue: null, key_url: "", models: [{ id: "openai/gpt-oss-20b", family: "gpt-oss", roles: ["solver"], scope: "model" }] },
+    { id: "gemini", enabled: true, limits_ready: false, limits_issue: "Limits not verified: rpm, rpd, tpm", key_url: "", models: [{ id: "gemini-3.8-flash", family: "gemini", roles: ["solver"], scope: "model" }] },
+    { id: "openrouter", enabled: true, limits_ready: true, limits_issue: null, key_url: "", models: [{ id: "google/gemma-4-26b-a4b-it:free", family: "gemma", roles: ["solver"], scope: "account" }] },
   ],
-  families: ["gpt-oss", "gemini", "gemma"],
+  families: ["gpt-oss", "gemma"],
 };
 
 async function mockNetwork(page: Page) {
@@ -62,7 +62,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await saveKey(page, "groq", CANARY_GROQ)
     await saveKey(page, "gemini", CANARY_GEMINI)
     await saveKey(page, "openrouter", CANARY_OPENROUTER)
-    await expect(page.getByTestId("readiness-chip")).toContainText("3 families ready", { timeout: 10000 })
+    await expect(page.getByTestId("readiness-chip")).toContainText("2 families ready", { timeout: 10000 })
 
     await page.reload()
     await expect(page.getByTestId("readiness-chip")).toContainText("3 families ready", { timeout: 10000 })
@@ -115,7 +115,7 @@ test.describe("Keys survive refresh (P0)", () => {
 
     await page.reload()
     await expect(page.getByTestId("readiness-chip")).toContainText("2 families ready", { timeout: 10000 })
-    await expect(page.getByTestId("readiness-chip")).toContainText("gemini", { timeout: 10000 })
+    await expect(page.getByTestId("limits-unavailable-gemini")).toContainText("rpm, rpd, tpm", { timeout: 10000 })
   })
 
   test("6. removing one provider keeps the others configured", async ({ page }) => {
