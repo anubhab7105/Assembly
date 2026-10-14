@@ -207,6 +207,33 @@ def test_repo_catalog_validation_flags_gemini() -> None:
         validate_limits_filled(load_models_config())
 
 
+def test_provider_limits_issue_is_safe_and_actionable(tmp_path) -> None:
+    from src.providers.config import provider_limits_issue
+
+    providers = _custom_providers()
+    providers["groq"][0]["limits"] = {"rpm": None, "rpd": None, "tpm": None}
+    config = load_models_config(make_models_yaml(tmp_path, providers))
+    issue = provider_limits_issue("groq", config.providers["groq"])
+    assert issue is not None
+    assert "groq-custom-fast" in issue
+    assert "rpm" in issue and "rpd" in issue and "tpm" in issue
+    assert "test-key" not in issue
+
+
+def test_provider_limits_issue_is_none_when_filled_or_disabled(tmp_path) -> None:
+    from src.providers.config import provider_limits_issue
+
+    config = load_models_config(make_models_yaml(tmp_path, _custom_providers()))
+    assert provider_limits_issue("groq", config.providers["groq"]) is None
+
+    providers = _custom_providers()
+    providers["groq"][0]["limits"] = {"rpm": None}
+    disabled = load_models_config(
+        make_models_yaml(tmp_path, providers, enabled=False, filename="disabled.yaml")
+    )
+    assert provider_limits_issue("groq", disabled.providers["groq"]) is None
+
+
 def test_router_skips_provider_with_unfilled_limits(tmp_path, monkeypatch) -> None:
     from src.providers.config import LimitsNotFilledError, validate_provider_limits
 
