@@ -34,7 +34,12 @@ async def test_crawl_extracts_static_html_and_preserves_source_url() -> None:
     with respx.mock(assert_all_called=False):
         respx.get("https://example.com/robots.txt").mock(return_value=robots_allow())
         respx.get("https://example.com/start").mock(
-            return_value=html_page("Example title", "<nav>menu text</nav><main>Hello <b>world</b>.</main>")
+            return_value=html_page(
+                "Example title",
+                "<nav>menu text</nav><div hidden>hidden marker</div>"
+                '<div style="display: none">hidden marker two</div>'
+                "<main>Hello <b>world</b>.</main>",
+            )
         )
         result = await WebCrawler(resolver=public_resolver).crawl(
             [{"title": "Search title", "url": "https://example.com/start", "snippet": "Search snippet"}]
@@ -44,6 +49,8 @@ async def test_crawl_extracts_static_html_and_preserves_source_url() -> None:
     assert result[0]["url"] == "https://example.com/start"
     assert "Hello world." in result[0]["snippet"]
     assert "menu text" not in result[0]["snippet"]
+    assert "hidden marker" not in result[0]["snippet"]
+    assert "hidden marker two" not in result[0]["snippet"]
     assert "steal()" not in result[0]["snippet"]
 
 
