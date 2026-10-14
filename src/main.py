@@ -81,12 +81,21 @@ async def lifespan(app: FastAPI):
     logger.info("====================================================")
 
     try:
-        from src.providers.config import load_models_config, validate_limits_filled
+        from src.providers.config import (
+            LimitsNotFilledError,
+            load_models_config,
+            validate_limits_filled,
+        )
 
         validate_limits_filled(load_models_config())
         logger.info("Server   │ models.yaml limits filled for all enabled models")
-    except ValueError as exc:
-        logger.error(f"Server   │ {exc} — fill models.yaml or disable the provider.")
+    except LimitsNotFilledError as exc:
+        # Keep the API online, but the router and catalog mark providers with
+        # unknown limits unavailable. Do not pretend quota capacity is known.
+        logger.error(
+            f"Server   │ Provider routing degraded: {exc}. "
+            "Affected providers are not routable until limits are verified."
+        )
     except Exception as exc:  # noqa: BLE001 — catalog trouble must not kill boot
         logger.warning(f"Server   │ models.yaml check skipped: {exc}")
 
