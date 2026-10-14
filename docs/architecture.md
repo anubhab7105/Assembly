@@ -32,6 +32,7 @@ flowchart TD
 | `src/api/` | HTTP endpoints for preflight, catalog, provider-key testing, run execution, event streaming, and cancellation. |
 | `src/orchestration/` | Capacity checks, planning, temporary agent teams, independent solving, debate, consensus scoring, and synthesis. |
 | `src/providers/` | Provider adapters, model routing, quota handling, mock/replay providers, and configuration validation. |
+| `src/research/` | Search-provider routing plus bounded static-page fetching/extraction; web text is sanitized as untrusted evidence before prompt use. |
 | `models.yaml` | Configured provider/model catalog, family/role assignments, and model-specific quota metadata. |
 | `tests/` | Python unit/regression tests designed to use mock providers and local test fixtures. |
 | `frontend/tests/` | Playwright browser regression tests. |

@@ -1,5 +1,11 @@
 # Project Progress Log
 
+## 2026-10-14 — Free-first crawler implementation (PR in progress)
+
+- Added a bounded static HTML crawler under `src/research/crawler.py`, using existing HTTPX plus standard-library HTMLParser/RobotFileParser (no new runtime dependencies or paid API). It normalizes search results, fetches up to five pages per run, follows same-origin links to depth one, honors robots rules, and bounds response size, redirects, ports, and total time.
+- Wired crawler enrichment into the existing researcher/search pipeline, respecting the synthesis reserve and preserving search snippets when crawling is blocked, unsafe, non-HTML, or unsuccessful.
+- Added offline `respx` tests for extraction, same-origin traversal, page caps, robots exclusions, non-public DNS results, unsafe URLs, redirects, size/content-type failures, and Pydantic search-result normalization. Test execution is pending CI review.
+
 ## Phase 1 — MVP Foundation (Completed)
 
 ### 1. Project Setup
