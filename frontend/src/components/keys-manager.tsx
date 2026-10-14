@@ -237,13 +237,13 @@ export function KeysManager() {
     // statuses reset every session, so gating on them would show restored
     // keys as unconfigured after every refresh. Only a proven-invalid key
     // is excluded; the backend preflight/run stays authoritative.
-    if (savedKeys[p.id] && statuses[p.id] !== "invalid") {
+    if (p.limits_ready && savedKeys[p.id] && statuses[p.id] !== "invalid") {
       p.models.forEach((m) => readyFamilies.add(m.family))
     }
   })
   const gate = evaluateGate(
     [...readyFamilies],
-    providers.filter((p) => savedKeys[p.id]).length,
+    providers.filter((p) => p.limits_ready && savedKeys[p.id]).length,
   )
 
   if (!vaultLoaded) return null
@@ -348,6 +348,15 @@ export function KeysManager() {
                 <CardDescription data-testid={`why-${provider.id}`} className="text-xs mt-1">
                   {why}
                 </CardDescription>
+                {!provider.limits_ready && (
+                  <p
+                    role="status"
+                    data-testid={`limits-unavailable-${provider.id}`}
+                    className="mt-2 rounded-md border border-warning/40 bg-warning-subtle px-2.5 py-2 text-xs text-warning"
+                  >
+                    {provider.limits_issue ?? "Provider quota limits are unverified. This provider will not be used for runs until its limits are confirmed."}
+                  </p>
+                )}
               </CardHeader>
               <CardContent className="flex-1 space-y-4">
                 <details data-testid={`stepper-${provider.id}`}>
