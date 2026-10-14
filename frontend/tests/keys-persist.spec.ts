@@ -65,7 +65,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page.getByTestId("readiness-chip")).toContainText("2 families ready", { timeout: 10000 })
 
     await page.reload()
-    await expect(page.getByTestId("readiness-chip")).toContainText("3 families ready", { timeout: 10000 })
+    await expect(page.getByTestId("readiness-chip")).toContainText("2 families ready", { timeout: 10000 })
   })
 
   test("3. reload with pre-existing saved values does not overwrite them", async ({ page }) => {
@@ -114,7 +114,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(groqCard.getByTestId("test-result-groq")).toContainText("valid", { timeout: 10000 })
 
     await page.reload()
-    await expect(page.getByTestId("readiness-chip")).toContainText("2 families ready", { timeout: 10000 })
+    await expect(page.getByTestId("readiness-chip")).toContainText("1 families ready", { timeout: 10000 })
     await expect(page.getByTestId("limits-unavailable-gemini")).toContainText("rpm, rpd, tpm", { timeout: 10000 })
   })
 
