@@ -11,6 +11,8 @@ export interface CatalogModel {
 export interface CatalogProvider {
   id: string
   enabled: boolean
+  limits_ready: boolean
+  limits_issue?: string | null
   key_url: string
   privacy_note?: string | null
   key_steps?: string[] | null

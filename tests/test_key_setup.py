@@ -26,6 +26,13 @@ def test_catalog_includes_key_steps_and_fallback() -> None:
     assert any((p.get("key_steps") or []) for p in enabled)
     # Null sensitive_signup renders the shared fallback in the UI contract.
     assert any(p.get("sensitive_signup") is None for p in data["providers"])
+    # Enabled does not imply routable when provider limits are unverified.
+    gemini = by_id.get("gemini")
+    assert gemini is not None and gemini["enabled"] is True
+    assert gemini["limits_ready"] is False
+    assert "rpm" in gemini["limits_issue"]
+    assert "gemini" not in data["families"]
+    assert "gemini" not in data["recommended_order"]
     assert SENSITIVE_SIGNUP_FALLBACK.startswith("Check this during signup")
     # Groq steps are generic (no invented signup facts).
     groq = by_id.get("groq")

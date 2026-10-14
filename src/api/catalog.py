@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
-from src.providers.config import load_models_config
+from src.providers.config import load_models_config, provider_limits_issue
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 
@@ -33,6 +33,8 @@ class CatalogProvider(BaseModel):
 
     id: str
     enabled: bool
+    limits_ready: bool
+    limits_issue: str | None = None
     key_url: str = ""
     privacy_note: str | None = None
     key_steps: list[str] | None = None
@@ -63,6 +65,8 @@ def recommended_provider_order(catalog: object) -> list[str]:
     for pid, spec in providers.items():
         if not getattr(spec, "enabled", False):
             continue
+        if provider_limits_issue(str(pid), spec) is not None:
+            continue
         total = 0.0
         for model in getattr(spec, "models", []) or []:
             limits = getattr(model, "limits", None)
@@ -86,6 +90,8 @@ def get_catalog() -> CatalogResponse:
     providers: list[CatalogProvider] = []
     families: set[str] = set()
     for pid, spec in catalog.providers.items():
+        limits_issue = provider_limits_issue(pid, spec) if spec.enabled else None
+        limits_ready = spec.enabled and limits_issue is None
         models = [
             CatalogModel(id=m.id, family=m.family, roles=list(m.roles), scope=m.scope)
             for m in spec.models
@@ -94,6 +100,8 @@ def get_catalog() -> CatalogResponse:
             CatalogProvider(
                 id=pid,
                 enabled=spec.enabled,
+                limits_ready=limits_ready,
+                limits_issue=limits_issue,
                 key_url=spec.key_url,
                 privacy_note=spec.privacy_note,
                 key_steps=list(spec.key_steps) if spec.key_steps else None,
@@ -102,7 +110,7 @@ def get_catalog() -> CatalogResponse:
                 models=models,
             )
         )
-        if spec.enabled:
+        if limits_ready:
             families.update(m.family for m in spec.models)
     return CatalogResponse(
         providers=providers,
