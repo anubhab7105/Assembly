@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import inspect
+import re
 import socket
 import time
 from collections import deque
@@ -157,7 +158,10 @@ class _ReadableHTMLParser(HTMLParser):
 
     def result(self) -> tuple[str, str, list[str]]:
         title = " ".join(" ".join(self._title_parts).split())[:500]
-        text = " ".join(" ".join(self._text_parts).split())[:MAX_EXTRACTED_CHARS]
+        text = " ".join(" ".join(self._text_parts).split())
+        # Joining HTML text nodes adds separators at inline-tag boundaries;
+        # remove those separators when they precede punctuation.
+        text = re.sub(r"\s+([.,!?;:])", r"\1", text)[:MAX_EXTRACTED_CHARS]
         return title, text, self.links
 
 
