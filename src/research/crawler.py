@@ -11,6 +11,7 @@ import asyncio
 import ipaddress
 import inspect
 import socket
+import time
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ DEFAULT_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 12_000
 MAX_REDIRECTS = 5
 ROBOTS_MAX_BYTES = 100_000
+MIN_HOST_INTERVAL_SECONDS = 0.2
 _MAX_SEED_PAGES = 3
 _MAX_LINKS_PER_PAGE = 20
 _ALLOWED_PORTS = {"http": 80, "https": 443}
@@ -217,6 +219,7 @@ class WebCrawler:
         self._resolver = resolver
         self._client: httpx.AsyncClient | None = None
         self._robots: dict[str, RobotFileParser | None] = {}
+        self._last_request_at: dict[str, float] = {}
 
     async def crawl(self, results: list[object]) -> list[dict[str, str]]:
         """Enrich up to three search hits and append same-origin linked pages.
@@ -329,6 +332,16 @@ class WebCrawler:
                 raise UnsafeURL("Private, reserved, and non-public IP addresses are blocked")
         return normalized
 
+    async def _pace_host(self, origin: str) -> None:
+        """Keep requests sequential and add a small per-origin pause."""
+        now = time.monotonic()
+        previous = self._last_request_at.get(origin)
+        if previous is not None:
+            delay = MIN_HOST_INTERVAL_SECONDS - (now - previous)
+            if delay > 0:
+                await asyncio.sleep(delay)
+        self._last_request_at[origin] = time.monotonic()
+
     async def _read_response(
         self,
         url: str,
@@ -348,6 +361,7 @@ class WebCrawler:
             if current in visited:
                 return None
             visited.add(current)
+            await self._pace_host(expected_origin)
             async with self._client.stream("GET", current) as response:
                 if response.status_code in {301, 302, 303, 307, 308}:
                     location = response.headers.get("location")
