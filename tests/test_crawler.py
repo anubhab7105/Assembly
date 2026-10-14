@@ -1,5 +1,7 @@
 """Bounded web crawler tests. All HTTP is mocked; DNS is injected offline."""
 
+import asyncio
+
 import httpx
 import pytest
 import respx
@@ -178,6 +180,40 @@ async def test_pydantic_search_results_are_normalized() -> None:
         )
     assert result[0]["title"] == "Model result"
     assert "Parsed text" in result[0]["snippet"]
+
+
+@pytest.mark.asyncio
+async def test_total_timeout_preserves_original_search_result() -> None:
+    async def blocked_resolver(_host: str, _port: int) -> list[str]:
+        await asyncio.Event().wait()
+        return PUBLIC_IPS
+
+    original = {"title": "Seed", "url": "https://example.com/start", "snippet": "search fallback"}
+    result = await WebCrawler(
+        total_timeout_seconds=0.1,
+        resolver=blocked_resolver,
+    ).crawl([original])
+    assert result[0]["snippet"] == "search fallback"
+
+
+@pytest.mark.asyncio
+async def test_task_cancellation_propagates_to_crawler() -> None:
+    resolver_started = asyncio.Event()
+
+    async def blocked_resolver(_host: str, _port: int) -> list[str]:
+        resolver_started.set()
+        await asyncio.Event().wait()
+        return PUBLIC_IPS
+
+    task = asyncio.create_task(
+        WebCrawler(resolver=blocked_resolver).crawl(
+            [{"title": "Seed", "url": "https://example.com/start", "snippet": "fallback"}]
+        )
+    )
+    await asyncio.wait_for(resolver_started.wait(), timeout=1.0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
 
 
 def test_injection_like_text_is_returned_as_source_data_for_existing_sanitizer() -> None:
