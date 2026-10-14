@@ -36,9 +36,9 @@ def html_page(title: str, body: str) -> httpx.Response:
 
 @pytest.mark.asyncio
 async def test_crawl_extracts_static_html_and_preserves_source_url() -> None:
-    with respx.mock(assert_all_called=False):
-        respx.get("https://example.com/robots.txt").mock(return_value=robots_allow())
-        respx.get("https://example.com/start").mock(
+    with respx.mock(assert_all_called=False) as mocked:
+        mocked.get("https://example.com/robots.txt").mock(return_value=robots_allow())
+        mocked.get("https://example.com/start").mock(
             return_value=html_page(
                 "Example title",
                 "<nav>menu text</nav><div hidden>hidden marker</div>"
@@ -67,16 +67,16 @@ async def test_crawl_extracts_static_html_and_preserves_source_url() -> None:
 
 @pytest.mark.asyncio
 async def test_crawl_adds_same_origin_links_only_and_respects_page_cap() -> None:
-    with respx.mock(assert_all_called=False):
-        respx.get("https://example.com/robots.txt").mock(return_value=robots_allow())
-        respx.get("https://example.com/start").mock(
+    with respx.mock(assert_all_called=False) as mocked:
+        mocked.get("https://example.com/robots.txt").mock(return_value=robots_allow())
+        mocked.get("https://example.com/start").mock(
             return_value=html_page(
                 "Start",
                 '<main>Start page <a href="/related">Related</a>'
                 '<a href="https://other.example/private">Off origin</a></main>',
             )
         )
-        respx.get("https://example.com/related").mock(
+        mocked.get("https://example.com/related").mock(
             return_value=html_page(
                 "Related page", "<main>Useful related evidence</main>"
             )
@@ -93,11 +93,11 @@ async def test_crawl_adds_same_origin_links_only_and_respects_page_cap() -> None
 
 @pytest.mark.asyncio
 async def test_robots_exclusion_prevents_page_fetch() -> None:
-    with respx.mock(assert_all_called=False):
-        respx.get("https://example.com/robots.txt").mock(
+    with respx.mock(assert_all_called=False) as mocked:
+        mocked.get("https://example.com/robots.txt").mock(
             return_value=httpx.Response(200, text="User-agent: *\nDisallow: /private")
         )
-        page_route = respx.get("https://example.com/private").mock(
+        page_route = mocked.get("https://example.com/private").mock(
             return_value=html_page("Should not fetch", "<p>secret</p>")
         )
         result = await WebCrawler(resolver=public_resolver).crawl(
@@ -119,8 +119,8 @@ async def test_private_dns_resolution_is_blocked_before_http_request() -> None:
     async def private_resolver(_host: str, _port: int) -> list[str]:
         return ["127.0.0.1"]
 
-    with respx.mock(assert_all_called=False):
-        route = respx.get("https://example.com/start").mock(
+    with respx.mock(assert_all_called=False) as mocked:
+        route = mocked.get("https://example.com/start").mock(
             return_value=html_page("Unsafe", "<p>never fetched</p>")
         )
         result = await WebCrawler(resolver=private_resolver).crawl(
@@ -155,9 +155,9 @@ async def test_redirect_into_private_address_is_rejected() -> None:
     async def mixed_resolver(host: str, _port: int) -> list[str]:
         return ["93.184.216.34"] if host == "example.com" else ["10.0.0.1"]
 
-    with respx.mock(assert_all_called=False):
-        respx.get("https://example.com/robots.txt").mock(return_value=robots_allow())
-        respx.get("https://example.com/start").mock(
+    with respx.mock(assert_all_called=False) as mocked:
+        mocked.get("https://example.com/robots.txt").mock(return_value=robots_allow())
+        mocked.get("https://example.com/start").mock(
             return_value=httpx.Response(
                 302, headers={"location": "https://internal.example/"}
             )
@@ -177,14 +177,14 @@ async def test_redirect_into_private_address_is_rejected() -> None:
 
 @pytest.mark.asyncio
 async def test_non_html_and_oversized_response_keep_original_snippet() -> None:
-    with respx.mock(assert_all_called=False):
-        respx.get("https://example.com/robots.txt").mock(return_value=robots_allow())
-        respx.get("https://example.com/pdf").mock(
+    with respx.mock(assert_all_called=False) as mocked:
+        mocked.get("https://example.com/robots.txt").mock(return_value=robots_allow())
+        mocked.get("https://example.com/pdf").mock(
             return_value=httpx.Response(
                 200, headers={"content-type": "application/pdf"}, content=b"%PDF"
             )
         )
-        respx.get("https://example.com/large").mock(
+        mocked.get("https://example.com/large").mock(
             return_value=httpx.Response(
                 200,
                 headers={
@@ -222,9 +222,9 @@ async def test_non_html_and_oversized_response_keep_original_snippet() -> None:
 async def test_pydantic_search_results_are_normalized() -> None:
     from src.research.schemas import SearchResult
 
-    with respx.mock(assert_all_called=False):
-        respx.get("https://example.com/robots.txt").mock(return_value=robots_allow())
-        respx.get("https://example.com/start").mock(
+    with respx.mock(assert_all_called=False) as mocked:
+        mocked.get("https://example.com/robots.txt").mock(return_value=robots_allow())
+        mocked.get("https://example.com/start").mock(
             return_value=html_page("Model result", "<main>Parsed text</main>")
         )
         result = await WebCrawler(resolver=public_resolver).crawl(
