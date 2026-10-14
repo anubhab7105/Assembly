@@ -108,11 +108,24 @@ class _ReadableHTMLParser(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         name = tag.lower()
         inherited = self._inside_ignored
+        attrs_map = dict(attrs)
+        style = (attrs_map.get("style") or "").replace(" ", "").lower()
+        is_hidden = (
+            "hidden" in attrs_map
+            or (attrs_map.get("aria-hidden") or "").lower() == "true"
+            or "display:none" in style
+            or "visibility:hidden" in style
+        )
         if name == "title":
             self._title_depth += 1
-        ignored = inherited or name in _BLOCKED_TAGS or name in {"head", "title"}
-        if name == "a" and not self._inside_ignored:
-            href = dict(attrs).get("href")
+        ignored = (
+            inherited
+            or is_hidden
+            or name in _BLOCKED_TAGS
+            or name in {"head", "title"}
+        )
+        if name == "a" and not ignored:
+            href = attrs_map.get("href")
             if href:
                 self.links.append(href)
         if name not in _VOID_TAGS:
@@ -322,9 +335,11 @@ class WebCrawler:
         expected_origin: str,
         *,
         allow_redirects: bool = True,
+        max_bytes: int | None = None,
     ) -> _FetchedResponse | None:
         assert self._client is not None
         current = url
+        byte_limit = min(self.max_response_bytes, max_bytes or self.max_response_bytes)
         visited: set[str] = set()
         for redirect_count in range(MAX_REDIRECTS + 1):
             current = await self._validate_public_url(current)
@@ -348,13 +363,13 @@ class WebCrawler:
                     declared_length = int(length_header)
                 except ValueError:
                     declared_length = 0
-                if declared_length > self.max_response_bytes:
+                if declared_length > byte_limit:
                     return _FetchedResponse(current, 413, content_type, b"")
                 chunks: list[bytes] = []
                 total = 0
                 async for chunk in response.aiter_bytes():
                     total += len(chunk)
-                    if total > self.max_response_bytes:
+                    if total > byte_limit:
                         return _FetchedResponse(current, 413, content_type, b"")
                     chunks.append(chunk)
                 return _FetchedResponse(current, response.status_code, content_type, b"".join(chunks))
@@ -364,7 +379,9 @@ class WebCrawler:
         if origin not in self._robots:
             robots_url = f"{origin}/robots.txt"
             try:
-                response = await self._read_response(robots_url, origin)
+                response = await self._read_response(
+                    robots_url, origin, max_bytes=ROBOTS_MAX_BYTES
+                )
             except (UnsafeURL, httpx.HTTPError, OSError, TimeoutError):
                 self._robots[origin] = None
             else:
