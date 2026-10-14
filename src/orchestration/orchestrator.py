@@ -47,6 +47,7 @@ from src.providers.router import (
     PinViolationError,
     normalize_allowed_families,
 )
+from src.research.crawler import crawl_search_results, normalize_search_results
 from src.research.router import SearchRouter, default_providers
 from src.research.sanitize import sanitize_search_results, summarize_flags
 
@@ -587,11 +588,31 @@ class Orchestrator:
                     },
                 )
 
-                search_results = await search_router.search(
+                raw_search_results = await search_router.search(
                     question, problem_type=getattr(plan, "problem_type", "general")
                 )
-                budget.record_search(len(search_results))
+                budget.record_search(len(raw_search_results))
                 used_sources = search_router.last_providers_used
+
+                # Crawl static HTML opportunistically within the execution
+                # deadline. Searching remains useful when a page is blocked,
+                # non-HTML, unsafe, or too slow to fetch.
+                crawl_seconds = min(8.0, max(0.0, deadline.remaining() - 25.0))
+                if raw_search_results and crawl_seconds > 0:
+                    await emit_event(
+                        ProgressEventType.AGENT_STATUS,
+                        {
+                            "role": "researcher",
+                            "activity": "Reading permitted source pages (bounded static crawl)...",
+                            "state": ExecState.TEAM_READY.value,
+                        },
+                    )
+                    search_results = await crawl_search_results(
+                        raw_search_results,
+                        total_timeout_seconds=crawl_seconds,
+                    )
+                else:
+                    search_results = normalize_search_results(raw_search_results)
                 if search_results and used_sources:
                     await emit_event(
                         ProgressEventType.AGENT_STATUS,
