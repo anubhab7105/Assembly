@@ -187,16 +187,31 @@ async def test_non_html_and_oversized_response_keep_original_snippet() -> None:
         respx.get("https://example.com/large").mock(
             return_value=httpx.Response(
                 200,
-                headers={"content-type": "text/html", "content-length": str(3 * 1024 * 1024)},
+                headers={
+                    "content-type": "text/html",
+                    "content-length": str(3 * 1024 * 1024),
+                },
                 content=b"x",
             )
         )
         crawler = WebCrawler(max_response_bytes=1024, resolver=public_resolver)
         pdf = await crawler.crawl(
-            [{"title": "PDF", "url": "https://example.com/pdf", "snippet": "search excerpt"}]
+            [
+                {
+                    "title": "PDF",
+                    "url": "https://example.com/pdf",
+                    "snippet": "search excerpt",
+                }
+            ]
         )
         large = await crawler.crawl(
-            [{"title": "Large", "url": "https://example.com/large", "snippet": "search excerpt"}]
+            [
+                {
+                    "title": "Large",
+                    "url": "https://example.com/large",
+                    "snippet": "search excerpt",
+                }
+            ]
         )
 
     assert pdf[0]["snippet"] == "search excerpt"
@@ -267,8 +282,7 @@ async def test_task_cancellation_propagates_to_crawler() -> None:
         await task
 
 
-def test_injection_like_text_is_returned_as_source_data_for_existing_sanitizer(
-) -> None:
+def test_injection_text_stays_untrusted_evidence() -> None:
     # The crawler never executes/extrapolates page text. The existing sanitizer
     # wraps its snippet as untrusted evidence at the prompt boundary.
     from src.research.sanitize import UNTRUSTED_OPEN, sanitize_search_results
