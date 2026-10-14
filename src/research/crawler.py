@@ -215,7 +215,9 @@ class WebCrawler:
         self.max_depth = max(0, min(int(max_depth), DEFAULT_MAX_DEPTH))
         self.request_timeout_seconds = max(0.1, float(request_timeout_seconds))
         self.total_timeout_seconds = max(0.1, float(total_timeout_seconds))
-        self.max_response_bytes = max(1024, min(int(max_response_bytes), DEFAULT_MAX_RESPONSE_BYTES))
+        self.max_response_bytes = max(
+            1024, min(int(max_response_bytes), DEFAULT_MAX_RESPONSE_BYTES)
+        )
         self._resolver = resolver
         self._client: httpx.AsyncClient | None = None
         self._robots: dict[str, RobotFileParser | None] = {}
@@ -239,7 +241,10 @@ class WebCrawler:
         try:
             async with asyncio.timeout(self.total_timeout_seconds):
                 async with httpx.AsyncClient(
-                    headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"},
+                    headers={
+                        "User-Agent": USER_AGENT,
+                        "Accept": "text/html,application/xhtml+xml",
+                    },
                     follow_redirects=False,
                     timeout=self.request_timeout_seconds,
                 ) as client:
@@ -316,7 +321,9 @@ class WebCrawler:
             literal = ipaddress.ip_address(host)
         except ValueError:
             # Block common local names before DNS resolution.
-            if host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
+            if host == "localhost" or host.endswith(
+                (".localhost", ".local", ".internal")
+            ):
                 raise UnsafeURL("Local and internal hosts are not allowed")
             addresses = await self._resolve_ips(host, port)
         else:
@@ -329,7 +336,9 @@ class WebCrawler:
             except ValueError as exc:
                 raise UnsafeURL("Host resolved to an invalid address") from exc
             if not ip.is_global:
-                raise UnsafeURL("Private, reserved, and non-public IP addresses are blocked")
+                raise UnsafeURL(
+                    "Private, reserved, and non-public IP addresses are blocked"
+                )
         return normalized
 
     async def _pace_host(self, origin: str) -> None:
@@ -365,13 +374,24 @@ class WebCrawler:
             async with self._client.stream("GET", current) as response:
                 if response.status_code in {301, 302, 303, 307, 308}:
                     location = response.headers.get("location")
-                    if not location or not allow_redirects or redirect_count >= MAX_REDIRECTS:
+                    if (
+                        not location
+                        or not allow_redirects
+                        or redirect_count >= MAX_REDIRECTS
+                    ):
                         return _FetchedResponse(current, response.status_code, "", b"")
                     current = urljoin(current, location)
                     continue
-                content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                content_type = (
+                    response.headers.get("content-type", "")
+                    .split(";", 1)[0]
+                    .strip()
+                    .lower()
+                )
                 if response.status_code < 200 or response.status_code >= 300:
-                    return _FetchedResponse(current, response.status_code, content_type, b"")
+                    return _FetchedResponse(
+                        current, response.status_code, content_type, b""
+                    )
                 length_header = response.headers.get("content-length", "")
                 try:
                     declared_length = int(length_header)
@@ -386,7 +406,9 @@ class WebCrawler:
                     if total > byte_limit:
                         return _FetchedResponse(current, 413, content_type, b"")
                     chunks.append(chunk)
-                return _FetchedResponse(current, response.status_code, content_type, b"".join(chunks))
+                return _FetchedResponse(
+                    current, response.status_code, content_type, b"".join(chunks)
+                )
         return None
 
     async def _robots_allowed(self, url: str, origin: str) -> bool:
@@ -399,7 +421,11 @@ class WebCrawler:
             except (UnsafeURL, httpx.HTTPError, OSError, TimeoutError):
                 self._robots[origin] = None
             else:
-                if response is None or response.status_code in {401, 403} or response.status_code >= 500:
+                if (
+                    response is None
+                    or response.status_code in {401, 403}
+                    or response.status_code >= 500
+                ):
                     self._robots[origin] = None
                 elif response.status_code in {404, 410}:
                     self._robots[origin] = RobotFileParser()
