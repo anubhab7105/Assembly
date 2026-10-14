@@ -392,7 +392,7 @@ class WebCrawler:
             return None
         try:
             response = await self._read_response(url, origin)
-        except (UnsafeURL, httpx.HTTPError, OSError, TimeoutError):
+        except (UnsafeURL, ValueError, httpx.HTTPError, OSError, TimeoutError):
             return None
         if (
             response is None
@@ -433,11 +433,23 @@ def _as_result_dict(result: object) -> dict[str, str]:
     }
 
 
+def normalize_search_results(results: list[object]) -> list[dict[str, str]]:
+    """Convert provider models or dictionaries to the legacy research shape."""
+    return [_as_result_dict(item) for item in (results or [])]
+
+
 async def crawl_search_results(
     results: list[object],
     *,
     total_timeout_seconds: float = DEFAULT_TOTAL_TIMEOUT_SECONDS,
 ) -> list[dict[str, str]]:
     """Public convenience function used by the orchestrator."""
-    crawler = WebCrawler(total_timeout_seconds=total_timeout_seconds)
-    return await crawler.crawl(results)
+    normalized = normalize_search_results(results)
+    if not normalized or total_timeout_seconds <= 0:
+        return normalized
+    crawler = WebCrawler(
+        total_timeout_seconds=min(
+            float(total_timeout_seconds), DEFAULT_TOTAL_TIMEOUT_SECONDS
+        )
+    )
+    return await crawler.crawl(normalized)
