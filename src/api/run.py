@@ -277,6 +277,11 @@ async def _execute_run(
                 limiter.set_usage_snapshot([])
             except Exception:  # noqa: BLE001, S110 — cleanup must not raise
                 pass
+        # Request material is owned by this task only. Drop references even
+        # on initialization, provider, timeout, and cancellation failures.
+        provider_keys.clear()
+        if search_keys is not None:
+            search_keys.clear()
 
 
 @router.post("", response_class=StreamingResponse)

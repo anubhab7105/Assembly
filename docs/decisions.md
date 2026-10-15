@@ -404,3 +404,10 @@ Append-only log of significant technical and product decisions.
 - Context: The OpenAI-compatible adapter retried HTTP 429 responses up to `max_retries` before raising `RateLimited`. That delayed the existing shared limiter's cooldown update and held the current run on the same model even when another model family could be selected. A long `Retry-After` header could consume substantial run time.
 - Decision: Do not retry HTTP 429 inside the adapter. Parse and retain the provider's `Retry-After` value, raise the shared `RateLimited` exception immediately, and let `generate()` apply the already-bounded per-model cooldown (`MAX_COOLDOWN_SECONDS`) so later routing can fail over. Continue bounded retries for HTTP 502/503/504 and timeout/connection failures; leave auth and request-shape failures non-retryable.
 - Consequences: A mocked large-`Retry-After` scenario now makes one request despite configured retries; the test checks the cooldown becomes active. Success, 401, connection failure, and timeout behavior remain covered offline. No provider-specific model metadata, new dependencies, or credentials are introduced. Validation result will be recorded after test execution/CI.
+
+
+## 2026-10-15 — Explicitly clear web request keys at run finalization (Issue #12)
+
+- Context: The stateless web runner cleared its client usage snapshot in `finally`, but retained the `provider_keys` and optional `search_keys` dictionaries passed to the run task until the coroutine was released. Although keys were not persisted or logged, explicitly dropping run-owned references makes the lifecycle guarantee testable on all terminal paths.
+- Decision: After writing the terminal SSE event/terminator, clear both dictionaries in the existing `finally` block. The `search_keys` value is optional; only clear it when present. Preserve the existing quota-snapshot cleanup and swallow cleanup errors as before.
+- Consequences: Provider failures, cancellation, initialization errors and success all pass through the same cleanup. A deterministic regression asserts safe diagnostics, no fake-key leak, and cleared quota snapshot. No dependencies or architecture changes.
