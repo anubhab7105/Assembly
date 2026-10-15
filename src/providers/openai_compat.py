@@ -6,9 +6,10 @@ expose POST {base_url}/chat/completions with the OpenAI body shape.
 Endpoint, model id, headers, and timeout come from models.yaml via the
 registry — nothing provider-specific lives here.
 
-Retry policy: only idempotent transient failures are retried —
-HTTP 429 (honoring Retry-After), 502/503/504, timeouts, and connection
-errors — with exponential backoff and a bounded attempt count. 401/403
+Retry policy: only transient gateway/network failures are retried —
+HTTP 502/503/504, timeouts, and connection errors — with a bounded
+attempt count. HTTP 429 is surfaced immediately so the shared quota
+limiter can record a cooldown and let the router fail over. 401/403
 (AuthError) and 400/404/malformed payloads (BadResponse) never retry.
 """
 
@@ -31,9 +32,9 @@ from src.providers.errors import (
     parse_retry_after,
 )
 
-# Statuses safe to retry on a POST chat-completion call: the call has no
-# server-side side effects, so a retry cannot double-apply anything.
-RETRYABLE_STATUSES = frozenset({429, 502, 503, 504})
+# Statuses safe to retry on a chat-completion call: no side effects are
+# applied by the provider; 429 is intentionally excluded for fast failover.
+RETRYABLE_STATUSES = frozenset({502, 503, 504})
 MAX_BACKOFF_SECONDS = 60.0
 
 
@@ -181,11 +182,24 @@ class OpenAICompatibleProvider(AIProvider):
                                 self.provider_name, "response body is not a JSON object"
                             )
                         return body
+                    if response.status_code == 429:
+                        # A 429 is a quota signal, not an ordinary transient
+                        # error. Surface it immediately: generate() records
+                        # the cooldown so orchestration can fail over instead
+                        # of waiting through retries on this same model.
+                        raise classify_http_error(
+                            self.provider_name,
+                            response.status_code,
+                            self._error_message(response),
+                            retry_after=parse_retry_after(
+                                response.headers.get("retry-after")
+                            ),
+                        )
                     if (
                         response.status_code in RETRYABLE_STATUSES
                         and attempt < self._max_retries
                     ):
-                        await asyncio.sleep(self._backoff_seconds(response, attempt))
+                        await asyncio.sleep(min(2.0**attempt, MAX_BACKOFF_SECONDS))
                         continue
                     body: Any = None
                     try:
@@ -205,32 +219,19 @@ class OpenAICompatibleProvider(AIProvider):
                         self.provider_name,
                         response.status_code,
                         self._error_message(response),
-                        retry_after=parse_retry_after(
-                            response.headers.get("retry-after")
-                        )
-                        if response.status_code == 429
-                        else None,
                     )
                 except (httpx.TimeoutException, httpx.ConnectError) as exc:
                     last_error = ProviderDown(
                         self.provider_name, f"{type(exc).__name__}: {exc}"
                     )
                     if attempt < self._max_retries:
-                        await asyncio.sleep(2.0**attempt)
+                        await asyncio.sleep(min(2.0**attempt, MAX_BACKOFF_SECONDS))
                         continue
                     raise last_error from exc
                 except httpx.HTTPError as exc:
                     raise ProviderDown(self.provider_name, str(exc)) from exc
         # Unreachable: the loop always returns or raises.
         raise last_error or ProviderDown(self.provider_name, "request failed")
-
-    def _backoff_seconds(self, response: httpx.Response, attempt: int) -> float:
-        """Retry-After (capped) for 429s, exponential backoff otherwise."""
-        if response.status_code == 429:
-            retry_after = parse_retry_after(response.headers.get("retry-after"))
-            if retry_after is not None:
-                return min(retry_after, MAX_BACKOFF_SECONDS)
-        return min(2.0**attempt, MAX_BACKOFF_SECONDS)
 
     @staticmethod
     def _error_message(response: httpx.Response) -> str:
