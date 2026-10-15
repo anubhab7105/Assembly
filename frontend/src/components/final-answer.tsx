@@ -22,22 +22,37 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
   const { toast } = useToast()
   const [verificationOpen, setVerificationOpen] = useState(false)
 
-  const handleCopy = () => {
-    if (state.finalAnswer) {
-      navigator.clipboard.writeText(state.finalAnswer)
+  const handleCopy = async () => {
+    if (!state.finalAnswer) return
+    try {
+      await navigator.clipboard.writeText(state.finalAnswer)
       toast({ title: "Copied to clipboard", description: "Markdown copied successfully." })
+    } catch {
+      toast({
+        title: "Clipboard unavailable",
+        description: "Your browser blocked clipboard access. Use Export Markdown to download the answer instead.",
+        variant: "warning",
+      })
     }
   }
 
   const handleExport = () => {
     if (!state.finalAnswer) return
-    const blob = new Blob([state.finalAnswer], { type: "text/markdown" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `assembly-answer-${Date.now()}.md`
-    a.click()
-    URL.revokeObjectURL(url)
+    try {
+      const blob = new Blob([state.finalAnswer], { type: "text/markdown;charset=utf-8" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `assembly-answer-${Date.now()}.md`
+      a.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      toast({
+        title: "Download unavailable",
+        description: "The browser could not create the Markdown download.",
+        variant: "warning",
+      })
+    }
   }
 
   const confidenceColors = {
