@@ -1,5 +1,12 @@
 # Project Progress Log
 
+## 2026-10-15 — Immediate provider rate-limit failover (Issue #10)
+
+- Reproduction: an OpenAI-compatible endpoint returns HTTP 429 with `Retry-After: 99999` while the adapter is configured with retries. Previously the adapter waited/retried the same model before the shared limiter learned it was rate-limited, delaying router fallback.
+- Change: surface HTTP 429 immediately as the shared `RateLimited` error with parsed `Retry-After`; the existing `generate()` path records a bounded per-model cooldown so subsequent routing skips the affected model. HTTP 502/503/504, timeouts, and connection errors retain bounded retries; invalid credentials and malformed requests are not retried.
+- Regression coverage: mocked success, 401 invalid credentials, 429 with a very large Retry-After (one request only, cooldown registered), connection failure, and bounded timeout retry. No live key is required.
+- Verification: pending local/CI execution; live provider smoke test skipped in this environment because it is unnecessary for this deterministic mock regression.
+
 ## 2026-10-14 — Free-first crawler implementation (PR in progress)
 
 - Added a bounded static HTML crawler under `src/research/crawler.py`, using existing HTTPX plus standard-library HTMLParser/RobotFileParser (no new runtime dependencies or paid API). It normalizes search results, fetches up to five pages per run, follows same-origin links to depth one, honors robots rules, and bounds response size, redirects, ports, and total time.
