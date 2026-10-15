@@ -51,6 +51,9 @@ jobs:
     - name: Run Vitest unit tests
       run: npm test
 
+    - name: Run storage lifecycle tests
+      run: npm run test:storage
+
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps chromium
 
