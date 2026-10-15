@@ -121,4 +121,17 @@ describe("BrowserStorage lifecycle contracts", () => {
     const ids = (await storage.listHistory()).map((item) => item.id).sort()
     expect(ids).toEqual(["existing", "imported"])
   })
+
+  it("does not read a false empty state or report delete success when both stores fail", async () => {
+    const storage = new BrowserStorage()
+    setLocalStorage({ blocked: true })
+    await expect(storage.listHistory()).rejects.toBeInstanceOf(StorageError)
+    await expect(storage.deleteHistory("run-1")).rejects.toBeInstanceOf(StorageError)
+  })
+
+  it("surfaces localStorage quota exhaustion if IndexedDB is unavailable", async () => {
+    const storage = new BrowserStorage()
+    setLocalStorage({ full: true })
+    await expect(storage.setSetting("example", "value")).rejects.toBeInstanceOf(StorageError)
+  })
 })
