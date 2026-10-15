@@ -1,5 +1,13 @@
 # Project Progress Log
 
+## 2026-10-15 — Clear stateless run request secrets on terminal paths (Issue #12)
+
+- Boundary tested: `POST /api/run` owns provider and search-key dictionaries only for one run; run failures must not echo key material or leave request-only state behind.
+- Finding: the finalizer reset the shared limiter's client usage snapshot but did not explicitly clear the provider/search-key dictionaries passed into `_execute_run`. Their references could remain until coroutine/task release, including a provider exception or cancellation.
+- Change: clear both request-owned dictionaries in the existing `finally` block, regardless of success, provider failure, timeout, or cancellation. No shared state or persistent storage is introduced.
+- Regression: a deterministic stub orchestrator raises an exception containing a fake key; the test asserts one safe `run.finished` diagnostic, no canary in logs/SSE, and an empty quota usage snapshot after cleanup.
+- Verification: targeted CI pending. No real keys or external providers are used; live smoke test skipped because this test exercises a deterministic cleanup boundary directly.
+
 ## 2026-10-15 — Immediate provider rate-limit failover (Issue #10)
 
 - Reproduction: an OpenAI-compatible endpoint returns HTTP 429 with `Retry-After: 99999` while the adapter is configured with retries. Previously the adapter waited/retried the same model before the shared limiter learned it was rate-limited, delaying router fallback.
