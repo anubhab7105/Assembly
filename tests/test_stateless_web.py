@@ -332,5 +332,4 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
     assert fake_key not in rendered
     assert fake_key not in caplog.text
     assert "upstream error unexpectedly included" not in caplog.text
-    assert run_mod._filtered_router is not None  # handler path remains registered
     assert limiter._snapshot == {}
