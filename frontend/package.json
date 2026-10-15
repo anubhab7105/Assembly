@@ -7,10 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run src/lib/*.test.ts src/lib/*.test.tsx src/components/*.test.tsx src/hooks/*.test.ts --exclude src/lib/storage.test.ts",
+    "test": "vitest run --config vitest.storage.config.mts",
     "audit:high": "node scripts/audit-high.mjs",
-    "audit:test": "node --test scripts/audit-high.test.mjs",
-    "test:storage": "vitest run --config vitest.storage.config.mts"
+    "audit:test": "node --test scripts/audit-high.test.mjs"
   },
   "overrides": {
     "katex": "$katex"
