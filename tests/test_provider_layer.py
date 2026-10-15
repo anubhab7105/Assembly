@@ -332,6 +332,18 @@ async def test_connection_error_raises_provider_down() -> None:
         await _provider(max_retries=1).generate(_messages())
     assert len(respx.calls) == 2
 
+@respx.mock
+async def test_timeout_retries_only_within_configured_bound() -> None:
+    route = respx.post("https://api.test/v1/chat/completions").mock(
+        side_effect=[
+            httpx.ReadTimeout("upstream timed out"),
+            httpx.ReadTimeout("upstream timed out"),
+        ]
+    )
+    with pytest.raises(ProviderDown, match="timed out"):
+        await _provider(max_retries=1).generate(_messages())
+    assert route.call_count == 2
+
 
 @respx.mock
 async def test_malformed_body_raises_bad_response() -> None:
