@@ -5,8 +5,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    // Keep Node's native audit tests and dedicated storage suite separate.
-    exclude: ["tests/**", "node_modules/**", "scripts/**", "src/lib/storage.test.ts"],
+    // Playwright specs live in tests/ and run under `npx playwright test`.
+    exclude: ["tests/**", "node_modules/**"],
   },
   resolve: {
     alias: {
