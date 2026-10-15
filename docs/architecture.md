@@ -61,10 +61,11 @@ Normal tests should use mock or replay providers. Tests that need live provider 
 
 ## Storage and secrets
 
-- **Web mode:** designed not to persist questions, answers, or provider keys in a server database. Run coordination uses in-memory state; an in-memory run may still temporarily exist while it is executing.
-- **Development and desktop modes:** use local SQLite for local history/state. Desktop integration may also use the operating system keyring.
-- **Browser:** saved provider-key configuration can persist in browser storage. Treat it as sensitive local data and use trusted devices/builds.
-- **Logs and tests:** keys must never be written to logs, URLs, fixtures, screenshots, or API responses. Keep redaction and key-leak regression tests intact.
+- **Web backend:** `POST /api/run` keeps request/run coordination in memory while work is active. It must not persist question/answer/key content in a server database or log raw keys, questions, or provider exceptions.
+- **Browser UI storage:** `frontend/src/lib/storage.ts` owns history, settings, and usage. It uses IndexedDB first and localStorage only as a fallback. If both layers fail for a write/delete, it raises `StorageError`; callers must show the failure rather than claim that data was saved. History export/import uses a versioned JSON envelope and normalizes imported records before mutation. Clearing browser/site data can erase this client-owned data.
+- **Provider keys in web UI:** `frontend/src/lib/key-vault.ts` has its own IndexedDB/localStorage persistence and reload tests. These keys are sensitive, same-origin-readable browser data; they are not sent to the server except transiently in run/preflight/test requests over HTTPS.
+- **Development and desktop backend:** local executions are stored in SQLite through the desktop/dev API. Desktop provider keys use `KeyringKeyStore` and the OS credential store (Windows Credential Manager on Windows); they must not be written into SQLite, ordinary files, logs, URLs, or API responses.
+- **Failure coverage:** browser storage tests use fake browser storage APIs; key-vault tests simulate reloads and storage failure; backend keyring tests use a fake keyring and scan API/database/log output for canary keys; provider tests mock auth, quota/rate-limit, timeout, and connection failures. Windows installer/WebView restart checks and live provider calls are separate environment-dependent verification, not claims made by these unit tests.
 
 Do not describe Assembly as end-to-end encrypted or as a guarantee of privacy. Provider APIs receive the data necessary to complete requests, and each provider's own terms and privacy practices apply.
 
