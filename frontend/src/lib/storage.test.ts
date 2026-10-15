@@ -1,25 +1,32 @@
-// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { BrowserStorage, StorageError } from "./storage"
 
 const local = new Map<string, string>()
 
 function setLocalStorage(options?: { blocked?: boolean; full?: boolean }) {
-  vi.stubGlobal("localStorage", {
+  const storage = {
     getItem: (key: string) => {
       if (options?.blocked) throw new Error("localStorage blocked")
       return local.get(key) ?? null
     },
     setItem: (key: string, value: string) => {
       if (options?.blocked) throw new Error("localStorage blocked")
-      if (options?.full) throw new DOMException("quota exceeded", "QuotaExceededError")
+      if (options?.full) throw new Error("quota exceeded")
       local.set(key, value)
     },
     removeItem: (key: string) => {
       if (options?.blocked) throw new Error("localStorage blocked")
       local.delete(key)
     },
-  } as Storage)
+  } as Storage
+  vi.stubGlobal("localStorage", storage)
+  vi.stubGlobal("window", {
+    get localStorage() {
+      if (options?.blocked) throw new Error("localStorage blocked")
+      return storage
+    },
+    ASSEMBLY_APP_MODE: "web",
+  } as unknown as Window)
 }
 
 const baseRecord = {
