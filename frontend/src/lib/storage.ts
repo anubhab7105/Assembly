@@ -81,6 +81,7 @@ function storageError(operation: string, cause: unknown): StorageError {
 }
 
 async function idbGet<T>(key: string): Promise<T | null> {
+  let idbError: unknown
   try {
     const db = await idb()
     return await new Promise((resolve, reject) => {
@@ -90,19 +91,21 @@ async function idbGet<T>(key: string): Promise<T | null> {
       rq.onerror = () => reject(rq.error ?? new Error("IndexedDB read failed"))
       tx.onabort = () => reject(tx.error ?? new Error("IndexedDB read aborted"))
     })
-  } catch (idbError) {
-    try {
-      if (typeof window === "undefined") return null
-      const raw = window.localStorage.getItem(`assembly:${key}`)
-      return raw ? (JSON.parse(raw) as T) : null
-    } catch (fallbackError) {
+  } catch (error) {
+    idbError = error
+  }
+
+  try {
+    if (typeof window === "undefined") return null
+    const raw = window.localStorage.getItem(`assembly:${key}`)
+    return raw ? (JSON.parse(raw) as T) : null
+  } catch (fallbackError) {
       // A read can return null only when both stores are unavailable. The
       // caller can still render an empty view, but mutations must not then
       // overwrite unknowable existing data.
-      const error = storageError("read saved data", fallbackError)
-      error.cause = idbError
-      throw error
-    }
+    const error = storageError("read saved data", fallbackError)
+    error.cause = idbError
+    throw error
   }
 }
 
