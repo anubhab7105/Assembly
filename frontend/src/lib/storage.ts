@@ -100,9 +100,8 @@ async function idbGet<T>(key: string): Promise<T | null> {
     const raw = window.localStorage.getItem(`assembly:${key}`)
     return raw ? (JSON.parse(raw) as T) : null
   } catch (fallbackError) {
-      // A read can return null only when both stores are unavailable. The
-      // caller can still render an empty view, but mutations must not then
-      // overwrite unknowable existing data.
+    // Both stores failed. Don't let a later mutation overwrite data that
+    // cannot be read reliably.
     const error = storageError("read saved data", fallbackError)
     error.cause = idbError
     throw error
