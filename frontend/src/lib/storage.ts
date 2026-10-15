@@ -133,6 +133,7 @@ async function idbSet(key: string, value: unknown): Promise<void> {
 }
 
 async function idbDel(key: string): Promise<void> {
+  let idbError: unknown
   try {
     const db = await idb()
     await new Promise<void>((resolve, reject) => {
@@ -143,16 +144,17 @@ async function idbDel(key: string): Promise<void> {
       tx.onabort = () => reject(tx.error ?? new Error("IndexedDB delete aborted"))
     })
     return
-  } catch (idbError) {
-    try {
-      if (typeof window === "undefined") throw new Error("Browser storage is unavailable")
-      window.localStorage.removeItem(`assembly:${key}`)
-      return
-    } catch (fallbackError) {
-      const error = storageError("delete data", fallbackError)
-      error.cause = idbError
-      throw error
-    }
+  } catch (error) {
+    idbError = error
+  }
+
+  try {
+    if (typeof window === "undefined") throw new Error("Browser storage is unavailable")
+    window.localStorage.removeItem(`assembly:${key}`)
+  } catch (fallbackError) {
+    const error = storageError("delete data", fallbackError)
+    error.cause = idbError
+    throw error
   }
 }
 
