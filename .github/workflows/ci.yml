@@ -48,6 +48,9 @@ jobs:
     - name: Type Check
       run: npx tsc --noEmit
 
+    - name: Run Vitest storage lifecycle tests
+      run: npm test
+
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps chromium
 

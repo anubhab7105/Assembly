@@ -1,5 +1,6 @@
 // Regression tests for the audit-high allowlist gate.
 // Run: node --test scripts/audit-high.test.mjs
+// @vitest-environment node
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
