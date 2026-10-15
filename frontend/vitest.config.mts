@@ -7,7 +7,7 @@ export default defineConfig({
     globals: true,
     // Playwright specs live in tests/ and run under `npx playwright test`.
     // Node-only audit tests use a file-level @vitest-environment directive.
-    exclude: ["tests/**", "node_modules/**"],
+    exclude: ["tests/**", "node_modules/**", "scripts/**"],
   },
   resolve: {
     alias: {
