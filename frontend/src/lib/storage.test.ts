@@ -1,13 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { BrowserStorage, StorageError } from "./storage"
 
-const data = new Map<string, unknown>()
-const faults = { get: false, set: false, del: false }
 const local = new Map<string, string>()
 
-vi.mock("./storage-idb-adapter", () => ({}))
-
-// Replacing the browser global gives deterministic tests for an unavailable
-// IndexedDB plus a working/blocked localStorage fallback without real APIs.
 function setLocalStorage(options?: { blocked?: boolean; full?: boolean }) {
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => {
@@ -26,10 +21,6 @@ function setLocalStorage(options?: { blocked?: boolean; full?: boolean }) {
   } as Storage)
 }
 
-vi.mocked; // keep this file free of browser-specific IndexedDB implementations
-
-import { BrowserStorage, StorageError } from "./storage"
-
 const baseRecord = {
   id: "run-1",
   question: "Which option is correct?",
@@ -41,13 +32,7 @@ const baseRecord = {
 
 describe("BrowserStorage lifecycle contracts", () => {
   beforeEach(() => {
-    data.clear()
     local.clear()
-    faults.get = false
-    faults.set = false
-    faults.del = false
-    // The implementation observes indexedDB through this global. If absent,
-    // it deterministically falls back to localStorage.
     vi.stubGlobal("indexedDB", undefined)
     setLocalStorage()
   })
@@ -88,6 +73,7 @@ describe("BrowserStorage lifecycle contracts", () => {
     const storage = new BrowserStorage()
     await expect(storage.saveHistory(baseRecord)).rejects.toBeInstanceOf(StorageError)
     await expect(storage.setSetting("example", "value")).rejects.toThrow(/storage is unavailable or full/i)
+    await expect(storage.clearHistory()).rejects.toBeInstanceOf(StorageError)
   })
 
   it("rejects malformed JSON and unsupported/incomplete exports without changing saved data", async () => {
