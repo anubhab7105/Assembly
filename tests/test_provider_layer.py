@@ -281,18 +281,26 @@ async def test_success_extracts_content_and_usage() -> None:
 
 
 @respx.mock
-async def test_429_retries_with_retry_after_then_succeeds() -> None:
-    respx.post("https://api.test/v1/chat/completions").mock(
+async def test_429_surfaces_immediately_for_router_failover() -> None:
+    route = respx.post("https://api.test/v1/chat/completions").mock(
         side_effect=[
             httpx.Response(
-                429, headers={"retry-after": "0"}, json={"error": {"message": "slow"}}
+                429,
+                headers={"retry-after": "99999"},
+                json={"error": {"message": "quota exhausted"}},
             ),
             httpx.Response(200, json=SUCCESS_BODY),
         ]
     )
-    response = await _provider(max_retries=1).generate(_messages())
-    assert response.content == "hello"
-    assert len(respx.calls) == 2
+    # Even with retries configured and a huge Retry-After, the adapter must
+    # not sleep/retry the same rate-limited model. generate() reports cooldown.
+    with pytest.raises(RateLimited) as exc_info:
+        await _provider(max_retries=2).generate(_messages())
+    assert exc_info.value.retry_after == 99999.0
+    assert route.call_count == 1
+    assert get_limiter().is_exhausted(
+        "test", _provider()._fingerprint, "m"
+    )
 
 
 @respx.mock
