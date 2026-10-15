@@ -3,7 +3,7 @@ import path from "path"
 
 export default defineConfig({
   test: {
-    environment: "jsdom",
+    environment: "node",
     globals: true,
     // Playwright specs live in tests/ and run under `npx playwright test`.
     exclude: ["tests/**", "node_modules/**"],
