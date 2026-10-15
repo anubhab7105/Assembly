@@ -163,8 +163,8 @@ Note on FR-36: each provider card in Settings shows a per-key status (`unknown` 
 | --- | --- | --- |
 | FR-40 | Windows app: no login required; history stored locally in SQLite. | M |
 | FR-41 | Done-different (see D8). Old text, kept for traceability: "Website: sign up, login, Google OAuth, history per user." There is no signup, login, OAuth, or per-user server history; web history lives in the browser. | — |
-| FR-42 | Conversation and execution history with final answer and sources: web in browser IndexedDB (`frontend/src/lib/storage.ts`, with Export/Import JSON); desktop in local SQLite (`src/database/models.py`, desktop-only endpoints in `src/api/executions.py`). | M |
-| FR-43 | Export an answer as Markdown. | C |
+| FR-42 | Conversation and execution history with final answer and sources: web UI history/settings in browser IndexedDB with localStorage fallback (`frontend/src/lib/storage.ts`, versioned Export/Import JSON); desktop backend execution history in local SQLite (`src/database/models.py`, desktop-only endpoints in `src/api/executions.py`). | M |
+| FR-43 | Copy or download the final answer as Markdown (`frontend/src/components/final-answer.tsx`). | Done |
 
 D8 consequences, stated honestly: no cross-device sync. Web history lives in the browser (IndexedDB) and can be lost if site data is cleared, so Export/Import exists (`StorageService.exportJSON`/`importJSON` in `frontend/src/lib/storage.ts`). Desktop history is a local SQLite file. Abuse control without accounts relies on per-IP rate limits, a server concurrency cap and origin checks (`src/core/rate_limit.py`, `src/api/run.py`, `src/main.py`).
 
@@ -242,7 +242,7 @@ Key management, provider health, privacy notices. Theme setting: Optional (the a
 
 **Should:** source ranking, stateless hosted website R1 (no login, D8).
 
-**Could:** coding mode (FR-14), Markdown export, academic search sources, key health panel consolidation (FR-36), Insight Mode toggle, theme setting.
+**Could:** coding mode (FR-14), academic search sources, key health panel consolidation (FR-36), Insight Mode toggle, theme setting.
 
 ### 12.2 Benchmark plan
 
@@ -332,3 +332,4 @@ Other safeguards, unchanged: keys from at least three providers loaded and teste
 - Section 14: abuse-without-accounts and browser-only-history risks added.
 - Section 15: Insight Mode question resolved and removed; remaining questions renumbered.
 - `docs/prd-gap-report.md` created for v1.1; `BUILD_PROMPTS.md` was not found in the repo (see decisions log for the intended Prompt 6.1/6.2/8.4 markings).
+- Issue #21: FR-42 clarified browser vs desktop history and fallback storage; FR-43 marked Done because Markdown copy/download controls are implemented. Browser persistence and import failure contracts now have a dedicated Vitest suite wired into CI.
