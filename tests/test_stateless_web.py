@@ -270,3 +270,67 @@ def test_per_ip_concurrency_cap(web_mode, monkeypatch) -> None:
             if line.startswith("data: ") and '"run.finished"' in line:
                 break
     assert CANARY_KEY not in "\n".join(blob_lines)
+
+
+@pytest.mark.asyncio()
+async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch, caplog):
+    """Request secrets and client quota snapshots are cleared on every terminal path.
+
+    The orchestrator stub deliberately raises an exception containing the
+    fake key. Only safe failure diagnostics may reach logs/SSE, and both the
+    request-key store and shared limiter snapshot must be empty afterwards.
+    """
+    import src.api.run as run_mod
+    import src.orchestration.orchestrator as orch_mod
+    from src.providers.quota import get_limiter
+
+    fake_key = "TEST-ONLY-WEB-KEY-CLEANUP-CANARY"
+    entry = run_mod._RunEntry(run_id="run-cleanup-canary", created_at=run_mod._now())
+    limiter = get_limiter()
+    limiter.set_usage_snapshot(
+        [{"provider": "groq", "model": "m", "count": 2, "tokens": 100}]
+    )
+
+    class StubOrch:
+        def __init__(self):
+            self.router = None
+
+        async def execute(self, **kwargs):
+            # Record exactly what the handler passed to the run, then fail
+            # with a secret-shaped payload to test safe diagnostic behavior.
+            assert kwargs["provider_keys"] == {"groq": fake_key}
+            raise RuntimeError(f"upstream error unexpectedly included {fake_key}")
+
+    monkeypatch.setattr(orch_mod, "Orchestrator", StubOrch)
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        await run_mod._execute_run(
+            "run-cleanup-canary",
+            "synthetic cleanup test question",
+            3,
+            {"groq": fake_key},
+            set(),
+            {},
+            [{"provider": "groq", "model": "m", "count": 2, "tokens": 100}],
+            entry,
+            search_keys={"tavily": "TEST-ONLY-SEARCH-KEY-CANARY"},
+            router_override=object(),
+        )
+
+    events = []
+    while True:
+        item = await entry.queue.get()
+        if item is None:
+            break
+        events.append(item)
+
+    rendered = json.dumps(events)
+    assert entry.done is True
+    assert len([e for e in events if e.get("event_type") == "run.finished"]) == 1
+    finished = next(e for e in events if e.get("event_type") == "run.finished")
+    assert finished["status"] == "failed"
+    assert finished["error_code"] == "runtime_error"
+    assert fake_key not in rendered
+    assert fake_key not in caplog.text
+    assert "upstream error unexpectedly included" not in caplog.text
+    assert run_mod._filtered_router is not None  # handler path remains registered
+    assert limiter._snapshot == {}
