@@ -29,10 +29,21 @@ class ModelSelection(BaseModel):
     pins: dict[str, str] = Field(default_factory=dict)
 
 
+class AttachmentInput(BaseModel):
+    """Client-supplied text attachment for one ephemeral investigation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    filename: str = Field(..., min_length=1, max_length=120)
+    media_type: str = Field(default="text/plain", max_length=100)
+    content: str = Field(..., min_length=1, max_length=262144)
+
+
 class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: str = Field(..., min_length=1, max_length=2000)
+    attachments: list[AttachmentInput] = Field(default_factory=list, max_length=5)
     time_budget_minutes: int = Field(..., ge=3, le=15)
     # Web-mode BYOK keys (provider → key). In-memory for this run only:
     # never written to disk or database, never logged, never returned.
