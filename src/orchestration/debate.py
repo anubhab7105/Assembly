@@ -92,10 +92,16 @@ class DebateManager:
             if others_raw:
                 per_other = self._per_other_chars(agent, len(others_raw))
                 others = self._compress_outputs(others_raw, per_other)
-                coro = self._agent_critique(
-                    agent, question, others, round_number, timeout_s,
-                    attachment_context,
-                )
+                if attachment_context:
+                    coro = self._agent_critique(
+                        agent, question, others, round_number, timeout_s,
+                        attachment_context,
+                    )
+                else:
+                    # Preserve the legacy call shape when no files were attached.
+                    coro = self._agent_critique(
+                        agent, question, others, round_number, timeout_s,
+                    )
             else:
                 # No others to critique — re-run independently
                 coro = self._timed_run(
