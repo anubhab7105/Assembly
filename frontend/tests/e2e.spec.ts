@@ -136,6 +136,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     })
 
     await expect(page.locator('[aria-label="Selected attachments"]')).toContainText("analysis-notes.txt")
+    await expect(page.locator('[aria-label="Selected attachments"]')).toContainText("TXT")
     const remove = page.getByRole("button", { name: "Remove analysis-notes.txt" })
     await expect(remove).toBeVisible()
     await remove.click()
