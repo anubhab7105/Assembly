@@ -168,6 +168,7 @@ function ExecutionContent() {
                 {state.attachments.map((attachment) => (
                   <span key={attachment.filename} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs">
                     <span className="truncate font-medium">{attachment.filename}</span>
+                    <span className="shrink-0 text-muted-foreground">{attachment.filename.toLowerCase().endsWith(".env.example") ? "ENV.EXAMPLE" : (attachment.filename.split(".").pop() || "TEXT").toUpperCase()}</span>
                     <span className="shrink-0 text-muted-foreground">{Math.max(1, Math.ceil(attachment.size_bytes / 1024))} KB</span>
                   </span>
                 ))}
