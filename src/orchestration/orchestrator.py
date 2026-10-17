@@ -178,6 +178,7 @@ class Orchestrator:
         deadline: Deadline | None = None,
         router_override=None,
         allowed_families: list[str] | None = None,
+        attachment_context: str = "",
     ) -> ExecutionResult:
         """
         Run the full orchestration pipeline.
@@ -187,6 +188,8 @@ class Orchestrator:
             question: User's question.
             time_budget_minutes: Time budget (3/5/10/15 minutes).
             on_progress: Async callback for real-time progress events.
+            attachment_context: Bounded untrusted document text, held in memory
+                for this run only and appended to agent prompts.
             provider_keys: Per-request BYOK keys (web mode). Held in memory
                 for this run only via RequestKeyStore and wiped afterwards;
                 when None, the router's own (mode) key set is used.
@@ -252,6 +255,16 @@ class Orchestrator:
 
         total_tokens = 0
         warnings: list[str] = []
+        # Report metadata only: never include attachment text in events or logs.
+        if attachment_context:
+            await emit_event(
+                ProgressEventType.AGENT_STATUS,
+                {
+                    "role": "system",
+                    "activity": "Using attached file context (untrusted data).",
+                    "state": ExecState.CAPACITY_CHECK.value,
+                },
+            )
         call_log: list[dict] = []
         recorder = EventRecorder(execution_id)
         open_disagreement_keys: dict = {}
@@ -432,7 +445,7 @@ class Orchestrator:
                     deadline.timeout_for_call(PLANNER_CALL_SECONDS)
                 ):
                     plan = await planner.plan(
-                        question, time_budget_minutes, allowed_families=allowed_families
+                        question + attachment_context, time_budget_minutes, allowed_families=allowed_families
                     )
             except TimeoutError:
                 # The planner LLM call hung past its bound. asyncio delivers
@@ -447,7 +460,7 @@ class Orchestrator:
                     "heuristic plan"
                 )
                 plan = planner.heuristic_plan(
-                    question,
+                    question + attachment_context,
                     time_budget_minutes,
                     "planner call timed out",
                 )
@@ -867,7 +880,7 @@ class Orchestrator:
                 outputs = await debate_manager.run_debate_round(
                     agents=agents,
                     current_outputs=outputs,
-                    question=question,
+                    question=question + attachment_context,
                     round_number=round_number,
                     timeout_s=deadline.timeout_for_call(),
                 )
@@ -999,7 +1012,7 @@ class Orchestrator:
             # there is nothing else left to produce an answer.
             async with asyncio.timeout(deadline.synthesis_timeout()):
                 final_output = await synthesizer.synthesize(
-                    question=question,
+                    question=question + attachment_context,
                     agent_outputs=outputs,
                     consensus_score=consensus_result.score,
                     debate_rounds=round_number,
