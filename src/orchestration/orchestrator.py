@@ -797,7 +797,7 @@ class Orchestrator:
                     challenged = await self._run_adversarial_round(
                         consensus_engine,
                         agents,
-                        question,
+                        question + attachment_context,
                         outputs,
                         round_number,
                         budget,
