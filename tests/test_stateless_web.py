@@ -378,3 +378,62 @@ def test_run_rejects_oversized_attachment_before_creating_run(web_mode):
     )
     assert res.status_code in (413, 422)
     assert len(run_mod._runs) == run_count
+
+
+def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(web_mode, monkeypatch, caplog):
+    """The uploaded text becomes prompt context, not response/log metadata."""
+    import src.api.run as run_mod
+    import src.orchestration.orchestrator as orch_mod
+    from src.main import app
+    from src.orchestration.orchestrator import ExecutionResult
+
+    source_marker = "ATTACHMENT-CONTENT-CANARY-7F3C"
+    captured = {}
+
+    class StubOrch:
+        def __init__(self):
+            self.router = None
+
+        async def execute(self, **kwargs):
+            captured["question"] = kwargs["question"]
+            captured["attachment_context"] = kwargs["attachment_context"]
+            return ExecutionResult(
+                execution_id=kwargs["execution_id"],
+                status="completed",
+                final_answer="Mock answer.",
+                total_tokens=0,
+            )
+
+    _mock_filtered_router(monkeypatch)
+    monkeypatch.setattr(orch_mod, "Orchestrator", StubOrch)
+    client = TestClient(app)
+    with caplog.at_level(logging.INFO, logger="assembly"), client.stream(
+        "POST",
+        "/api/run",
+        json={
+            "question": "Summarize the attached component",
+            "time_budget_minutes": 3,
+            "provider_keys": {"groq": CANARY_KEY},
+            "model_selection": {"selected": [], "pins": {}},
+            "usage_snapshot": [],
+            "attachments": [{
+                "filename": "component.tsx",
+                "media_type": "text/plain",
+                "content": f'<div>hello</div>\\n{source_marker}',
+            }],
+        },
+    ) as res:
+        assert res.status_code == 200, res.text
+        lines = []
+        for line in res.iter_lines():
+            lines.append(line)
+            if line.startswith("data: ") and '"run.finished"' in line:
+                break
+
+    assert source_marker in captured["attachment_context"]
+    assert "component.tsx" in captured["attachment_context"]
+    assert captured["question"] == "Summarize the attached component"
+    assert source_marker not in "\\n".join(lines)
+    assert source_marker not in caplog.text
+    assert CANARY_KEY not in "\\n".join(lines)
+    assert CANARY_KEY not in caplog.text
