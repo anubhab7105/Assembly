@@ -14,15 +14,12 @@ from dataclasses import dataclass
 
 from src.research.sanitize import (
     escape_delimiters,
-    format_untrusted_block,
     scan_for_injection,
-    strip_markup,
-    truncate_to_budget,
 )
 
 MAX_ATTACHMENTS = 5
 MAX_FILE_BYTES = 256 * 1024
-MAX_TOTAL_BYTES = 768 * 1024
+MAX_TOTAL_BYTES = 384 * 1024
 MAX_ATTACHMENT_CONTEXT_CHARS = 24_000
 MAX_FILENAME_CHARS = 120
 
@@ -124,6 +121,8 @@ def validate_attachment(
             raise AttachmentValidationError(
                 f"{safe_name}: MIME type doesn't match a supported text document."
             )
+    # Never echo an arbitrary client MIME string into model-visible metadata.
+    # Unknown text types are accepted by extension but rendered generically.
     try:
         text = content.decode("utf-8-sig", errors="strict")
     except UnicodeDecodeError as exc:
@@ -212,15 +211,18 @@ def build_attachment_context(
     truncated = False
 
     for index, attachment in enumerate(attachments, start=1):
-        cleaned = strip_markup(attachment.content)
-        categories.update(flag.category for flag in scan_for_injection(cleaned))
-        safe_text = escape_delimiters(cleaned)
+        # File content is data, not web markup: preserve HTML/JSX/source
+        # exactly enough for code-aware analysis. Validation has already
+        # rejected unsafe control characters and normalized line endings.
+        source_text = attachment.content
+        categories.update(flag.category for flag in scan_for_injection(source_text))
+        safe_text = escape_delimiters(source_text)
         name = safe_filename(attachment.filename)
         separator = 2 if blocks else 0
         remaining = max_chars - used - separator
         prefix = (
             f"{UNTRUSTED_OPEN} [{index}] "
-            f"title=User attachment: {name} ({attachment.media_type})>\n"
+            f"title=User attachment: {name} ({attachment.media_type if attachment.media_type in _TEXT_MIME_TYPES else 'text/plain'})>\n"
             "URL: not-applicable: local attachment\n"
         )
         suffix = f"\n{UNTRUSTED_CLOSE}"
