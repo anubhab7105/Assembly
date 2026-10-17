@@ -170,3 +170,60 @@ describe("ApiClient.startRunStream terminal handling", () => {
     );
   });
 });
+
+describe("ApiClient attachment payload", () => {
+  function mockRunStream() {
+    const encoder = new TextEncoder()
+    const chunks = [
+      `data: ${JSON.stringify({ event_type: "execution.completed", data: { answer: "ok" } })}\n\n`,
+      `data: ${JSON.stringify({ event_type: "run.finished", status: "completed", usage: [] })}\n\n`,
+    ].map((chunk) => encoder.encode(chunk))
+    let index = 0
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      body: {
+        getReader() {
+          return {
+            async read() {
+              if (index >= chunks.length) return { done: true, value: undefined }
+              return { done: false, value: chunks[index++] }
+            },
+          }
+        },
+      },
+    })
+    global.fetch = fetchSpy as unknown as typeof fetch
+    return fetchSpy
+  }
+
+  const args = {
+    question: "Review these files",
+    minutes: 3,
+    providerKeys: { groq: "test-only-key" },
+    selection: { selected: [], pins: {} },
+    usage: [],
+  }
+
+  it("sends bounded text file objects with the run request", async () => {
+    const fetchSpy = mockRunStream()
+    const attachments = [
+      { filename: "notes.md", media_type: "text/markdown", content: "Private test-only content" },
+    ]
+    await ApiClient.startRunStream({ ...args, attachments }, () => {})
+    const init = fetchSpy.mock.calls[0]?.[1] as RequestInit
+    const payload = JSON.parse(String(init.body))
+    expect(payload.question).toBe(args.question)
+    expect(payload.attachments).toEqual(attachments)
+    expect(JSON.stringify(payload)).toContain("Private test-only content")
+  })
+
+  it("omits the attachments field when no files are selected", async () => {
+    const fetchSpy = mockRunStream()
+    await ApiClient.startRunStream(args, () => {})
+    const init = fetchSpy.mock.calls[0]?.[1] as RequestInit
+    const payload = JSON.parse(String(init.body))
+    expect(payload).not.toHaveProperty("attachments")
+  })
+})
