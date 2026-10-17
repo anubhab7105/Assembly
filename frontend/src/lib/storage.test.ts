@@ -142,4 +142,42 @@ describe("BrowserStorage lifecycle contracts", () => {
     setLocalStorage({ full: true })
     await expect(storage.setSetting("example", "value")).rejects.toBeInstanceOf(StorageError)
   })
+
+  it("round-trips only attachment metadata, never uploaded content", async () => {
+    const store = new BrowserStorage()
+    const contentCanary = "ATTACHMENT-CONTENT-MUST-NOT-BE-PERSISTED"
+    await store.importJSON(JSON.stringify({
+      version: 1,
+      history: [{
+        ...baseRecord,
+        attachments: [{
+          filename: "analysis.txt",
+          media_type: "text/plain",
+          size_bytes: 50,
+          content: contentCanary,
+        }],
+      }],
+      usage: [],
+    }))
+    const loaded = await new BrowserStorage().getHistory("run-1")
+    expect(loaded?.attachments).toEqual([
+      { filename: "analysis.txt", media_type: "text/plain", size_bytes: 50 },
+    ])
+    const backup = await new BrowserStorage().exportJSON()
+    expect(backup).not.toContain(contentCanary)
+    expect(backup).not.toContain('"content"')
+  })
+
+  it("drops invalid attachment metadata when importing history", async () => {
+    const store = new BrowserStorage()
+    await store.importJSON(JSON.stringify({
+      version: 1,
+      history: [{
+        ...baseRecord,
+        attachments: [{ filename: "../unsafe.txt", media_type: "text/plain", size_bytes: 25 }],
+      }],
+      usage: [],
+    }))
+    expect((await store.getHistory("run-1"))?.attachments).toBeUndefined()
+  })
 })

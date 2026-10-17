@@ -36,6 +36,7 @@ export interface ExecutionState {
   confidence: "High" | "Moderate" | "Low" | null
   uncertaintyNote: string | null
   question: string | null
+  attachments: Array<{ filename: string; media_type: string; size_bytes: number }>
   round: number
   degradedMode: boolean
   quotaWarning: string | null
@@ -66,6 +67,7 @@ const initialState: ExecutionState = {
   confidence: null,
   uncertaintyNote: null,
   question: null,
+  attachments: [],
   round: 0,
   degradedMode: false,
   quotaWarning: null,
@@ -263,6 +265,7 @@ export function useExecution(executionId: string | null) {
             status: h.status,
             finalAnswer: h.answer || null,
             question: h.question,
+            attachments: h.attachments ?? [],
             consensusScore: h.consensus ?? null,
             confidence: h.confidence ?? null,
             summary: {

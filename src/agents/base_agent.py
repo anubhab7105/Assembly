@@ -128,6 +128,23 @@ class AgentOutput(BaseModel):
         return calibrated, raw_float
 
 
+def add_attachment_context(
+    question: str, context: dict[str, Any] | None = None
+) -> str:
+    """Append request-local, explicitly untrusted attachment data to a prompt.
+
+    This helper adds no state to agents and never logs the file contents.
+    """
+    if not context:
+        return question
+    block = context.get("attachment_context")
+    if not isinstance(block, str) or not block:
+        return question
+    # build_attachment_context already wraps the text in a labelled,
+    # escaped UNTRUSTED_WEB_CONTENT block. Do not wrap or copy it again.
+    return f"{question}{block}\n"
+
+
 class BaseAgent:
     """
     Abstract base for all Assembly agents.
@@ -487,26 +504,27 @@ class BaseAgent:
         question: str,
         other_outputs: list[AgentOutput],
         round_number: int,
+        *,
+        context: dict[str, Any] | None = None,
     ) -> AgentOutput:
-        """
-        Review other agents' outputs and produce critique.
-        Used during debate rounds.
-        """
+        """Review peer outputs while retaining optional run-local context."""
         valid_agent_ids = [o.agent_id for o in other_outputs]
-        context = {
+        critique_context: dict[str, Any] = {
             "round_number": round_number,
             "other_outputs": [o.to_dict() for o in other_outputs],
             "valid_agent_ids": valid_agent_ids,
             "mode": "critique",
         }
-        output = await self.run(question, context=context)
+        if context:
+            attachment_context = context.get("attachment_context")
+            if isinstance(attachment_context, str) and attachment_context:
+                critique_context["attachment_context"] = attachment_context
+        output = await self.run(question, context=critique_context)
 
-        # Validate referential integrity: strip hallucinated agent IDs
-        # (Fix B — belt and suspenders: run() already filtered these).
+        # Validate referential integrity: strip hallucinated agent IDs.
         all_valid = set(valid_agent_ids + [self.agent_id])
         output.supports = [aid for aid in output.supports if aid in all_valid]
         output.disagrees_with = [
             aid for aid in output.disagrees_with if aid in all_valid
         ]
-
         return output

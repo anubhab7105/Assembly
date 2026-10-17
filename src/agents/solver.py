@@ -7,7 +7,7 @@ with reasoning and evidence before seeing other agents' work.
 
 from typing import Any
 
-from src.agents.base_agent import BaseAgent
+from src.agents.base_agent import BaseAgent, add_attachment_context
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
 
 
@@ -72,6 +72,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
             return f"""DEBATE ROUND {round_num}
 
 Original question: {question}
+{add_attachment_context("", context)}
 
 Other agents' conclusions:
 {others_text}
@@ -103,4 +104,4 @@ Update your own position based on this review. Respond with JSON only, no extra 
 
 Question: {question}
 
-Respond with the JSON format specified in your instructions."""
+Respond with the JSON format specified in your instructions.""" + add_attachment_context("", context)

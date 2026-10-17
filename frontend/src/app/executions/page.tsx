@@ -159,6 +159,25 @@ function ExecutionContent() {
           </div>
         )}
         
+        {state.question && (
+          <section aria-label="Investigation question and attachments" className="rounded-xl border border-border bg-card p-4">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Investigation</h2>
+            <p className="whitespace-pre-wrap break-words text-sm">{state.question}</p>
+            {state.attachments.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2" aria-label="Attached files used in this investigation">
+                {state.attachments.map((attachment) => (
+                  <span key={attachment.filename} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs">
+                    <span className="truncate font-medium">{attachment.filename}</span>
+                    <span className="shrink-0 text-muted-foreground">{attachment.filename.toLowerCase().endsWith(".env.example") ? "ENV.EXAMPLE" : (attachment.filename.split(".").pop() || "TEXT").toUpperCase()}</span>
+                    <span className="shrink-0 text-muted-foreground">{Math.max(1, Math.ceil(attachment.size_bytes / 1024))} KB</span>
+                  </span>
+                ))}
+                <p className="w-full text-xs text-muted-foreground">Only attachment names and sizes are kept in local history; original file contents are not saved.</p>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* ─── Top Row: Consensus & Final Answer ──────────────────────────────── */}
         <div className="grid gap-6 lg:grid-cols-3">
           

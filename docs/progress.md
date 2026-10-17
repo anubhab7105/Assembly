@@ -650,3 +650,11 @@
 - Added coverage: `frontend/src/lib/storage.test.ts` checks a fresh profile, export/import round-trip, localStorage fallback, dual-layer storage failure, malformed and unsupported backups, malformed rows, duplicate IDs/usage, and repeated-import behavior. Existing key-vault, backend keyring/leak and provider-failure tests remain relevant and unchanged.
 - Platform matrix: Vitest checks storage contracts with fake browser storage APIs and no live credentials; GitHub Actions Chromium Playwright tests cover actual browser flows on Ubuntu. Backend keyring tests use an in-memory fake, not Windows Credential Manager. A packaged Tauri/WebView restart, a clean Windows install, and real-provider outage/credential flows were not run here and remain unverified on Windows/with live credentials.
 - Verification status: PR #26 Actions run on the initial head exposed a Node 20/jsdom Undici worker startup error before tests ran. Switching Vitest's default environment to Node avoids that jsdom startup path; the updated run is pending at https://github.com/anubhab7105/Assembly/actions/runs/38792182788. Windows-only and live-provider verification remain unverified.
+
+## 2026-10-17 — Issue #27: bounded text attachments for investigations
+
+- Added v1 upload flow for text, Markdown, CSV, JSON, logs, and source/config files, with client hints plus authoritative backend validation: 5 files, 256 KiB/file, 384 KiB combined, 24,000 characters of prompt context.
+- File contents remain in memory during a run, are delimiter-escaped and labelled as untrusted context; the external search query remains the original user question. No document body in logs, SSE events, backend DB/disk or browser history. Client history may retain safe filename/type/size metadata.
+- Explicitly deferred binary parsing, PDF/DOCX, images and OCR. See `docs/attachments.md`.
+- Added parser and end-to-end stateless API regression tests plus a dedicated Node-only API payload test, avoiding the repository's jsdom/Undici worker incompatibility in the focused unit job.
+- Verification pending the feature branch Actions run; no live provider keys or documents are used by tests.

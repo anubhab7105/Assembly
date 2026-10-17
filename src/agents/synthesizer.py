@@ -7,7 +7,7 @@ The user never sees the debate — only this agent's output.
 
 from typing import Any
 
-from src.agents.base_agent import AgentOutput, BaseAgent
+from src.agents.base_agent import AgentOutput, BaseAgent, add_attachment_context
 from src.orchestration.composer import attribution_footer
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE, sanitize_search_results
 
@@ -104,6 +104,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
         return f"""SYNTHESIZE THE FINAL ANSWER
 
 Original question: {question}
+{add_attachment_context("", context)}
 
 Team consensus score: {consensus_score:.0%}
 Debate rounds completed: {debate_rounds}

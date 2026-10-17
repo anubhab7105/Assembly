@@ -7,7 +7,7 @@ and prevents echo chambers (PRD Section 10).
 
 from typing import Any
 
-from src.agents.base_agent import AgentOutput, BaseAgent
+from src.agents.base_agent import AgentOutput, BaseAgent, add_attachment_context
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
 
 
@@ -65,6 +65,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
                 context.get("other_outputs", []),
                 context.get("round_number", 1),
                 context.get("valid_agent_ids", []),
+                context.get("attachment_context", ""),
             )
         if context and context.get("mode") == "critique":
             other_outputs = context.get("other_outputs", [])
@@ -88,6 +89,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
             return f"""CRITIQUE ROUND {round_num}
 
 Original question: {question}
+{add_attachment_context("", context)}
 
 Other agents' conclusions:
 {others_text}
@@ -108,6 +110,7 @@ Respond with the JSON format specified in your instructions."""
         return f"""Analyze this question with a critical, skeptical lens.
 
 Question: {question}
+{add_attachment_context("", context)}
 
 Consider:
 - What are the common misconceptions about this topic?
@@ -123,6 +126,7 @@ Respond with the JSON format specified in your instructions."""
         other_outputs: list,
         round_num: int,
         valid_ids: list,
+        attachment_context: str = "",
     ) -> str:
         """The WORKFLOW 6.4 strike: assume the consensus is wrong."""
         others_text = ""
@@ -143,6 +147,8 @@ Respond with the JSON format specified in your instructions."""
 Assume the current consensus is wrong. Give the strongest counterargument and what would prove it.
 
 Original question: {question}
+
+{attachment_context}
 
 Current consensus positions:
 {others_text}
@@ -174,6 +180,7 @@ Respond with JSON only, no extra keys, in the format specified in your instructi
             "other_outputs": [o.to_dict() for o in other_outputs],
             "valid_agent_ids": valid_agent_ids,
             "mode": "adversarial",
+            "attachment_context": getattr(self, "attachment_context", ""),
         }
         output = await self.run(question, context=context)
 

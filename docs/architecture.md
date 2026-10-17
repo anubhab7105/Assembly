@@ -78,3 +78,9 @@ Do not describe Assembly as end-to-end encrypted or as a guarantee of privacy. P
 - Regressions and deterministic fixtures: `tests/`, `frontend/tests/`
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for local setup, test commands, and the pull-request workflow.
+
+## File attachments
+
+The v1 attachment boundary is implemented in `src/research/attachments.py` and the `RunRequest.attachments` schema. The UI accepts up to five supported UTF-8 text files (256 KiB each, 384 KiB combined); server validation is authoritative. The combined prompt context is capped at 24,000 characters. It is held in memory for the run, delimiter-escaped, marked as untrusted, and shared with analysis agents. Search queries use the original question rather than attachment bodies.
+
+Attachment bodies must not enter server logs, SSE events, database rows or error text. Local browser history may retain sanitized filename, MIME type and size only. PDF/DOCX, binary parsing and OCR are outside v1. See [attachment documentation](attachments.md).

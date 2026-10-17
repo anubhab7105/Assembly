@@ -56,6 +56,7 @@ class DebateManager:
         round_number: int,
         timeout_s: float | None = None,
         tracker: TaskTracker | None = None,
+        attachment_context: str = "",
     ) -> list[AgentOutput]:
         """
         Run one debate round: all agents review each other's work in parallel.
@@ -91,12 +92,21 @@ class DebateManager:
             if others_raw:
                 per_other = self._per_other_chars(agent, len(others_raw))
                 others = self._compress_outputs(others_raw, per_other)
-                coro = self._agent_critique(
-                    agent, question, others, round_number, timeout_s
-                )
+                if attachment_context:
+                    coro = self._agent_critique(
+                        agent, question, others, round_number, timeout_s,
+                        attachment_context,
+                    )
+                else:
+                    # Preserve the legacy call shape when no files were attached.
+                    coro = self._agent_critique(
+                        agent, question, others, round_number, timeout_s,
+                    )
             else:
                 # No others to critique — re-run independently
-                coro = self._timed_run(agent, question, timeout_s)
+                coro = self._timed_run(
+                    agent, question, timeout_s, attachment_context
+                )
             tasks.append(
                 own_tracker.create(
                     coro, name=f"assembly:{self.execution_id}:{agent.agent_id}"
@@ -256,19 +266,28 @@ class DebateManager:
         others: list[AgentOutput],
         round_number: int,
         timeout_s: float | None = None,
+        attachment_context: str = "",
     ) -> AgentOutput:
         """Have a single agent critique others' work, optionally time-bounded."""
+        context = {
+            "attachment_context": attachment_context,
+        } if attachment_context else None
         if timeout_s is None:
-            return await agent.critique(question, others, round_number)
+            return await agent.critique(question, others, round_number, context=context) if context else await agent.critique(question, others, round_number)
         async with asyncio.timeout(timeout_s):
-            return await agent.critique(question, others, round_number)
+            return (
+                await agent.critique(question, others, round_number, context=context)
+                if context
+                else await agent.critique(question, others, round_number)
+            )
 
     @staticmethod
     async def _timed_run(
-        agent: BaseAgent, question: str, timeout_s: float | None
+        agent: BaseAgent, question: str, timeout_s: float | None,
+        attachment_context: str = "",
     ) -> AgentOutput:
         """Solo re-run for single-agent teams, optionally time-bounded."""
         if timeout_s is None:
-            return await agent.run(question)
+            return await agent.run(question, context={"attachment_context": attachment_context} if attachment_context else None)
         async with asyncio.timeout(timeout_s):
-            return await agent.run(question)
+            return await agent.run(question, context={"attachment_context": attachment_context} if attachment_context else None)
