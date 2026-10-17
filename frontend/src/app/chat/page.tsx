@@ -29,7 +29,7 @@ const EXAMPLES = [
 const TIME_BUDGETS = [3, 5, 10, 15]
 const MAX_ATTACHMENTS = 5
 const MAX_FILE_BYTES = 256 * 1024
-const MAX_TOTAL_BYTES = 768 * 1024
+const MAX_TOTAL_BYTES = 384 * 1024
 const SUPPORTED_EXTENSIONS = new Set([
   "txt", "md", "csv", "json", "log", "py", "js", "jsx", "ts", "tsx",
   "html", "css", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml",
@@ -197,7 +197,7 @@ export default function Home() {
       }
       try {
         const content = await file.text()
-        if (content.includes("\\u0000")) {
+        if (content.includes("\u0000")) {
           total -= file.size
           setStatus(`${file.name}: binary files aren't supported.`)
           continue
@@ -270,7 +270,7 @@ export default function Home() {
       const usage: UsageEntry[] = await storage.getUsage()
       const questionForRun = question.trim() || "Analyze the attached files and summarize their key contents, important claims, and uncertainties."
       const preflight = await ApiClient.preflight(
-        questionForRun + (attachments.length ? `\\n\\nAttached files: ${attachments.map((f) => f.filename).join(", ")}` : ""),
+        questionForRun,
         minutes,
         usage,
         providerKeys,
