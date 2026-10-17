@@ -696,7 +696,7 @@ class Orchestrator:
             deadline.raise_if_cancelled()
             outputs = await agent_manager.run_all_independent(
                 agents,
-                question,
+                question + attachment_context,
                 timeout_s=deadline.timeout_for_call(),
             )
 
