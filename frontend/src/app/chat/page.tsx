@@ -17,7 +17,7 @@ import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Zap, Send, Settings, Clock, SlidersHorizontal } from "lucide-react"
+import { Zap, Send, Settings, Clock, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
@@ -27,12 +27,30 @@ const EXAMPLES = [
 ]
 
 const TIME_BUDGETS = [3, 5, 10, 15]
+const MAX_ATTACHMENTS = 5
+const MAX_FILE_BYTES = 256 * 1024
+const MAX_TOTAL_BYTES = 768 * 1024
+const SUPPORTED_EXTENSIONS = new Set([
+  "txt", "md", "csv", "json", "log", "py", "js", "jsx", "ts", "tsx",
+  "html", "css", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml",
+  "sql", "sh", "ps1", "bat", "env.example",
+])
+
+type DraftAttachment = {
+  id: string
+  filename: string
+  media_type: string
+  content: string
+  size: number
+}
 
 export default function Home() {
   const router = useRouter()
 
   const [question, setQuestion] = useState("")
+  const [attachments, setAttachments] = useState<DraftAttachment[]>([])
   const [minutes, setMinutes] = useState(5)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [selection, setSelection] = useState<ModelSelection>({ selected: [], pins: {} })
@@ -144,8 +162,79 @@ export default function Home() {
     setShowPrivacy(false)
   }
 
+  const handleFilesSelected = async (files: FileList | null) => {
+    if (!files?.length) return
+    const picked = Array.from(files)
+    if (attachments.length + picked.length > MAX_ATTACHMENTS) {
+      setStatus(`Attach up to ${MAX_ATTACHMENTS} files per investigation.`)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+    let total = attachments.reduce((sum, item) => sum + item.size, 0)
+    const accepted: DraftAttachment[] = []
+    for (const file of picked) {
+      const lower = file.name.toLowerCase()
+      const extension = lower.endsWith(".env.example")
+        ? "env.example"
+        : lower.includes(".") ? lower.split(".").pop() ?? "" : ""
+      if (!SUPPORTED_EXTENSIONS.has(extension)) {
+        setStatus(`${file.name}: unsupported type. Choose a text, Markdown, CSV, JSON, log, or source/configuration file.`)
+        continue
+      }
+      if (file.size <= 0) {
+        setStatus(`${file.name}: file is empty.`)
+        continue
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        setStatus(`${file.name}: file exceeds the 256 KiB per-file limit.`)
+        continue
+      }
+      total += file.size
+      if (total > MAX_TOTAL_BYTES) {
+        total -= file.size
+        setStatus("Attachments exceed the 768 KiB combined limit.")
+        continue
+      }
+      try {
+        const content = await file.text()
+        if (content.includes("\\u0000")) {
+          total -= file.size
+          setStatus(`${file.name}: binary files aren't supported.`)
+          continue
+        }
+        if (extension === "json") {
+          try { JSON.parse(content) } catch {
+            total -= file.size
+            setStatus(`${file.name}: invalid JSON.`)
+            continue
+          }
+        }
+        if (!content.trim()) {
+          total -= file.size
+          setStatus(`${file.name}: file is empty.`)
+          continue
+        }
+        accepted.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${accepted.length}`,
+          filename: file.name,
+          media_type: file.type || "text/plain",
+          content,
+          size: file.size,
+        })
+      } catch {
+        total -= file.size
+        setStatus(`${file.name}: couldn't read this file.`)
+      }
+    }
+    if (accepted.length) {
+      setAttachments((current) => [...current, ...accepted])
+      setStatus(`${accepted.length} file${accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.`)
+    }
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
   const handleLaunch = async () => {
-    if (!question.trim() || loading) return
+    if ((!question.trim() && attachments.length === 0) || loading) return
     if (!privacyAcked) {
       setShowPrivacy(true)
       setStatus("Please acknowledge the privacy notice first.")
@@ -179,8 +268,9 @@ export default function Home() {
       const { tavily, ...providerKeys } = keys
       const searchKeys = tavily ? { tavily } : undefined
       const usage: UsageEntry[] = await storage.getUsage()
+      const questionForRun = question.trim() || "Analyze the attached files and summarize their key contents, important claims, and uncertainties."
       const preflight = await ApiClient.preflight(
-        question,
+        questionForRun + (attachments.length ? `\\n\\nAttached files: ${attachments.map((f) => f.filename).join(", ")}` : ""),
         minutes,
         usage,
         providerKeys,
@@ -194,10 +284,11 @@ export default function Home() {
       setStatus("Running team… (streaming)")
       const result = await ApiClient.startRunStream(
         {
-          question,
+          question: questionForRun,
           minutes,
           providerKeys,
           searchKeys,
+          attachments: attachments.map(({ filename, media_type, content }) => ({ filename, media_type, content })),
           selection: { selected: selection.selected, pins: selection.pins },
           usage,
         },
@@ -370,6 +461,26 @@ export default function Home() {
         )}
 
         <div className="space-y-3">
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2" aria-label="Selected attachments">
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs">
+                  <FileText className="size-4 shrink-0 text-brand" aria-hidden />
+                  <span className="max-w-48 truncate font-medium" title={attachment.filename}>{attachment.filename}</span>
+                  <span className="shrink-0 text-muted-foreground">{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${attachment.filename}`}
+                    disabled={loading}
+                    onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                  >
+                    <X className="size-3.5" aria-hidden />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="rounded-2xl border border-border bg-card p-3 shadow-sm transition-colors focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10">
             <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
             <textarea
@@ -386,6 +497,28 @@ export default function Home() {
             />
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
               <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  aria-label="Choose investigation attachments"
+                  accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
+                  className="sr-only"
+                  disabled={loading}
+                  onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-9"
+                  disabled={loading || attachments.length >= MAX_ATTACHMENTS}
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach files"
+                >
+                  <Paperclip className="mr-1.5 size-3.5" />
+                  Attach{attachments.length ? ` · ${attachments.length}` : ""}
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -416,7 +549,7 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <Button size="default" onClick={handleLaunch} disabled={loading || !question.trim() || gate.level === "BLOCKED"} className="min-h-10 rounded-xl px-4">
+              <Button size="default" onClick={handleLaunch} disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"} className="min-h-10 rounded-xl px-4">
                 {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="mr-1.5 size-4" />}
                 {loading ? "Running…" : "Run"}
               </Button>
