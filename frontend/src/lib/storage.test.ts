@@ -143,3 +143,30 @@ describe("BrowserStorage lifecycle contracts", () => {
     await expect(storage.setSetting("example", "value")).rejects.toBeInstanceOf(StorageError)
   })
 })
+
+
+  it("round-trips attachment metadata without retaining document content", async () => {
+    const store = new BrowserStorage()
+    await store.saveHistory({
+      ...baseRecord,
+      attachments: [{ filename: "analysis.txt", media_type: "text/plain", size_bytes: 50 }],
+    })
+    const loaded = await new BrowserStorage().getHistory("run-1")
+    expect(loaded?.attachments).toEqual([
+      { filename: "analysis.txt", media_type: "text/plain", size_bytes: 50 },
+    ])
+    expect(JSON.stringify(await new BrowserStorage().exportJSON())).not.toContain("document contents")
+  })
+
+  it("drops invalid attachment metadata when importing history", async () => {
+    const store = new BrowserStorage()
+    await store.importJSON(JSON.stringify({
+      version: 1,
+      history: [{
+        ...baseRecord,
+        attachments: [{ filename: "../unsafe.txt", media_type: "text/plain", size_bytes: 25 }],
+      }],
+      usage: [],
+    }))
+    expect((await store.getHistory("run-1"))?.attachments).toBeUndefined()
+  })
