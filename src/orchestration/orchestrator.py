@@ -883,6 +883,7 @@ class Orchestrator:
                     question=question + attachment_context,
                     round_number=round_number,
                     timeout_s=deadline.timeout_for_call(),
+                    attachment_context=attachment_context,
                 )
                 budget.record_debate_round()
 
