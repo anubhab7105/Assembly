@@ -207,10 +207,15 @@ function normalizeHistory(value: unknown): HistoryRecord | null {
     value.attachments.length <= 5 &&
     value.attachments.every((item) =>
       isRecord(item) &&
-      isNonEmptyString(item.filename) &&
+      typeof item.filename === "string" &&
       item.filename.length <= 120 &&
+      /^[A-Za-z0-9._ -]+$/.test(item.filename) &&
+      item.filename !== "." &&
+      item.filename !== ".." &&
+      item.filename.trim().length > 0 &&
       typeof item.media_type === "string" &&
       item.media_type.length <= 100 &&
+      /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(item.media_type) &&
       typeof item.size_bytes === "number" &&
       Number.isFinite(item.size_bytes) &&
       item.size_bytes >= 0 &&
