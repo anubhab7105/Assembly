@@ -72,6 +72,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
             return f"""DEBATE ROUND {round_num}
 
 Original question: {question}
+{add_attachment_context("", context)}
 
 Other agents' conclusions:
 {others_text}
