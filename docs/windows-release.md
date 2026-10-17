@@ -1,71 +1,77 @@
-# Assembly — Windows Release Guide
+# Assembly — Windows release guide
 
-This document outlines the prerequisites, build instructions, and expected behaviors for the Assembly Windows Desktop application. It also includes a test checklist for verifying builds on a clean Windows VM.
+This guide covers building and verifying the Tauri 2 Windows desktop application. A successful frontend build is not the same as a successfully packaged or smoke-tested Windows installer.
 
 ## Prerequisites
 
-- **WebView2**: Required for the Tauri frontend to run. Windows 10/11 typically comes with WebView2 pre-installed, but the Tauri MSI installer will automatically bootstrap and install it if it is missing.
-- **Node.js & npm**: Required to build the frontend and Tauri app.
-- **Rust (Cargo)**: Required to compile the Tauri shell.
-- **Python 3.11+ & PyInstaller**: Required to compile the Python backend sidecar.
+Build on a Windows 10/11 machine with:
 
-## Build Commands
+- Python 3.11 or newer
+- Node.js 20 or newer and npm
+- Rust stable toolchain with Cargo
+- WebView2 runtime
+- The Python build dependencies installed from `requirements-dev.txt`
 
-To build the MSI installer, open a terminal in the `desktop/` directory and run:
+Use a clean working tree and do not build releases with real user data or production API keys in the checkout.
 
-```bash
-npm install
-npm run build
+## Prepare the Python environment
+
+From the repository root, create/activate the virtual environment and install the build dependencies:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
 ```
 
-This command will:
-1. Compile the Python backend into a single executable (`assembly_backend.exe`) using PyInstaller.
-2. Copy the executable into `desktop/src-tauri/binaries/backend-x86_64-pc-windows-msvc.exe`.
-3. Copy the frontend assets to a location that Vite can serve.
-4. Run `tauri build` to compile the Rust binary, bundle the sidecar, and produce an MSI installer inside `desktop/src-tauri/target/release/bundle/msi/`.
+If your project setup requires local environment configuration, copy `.env.example` to `.env` and set a unique local `QUOTA_SALT`. Never commit the local `.env` file or real provider credentials.
 
-## Application Data and Logs
+## Build the installer
 
-- **Data Directory**: The application data, including the `assembly.db` SQLite database (which stores conversation history and execution records), is located at:
-  `%LOCALAPPDATA%\Assembly\Assembly\assembly.db`
-  *(e.g., `C:\Users\<username>\AppData\Local\Assembly\Assembly\assembly.db`)*
-- **API Keys**: API keys are **never** stored in the database or on the filesystem. They are stored securely in the Windows Credential Manager via the `keyring` library.
-- **Logs**:
-  - The Python sidecar logs its output to standard output (`stdout`). 
-  - If the backend fails to start, the splash screen will capture the logs and provide a "Show Logs" link for debugging.
-  - For normal runtime logs, launch the application executable (`tauri-app.exe`) from a command prompt to view the streamed structured logs.
+From `desktop/`:
 
-## Uninstall Behavior
+```powershell
+npm install
+npm run tauri -- build
+```
 
-When uninstalling the application via "Add or Remove Programs":
-- **Application Files**: The installed binaries and frontend assets in `C:\Program Files\tauri-app` will be removed.
-- **History & Data**: The `assembly.db` file in `%LOCALAPPDATA%\Assembly\Assembly\` is **retained** by default. Reinstalling the app will restore your history.
-- **API Keys**: Stored API keys remain in the Windows Credential Manager. You can manually remove them by opening the "Credential Manager" application in Windows and deleting the entries under "Windows Credentials".
+The configured Tauri build hook calls the desktop package build, which builds the Python sidecar, copies the shared frontend assets, runs TypeScript compilation, builds the Vite shell, and invokes Tauri's bundler. The Windows installer is normally emitted under:
 
-## SmartScreen and Code Signing
+```text
+desktop/src-tauri/target/release/bundle/msi/
+```
 
-By default, the produced MSI installer is unsigned. When a user runs it, they will encounter a **Windows Defender SmartScreen** warning (a blue screen stating "Windows protected your PC"). 
-- **To proceed (Unsigned)**: Users must click **"More info"**, and then click **"Run anyway"**.
+The exact output depends on Tauri configuration and the selected bundle targets. Review `desktop/src-tauri/tauri.conf.json` before changing product identity, bundle targets, icons, Content Security Policy, or frontend build commands.
 
-### Options for Code Signing
-To eliminate the SmartScreen warning, the binary and MSI must be signed using a code signing certificate:
-1. **Standard OV (Organization Validation) Certificate**: Removes the warning over time as the application builds "reputation" with Microsoft.
-2. **EV (Extended Validation) Certificate**: Instantly provides reputation and eliminates the SmartScreen warning immediately upon signing. Requires a hardware token or cloud HSM.
-3. **Azure Trusted Signing**: Microsoft's cloud-based signing service that provides instant SmartScreen reputation without hardware tokens. Requires an Azure subscription. 
+For local iteration, launch the Tauri development shell from `desktop/` with `npm run tauri -- dev`.
 
-To sign the Tauri build, you can set the `TAURI_SIGN_CMD` environment variable or configure signing in `tauri.conf.json`.
+## Data and credentials
 
----
+- **Web mode:** designed not to create a server database or persist run content to server disk.
+- **Desktop/dev mode:** may use local SQLite for execution history. The effective database path comes from the application configuration; do not assume it is portable between environments.
+- **Provider keys:** desktop mode should use the OS credential-store integration (Windows Credential Manager on Windows). Keys must not be written into SQLite, ordinary files, URLs, logs, screenshots, or release artifacts.
+- **Browser-side state:** settings/history in the embedded WebView may use browser storage and are distinct from SQLite.
+- **Provider requests:** questions, attachment text, and other necessary prompt context are sent to the providers chosen for the run. Their data-handling policies still apply.
 
-## Testing Checklist (Clean Windows VM)
+See [privacy documentation](privacy.md) for the detailed user-facing data-flow explanation.
 
-Use this checklist to verify a release build on a clean Windows VM:
+## Clean-Windows smoke-test checklist
 
-- [ ] **Install**: Copy the generated `.msi` file to the VM. Run the installer. Acknowledge the SmartScreen prompt (More info -> Run anyway). Confirm the installation finishes successfully.
-- [ ] **Launch**: Open the application from the Start Menu. Verify the splash screen appears, connects to the backend, and loads the main frontend UI.
-- [ ] **Add Keys**: Enter valid API keys in the settings UI. Verify they save successfully (check Windows Credential Manager to ensure they were written securely).
-- [ ] **Run Execution**: Start a conversation that triggers a multi-agent execution (ensure it takes ~3 minutes to complete). Verify that the agents can communicate, debate, and resolve the final consensus.
-- [ ] **Restart**: Close the application window completely. Reopen it from the Start Menu to ensure the backend starts up correctly a second time.
-- [ ] **History Persists**: After restarting, verify that the previous conversation and its 3-minute execution result are fully loaded from the local database.
-- [ ] **Uninstall**: Close the application. Go to "Add or Remove Programs" and uninstall the application. Verify the installation folder is removed.
-- [ ] *(Optional cleanup)*: Open Windows Credential Manager and verify that you can manually delete the stored API keys. Delete `%LOCALAPPDATA%\Assembly` to wipe the history.
+Run this checklist on a clean Windows VM or machine that does not depend on your development checkout. Record actual results; do not mark environment-dependent steps as passed without testing.
+
+- [ ] **Install:** Run the generated installer and confirm installation completes.
+- [ ] **Launch:** Open Assembly from the installed location and verify the WebView UI loads and the local backend becomes ready.
+- [ ] **Key storage:** Add a test provider key and verify it is stored through Windows Credential Manager, not in SQLite or plain files.
+- [ ] **Execution:** Run a small investigation with a valid test key and check progress, completion/failure messages, and source/uncertainty rendering.
+- [ ] **Provider error path:** Test an invalid or exhausted test key and confirm the app provides a safe, actionable message without exposing credentials.
+- [ ] **Restart:** Close and relaunch the application; verify backend startup and UI readiness.
+- [ ] **Local history:** Confirm expected history persistence across restart, if enabled for the selected mode.
+- [ ] **Uninstall:** Uninstall through Windows settings and check the actual behavior of app files, local history, and credential-store entries. Do not assume user data or credentials are removed automatically.
+- [ ] **Clean installation:** Confirm the build works without access to the source checkout, developer environment variables, or build-only assets.
+
+## Signing and release hygiene
+
+Unsigned Windows installers may trigger Microsoft Defender SmartScreen warnings. Do not instruct users to ignore security warnings without providing trustworthy release provenance. Before distributing a release, consider code signing, publish checksums, link to the source commit, and document known limitations.
+
+Review Tauri permissions in `desktop/src-tauri/capabilities/` and keep them minimal. Do not bundle local databases, logs, cached run data, or real provider keys. Keep generated sidecar/installer output out of Git unless the release process explicitly calls for a published artifact.
