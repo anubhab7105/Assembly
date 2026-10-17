@@ -155,7 +155,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
       buffer: Buffer.from("%PDF-1.7 not supported by v1"),
     })
 
-    await expect(page.getByRole("alert")).toContainText("unsupported type")
+    await expect(page.locator("#question-status")).toContainText("unsupported type")
     await expect(page.locator('[aria-label="Selected attachments"]')).toHaveCount(0)
   })
 })
