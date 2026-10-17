@@ -209,7 +209,8 @@ function normalizeHistory(value: unknown): HistoryRecord | null {
       isRecord(item) &&
       typeof item.filename === "string" &&
       item.filename.length <= 120 &&
-      /^[A-Za-z0-9._ -]+$/.test(item.filename) &&
+      !/[\\/]/.test(item.filename) &&
+      !/[\\u0000-\\u001f\\u007f]/.test(item.filename) &&
       item.filename !== "." &&
       item.filename !== ".." &&
       item.filename.trim().length > 0 &&
