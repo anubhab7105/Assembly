@@ -398,10 +398,15 @@ def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(web_mode, m
             captured["question"] = kwargs["question"]
             captured["attachment_context"] = kwargs["attachment_context"]
             return ExecutionResult(
-                execution_id=kwargs["execution_id"],
-                status="completed",
-                final_answer="Mock answer.",
+                answer="Mock answer.",
+                sources=[],
+                consensus_score=0.8,
+                problem_type="general",
+                complexity="simple",
+                agent_count=1,
+                debate_rounds=0,
                 total_tokens=0,
+                status="completed",
             )
 
     _mock_filtered_router(monkeypatch)
