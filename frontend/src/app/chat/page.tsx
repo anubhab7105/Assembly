@@ -486,6 +486,7 @@ export default function Home() {
                 <div key={attachment.id} className="flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs">
                   <FileText className="size-4 shrink-0 text-brand" aria-hidden />
                   <span className="max-w-48 truncate font-medium" title={attachment.filename}>{attachment.filename}</span>
+                  <span className="shrink-0 text-muted-foreground">{attachment.filename.toLowerCase().endsWith(".env.example") ? "ENV.EXAMPLE" : (attachment.filename.split(".").pop() || "TEXT").toUpperCase()}</span>
                   <span className="shrink-0 text-muted-foreground">{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
                   <button
                     type="button"
