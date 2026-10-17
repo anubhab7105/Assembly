@@ -95,6 +95,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
 
 Original question: {question}
 {web_results}
+{add_attachment_context("", context)}
 
 Other agents' conclusions:
 {others_text}
@@ -115,4 +116,4 @@ Respond with JSON only, no extra keys, in the format specified in your instructi
 {web_results}
 Question: {question}
 
-Respond with the JSON format specified in your instructions."""
+Respond with the JSON format specified in your instructions.""" + add_attachment_context("", context)
