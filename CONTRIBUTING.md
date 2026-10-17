@@ -11,7 +11,7 @@ Thanks for considering a contribution. Assembly is experimental, and contributio
 
 ## Fork and branch
 
-After the repository is public, use the standard fork workflow:
+Use the standard fork workflow; contributors should work in their own forks and submit pull requests:
 
 ```bash
 # Fork anubhab7105/Assembly on GitHub, then clone your fork
