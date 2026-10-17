@@ -359,7 +359,7 @@ export default function Home() {
       }
       await storage.saveHistory({
         id: runId,
-        question,
+        question: questionForRun,
         answer: finalAnswer,
         status: result.status,
         created_at: new Date().toISOString(),
@@ -399,10 +399,10 @@ export default function Home() {
             tokens,
             elapsedSeconds,
             attachments: attachments.map(({ filename, media_type, size }) => ({
-            filename,
-            media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
-            size_bytes: size,
-          })),
+          filename,
+          media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
+          size_bytes: size,
+        })),
           })
         } catch {
           // Storage failure must not hide the original error.
