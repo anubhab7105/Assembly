@@ -803,6 +803,7 @@ class Orchestrator:
                         budget,
                         emit_event,
                         agent_manager,
+                        attachment_context=attachment_context,
                     )
                     await emit_breaker_trips()
                     if challenged is not None:
