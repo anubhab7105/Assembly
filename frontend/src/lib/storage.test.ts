@@ -142,8 +142,6 @@ describe("BrowserStorage lifecycle contracts", () => {
     setLocalStorage({ full: true })
     await expect(storage.setSetting("example", "value")).rejects.toBeInstanceOf(StorageError)
   })
-})
-
 
   it("round-trips only attachment metadata, never uploaded content", async () => {
     const store = new BrowserStorage()
@@ -182,3 +180,4 @@ describe("BrowserStorage lifecycle contracts", () => {
     }))
     expect((await store.getHistory("run-1"))?.attachments).toBeUndefined()
   })
+})
