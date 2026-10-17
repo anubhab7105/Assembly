@@ -269,7 +269,11 @@ class DebateManager:
         if timeout_s is None:
             return await agent.critique(question, others, round_number, context=context) if context else await agent.critique(question, others, round_number)
         async with asyncio.timeout(timeout_s):
-            return await agent.critique(question, others, round_number)
+            return (
+                await agent.critique(question, others, round_number, context=context)
+                if context
+                else await agent.critique(question, others, round_number)
+            )
 
     @staticmethod
     async def _timed_run(
