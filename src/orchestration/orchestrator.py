@@ -797,7 +797,7 @@ class Orchestrator:
                     challenged = await self._run_adversarial_round(
                         consensus_engine,
                         agents,
-                        question + attachment_context,
+                        question,
                         outputs,
                         round_number,
                         budget,
@@ -880,7 +880,7 @@ class Orchestrator:
                 outputs = await debate_manager.run_debate_round(
                     agents=agents,
                     current_outputs=outputs,
-                    question=question + attachment_context,
+                    question=question,
                     round_number=round_number,
                     timeout_s=deadline.timeout_for_call(),
                     attachment_context=attachment_context,
@@ -1284,6 +1284,7 @@ class Orchestrator:
         budget,
         emit_event,
         agent_manager=None,
+        attachment_context: str = "",
     ):
         """One WORKFLOW 5b strike: a different-family critic attacks the consensus.
 
@@ -1304,6 +1305,11 @@ class Orchestrator:
                 "round — debating normally"
             )
             return None
+
+        if attachment_context:
+            # The agent is run-local; this metadata is not retained outside
+            # this execution and is consumed by its prompt builder.
+            critic.attachment_context = attachment_context
 
         await emit_event(
             ProgressEventType.ROUND_STARTED,
