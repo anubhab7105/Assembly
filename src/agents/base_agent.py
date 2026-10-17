@@ -505,29 +505,24 @@ class BaseAgent:
         *,
         context: dict[str, Any] | None = None,
     ) -> AgentOutput:
-        """
-        Review other agents' outputs and produce critique.
-        Used during debate rounds.
-        """
+        """Review peer outputs while retaining optional run-local context."""
         valid_agent_ids = [o.agent_id for o in other_outputs]
-        context = {
+        critique_context: dict[str, Any] = {
             "round_number": round_number,
             "other_outputs": [o.to_dict() for o in other_outputs],
             "valid_agent_ids": valid_agent_ids,
             "mode": "critique",
         }
         if context:
-            context.update({"mode": "critique", "round_number": round_number,
-                            "other_outputs": [o.to_dict() for o in other_outputs],
-                            "valid_agent_ids": valid_agent_ids})
-        output = await self.run(question, context=context)
+            attachment_context = context.get("attachment_context")
+            if isinstance(attachment_context, str) and attachment_context:
+                critique_context["attachment_context"] = attachment_context
+        output = await self.run(question, context=critique_context)
 
-        # Validate referential integrity: strip hallucinated agent IDs
-        # (Fix B — belt and suspenders: run() already filtered these).
+        # Validate referential integrity: strip hallucinated agent IDs.
         all_valid = set(valid_agent_ids + [self.agent_id])
         output.supports = [aid for aid in output.supports if aid in all_valid]
         output.disagrees_with = [
             aid for aid in output.disagrees_with if aid in all_valid
         ]
-
         return output
