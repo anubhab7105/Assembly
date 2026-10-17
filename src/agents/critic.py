@@ -7,7 +7,7 @@ and prevents echo chambers (PRD Section 10).
 
 from typing import Any
 
-from src.agents.base_agent import AgentOutput, BaseAgent
+from src.agents.base_agent import AgentOutput, BaseAgent, add_attachment_context
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
 
 
@@ -88,6 +88,7 @@ You MUST respond with a JSON object in this exact format (no extra keys):
             return f"""CRITIQUE ROUND {round_num}
 
 Original question: {question}
+{add_attachment_context("", context)}
 
 Other agents' conclusions:
 {others_text}
@@ -108,6 +109,7 @@ Respond with the JSON format specified in your instructions."""
         return f"""Analyze this question with a critical, skeptical lens.
 
 Question: {question}
+{add_attachment_context("", context)}
 
 Consider:
 - What are the common misconceptions about this topic?
