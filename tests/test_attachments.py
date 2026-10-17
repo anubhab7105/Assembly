@@ -163,3 +163,30 @@ def test_preserves_source_indentation_and_boundary_newlines():
         media_type="text/plain",
     )
     assert parsed.content == source.replace("\r\n", "\n").replace("\r", "\n")
+
+
+
+def test_rejects_mime_spoof_for_supported_extension():
+    with pytest.raises(AttachmentValidationError, match="MIME type"):
+        validate_attachment(
+            filename="notes.txt",
+            content=b"valid-looking UTF-8 text",
+            media_type="application/pdf",
+        )
+
+
+def test_rejects_aggregate_size_over_384_kib():
+    from src.research.attachments import MAX_TOTAL_BYTES
+
+    item = {"filename": "first.txt", "media_type": "text/plain", "content": "a" * 220_000}
+    other = {"filename": "second.txt", "media_type": "text/plain", "content": "b" * 220_000}
+    assert len(item["content"].encode()) < 256 * 1024
+    assert len(other["content"].encode()) < 256 * 1024
+    with pytest.raises(AttachmentValidationError, match="combined limit"):
+        validate_attachments([item, other])
+
+
+def test_preserves_indented_source_code_after_validation():
+    source = "\ndef main():\n    return 1\n"
+    parsed = validate_attachment(filename="sample.py", content=source.encode("utf-8"))
+    assert parsed.content == source
