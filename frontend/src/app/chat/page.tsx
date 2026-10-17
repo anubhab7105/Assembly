@@ -197,7 +197,16 @@ export default function Home() {
       }
       try {
         const content = await file.text()
-        if (/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/.test(content)) {\n          total -= file.size\n          setStatus(`${file.name}: binary or unsupported control characters aren't supported.`)\n          continue\n        }\n        if (extension === "json") {
+        const hasUnsupportedControls = Array.from(content).some((character) => {
+          const code = character.charCodeAt(0)
+          return (code < 32 && ![9, 10, 12, 13].includes(code)) || code === 127
+        })
+        if (hasUnsupportedControls) {
+          total -= file.size
+          setStatus(`${file.name}: binary or unsupported control characters aren't supported.`)
+          continue
+        }
+        if (extension === "json") {
           try { JSON.parse(content) } catch {
             total -= file.size
             setStatus(`${file.name}: invalid JSON.`)
