@@ -33,6 +33,11 @@ from src.core.rate_limit import (
 from src.database.schemas import RunRequest
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
 from src.providers.quota import get_limiter
+from src.research.attachments import (
+    AttachmentValidationError,
+    build_attachment_context,
+    validate_attachments,
+)
 
 router = APIRouter(prefix="/api/run", tags=["run"])
 
@@ -142,6 +147,7 @@ async def _execute_run(
     entry: _RunEntry,
     search_keys: dict[str, str] | None = None,
     router_override=None,
+    attachment_context: str = "",
 ) -> None:
     """Run the orchestrator, forwarding recorder events into the SSE queue.
 
@@ -187,6 +193,7 @@ async def _execute_run(
             provider_keys=provider_keys or None,
             search_keys=search_keys,
             router_override=router_override,
+            attachment_context=attachment_context,
         )
         result_status = result.status
         # Updated usage counters (counts only, never keys).
@@ -303,6 +310,18 @@ async def start_run(req: RunRequest, request: Request):
     if len(req.provider_keys or {}) > 20:
         limited = await _count_invalid_or_429(ip)
         return limited if limited is not None else JSONResponse(status_code=422, content={"detail": "Invalid request."})
+
+    try:
+        attachments = validate_attachments(
+            [item.model_dump() for item in (req.attachments or [])]
+        )
+        attachment_data = build_attachment_context(attachments)
+    except AttachmentValidationError as exc:
+        limited = await _count_invalid_or_429(ip)
+        if limited is not None:
+            return limited
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
+
     await check_rate_limit(
         f"ip:{ip}", "run", settings.rate_limit_run_per_min_per_ip, 60
     )
@@ -414,6 +433,7 @@ async def start_run(req: RunRequest, request: Request):
                 dict(req.search_keys) if req.search_keys is not None else None
             ),
             router_override=ctx.router,
+            attachment_context=attachment_data.block,
         )
     )
 
