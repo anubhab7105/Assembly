@@ -121,4 +121,40 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.getByRole("button", { name: /Export/i })).toBeVisible()
     await expect(page.getByText(/Import/i)).toBeVisible()
   })
+
+
+  test("supported attachments show a removable chip before a run", async ({ page }) => {
+    await page.goto("/chat")
+    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
+    await page.getByLabel(/my question is sent to the model providers/i).check()
+    await page.getByTestId("privacy-acknowledge").click()
+
+    await page.locator('input[aria-label="Choose investigation attachments"]').setInputFiles({
+      name: "analysis-notes.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("Context for the next investigation."),
+    })
+
+    await expect(page.locator('[aria-label="Selected attachments"]')).toContainText("analysis-notes.txt")
+    const remove = page.getByRole("button", { name: "Remove analysis-notes.txt" })
+    await expect(remove).toBeVisible()
+    await remove.click()
+    await expect(page.locator('[aria-label="Selected attachments"]')).toHaveCount(0)
+  })
+
+  test("unsupported attachment types produce a clear validation error", async ({ page }) => {
+    await page.goto("/chat")
+    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
+    await page.getByLabel(/my question is sent to the model providers/i).check()
+    await page.getByTestId("privacy-acknowledge").click()
+
+    await page.locator('input[aria-label="Choose investigation attachments"]').setInputFiles({
+      name: "scan.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.7 not supported by v1"),
+    })
+
+    await expect(page.getByRole("alert")).toContainText("unsupported type")
+    await expect(page.locator('[aria-label="Selected attachments"]')).toHaveCount(0)
+  })
 })
