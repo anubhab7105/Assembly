@@ -16,7 +16,7 @@
 ## 2. Stack and folder layout
 
 - Backend (`src/`): FastAPI + asyncio + httpx + Pydantic; SQLAlchemy/SQLite for local and future desktop persistence; web mode has no database and uses an in-memory run registry. Entry: `src/main.py`, app `src.main:app`.
-- Frontend (`frontend/`): Next.js + TypeScript + Tailwind is the target; current code is a vanilla-JS SPA served statically.
+- Frontend (`frontend/`): Next.js App Router + React + TypeScript + Tailwind; verify the current scripts and dependencies in `frontend/package.json`.
 - Desktop (`desktop/`): Tauri 2 shell + bundled Python backend sidecar (PyInstaller); keys in Windows Credential Manager via `keyring`; Electron only as fallback.
 - Benchmark (`bench/`): `questions.jsonl`, `run_single.py`, `run_assembly.py` (`run_vote.py` optional), `grade.py` → results CSV/slide.
 - `scripts/`: one-off ops/dev helpers. Pipeline: Capacity check → Planner → Team → Independent solve → Publish → Consensus (→ adversarial if too agreeable) → Debate/research → Synthesis (`src/orchestration/`, see `docs/WORKFLOW.md`).
@@ -47,13 +47,13 @@
 
 - Propose a plan before large changes; keep diffs small; `main` stays runnable.
 - Ask before adding a dependency or changing architecture (orchestrator, router, consensus, key handling, platform split).
-- Log each significant decision in `docs/decisions.md` (Context/Decision/Consequences); update `docs/progress.md` at the end of each task.
-- Daily loop: pick one checklist item → test first (mock provider) → implement → one real-key end-to-end run → log calls/time/consensus/failures → commit.
+- Log significant architectural/product decisions in `docs/decisions.md` (Context/Decision/Consequences). Update the maintained docs that the change affects; do not create a chronological progress journal.
+- Work loop: pick a focused task → inspect relevant implementation and tests → make the smallest safe change → run targeted offline/mock tests and applicable lint/type checks → summarize checks actually completed. Live provider calls are opt-in and are not a default completion requirement.
 
 ## 7. Definition of done
 
 - [ ] Tests pass (`pytest`, live-marked excluded by default)
 - [ ] Lint passes (`ruff`)
 - [ ] No secrets in diff (keys, tokens, `.env`, `assembly.db`); key-leak scan green
-- [ ] Docs updated (`docs/progress.md`, plus `docs/decisions.md` if a decision was made)
-- [ ] One end-to-end run with real keys works (or state why it was skipped)
+- [ ] Relevant maintained documentation is updated; add a decision record only when a durable design decision was made
+- [ ] A deterministic offline or replay-based end-to-end check passes when relevant; live-provider or clean-Windows checks are separately identified and must not be claimed unless actually run
