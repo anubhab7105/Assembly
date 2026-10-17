@@ -266,13 +266,13 @@ export default function Home() {
     let elapsedSeconds: number | null = null
     let streamStarted = false
     const runId = `local-${Date.now()}`
+    const questionForRun = question.trim() || "Analyze the attached files and summarize their key contents, important claims, and uncertainties."
     try {
       const keys = await globalVault.allKeys()
       // The Tavily search key travels separately; it is never a model key.
       const { tavily, ...providerKeys } = keys
       const searchKeys = tavily ? { tavily } : undefined
       const usage: UsageEntry[] = await storage.getUsage()
-      const questionForRun = question.trim() || "Analyze the attached files and summarize their key contents, important claims, and uncertainties."
       const preflight = await ApiClient.preflight(
         questionForRun,
         minutes,
