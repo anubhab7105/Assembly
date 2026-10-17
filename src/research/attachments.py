@@ -68,9 +68,10 @@ class AttachmentValidationError(ValueError):
 def safe_filename(value: str) -> str:
     """Reduce untrusted names to a harmless display-only basename."""
     name = str(value or "").replace("\\", "/").split("/")[-1]
-    name = re.sub(r"[^A-Za-z0-9._ -]", "_", name).strip(" .")
+    name = re.sub(r"[^A-Za-z0-9._ -]", "_", name).strip()
     name = re.sub(r"\s+", " ", name)[:MAX_FILENAME_CHARS]
-    if not name or name in {".", ".."}:
+    # Preserve the leading dot in .env.example, but reject path pseudo-names.
+    if not name or name in {".", ".."} or not name.strip("."):
         raise AttachmentValidationError("An attachment has an invalid filename.")
     return name
 
@@ -215,51 +216,50 @@ def build_attachment_context(
         categories.update(flag.category for flag in scan_for_injection(cleaned))
         safe_text = escape_delimiters(cleaned)
         name = safe_filename(attachment.filename)
-        remaining = max_chars - used
-        if remaining <= 0:
-            truncated = True
-            break
-
-        prefix = f"{UNTRUSTED_OPEN} [{index}] title=User attachment: {name} ({attachment.media_type})>\\nURL: not-applicable: local attachment\\n"
+        separator = 2 if blocks else 0
+        remaining = max_chars - used - separator
+        prefix = (
+            f"{UNTRUSTED_OPEN} [{index}] "
+            f"title=User attachment: {name} ({attachment.media_type})>\\n"
+            "URL: not-applicable: local attachment\\n"
+        )
         suffix = f"\\n{UNTRUSTED_CLOSE}"
-        # Keep each entire wrapper and the final context heading inside the
-        # shared budget. Reserve space for a truncation marker when needed.
         wrapper_chars = len(prefix) + len(suffix)
-        if wrapper_chars >= remaining:
-            truncated = True
-            break
-        content_budget = remaining - wrapper_chars
-        text, cut = truncate_to_budget(safe_text, content_budget)
-        block = f"{prefix}{text}{suffix}"
-        if len(block) > remaining:
-            truncated = True
-            break
-        blocks.append(block)
-        names.append(name)
-        used += len(block) + (2 if len(blocks) > 1 else 0)
-        if cut or used >= max_chars:
+        if remaining <= wrapper_chars:
             truncated = True
             break
 
-    if blocks:
-        block = header + "\\n\\n".join(blocks)
-        if truncated:
-            notice = "\\n[Additional attachment context omitted or truncated to fit the investigation budget.]"
-            # If needed, shorten only text inside the final block, not the
-            # delimiter structure, so prompt wrappers remain balanced.
-            if len(block) + len(notice) > max_chars:
-                block = block[: max_chars - len(notice)]
-                block = block.rsplit(UNTRUSTED_CLOSE, 1)[0] + suffix
-                block = block[: max_chars - len(notice)]
-            if len(block) + len(notice) <= max_chars:
-                block += notice
-    else:
+        content_budget = remaining - wrapper_chars
+        cut = len(safe_text) > content_budget
+        if cut:
+            marker = "…[truncated]"
+            if content_budget <= len(marker):
+                text = safe_text[:content_budget]
+            else:
+                text = safe_text[: content_budget - len(marker)] + marker
+        else:
+            text = safe_text
+
+        blocks.append(f"{prefix}{text}{suffix}")
+        names.append(name)
+        used += separator + wrapper_chars + len(text)
+        if cut:
+            truncated = True
+            break
+
+    block = header + "\\n\\n".join(blocks) if blocks else ""
+    # The same budget applies to the entire block, including labels/wrappers.
+    if len(block) > max_chars:
+        # This should be prevented by the per-block accounting above. Keep a
+        # defensive bounded fallback without emitting malformed partial tags.
         block = ""
+        names = []
+        truncated = True
 
     return AttachmentContext(
         block=block,
         filenames=tuple(names),
         chars_used=len(block),
-        truncated=truncated,
+        truncated=truncated or len(names) < len(attachments),
         injection_categories=tuple(sorted(categories)),
     )
