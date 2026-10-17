@@ -97,6 +97,7 @@ export class ApiClient {
       minutes: number
       providerKeys: Record<string, string>
       searchKeys?: Record<string, string>
+      attachments?: Array<{ filename: string; media_type: string; content: string }>
       selection: ModelSelection
       usage: UsageEntry[]
       signal?: AbortSignal
@@ -122,6 +123,7 @@ export class ApiClient {
         ...(args.searchKeys && Object.keys(args.searchKeys).length > 0
           ? { search_keys: args.searchKeys }
           : {}),
+        ...(args.attachments?.length ? { attachments: args.attachments } : {}),
         model_selection: args.selection,
         usage_snapshot: args.usage,
       }),
