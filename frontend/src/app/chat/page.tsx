@@ -192,7 +192,7 @@ export default function Home() {
       total += file.size
       if (total > MAX_TOTAL_BYTES) {
         total -= file.size
-        setStatus("Attachments exceed the 768 KiB combined limit.")
+        setStatus("Attachments exceed the 384 KiB combined limit.")
         continue
       }
       try {
