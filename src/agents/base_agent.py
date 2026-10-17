@@ -28,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from src.core.logging_config import logger
 from src.providers.base import AIProvider, ChatMessage, ProviderResponse
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
+from src.research.attachments import AttachmentValidationError
 
 # reasoning_summary is a short digest, never a dumped chain-of-thought.
 # Longer text is truncated (not a retryable error) to avoid burning retries.
