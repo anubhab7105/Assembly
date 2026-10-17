@@ -28,7 +28,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from src.core.logging_config import logger
 from src.providers.base import AIProvider, ChatMessage, ProviderResponse
 from src.research.sanitize import UNTRUSTED_SYSTEM_NOTE
-from src.research.attachments import AttachmentValidationError
 
 # reasoning_summary is a short digest, never a dumped chain-of-thought.
 # Longer text is truncated (not a retryable error) to avoid burning retries.
@@ -127,6 +126,21 @@ class AgentOutput(BaseModel):
             raise ValueError(f"confidence must be finite, got {raw!r}")
         calibrated = min(1.0, max(0.0, raw_float))
         return calibrated, raw_float
+
+
+def add_attachment_context(
+    question: str, context: dict[str, Any] | None = None
+) -> str:
+    """Append request-local, explicitly untrusted attachment data to a prompt.
+
+    This helper adds no state to agents and never logs the file contents.
+    """
+    if not context:
+        return question
+    block = context.get("attachment_context")
+    if not isinstance(block, str) or not block:
+        return question
+    return f"{question}\\n\\n{block}\\n"
 
 
 class BaseAgent:
