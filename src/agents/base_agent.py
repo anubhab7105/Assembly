@@ -502,6 +502,8 @@ class BaseAgent:
         question: str,
         other_outputs: list[AgentOutput],
         round_number: int,
+        *,
+        context: dict[str, Any] | None = None,
     ) -> AgentOutput:
         """
         Review other agents' outputs and produce critique.
@@ -514,6 +516,10 @@ class BaseAgent:
             "valid_agent_ids": valid_agent_ids,
             "mode": "critique",
         }
+        if context:
+            context.update({"mode": "critique", "round_number": round_number,
+                            "other_outputs": [o.to_dict() for o in other_outputs],
+                            "valid_agent_ids": valid_agent_ids})
         output = await self.run(question, context=context)
 
         # Validate referential integrity: strip hallucinated agent IDs
