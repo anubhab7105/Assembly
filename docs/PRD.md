@@ -333,3 +333,5 @@ Other safeguards, unchanged: keys from at least three providers loaded and teste
 - Section 15: Insight Mode question resolved and removed; remaining questions renumbered.
 - `docs/prd-gap-report.md` created for v1.1; `BUILD_PROMPTS.md` was not found in the repo (see decisions log for the intended Prompt 6.1/6.2/8.4 markings).
 - Issue #21: FR-42 clarified browser vs desktop history and fallback storage; FR-43 marked Done because Markdown copy/download controls are implemented. Browser persistence and import failure contracts now have a dedicated Vitest suite wired into CI.
+
+- Issue #27: Added bounded text-only file attachments for investigations (TXT/Markdown/CSV/JSON/log and source/config formats). Files are validated server-side, passed as untrusted prompt context, excluded from external search queries, and never persisted as content. Browser history keeps only attachment names, MIME metadata and byte sizes. See [File attachments](attachments.md). PDF/DOCX, images and OCR are deferred.
