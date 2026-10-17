@@ -153,3 +153,13 @@ def test_total_attachment_limit_matches_serialized_api_budget():
     from src.research.attachments import MAX_TOTAL_BYTES
 
     assert MAX_TOTAL_BYTES <= 384 * 1024
+
+
+def test_preserves_source_indentation_and_boundary_newlines():
+    source = "\ndef main():\n    return 1\n"
+    parsed = validate_attachment(
+        filename="sample.py",
+        content=source.encode("utf-8"),
+        media_type="text/plain",
+    )
+    assert parsed.content == source.replace("\r\n", "\n").replace("\r", "\n")
