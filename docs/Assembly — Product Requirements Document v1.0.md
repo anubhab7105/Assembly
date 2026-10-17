@@ -1,3 +1,5 @@
+> **Historical specification — not current implementation guidance.** This document records the v1.0 product requirements as of October 8, 2026. It is retained for historical context only and may contain superseded requirements or implementation assumptions. For the current source of truth, use [`docs/PRD.md`](PRD.md) (v1.1 or later), [the architecture guide](architecture.md), and the current code. In particular, the current design has no accounts or login and does not persist web-mode data on the server.
+
 # Assembly — Product Requirements Document
 
 *Multi-Agent AI Consensus Platform · v1.0 · October 8, 2026 · Owner: Anubhab Das · Supersedes v0.1 (August 16, 2026)*
