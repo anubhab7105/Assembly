@@ -333,3 +333,48 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
     assert fake_key not in caplog.text
     assert "upstream error unexpectedly included" not in caplog.text
     assert limiter._snapshot == {}
+
+def test_run_rejects_unsupported_attachment_without_echoing_content(web_mode, monkeypatch):
+    """Unsupported attachments are rejected before any run or provider call."""
+    from src.main import app
+
+    client = TestClient(app)
+    secret_marker = "ATTACHMENT-MUST-NOT-ECHO-UNSUPPORTED-BINARY"
+    res = client.post(
+        "/api/run",
+        json={
+            "question": "Summarize this",
+            "time_budget_minutes": 3,
+            "provider_keys": {"groq": CANARY_KEY},
+            "attachments": [{
+                "filename": "../../bad.exe",
+                "media_type": "application/octet-stream",
+                "content": secret_marker,
+            }],
+        },
+    )
+    assert res.status_code == 422
+    assert "unsupported file type" in res.json()["detail"].lower()
+    assert secret_marker not in res.text
+    assert CANARY_KEY not in res.text
+
+
+def test_run_rejects_oversized_attachment_before_creating_run(web_mode):
+    from src.main import app
+    import src.api.run as run_mod
+
+    run_count = len(run_mod._runs)
+    res = TestClient(app).post(
+        "/api/run",
+        json={
+            "question": "Analyze file",
+            "time_budget_minutes": 3,
+            "attachments": [{
+                "filename": "big.txt",
+                "media_type": "text/plain",
+                "content": "x" * (256 * 1024 + 1),
+            }],
+        },
+    )
+    assert res.status_code in (413, 422)
+    assert len(run_mod._runs) == run_count
