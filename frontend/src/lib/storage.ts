@@ -22,6 +22,8 @@ export interface HistoryRecord {
   debateRounds?: number | null
   tokens?: number | null
   elapsedSeconds?: number | null
+  /** Display-only metadata; file content is deliberately never persisted. */
+  attachments?: Array<{ filename: string; media_type: string; size_bytes: number }>
 }
 
 export interface UsageRecord {
@@ -200,6 +202,27 @@ function normalizeHistory(value: unknown): HistoryRecord | null {
   else if (value.tokens === null) record.tokens = null
   if (typeof value.elapsedSeconds === "number" && Number.isFinite(value.elapsedSeconds)) record.elapsedSeconds = value.elapsedSeconds
   else if (value.elapsedSeconds === null) record.elapsedSeconds = null
+  if (
+    Array.isArray(value.attachments) &&
+    value.attachments.length <= 5 &&
+    value.attachments.every((item) =>
+      isRecord(item) &&
+      isNonEmptyString(item.filename) &&
+      item.filename.length <= 120 &&
+      typeof item.media_type === "string" &&
+      item.media_type.length <= 100 &&
+      typeof item.size_bytes === "number" &&
+      Number.isFinite(item.size_bytes) &&
+      item.size_bytes >= 0 &&
+      item.size_bytes <= 256 * 1024
+    )
+  ) {
+    record.attachments = value.attachments.map((item) => ({
+      filename: item.filename as string,
+      media_type: item.media_type as string,
+      size_bytes: item.size_bytes as number,
+    }))
+  }
   return record
 }
 
