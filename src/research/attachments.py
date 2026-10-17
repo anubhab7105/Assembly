@@ -91,7 +91,8 @@ def _normalize_text(filename: str, text: str) -> str:
             raise AttachmentValidationError(
                 f"{filename}: the content contains unsupported control characters."
             )
-    return text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    # Keep indentation and boundary whitespace: it can be meaningful source code.
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def validate_attachment(
