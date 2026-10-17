@@ -145,17 +145,29 @@ describe("BrowserStorage lifecycle contracts", () => {
 })
 
 
-  it("round-trips attachment metadata without retaining document content", async () => {
+  it("round-trips only attachment metadata, never uploaded content", async () => {
     const store = new BrowserStorage()
-    await store.saveHistory({
-      ...baseRecord,
-      attachments: [{ filename: "analysis.txt", media_type: "text/plain", size_bytes: 50 }],
-    })
+    const contentCanary = "ATTACHMENT-CONTENT-MUST-NOT-BE-PERSISTED"
+    await store.importJSON(JSON.stringify({
+      version: 1,
+      history: [{
+        ...baseRecord,
+        attachments: [{
+          filename: "analysis.txt",
+          media_type: "text/plain",
+          size_bytes: 50,
+          content: contentCanary,
+        }],
+      }],
+      usage: [],
+    }))
     const loaded = await new BrowserStorage().getHistory("run-1")
     expect(loaded?.attachments).toEqual([
       { filename: "analysis.txt", media_type: "text/plain", size_bytes: 50 },
     ])
-    expect(JSON.stringify(await new BrowserStorage().exportJSON())).not.toContain("document contents")
+    const backup = await new BrowserStorage().exportJSON()
+    expect(backup).not.toContain(contentCanary)
+    expect(backup).not.toContain('"content"')
   })
 
   it("drops invalid attachment metadata when importing history", async () => {
