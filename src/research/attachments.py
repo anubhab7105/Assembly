@@ -13,6 +13,8 @@ import re
 from dataclasses import dataclass
 
 from src.research.sanitize import (
+    UNTRUSTED_CLOSE,
+    UNTRUSTED_OPEN,
     escape_delimiters,
     scan_for_injection,
 )
@@ -37,7 +39,6 @@ _TEXT_MIME_TYPES = {
     "text/javascript", "application/x-yaml", "text/yaml",
     "application/toml",
 }
-_BINARY_MARKERS = (b"\x00", b"\xff\xfe", b"\xfe\xff")
 
 @dataclass(frozen=True)
 class Attachment:
@@ -114,7 +115,7 @@ def validate_attachment(
         raise AttachmentValidationError(
             f"{safe_name}: file exceeds the {MAX_FILE_BYTES // 1024} KiB per-file limit."
         )
-    if any(marker in content[:4096] for marker in _BINARY_MARKERS):
+    if b"\x00" in content[:4096]:
         raise AttachmentValidationError(f"{safe_name}: binary or encoded text is not supported.")
     declared = (media_type or "").split(";", 1)[0].strip().lower()
     if declared and declared not in _TEXT_MIME_TYPES and declared != "application/octet-stream":
