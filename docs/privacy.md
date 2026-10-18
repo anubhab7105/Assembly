@@ -6,7 +6,9 @@
 
 ## Web mode consent text (blocking dialog, version 1)
 
-Assembly web mode processes your question, API keys and model choices in memory for the duration of one run and stores nothing on the server.
+Assembly web mode sends your question, API keys and model choices to the Assembly backend over HTTPS. The backend uses submitted API keys only for the key-test or run request and does not persist them.
+
+Saved web API keys stay in this browser across refreshes. They are stored in IndexedDB with a localStorage fallback until you remove them in Settings or clear browser/site data. Browser storage is not an OS-protected credential vault; protect access to your browser profile and device.
 
 Server logs contain metadata only (run id, tier, timings, counts) — never your questions, answers or keys.
 
@@ -49,7 +51,7 @@ acknowledgment record never contains keys, questions or answers.
 
 The descriptions above explain the user-facing privacy notice. Implementation details:
 
-- In web mode, run requests and provider keys are transient in backend memory. History/settings/usage and saved browser keys are client-owned IndexedDB records, with localStorage fallback in the relevant storage module; storage failure must not be reported as a successful save.
+- In web mode, saved provider keys are client-owned IndexedDB records with a localStorage fallback and survive refreshes. Users can remove a provider key or clear all keys in Settings; clearing site/browser data also removes them. Browser storage is not an OS-protected credential vault, so browser-profile/device access should be protected. When a key is submitted for a provider test or run, the backend uses it transiently and does not persist or log the key value. History/settings/usage remain client-owned; storage failure must not be reported as a successful save or deletion.
 - Browser storage is not cross-device backup. Export history JSON from Settings before clearing site data or moving to another browser profile. Import accepts the versioned Assembly export envelope; malformed rows are skipped and unsupported payload shapes are rejected.
 - In the Windows desktop mode, backend execution records are kept in the app's local SQLite database, and provider keys are held by the OS credential manager via the keyring abstraction. Browser-side UI settings/history can remain in the embedded WebView's storage. Those stores are distinct: SQLite is not a provider-key store.
 - Automated keyring tests use an in-memory fake and prove that canary keys do not appear in database rows, logs, or API responses. They do not prove a packaged Windows build or a real Windows Credential Manager installation works; those require a Windows smoke test.
