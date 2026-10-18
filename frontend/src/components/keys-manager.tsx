@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { globalVault } from "@/lib/key-vault"
+import { env } from "@/lib/env"
 import { ApiClient, type Catalog } from "@/lib/api-client"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
@@ -91,7 +92,12 @@ export function KeysManager() {
     try {
       await globalVault.clearAll()
     } catch {
-      // Explicit removal is best-effort across every blob; the UI still resets.
+      toast({
+        title: "Unable to remove saved keys",
+        description: "Browser storage rejected the deletion, so some keys may still be saved. Try again or clear browser/site data.",
+        variant: "danger",
+      })
+      return
     }
     setNeedsUnlock(false)
     setUnlockError(null)
@@ -179,7 +185,12 @@ export function KeysManager() {
     try {
       await globalVault.removeKey(providerId)
     } catch {
-      // Removal is best-effort; the UI still drops the row's key.
+      toast({
+        title: "Unable to remove key",
+        description: "Browser storage rejected the deletion, so this key may still be saved. Try again or clear browser/site data.",
+        variant: "danger",
+      })
+      return
     }
     setSavedKeys((prev) => {
       if (!(providerId in prev)) return prev
@@ -212,12 +223,21 @@ export function KeysManager() {
     try {
       await globalVault.clearAll()
     } catch {
-      // Backend may not be reachable; frontend vault clear is attempted first.
+      toast({
+        title: "Unable to clear saved keys",
+        description: "Browser storage rejected the deletion, so some keys may still be saved. Try again or clear browser/site data.",
+        variant: "danger",
+      })
+      return
     }
-    try {
-      await ApiClient.clearAllKeys()
-    } catch {
-      // Backend may not be reachable; frontend vault is already cleared.
+
+    let desktopStoreCleared = true
+    if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+      try {
+        await ApiClient.clearAllKeys()
+      } catch {
+        desktopStoreCleared = false
+      }
     }
     setNeedsUnlock(false)
     setUnlockError(null)
@@ -228,7 +248,15 @@ export function KeysManager() {
     setSaveErrors({})
     setTavilyInput("")
     setPassphrase("")
-    toast({ title: "Keys cleared", description: "All API keys removed from this device." })
+    if (desktopStoreCleared) {
+      toast({ title: "Keys cleared", description: "Browser-stored keys were removed." })
+    } else {
+      toast({
+        title: "Browser keys cleared; desktop store not confirmed",
+        description: "Browser-stored keys were removed, but the desktop credential-store request failed. Some OS-stored keys may remain; reconnect and clear them again.",
+        variant: "warning",
+      })
+    }
   }
 
   const readyFamilies = new Set<string>()
@@ -318,7 +346,7 @@ export function KeysManager() {
           </div>
         ) : (
           <p data-testid="persisted-banner" className="text-xs text-muted-foreground">
-            Keys are stored on this device and restored after refresh. Clearing site data removes them.
+            Saved keys stay in this browser across refreshes until you remove them here or clear all keys. Clearing browser/site data also removes them. Browser storage is not an OS-protected credential vault.
           </p>
         )}
         <Button variant="destructive" size="sm" onClick={handleClearAll} disabled={Object.keys(savedKeys).length === 0}>
