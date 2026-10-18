@@ -18,7 +18,7 @@ export interface EnabledProviderNote {
   privacy_note?: string | null;
 }
 
-/** Web-mode dialog paragraphs (a)–(f), in order. */
+/** Web-mode dialog paragraphs (a)–(g), in order. */
 export const WEB_PRIVACY_PARAGRAPHS: string[] = [
   "Assembly web mode sends your question, API keys and model choices to the Assembly backend over HTTPS. The backend uses submitted API keys only for the key-test or run request and does not persist them.",
   "Saved web API keys stay in this browser across refreshes. They are stored in IndexedDB with a localStorage fallback until you remove them in Settings or clear browser/site data. Browser storage is not an OS-protected credential vault; protect access to your browser profile and device.",
