@@ -4,13 +4,13 @@
 > (`WEB_PRIVACY_PARAGRAPHS` / `DESKTOP_PRIVACY_PARAGRAPHS`). The paragraphs
 > below match the blocking first-run dialog exactly.
 
-## Web mode consent text (blocking dialog, version 1)
+## Web mode consent text (blocking dialog, version 2)
 
 Assembly web mode sends your question, API keys and model choices to the Assembly backend over HTTPS. The backend uses submitted API keys only for the key-test or run request and does not persist them.
 
 Saved web API keys stay in this browser across refreshes. They are stored in IndexedDB with a localStorage fallback until you remove them in Settings or clear browser/site data. Browser storage is not an OS-protected credential vault; protect access to your browser profile and device.
 
-Server logs contain metadata only (run id, tier, timings, counts) — never your questions, answers or keys.
+Server logs contain metadata only (run id, tier, timings, counts). Never your questions, answers or keys.
 
 Your history and settings stay in this browser (IndexedDB). Nothing is stored on the server.
 
@@ -21,7 +21,7 @@ Each model provider handles your inputs under its own policy:
 
 Avoid sending sensitive or confidential information.
 
-The desktop app keeps keys in the Windows Credential Manager and sends requests straight from your PC — keys never leave your machine except to authenticate with the provider.
+The desktop app keeps keys in the Windows Credential Manager and sends requests straight from your PC. Keys never leave your machine except to authenticate with the provider.
 
 ## Desktop mode consent text (shorter, no server wording)
 
@@ -36,7 +36,7 @@ Each model provider handles your inputs under its own policy:
 
 Avoid sending sensitive or confidential information.
 
-Keys are kept in the Windows Credential Manager and requests go straight from your PC — keys never leave your machine except to authenticate with the provider.
+Keys are kept in the Windows Credential Manager and requests go straight from your PC. Keys never leave your machine except to authenticate with the provider.
 
 ## Acknowledgment storage
 
