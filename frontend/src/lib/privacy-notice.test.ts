@@ -34,6 +34,7 @@ describe("privacy-notice", () => {
     expect(webNotice).toContain("does not persist them");
     expect(webNotice).toContain("HTTPS");
   });
+
   it("shows the gemini note only when gemini is enabled", () => {
     const gemini = providerNoteFor({
       id: "gemini",
