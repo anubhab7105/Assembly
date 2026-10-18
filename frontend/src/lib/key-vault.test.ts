@@ -128,6 +128,7 @@ describe("KeyVault persistence (P0)", () => {
     await reloaded.removeKey("groq");
     expect(await new KeyVault().allKeys()).toEqual({});
   });
+
   it("3. initialization never overwrites pre-existing values with empty defaults", async () => {
     await set(KEYS_STORE_KEY, { groq: CANARY_A });
     const fresh = new KeyVault();
@@ -209,6 +210,7 @@ describe("KeyVault persistence (P0)", () => {
     await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError);
     expect(await new KeyVault().getKey("groq")).toBe(CANARY_A);
   });
+
   it("corrupt canonical record never crashes reads", async () => {
     await set(KEYS_STORE_KEY, { groq: 42 });
     const vault = new KeyVault();
