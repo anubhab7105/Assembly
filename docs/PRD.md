@@ -1,6 +1,6 @@
 # Assembly — Product Requirements Document
 
-*Multi-Agent AI Consensus Platform · v1.1 · October 10, 2026 · Owner: Anubhab Das · Supersedes v1.0 (October 8, 2026)*
+*Multi-Agent AI Consensus Platform · v1.2 · October 18, 2026 · Owner: Anubhab Das · Supersedes v1.1 (October 10, 2026)*
 
 ## Status key
 
@@ -83,7 +83,7 @@ Everything in the MVP exists to test and demonstrate this one hypothesis.
 | D2 | Free-tier models only. | Hard project constraint. |
 | D3 | Diversity is measured by **model family**, not provider. Groq and Cerebras can both serve Llama; that is one family. | Correlated errors destroy the value of independent first-pass reasoning. |
 | D4 | Local-first orchestration on Windows: the orchestrator runs on the user's machine, so keys never leave it. | Strongest security story; also the most reliable demo setup (no cold-starting free server). |
-| D5 | The website sends keys per request over HTTPS and never stores or logs them. | Honest, auditable minimum for a hosted version. |
+| D5 | Web keys are saved in browser storage (IndexedDB with localStorage fallback) and sent over HTTPS for key-test/run requests; the backend uses them transiently and never persists or logs key values. | Separates user-controlled browser retention from stateless server handling. |
 | D6 | Capacity-aware planning. The orchestrator reads the user's available providers and quotas before choosing team size and rounds. | Free rate limits vary by account and change over time. |
 | D7 | Time budget is a hard constraint with a safety cutoff. | Core feature; also protects the demo. |
 | D8 | No accounts, no login and no server-side data storage in any mode. | BYOK + privacy (nothing on the server to leak) + simpler hosting (no database to run). See consequences in section 8.4 and risks in section 14. |
@@ -149,11 +149,13 @@ Note on FR-14: the planner field `needs_code_execution` exists (`src/orchestrati
 | --- | --- | --- |
 | FR-30 | Key Setup wizard with per-provider instructions and a Test button. | M |
 | FR-31 | Windows app stores keys in the Windows Credential Manager (encrypted by the OS), never in plain files. | M |
-| FR-32 | Website keeps keys in browser memory for the session by default; no server-side persistence. | M |
+| FR-32 | Website saves keys persistently in browser IndexedDB with a localStorage fallback by default; they survive refreshes until the user removes them in Settings or clears site/browser data. The backend uses submitted keys only for key-test/run requests and never persists or logs key values. | M |
 | FR-33 | Keys are redacted from all logs, error messages and stored execution records. | M |
 | FR-34 | Per-provider quota tracker (requests per minute and per day) that the planner reads. | M |
 | FR-35 | Privacy notice per provider where free tiers may use inputs for model improvement (for example Gemini free tier). | M |
 | FR-36 | Key health panel: valid, rate-limited, exhausted for today. | C (acceptance: per-key status is visible in Settings — see note below). |
+
+FR-32 storage note: the browser copy is persistent by design. The user can remove an individual key or clear all keys in Settings; clearing site/browser data also removes the browser copy. This does not imply server-side persistence: provider keys are sent over HTTPS with the relevant request, used transiently, and not written to server databases or logs. Browser storage is not the Windows Credential Manager or an OS-protected credential store.
 
 Note on FR-36: each provider card in Settings shows a per-key status (`unknown` / `valid` / `invalid` / `rate_limited` / `testing`, `frontend/src/components/keys-manager.tsx`) plus a family-readiness chip. There is no consolidated valid / rate-limited / exhausted-for-today panel with cooldown display.
 
@@ -313,7 +315,13 @@ Other safeguards, unchanged: keys from at least three providers loaded and teste
 
 *Free-tier limits quoted in the companion documents come from third-party summaries checked in October 2026 and must be verified in each provider's own dashboard before the demo.*
 
-## 17. Changelog (v1.1 · October 10, 2026)
+## 17. Changelog
+
+### v1.2 — October 18, 2026
+
+- Issue #36: clarify that persistent browser key storage is intentional (IndexedDB with localStorage fallback), document explicit user removal and browser-data deletion behavior, distinguish browser retention from request-scoped backend use, and bump the privacy acknowledgment version to 2. Desktop Credential Manager behavior remains a separate platform concern.
+
+### v1.1 — October 10, 2026
 
 - Status key added (Done, Done-different, Deferred, Optional, Out of scope).
 - D8 added to the section 6 decisions table: no accounts, no login, no server-side storage in any mode.

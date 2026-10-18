@@ -23,7 +23,7 @@
 | Event bus | In-memory asyncio pub/sub (already built) | Redis adds nothing until you run several workers |
 | Frontend | Next.js + TypeScript + Tailwind CSS | Planned in your PRD; one UI for web and desktop |
 | Windows app | **Tauri 2 shell + bundled Python backend (sidecar)**; Electron as fallback | Small installer, keys stay on the machine (section 4) |
-| Key storage | Windows Credential Manager via the `keyring` library (desktop); browser memory + opt-in encrypted IndexedDB (web) | OS-encrypted on desktop; in-memory by default on web |
+| Key storage | Windows Credential Manager via the `keyring` library (desktop); persistent IndexedDB with localStorage fallback for web | Desktop keys use the OS key store; saved web keys survive refreshes until removed in Settings or site/browser data is cleared |
 | Search | A free search source with fallback (section 6) | Research is a core feature |
 | Auth | None — no accounts, no login in any mode (D8). The desktop shell uses a per-launch local token (`X-Assembly-Token`, `src/main.py`) only to stop other local programs calling the backend. | Nothing to log into; nothing to leak |
 | Testing | pytest, a log-scan test for keys, a benchmark harness | Proves both safety and your hypothesis |
@@ -164,7 +164,7 @@ You are a security student; make this a visible feature.
 |---|---|
 | Desktop keys never leave the machine except to the provider | Orchestrator runs locally; keys read from Credential Manager just before each call |
 | No plain-text key files | Use `keyring` (Windows Credential Manager); never `.env` for user keys |
-| Website keys are not stored | Held in browser memory (session); sent with each execution request over HTTPS; backend keeps them only in memory for that run and drops them at the end |
+| Web key retention vs. backend handling | Browser-saved keys persist in IndexedDB with localStorage fallback until the user removes them or clears site/browser data. Submitted keys travel over HTTPS for provider-test/run requests; the backend uses them transiently and does not persist or log key values. |
 | Never in logs, errors or database | A logging filter masks anything that looks like a key; stored execution records contain provider and model names only |
 | Prove it | A pytest that runs a full execution with a fake key string and scans logs, DB and responses for that string |
 | Do not leak through URLs | Keys only in headers or body |

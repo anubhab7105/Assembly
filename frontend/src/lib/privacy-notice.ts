@@ -6,7 +6,7 @@
  * carries the same wording. Do not duplicate the text elsewhere.
  */
 
-export const PRIVACY_NOTICE_VERSION = 1;
+export const PRIVACY_NOTICE_VERSION = 2;
 
 export const PRIVACY_ACK_KEY = "privacy_notice_ack";
 
@@ -18,9 +18,10 @@ export interface EnabledProviderNote {
   privacy_note?: string | null;
 }
 
-/** Web-mode dialog paragraphs (a)–(f), in order. */
+/** Web-mode dialog paragraphs (a)–(g), in order. */
 export const WEB_PRIVACY_PARAGRAPHS: string[] = [
-  "Assembly web mode processes your question, API keys and model choices in memory for the duration of one run and stores nothing on the server.",
+  "Assembly web mode sends your question, API keys and model choices to the Assembly backend over HTTPS. The backend uses submitted API keys only for the key-test or run request and does not persist them.",
+  "Saved web API keys stay in this browser across refreshes. They are stored in IndexedDB with a localStorage fallback until you remove them in Settings or clear browser/site data. Browser storage is not an OS-protected credential vault; protect access to your browser profile and device.",
   "Server logs contain metadata only (run id, tier, timings, counts). Never your questions, answers or keys.",
   "Your history and settings stay in this browser (IndexedDB). Nothing is stored on the server.",
   "Each model provider handles your inputs under its own policy:",

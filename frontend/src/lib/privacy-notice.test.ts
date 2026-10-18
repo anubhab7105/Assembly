@@ -26,6 +26,15 @@ describe("privacy-notice", () => {
     expect(needsAck({ version: PRIVACY_NOTICE_VERSION - 1, acknowledged_at: new Date().toISOString() })).toBe(true);
   });
 
+  it("discloses persistent web-key retention and request-scoped backend handling", () => {
+    expect(PRIVACY_NOTICE_VERSION).toBe(2);
+    const webNotice = WEB_PRIVACY_PARAGRAPHS.join(" ");
+    expect(webNotice).toContain("across refreshes");
+    expect(webNotice).toContain("until you remove them in Settings");
+    expect(webNotice).toContain("does not persist them");
+    expect(webNotice).toContain("HTTPS");
+  });
+
   it("shows the gemini note only when gemini is enabled", () => {
     const gemini = providerNoteFor({
       id: "gemini",

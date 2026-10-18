@@ -47,7 +47,7 @@ flowchart LR
 - **Backend:** FastAPI and Python under `src/`; the API exposes catalog, preflight, key-testing, and streamed run endpoints.
 - **Orchestration:** planner, agent manager, model router, consensus, debate, research, and synthesis modules.
 - **Configuration:** `models.yaml` is the source of truth for configured provider/model IDs, roles, families, and quota metadata.
-- **Storage:** web mode is designed to be stateless on the server, apart from in-memory run coordination. Development and desktop modes use local SQLite. The browser can persist key configuration, so use only a trusted local build and protect your browser profile.
+- **Storage:** web mode is stateless with respect to persistent user data. Saved browser keys persist in IndexedDB (with a localStorage fallback) across refreshes until removed in Settings or site/browser data is cleared. Keys submitted for provider-test/run requests are sent over HTTPS and are not persisted or logged by the backend. Protect access to your browser profile and device: browser storage is not an OS-protected credential vault. Local SQLite is used for development/desktop history.
 - **Desktop:** Tauri-related code exists in the repository, but the quickest contributor path to verify is the web frontend plus FastAPI backend described below.
 
 ## Quick start
