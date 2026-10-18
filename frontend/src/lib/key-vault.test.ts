@@ -113,6 +113,21 @@ describe("KeyVault persistence (P0)", () => {
     });
   });
 
+  it("uses persistent localStorage fallback if IndexedDB is unavailable and clears it on deletion", async () => {
+    const fallback = mockLocalStorage();
+    vi.mocked(get).mockRejectedValue(new Error("IndexedDB unavailable"));
+    vi.mocked(set).mockRejectedValue(new Error("IndexedDB unavailable"));
+
+    const vault = new KeyVault();
+    await vault.setKey("groq", CANARY_A);
+    expect(JSON.parse(fallback.get("assembly:keys_v1") ?? "{}")).toEqual({ groq: CANARY_A });
+
+    const reloaded = new KeyVault();
+    expect(await reloaded.allKeys()).toEqual({ groq: CANARY_A });
+
+    await reloaded.removeKey("groq");
+    expect(await new KeyVault().allKeys()).toEqual({});
+  });
   it("3. initialization never overwrites pre-existing values with empty defaults", async () => {
     await set(KEYS_STORE_KEY, { groq: CANARY_A });
     const fresh = new KeyVault();
@@ -175,6 +190,25 @@ describe("KeyVault persistence (P0)", () => {
     await expect(vault.setKey("tavily", CANARY_B)).rejects.toBeInstanceOf(KeyStorageError);
   });
 
+  it("does not report removal as successful when both persistent stores reject writes", async () => {
+    const vault = new KeyVault();
+    await vault.setKey("groq", CANARY_A);
+
+    vi.mocked(set).mockRejectedValue(new Error("IndexedDB unavailable"));
+    vi.stubGlobal(
+      "localStorage",
+      {
+        getItem: () => null,
+        setItem: () => {
+          throw new Error("storage unavailable");
+        },
+        removeItem: () => {},
+      } as unknown as Storage,
+    );
+
+    await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError);
+    expect(await new KeyVault().getKey("groq")).toBe(CANARY_A);
+  });
   it("corrupt canonical record never crashes reads", async () => {
     await set(KEYS_STORE_KEY, { groq: 42 });
     const vault = new KeyVault();
