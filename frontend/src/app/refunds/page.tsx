@@ -11,11 +11,7 @@ export const metadata: Metadata = {
 export default function RefundsPage() {
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
-      <p className="rounded-xl border border-warning/40 bg-warning-subtle px-4 py-3 text-sm font-medium text-warning">
-        Draft, not legal advice. A real lawyer must review this page before you
-        rely on it.
-      </p>
-      <h1 className="mt-6 text-4xl font-bold tracking-tight">Refund policy</h1>
+      <h1 className="text-4xl font-bold tracking-tight">Refund policy</h1>
       <p className="mt-2 text-sm text-muted-foreground">Last updated: 12 October 2026.</p>
 
       <div className="mt-8 space-y-8 text-left">
