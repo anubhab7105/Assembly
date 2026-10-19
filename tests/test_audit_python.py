@@ -37,10 +37,19 @@ def test_exact_package_and_advisory_exception_only():
     assert len(allowed) == 1 and blocking == []
     allowed, blocking = evaluate_findings([{**findings[0],"package":"other-package"}], [exception])
     assert allowed == [] and len(blocking) == 1
+    out_of_range = [{**findings[0], "version": "2.0.0"}]
+    allowed, blocking = evaluate_findings(out_of_range, [exception])
+    assert allowed == [] and len(blocking) == 1
+
+def test_exception_can_match_canonical_alias_but_is_version_bounded():
+    findings = parse_findings(report_with_vuln())
+    exception = {"package":"demo-package","id":"GHSA-abcd-efgh-ijkl","affected_range":">=1.0,<1.3","reason":"Temporary hold pending upstream fix.","compensating_control":"Development-only package not deployed in runtime.","owner":"assembly-maintainers","review_by":"2099-01-01"}
+    allowed, blocking = evaluate_findings(findings, [exception])
+    assert len(allowed) == 1 and blocking == []
 
 def test_expired_exception_fails_closed(tmp_path: Path):
     path = tmp_path / "allowlist.json"
-    path.write_text(json.dumps([{"package":"demo-package","id":"PYSEC-2025-0001","affected_range":"*","reason":"temporary","compensating_control":"control","owner":"maintainer","review_by":"2025-01-01"}]), encoding="utf-8")
+    path.write_text(json.dumps([{"package":"demo-package","id":"PYSEC-2025-0001","affected_range":">=1.0","reason":"temporary","compensating_control":"control","owner":"maintainer","review_by":"2025-01-01"}]), encoding="utf-8")
     with pytest.raises(ValueError, match="expired allowlist"): load_allowlist(path, today=date(2026,10,19))
 
 def test_malformed_exception_fails_closed(tmp_path: Path):
