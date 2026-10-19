@@ -81,3 +81,11 @@ def test_invalid_or_missing_json_is_not_clean():
 def test_summary_distinguishes_unknown_state():
     summary = render_summary(completed=False, findings=[], allowlisted=[], blocking=[], error="registry unavailable")
     assert "AUDIT ERROR" in summary and "result unknown" in summary
+
+def test_current_pip_audit_json_envelope_is_supported():
+    report = {"dependencies": report_with_vuln(), "fixes": []}
+    assert parse_findings(report)[0]["id"] == "PYSEC-2025-0001"
+
+def test_malformed_pip_audit_envelope_is_not_clean():
+    with pytest.raises(ValueError, match="dependencies array"):
+        parse_findings({"results": []})
