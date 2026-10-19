@@ -91,7 +91,7 @@ def render_summary(*, completed: bool, findings: list[dict[str, Any]], allowlist
     return "\n".join(lines) + "\n"
 
 def run_audit(command: list[str] | None = None) -> tuple[int, list[dict[str, Any]]]:
-    cmd = command or [sys.executable, "-m", "pip_audit", "--format", "json", "--progress-spinner", "off"]
+    cmd = command or [sys.executable, "-m", "pip_audit", "--format", "json", "--progress-spinner", "off", "--requirement", "requirements.txt", "--requirement", "requirements-dev.txt"]
     try: result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=300)
     except (OSError, subprocess.TimeoutExpired) as exc: raise RuntimeError(f"pip-audit could not run to completion: {type(exc).__name__}") from exc
     if result.returncode not in (0, 1):
