@@ -15,6 +15,13 @@ class Result:
         self.stdout = "" if payload is None else json.dumps(payload)
         self.stderr = stderr
 
+def test_audit_targets_declared_manifests():
+    from scripts.audit_python import run_audit
+    with patch("scripts.audit_python.subprocess.run", return_value=Result(0, [])) as mocked:
+        run_audit()
+    command = mocked.call_args.args[0]
+    assert command[-4:] == ["--requirement", "requirements.txt", "--requirement", "requirements-dev.txt"]
+
 def test_clean_scan():
     assert parse_findings([]) == []
     with patch("scripts.audit_python.subprocess.run", return_value=Result(0, [])): assert run_audit()[0] == 0
