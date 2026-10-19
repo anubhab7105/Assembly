@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
+from packaging.utils import canonicalize_name
 
 ALLOWLIST_PATH = Path(__file__).resolve().parents[1] / "security" / "python-audit-allowlist.json"
 
@@ -21,7 +22,7 @@ def load_allowlist(path: Path = ALLOWLIST_PATH, *, today: date | None = None) ->
         if not isinstance(entry, dict) or not required.issubset(entry): raise ValueError(f"allowlist entry {index + 1} is missing required fields")
         for field in required:
             if not isinstance(entry[field], str) or not entry[field].strip(): raise ValueError(f"allowlist entry {index + 1} has empty/invalid {field}")
-        key = (entry["package"].lower(), entry["id"].upper())
+        key = (canonicalize_name(entry["package"]), entry["id"].upper())
         if key in seen: raise ValueError(f"duplicate allowlist entry for {key[0]} {key[1]}")
         seen.add(key)
         try: SpecifierSet(entry["affected_range"])
@@ -44,14 +45,14 @@ def parse_findings(report: Any) -> list[dict[str, Any]]:
     return findings
 
 def evaluate_findings(findings: list[dict[str, Any]], allowlist: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    active = {(entry["package"].lower(), entry["id"].upper()): entry for entry in allowlist}
+    active = {(canonicalize_name(entry["package"]), entry["id"].upper()): entry for entry in allowlist}
     allowed, blocking = [], []
     for finding in findings:
         candidate_ids = {finding["id"].upper()}
         candidate_ids.update(alias.upper() for alias in finding.get("aliases", []) if isinstance(alias, str))
         exception = None
         for vuln_id in candidate_ids:
-            candidate = active.get((finding["package"].lower(), vuln_id))
+            candidate = active.get((canonicalize_name(finding["package"]), vuln_id))
             if candidate is None:
                 continue
             try:
@@ -88,8 +89,7 @@ def run_audit(command: list[str] | None = None) -> tuple[int, list[dict[str, Any
     try: result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=300)
     except (OSError, subprocess.TimeoutExpired) as exc: raise RuntimeError(f"pip-audit could not run to completion: {type(exc).__name__}") from exc
     if result.returncode not in (0, 1):
-        detail = result.stderr.strip().splitlines()[-1][:300] if result.stderr.strip() else f"exit code {result.returncode}"
-        raise RuntimeError(f"pip-audit execution failed: {detail}")
+        raise RuntimeError(f"pip-audit execution failed with exit code {result.returncode}; raw stderr omitted to avoid exposing registry credentials")
     if not result.stdout.strip(): raise RuntimeError("pip-audit produced no JSON report; scan status unknown")
     try: report = json.loads(result.stdout)
     except json.JSONDecodeError as exc: raise RuntimeError("pip-audit output was not valid JSON; scan status unknown") from exc
@@ -106,8 +106,8 @@ def main() -> int:
         completed = True
         allowlisted, blocking = evaluate_findings(findings, exceptions)
         exit_code = 1 if blocking else 0
-        for f in allowlisted: print(f"python-audit: ALLOWLISTED {f['package']}=={f['version']} {f['id']} review_by={f['exception']['review_by']}")
-        for f in blocking: print(f"python-audit: BLOCKING {f['package']}=={f['version']} {f['id']}")
+        for f in allowlisted[:20]: print(f"python-audit: ALLOWLISTED {f['package']}=={f['version']} {f['id']} review_by={f['exception']['review_by']}")
+        for f in blocking[:20]: print(f"python-audit: BLOCKING {f['package']}=={f['version']} {f['id']}")
         print(f"python-audit: {'PASS' if not exit_code else 'FAIL'} scan_completed=yes findings={len(findings)} allowlisted={len(allowlisted)} blocking={len(blocking)}")
     except (ValueError, RuntimeError) as exc:
         error = str(exc)
