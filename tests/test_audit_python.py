@@ -52,6 +52,12 @@ def test_expired_exception_fails_closed(tmp_path: Path):
     path.write_text(json.dumps([{"package":"demo-package","id":"PYSEC-2025-0001","affected_range":">=1.0","reason":"temporary","compensating_control":"control","owner":"maintainer","review_by":"2025-01-01"}]), encoding="utf-8")
     with pytest.raises(ValueError, match="expired allowlist"): load_allowlist(path, today=date(2026,10,19))
 
+def test_invalid_affected_range_fails_closed(tmp_path: Path):
+    path = tmp_path / "allowlist.json"
+    path.write_text(json.dumps([{"package":"demo-package","id":"PYSEC-2025-0001","affected_range":"*","reason":"temporary","compensating_control":"control","owner":"maintainer","review_by":"2099-01-01"}]), encoding="utf-8")
+    with pytest.raises(ValueError, match="affected_range"):
+        load_allowlist(path)
+
 def test_malformed_exception_fails_closed(tmp_path: Path):
     path = tmp_path / "allowlist.json"
     path.write_text(json.dumps([{"package":"demo-package","id":"PYSEC-2025-0001"}]), encoding="utf-8")
@@ -61,6 +67,9 @@ def test_tool_error_and_network_error_fail_unknown():
     with patch("scripts.audit_python.subprocess.run", return_value=Result(2,None,"registry offline")):
         with pytest.raises(RuntimeError, match="execution failed"): run_audit()
     with patch("scripts.audit_python.subprocess.run", side_effect=OSError("offline")):
+        with pytest.raises(RuntimeError, match="could not run"): run_audit()
+    from subprocess import TimeoutExpired
+    with patch("scripts.audit_python.subprocess.run", side_effect=TimeoutExpired("pip-audit", 300)):
         with pytest.raises(RuntimeError, match="could not run"): run_audit()
 
 def test_invalid_or_missing_json_is_not_clean():
