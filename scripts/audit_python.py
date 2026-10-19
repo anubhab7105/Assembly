@@ -33,9 +33,15 @@ def load_allowlist(path: Path = ALLOWLIST_PATH, *, today: date | None = None) ->
     return entries
 
 def parse_findings(report: Any) -> list[dict[str, Any]]:
-    if not isinstance(report, list): raise ValueError("pip-audit output must be a JSON array; scanner output is incomplete")
+    # pip-audit 2.10+ emits an object with a dependencies array; older releases emitted the array directly.
+    if isinstance(report, dict) and isinstance(report.get("dependencies"), list):
+        dependencies = report["dependencies"]
+    elif isinstance(report, list):
+        dependencies = report
+    else:
+        raise ValueError("pip-audit output has no dependencies array; scanner output is incomplete")
     findings = []
-    for item in report:
+    for item in dependencies:
         if not isinstance(item, dict) or not isinstance(item.get("name"), str) or not isinstance(item.get("version"), str): raise ValueError("pip-audit returned a malformed finding")
         vulns = item.get("vulns")
         if not isinstance(vulns, list): raise ValueError(f"pip-audit output for {item['name']} has no vulnerability list")
