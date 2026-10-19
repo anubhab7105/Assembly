@@ -70,9 +70,7 @@ jobs:
     - name: Install dependencies
       run: pip install -r requirements.txt -r requirements-dev.txt alembic pip-audit
     - name: Run Python dependency audit gate
-      run: python scripts/audit-python.py
-      env:
-        GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+      run: python scripts/audit_python.py
     - name: Run SQLite migrations and tests
       run: |
         alembic upgrade head
