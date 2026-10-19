@@ -4,7 +4,7 @@ CI reports dependency audits as **PASS**, **FAIL** (completed scan with unapprov
 
 ## Python
 
-CI runs `python scripts/audit_python.py`, which invokes `pip-audit --format json`. A completed scan can return exit 1 because findings exist; the wrapper parses the JSON to distinguish this from a tool failure. All findings block unless an exact package + advisory exception is listed in `security/python-audit-allowlist.json`. Each exception must document its affected range, reason, compensating control, owner, and future review date. Expired or malformed exceptions block.
+CI runs `python scripts/audit_python.py`, which invokes `pip-audit --format json` against both `requirements.txt` and `requirements-dev.txt` (the declared production and development dependency trees), rather than auditing unrelated packages preinstalled in the runner. A completed scan can return exit 1 because findings exist; the wrapper parses the JSON to distinguish this from a tool failure. All findings block unless an exact package + advisory exception is listed in `security/python-audit-allowlist.json`. Each exception must document its affected range, reason, compensating control, owner, and future review date. Expired or malformed exceptions block.
 
 ## npm
 
