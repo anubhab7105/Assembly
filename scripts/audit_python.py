@@ -68,8 +68,8 @@ def evaluate_findings(findings: list[dict[str, Any]], allowlist: list[dict[str, 
 
 def render_summary(*, completed: bool, findings: list[dict[str, Any]], allowlisted: list[dict[str, Any]], blocking: list[dict[str, Any]], error: str | None) -> str:
     lines = ["## Python dependency audit", ""]
-    if error: lines += ["**Status: AUDIT ERROR — result unknown.**", "", f"- {error}", ""]
-    elif not completed: lines += ["**Status: AUDIT ERROR — result unknown.**", ""]
+    if error: lines += ["**Status: AUDIT ERROR — result unknown.**", "", "- Scan completed: no", "- Findings: unknown", f"- Error: {error}", ""]
+    elif not completed: lines += ["**Status: AUDIT ERROR — result unknown.**", "", "- Scan completed: no", "- Findings: unknown", ""]
     else: lines += [f"**Status: {'PASS' if not blocking else 'FAIL'}**", "", "- Scan completed: yes", f"- Findings returned: {len(findings)}", f"- Allowlisted findings: {len(allowlisted)}", f"- Unapproved findings: {len(blocking)}", ""]
     if allowlisted:
         lines += ["### Time-bounded exceptions", ""]
