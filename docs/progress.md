@@ -658,3 +658,11 @@
 - Explicitly deferred binary parsing, PDF/DOCX, images and OCR. See `docs/attachments.md`.
 - Added parser and end-to-end stateless API regression tests plus a dedicated Node-only API payload test, avoiding the repository's jsdom/Undici worker incompatibility in the focused unit job.
 - Verification pending the feature branch Actions run; no live provider keys or documents are used by tests.
+
+## 2026-10-19 — Issue #40: fail-closed Python dependency audit
+
+- Replaced the CI `pip-audit || echo ...` bypass with a dedicated audit gate. Unapproved findings fail; scanner launch/timeout/network/report errors and malformed or expired exception metadata fail with a distinct nonzero error state.
+- Added an exact package + advisory exception file requiring affected range, reason, compensating control, owner and review date. It intentionally starts empty; no exceptions are invented. Expired exceptions fail until reviewed.
+- Added a concise GitHub step summary with scan state, finding counts, allowlisted findings, blocking findings and fix versions; logs contain package/advisory metadata only.
+- Added deterministic offline tests for clean scans, vulnerable results, scanner errors, malformed output, exact exception matching and expired exceptions. CI also runs the npm audit-gate regression tests.
+- Verification: tests are network-free; GitHub Actions on the PR is the integration/merge gate.

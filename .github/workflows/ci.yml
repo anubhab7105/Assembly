@@ -13,52 +13,42 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-
     defaults:
       run:
         working-directory: ./frontend
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
     - name: Run Gitleaks
       uses: gitleaks/gitleaks-action@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: 20
-        cache: 'npm'
-        cache-dependency-path: './frontend/package-lock.json'
-
+        cache: npm
+        cache-dependency-path: ./frontend/package-lock.json
     - name: Install Dependencies
       run: npm ci --legacy-peer-deps
-
     - name: Run npm audit
       run: npm run audit:high
-
+    - name: Run npm audit gate regression tests
+      run: npm run audit:test
     - name: Lint
       run: npm run lint
-
     - name: Type Check
       run: npx tsc --noEmit
-
     - name: Run Vitest storage lifecycle tests
       run: npm test
-
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps chromium
-
     - name: Run Playwright Tests
       run: npx playwright test
       env:
         CI: true
-
     - name: Upload Playwright Report
       if: always()
       uses: actions/upload-artifact@v4
@@ -69,23 +59,18 @@ jobs:
 
   backend-test:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
-        cache: 'pip'
-
+        cache: pip
     - name: Install dependencies
       run: pip install -r requirements.txt -r requirements-dev.txt alembic pip-audit
-
-    - name: Run pip-audit
-      run: pip-audit || echo "Audit failed but ignoring for now, review later" # Or remove echo to enforce
-
+    - name: Run Python dependency audit gate
+      run: python scripts/audit_python.py
     - name: Run SQLite migrations and tests
       run: |
         alembic upgrade head
