@@ -171,12 +171,15 @@ async def _execute_run(
     result_status = "failed"
     usage: list[dict] = []
     limiter = None
+    snapshot_token = None
     try:
         from src.orchestration.orchestrator import Orchestrator
 
         stage_holder["stage"] = "limiter_init"
         limiter = get_limiter()
-        limiter.set_usage_snapshot(usage_snapshot or [])
+        from src.providers.quota import fingerprint_key
+        key_ids = {provider: fingerprint_key(key) for provider, key in provider_keys.items() if key}
+        snapshot_token = limiter.set_usage_snapshot(usage_snapshot or [], owner_key_ids=key_ids)
         if router_override is None:
             stage_holder["stage"] = "router_init"
             router_override = _filtered_router(provider_keys, allowed, pins)
@@ -279,9 +282,9 @@ async def _execute_run(
     finally:
         entry.done = True
         await entry.queue.put(None)  # type: ignore[arg-type] — SSE terminator
-        if limiter is not None:
+        if limiter is not None and snapshot_token is not None:
             try:
-                limiter.set_usage_snapshot([])
+                limiter.reset_usage_snapshot(snapshot_token)
             except Exception:  # noqa: BLE001, S110 — cleanup must not raise
                 pass
         # Request material is owned by this task only. Drop references even
@@ -340,6 +343,9 @@ async def start_run(req: RunRequest, request: Request):
 
     # No usable model family: refuse before streaming or spending quota.
     if _diversity_is_blocked(ctx.router, allowed):
+        if ctx.quota_snapshot_token is not None:
+            get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
+            ctx.quota_snapshot_token = None
         return JSONResponse(
             status_code=400,
             content={
@@ -353,8 +359,8 @@ async def start_run(req: RunRequest, request: Request):
             },
         )
 
-    # Capacity check with max(client snapshot, server memory). Advisory:
-    # only an actually-infeasible verdict blocks; errors fail open.
+    # The request snapshot is already reconciled into limiter counters; don't
+    # subtract client-reported usage a second time. This check remains advisory.
     try:
         limiter = get_limiter()
         keys = [
@@ -372,10 +378,11 @@ async def start_run(req: RunRequest, request: Request):
                 keys,
                 req.time_budget_minutes,
                 heuristic_suggestion(question),
-                usage_snapshot=[u.model_dump() for u in (req.usage_snapshot or [])],
             )
             if not plan.feasible:
-                limiter.set_usage_snapshot([])
+                if ctx.quota_snapshot_token is not None:
+                    limiter.reset_usage_snapshot(ctx.quota_snapshot_token)
+                    ctx.quota_snapshot_token = None
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Tier not feasible with current quota."},
@@ -386,11 +393,17 @@ async def start_run(req: RunRequest, request: Request):
     async with _runs_lock:
         active = sum(1 for e in _runs.values() if not e.done)
         if active >= settings.max_concurrent_runs:
+            if ctx.quota_snapshot_token is not None:
+                get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
+                ctx.quota_snapshot_token = None
             return JSONResponse(
                 status_code=429, content={"detail": "Server busy, try again later."}
             )
         ip_active = sum(1 for e in _runs.values() if not e.done and e.ip == ip)
         if ip_active >= MAX_RUNS_PER_IP:
+            if ctx.quota_snapshot_token is not None:
+                get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
+                ctx.quota_snapshot_token = None
             return JSONResponse(
                 status_code=429,
                 content={
@@ -419,6 +432,10 @@ async def start_run(req: RunRequest, request: Request):
         f"Run     │ start tier={req.time_budget_minutes} "
         f"models={len(allowed) or 'auto'}"
     )
+    if ctx.quota_snapshot_token is not None:
+        get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
+        ctx.quota_snapshot_token = None
+
     entry.task = asyncio.create_task(
         _execute_run(
             run_id,

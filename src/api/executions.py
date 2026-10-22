@@ -77,7 +77,9 @@ def _build_preflight(
         )
         for entry in raw_snapshot
     ]
-    plan = plan_capacity(keys, tier, suggestion, usage_snapshot=snapshot)
+    # The request's quota snapshot has already been reconciled by the limiter.
+    # Subtracting it again here would double-count client-reported usage.
+    plan = plan_capacity(keys, tier, suggestion)
     warnings = list(plan.warnings)
     for entry in raw_snapshot:
         if (entry.get("cooldown_seconds") or 0) > 0:

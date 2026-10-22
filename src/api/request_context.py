@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from src.core.keystore import wrap_keys
 from src.core.logging_config import logger
 from src.providers.config import load_models_config
-from src.providers.quota import get_limiter
+from src.providers.quota import fingerprint_key, get_limiter
 
 
 def _resolve_selection(selected: list[str]) -> tuple[set[str], dict[str, str]]:
@@ -197,6 +197,7 @@ class RequestContext:
     pins: dict[str, str] = field(default_factory=dict)
     quota_snapshot: list[dict] = field(default_factory=list)
     has_search_key: bool = False
+    quota_snapshot_token: object | None = None
 
 
 def build_request_context(
@@ -217,7 +218,8 @@ def build_request_context(
     resolved_pins = dict(pins or {})
     router = _filtered_router(dict(provider_keys or {}), allowed, resolved_pins)
     limiter = get_limiter()
-    limiter.set_usage_snapshot(usage_snapshot or [])
+    key_ids = {provider: fingerprint_key(key) for provider, key in (provider_keys or {}).items() if key}
+    snapshot_token = limiter.set_usage_snapshot(usage_snapshot or [], owner_key_ids=key_ids)
     snapshot = []
     if hasattr(router, "quota_snapshot"):
         try:
@@ -232,4 +234,5 @@ def build_request_context(
         pins=resolved_pins,
         quota_snapshot=list(snapshot or []),
         has_search_key=has_search,
+        quota_snapshot_token=snapshot_token,
     )
