@@ -44,7 +44,6 @@ async def preflight(req: RunRequest, request: Request):
         return _build_preflight(
             question,
             req.time_budget_minutes,
-            [u.model_dump() for u in (req.usage_snapshot or [])],
             router_override=ctx.router,
         )
     finally:

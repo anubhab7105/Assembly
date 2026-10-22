@@ -61,7 +61,6 @@ def _require_desktop() -> None:
 def _build_preflight(
     question: str,
     tier: int,
-    snapshot: list[dict],
     router_override=None,
 ) -> PreflightResponse:
     suggestion = heuristic_suggestion(question)
