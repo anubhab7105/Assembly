@@ -150,14 +150,46 @@ def test_usage_snapshot_changes_plan() -> None:
     assert snap.affordable_calls < base.affordable_calls
 
 
-def test_quota_takes_max_of_snapshot_and_memory() -> None:
+def test_quota_snapshot_is_key_scoped_and_request_owned() -> None:
     from src.providers.quota import QuotaLimiter
 
     limiter = QuotaLimiter(config=None, session_factory=None)
-    limiter.set_usage_snapshot([{"provider": "p", "model": "m", "count": 7, "tokens": 100}])
-    assert limiter._today_counters("p", "fp", "m") == (7, 100)
-    limiter.set_usage_snapshot([])
-    assert limiter._today_counters("p", "fp", "m") == (0, 0)
+    provider = next(iter(limiter._config.providers))
+    model = limiter._config.providers[provider].models[0]
+    fp_a, fp_b = "key-fingerprint-a", "key-fingerprint-b"
+    token_a = limiter.set_usage_snapshot(
+        [{"provider": provider, "model": model.id, "count": 7, "tokens": 100}],
+        owner_key_ids={provider: fp_a},
+    )
+    assert limiter._today_counters(provider, fp_a, model.id) == (7, 100)
+    assert limiter._today_counters(provider, fp_b, model.id) == (0, 0)
+
+    token_b = limiter.set_usage_snapshot(
+        [{"provider": provider, "model": model.id, "count": 2, "tokens": 25}],
+        owner_key_ids={provider: fp_b},
+    )
+    assert limiter._today_counters(provider, fp_b, model.id) == (2, 25)
+    limiter.reset_usage_snapshot(token_b)
+    assert limiter._today_counters(provider, fp_a, model.id) == (7, 100)
+    limiter.reset_usage_snapshot(token_a)
+    assert limiter._today_counters(provider, fp_a, model.id) == (0, 0)
+
+
+def test_quota_snapshot_extreme_counts_are_bounded() -> None:
+    from src.providers.quota import QuotaLimiter
+
+    limiter = QuotaLimiter(config=None, session_factory=None)
+    provider = next(iter(limiter._config.providers))
+    model = limiter._config.providers[provider].models[0]
+    fp = "bounded-fingerprint"
+    token = limiter.set_usage_snapshot(
+        [{"provider": provider, "model": model.id, "count": 10**30, "tokens": 10**40}],
+        owner_key_ids={provider: fp},
+    )
+    calls, tokens = limiter._today_counters(provider, fp, model.id)
+    assert calls <= (model.limits.rpd if isinstance(model.limits.rpd, int) else 100_000)
+    assert tokens <= (model.limits.tpd if isinstance(model.limits.tpd, int) else 100_000_000)
+    limiter.reset_usage_snapshot(token)
 
 
 def test_cancel_on_disconnect(web_mode, monkeypatch) -> None:
@@ -287,8 +319,9 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
     fake_key = "TEST-ONLY-WEB-KEY-CLEANUP-CANARY"
     entry = run_mod._RunEntry(run_id="run-cleanup-canary", created_at=run_mod._now())
     limiter = get_limiter()
-    limiter.set_usage_snapshot(
-        [{"provider": "groq", "model": "m", "count": 2, "tokens": 100}]
+    token = limiter.set_usage_snapshot(
+        [{"provider": "groq", "model": "m", "count": 2, "tokens": 100}],
+        owner_key_ids={"groq": "cleanup-fingerprint"},
     )
 
     class StubOrch:
@@ -332,7 +365,9 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
     assert fake_key not in rendered
     assert fake_key not in caplog.text
     assert "upstream error unexpectedly included" not in caplog.text
-    assert limiter._snapshot == {}
+    # The run cleans up only its nested snapshot; this caller resets its own.
+    limiter.reset_usage_snapshot(token)
+    assert limiter._snapshot.get() == {}
 
 def test_run_rejects_unsupported_attachment_without_echoing_content(web_mode, monkeypatch):
     """Unsupported attachments are rejected before any run or provider call."""

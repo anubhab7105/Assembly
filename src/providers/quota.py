@@ -22,6 +22,7 @@ import hashlib
 import os
 import time
 from collections import deque
+from contextvars import ContextVar, Token
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -229,7 +230,10 @@ class QuotaLimiter:
         self._in_flight: dict[str, int] = {}
         self._warned_unknown_pairs: set[tuple[str, str]] = set()
         self._day_counts: dict[tuple[str, str, str], list[int]] = {}
-        self._snapshot: dict[tuple[str, str], tuple[int, int]] = {}
+        # Client usage is task-local rather than process-wide mutable state.
+        self._snapshot: ContextVar[
+            dict[tuple[str, str, str, str], tuple[int, int]]
+        ] = ContextVar(f"assembly_quota_snapshot_{id(self)}", default={})
 
     # ── internal helpers ─────────────────────────────────────────────
 
@@ -292,43 +296,65 @@ class QuotaLimiter:
     # run. The limiter takes max(in-memory, snapshot) per bucket, so a
     # restarted server never under-counts a key it cannot see.
 
-    def set_usage_snapshot(self, entries: Any) -> None:
-        """Load a client usage_snapshot: [{provider, model, count, tokens}]."""
-        merged: dict[tuple[str, str], tuple[int, int]] = {}
-        for entry in entries or []:
-            if isinstance(entry, dict):
-                provider = str(entry.get("provider", ""))
-                model = str(entry.get("model", ""))
-                try:
-                    count = max(0, int(entry.get("count", 0) or 0))
-                except (TypeError, ValueError):
-                    count = 0
-                try:
-                    tokens = max(0, int(entry.get("tokens", 0) or 0))
-                except (TypeError, ValueError):
-                    tokens = 0
-            else:
-                provider = str(getattr(entry, "provider", ""))
-                model = str(getattr(entry, "model", ""))
-                count = max(0, int(getattr(entry, "count", 0) or 0))
-                tokens = max(0, int(getattr(entry, "tokens", 0) or 0))
-            if not provider:
-                continue
-            key = (provider, model)
-            prev = merged.get(key, (0, 0))
-            merged[key] = (prev[0] + count, prev[1] + tokens)
-        self._snapshot = merged
+    def set_usage_snapshot(
+        self, entries: Any, *, owner_key_ids: dict[str, str] | None = None
+    ) -> Token:
+        """Bind client usage to this async request and the provider keys it supplied.
 
-    def _snapshot_for(self, provider: str, bucket: str) -> tuple[int, int]:
-        snap: dict[tuple[str, str], tuple[int, int]] = getattr(self, "_snapshot", {})
-        if not snap:
-            return 0, 0
-        if bucket == "":
-            # Account scope: shared pool sums every model on the provider.
-            total_c = sum(c for (p, _m), (c, _t) in snap.items() if p == provider)
-            total_t = sum(_t for (p, _m), (c, _t) in snap.items() if p == provider)
-            return total_c, total_t
-        return snap.get((provider, bucket), (0, 0))
+        Client entries omit fingerprints, so only provider/model entries tied to
+        fingerprints from this request are accepted. Snapshots are advisory lower
+        bounds; server-memory/database counters remain independently authoritative.
+        """
+        # Include source model in the key so account-scope buckets can sum usage
+        # across distinct models while duplicate entries cannot amplify a model.
+        merged: dict[tuple[str, str, str, str], tuple[int, int]] = {}
+        owner_key_ids = owner_key_ids or {}
+        for entry in entries or []:
+            try:
+                if isinstance(entry, dict):
+                    provider = str(entry.get("provider", ""))
+                    model = str(entry.get("model", ""))
+                    count = max(0, int(entry.get("count", 0) or 0))
+                    tokens = max(0, int(entry.get("tokens", 0) or 0))
+                else:
+                    provider = str(getattr(entry, "provider", ""))
+                    model = str(getattr(entry, "model", ""))
+                    count = max(0, int(getattr(entry, "count", 0) or 0))
+                    tokens = max(0, int(getattr(entry, "tokens", 0) or 0))
+            except (TypeError, ValueError, OverflowError):
+                continue
+            key_id = owner_key_ids.get(provider)
+            if not provider or not model or not key_id:
+                continue
+            limits, _scope, bucket = self._lookup(provider, model)
+            if limits is None:
+                continue
+            rpd = self._int_or_none(limits.rpd)
+            tpd = self._int_or_none(limits.tpd)
+            # Guard against unbounded browser values. Where catalog limits exist,
+            # those documented provider budgets provide the upper bound.
+            count = min(count, rpd) if rpd is not None else min(count, 100_000)
+            tokens = min(tokens, tpd) if tpd is not None else min(tokens, 100_000_000)
+            snapshot_key = (provider, key_id, bucket, model)
+            previous = merged.get(snapshot_key, (0, 0))
+            merged[snapshot_key] = (max(previous[0], count), max(previous[1], tokens))
+        return self._snapshot.set(merged)
+
+    def reset_usage_snapshot(self, token: Token) -> None:
+        """Restore only the calling task's previous snapshot state."""
+        self._snapshot.reset(token)
+
+    def _snapshot_for(self, provider: str, key_id: str, bucket: str) -> tuple[int, int]:
+        snap = self._snapshot.get()
+        if bucket != ACCOUNT_BUCKET:
+            return snap.get((provider, key_id, bucket, bucket), (0, 0))
+        # Account-scope quota is shared across models for this provider key.
+        entries = [
+            counts
+            for (p, kid, entry_bucket, _model), counts in snap.items()
+            if p == provider and kid == key_id and entry_bucket == ACCOUNT_BUCKET
+        ]
+        return sum(c for c, _t in entries), sum(t for _c, t in entries)
 
     def _today_counters(
         self, provider: str, key_id: str, bucket: str
@@ -340,7 +366,7 @@ class QuotaLimiter:
         """
         mem = self._day_counts.get((provider, key_id, bucket), [0, 0])
         mem_c, mem_t = mem[0], mem[1]
-        snap_c, snap_t = self._snapshot_for(provider, bucket)
+        snap_c, snap_t = self._snapshot_for(provider, key_id, bucket)
         best_c, best_t = max(mem_c, snap_c), max(mem_t, snap_t)
         try:
             from src.core.config import settings
@@ -664,15 +690,14 @@ class QuotaLimiter:
         return out
 
     def reset(self) -> None:
-        """Drop in-memory windows, cooldowns, day counts and snapshot."""
+        """Drop in-memory windows, cooldowns, day counts and current-task snapshot."""
         self._minute_calls.clear()
         self._minute_tokens.clear()
         self._cooldowns.clear()
         self._slots.clear()
         self._in_flight.clear()
         self._day_counts.clear()
-        self._snapshot = {}
-
+        self._snapshot.set({})
 
 _limiter: QuotaLimiter | None = None
 

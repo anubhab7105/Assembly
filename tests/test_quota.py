@@ -509,3 +509,60 @@ async def test_unlimited_fields_are_not_enforced(tmp_path) -> None:
             pass
     remaining = limiter.remaining("alpha", fingerprint, "alpha-fast")
     assert remaining["tpm_limit"] is None and remaining["tpm_remaining"] is None
+
+
+
+async def test_request_snapshots_are_isolated_during_overlapping_runs(tmp_path) -> None:
+    """One task's snapshot and cleanup must not affect another active task."""
+    limiter, _ = _limiter(tmp_path, providers=_scoped_providers())
+    provider, model_id = "solo", "solo-a"
+    fp_a, fp_b = "fake-key-a", "fake-key-b"
+    a_ready, b_ready = asyncio.Event(), asyncio.Event()
+    release_a, release_b = asyncio.Event(), asyncio.Event()
+
+    async def run_snapshot(fp, count, ready, release):
+        token = limiter.set_usage_snapshot(
+            [
+                {
+                    "provider": provider,
+                    "model": model_id,
+                    "count": count,
+                    "tokens": count * 10,
+                }
+            ],
+            owner_key_ids={provider: fp},
+        )
+        ready.set()
+        await release.wait()
+        seen = limiter._today_counters(provider, fp, model_id)
+        limiter.reset_usage_snapshot(token)
+        return seen
+
+    task_a = asyncio.create_task(run_snapshot(fp_a, 2, a_ready, release_a))
+    task_b = asyncio.create_task(run_snapshot(fp_b, 4, b_ready, release_b))
+    await asyncio.gather(a_ready.wait(), b_ready.wait())
+    release_b.set()
+    assert await task_b == (4, 40)
+    # B has finished and reset its own context; A is still active.
+    assert not task_a.done()
+    release_a.set()
+    assert await task_a == (2, 20)
+    assert limiter._today_counters(provider, fp_a, model_id) == (0, 0)
+    assert limiter._today_counters(provider, fp_b, model_id) == (0, 0)
+
+
+def test_account_scope_snapshot_sums_distinct_models_once(tmp_path) -> None:
+    limiter, _ = _limiter(tmp_path, providers=_scoped_providers())
+    provider = "shared"
+    fp = "account-key"
+    token = limiter.set_usage_snapshot(
+        [
+            {"provider": provider, "model": "shared-a", "count": 2, "tokens": 20},
+            {"provider": provider, "model": "shared-a", "count": 3, "tokens": 30},
+            {"provider": provider, "model": "shared-b", "count": 4, "tokens": 40},
+        ],
+        owner_key_ids={provider: fp},
+    )
+    # Duplicate model entries reconcile with max(2, 3), then account scope sums 3 + 4.
+    assert limiter._today_counters(provider, fp, "") == (7, 70)
+    limiter.reset_usage_snapshot(token)

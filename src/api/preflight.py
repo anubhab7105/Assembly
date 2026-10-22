@@ -14,6 +14,7 @@ from src.api.request_context import build_request_context
 from src.core.config import settings
 from src.core.rate_limit import check_rate_limit, client_ip
 from src.database.schemas import PreflightResponse, RunRequest
+from src.providers.quota import get_limiter
 
 router = APIRouter(prefix="/api", tags=["preflight"])
 
@@ -39,9 +40,13 @@ async def preflight(req: RunRequest, request: Request):
         dict(req.model_selection.pins or {}),
         [u.model_dump() for u in (req.usage_snapshot or [])],
     )
-    return _build_preflight(
-        question,
-        req.time_budget_minutes,
-        [u.model_dump() for u in (req.usage_snapshot or [])],
-        router_override=ctx.router,
-    )
+    try:
+        return _build_preflight(
+            question,
+            req.time_budget_minutes,
+            router_override=ctx.router,
+        )
+    finally:
+        if ctx.quota_snapshot_token is not None:
+            get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
+            ctx.quota_snapshot_token = None
