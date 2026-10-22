@@ -112,7 +112,8 @@ def test_exhausted_daily_quota_is_excluded(tmp_path) -> None:
         [
             {"provider": "groq", "model": "gpt-20b", "count": 1000, "tokens": 0},
             {"provider": "groq", "model": "qwen-27b", "count": 1000, "tokens": 0},
-        ]
+        ],
+        owner_key_ids={"groq": fingerprint_key("k1")},
     )
     gate = router.diversity_gate()
     assert "gpt-oss" not in gate.families_ready
