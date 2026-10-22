@@ -231,9 +231,9 @@ class QuotaLimiter:
         self._warned_unknown_pairs: set[tuple[str, str]] = set()
         self._day_counts: dict[tuple[str, str, str], list[int]] = {}
         # Client usage is task-local rather than process-wide mutable state.
-        self._snapshot: ContextVar[dict[tuple[str, str, str, str], tuple[int, int]]] = ContextVar(
-            f"assembly_quota_snapshot_{id(self)}", default={}
-        )
+        self._snapshot: ContextVar[
+            dict[tuple[str, str, str, str], tuple[int, int]]
+        ] = ContextVar(f"assembly_quota_snapshot_{id(self)}", default={})
 
     # ── internal helpers ─────────────────────────────────────────────
 

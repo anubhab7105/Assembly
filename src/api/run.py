@@ -178,8 +178,14 @@ async def _execute_run(
         stage_holder["stage"] = "limiter_init"
         limiter = get_limiter()
         from src.providers.quota import fingerprint_key
-        key_ids = {provider: fingerprint_key(key) for provider, key in provider_keys.items() if key}
-        snapshot_token = limiter.set_usage_snapshot(usage_snapshot or [], owner_key_ids=key_ids)
+        key_ids = {
+            provider: fingerprint_key(key)
+            for provider, key in provider_keys.items()
+            if key
+        }
+        snapshot_token = limiter.set_usage_snapshot(
+            usage_snapshot or [], owner_key_ids=key_ids
+        )
         if router_override is None:
             stage_holder["stage"] = "router_init"
             router_override = _filtered_router(provider_keys, allowed, pins)

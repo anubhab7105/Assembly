@@ -218,8 +218,14 @@ def build_request_context(
     resolved_pins = dict(pins or {})
     router = _filtered_router(dict(provider_keys or {}), allowed, resolved_pins)
     limiter = get_limiter()
-    key_ids = {provider: fingerprint_key(key) for provider, key in (provider_keys or {}).items() if key}
-    snapshot_token = limiter.set_usage_snapshot(usage_snapshot or [], owner_key_ids=key_ids)
+    key_ids = {
+        provider: fingerprint_key(key)
+        for provider, key in (provider_keys or {}).items()
+        if key
+    }
+    snapshot_token = limiter.set_usage_snapshot(
+        usage_snapshot or [], owner_key_ids=key_ids
+    )
     snapshot = []
     if hasattr(router, "quota_snapshot"):
         try:

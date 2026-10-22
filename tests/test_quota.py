@@ -522,7 +522,14 @@ async def test_request_snapshots_are_isolated_during_overlapping_runs(tmp_path) 
 
     async def run_snapshot(fp, count, ready, release):
         token = limiter.set_usage_snapshot(
-            [{"provider": provider, "model": model_id, "count": count, "tokens": count * 10}],
+            [
+                {
+                    "provider": provider,
+                    "model": model_id,
+                    "count": count,
+                    "tokens": count * 10,
+                }
+            ],
             owner_key_ids={provider: fp},
         )
         ready.set()
