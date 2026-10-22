@@ -518,7 +518,7 @@ async def test_request_snapshots_are_isolated_during_overlapping_runs(tmp_path) 
     provider, model_id = "solo", "solo-a"
     fp_a, fp_b = "fake-key-a", "fake-key-b"
     a_ready, b_ready = asyncio.Event(), asyncio.Event()
-    release_a, release_b = asyncio.Event()
+    release_a, release_b = asyncio.Event(), asyncio.Event()
 
     async def run_snapshot(fp, count, ready, release):
         token = limiter.set_usage_snapshot(
