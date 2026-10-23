@@ -137,7 +137,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await page.route("**/api/run", async route => {
       runBody = route.request().postDataJSON() as unknown as Record<string, unknown>
       const body = [
-        `data: ${JSON.stringify({ event_type: "execution.completed", execution_id: "run-1", seq: 1, data: { status: "completed", answer: "Mock", sources: [], confidence_label: "Moderate", consensus_score: 0.9, agent_count: 2, providers_used: ["groq", "gemini"], tokens_used: 10, debate_rounds: 1, elapsed_seconds: 1 } })}`,
+        `data: ${JSON.stringify({ event_type: "execution.completed", execution_id: "run-1", seq: 1, data: { status: "completed", answer: "Mock", sources: [], confidence_label: "Moderate", consensus_score: 0.9, agent_count: 2, providers_used: ["groq", "openrouter"], tokens_used: 10, debate_rounds: 1, elapsed_seconds: 1 } })}`,
         `data: ${JSON.stringify({ event_type: "run.finished", run_id: "run-1", status: "completed", usage: [] })}`,
       ].join("\n\n")
       await route.fulfill({ contentType: "text/event-stream", body: body + "\n\n" })
@@ -149,7 +149,7 @@ test.describe("Keys survive refresh (P0)", () => {
 
     await page.goto("/settings")
     await saveKey(page, "groq", CANARY_GROQ)
-    await saveKey(page, "gemini", CANARY_GEMINI)
+    await saveKey(page, "openrouter", CANARY_OPENROUTER)
 
     await page.reload()
     await page.locator('a[href="/"]').first().click()
@@ -171,7 +171,7 @@ test.describe("Keys survive refresh (P0)", () => {
     expect(preflightBody).not.toBeNull()
     expect(runBody).not.toBeNull()
     expect((preflightBody as unknown as Record<string, unknown>)["provider_keys"]).toEqual(
-      expect.objectContaining({ groq: CANARY_GROQ, gemini: CANARY_GEMINI }),
+      expect.objectContaining({ groq: CANARY_GROQ, openrouter: CANARY_OPENROUTER }),
     )
     expect((runBody as unknown as Record<string, unknown>)["provider_keys"]).toEqual(
       expect.objectContaining({ groq: CANARY_GROQ, gemini: CANARY_GEMINI }),
