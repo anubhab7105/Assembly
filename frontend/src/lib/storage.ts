@@ -347,7 +347,7 @@ function parseImport(text: string): { history: HistoryRecord[]; usage: UsageReco
     if (!entry) {
       throw new Error(`Import contains an invalid usage record at row ${index + 1}. No saved data was changed.`)
     }
-    const key = `${entry.provider}\\u0000${entry.model}`
+    const key = `${entry.provider}\u0000${entry.model}`
     const previous = usageByKey.get(key)
     if (!previous) usageByKey.set(key, entry)
     else usageByKey.set(key, {
