@@ -41,6 +41,8 @@ jobs:
       run: npm run lint
     - name: Type Check
       run: npx tsc --noEmit
+    - name: Run confidence display regression tests
+      run: npx vitest run --config vitest.config.mts src/components/final-answer.test.tsx src/hooks/use-execution.test.ts
     - name: Run Vitest storage lifecycle tests
       run: npm test
     - name: Install Playwright Browsers
