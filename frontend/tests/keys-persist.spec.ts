@@ -174,7 +174,7 @@ test.describe("Keys survive refresh (P0)", () => {
       expect.objectContaining({ groq: CANARY_GROQ, openrouter: CANARY_OPENROUTER }),
     )
     expect((runBody as unknown as Record<string, unknown>)["provider_keys"]).toEqual(
-      expect.objectContaining({ groq: CANARY_GROQ, gemini: CANARY_GEMINI }),
+      expect.objectContaining({ groq: CANARY_GROQ, openrouter: CANARY_OPENROUTER }),
     )
   })
 
