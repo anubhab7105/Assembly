@@ -169,6 +169,9 @@ async function idbSetImportState(history: HistoryRecord[], usage: UsageRecord[])
       return
     } catch (fallbackError) {
       const error = storageError("import history", fallbackError)
+      if (fallbackError instanceof Error && fallbackError.message.includes("rollback could not be confirmed")) {
+        error.message = fallbackError.message
+      }
       error.cause = openError
       throw error
     }
