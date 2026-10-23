@@ -46,6 +46,8 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   const [executions, setExecutions] = useState<HistoryRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const importInputRef = React.useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
 
   const loadExecutions = async () => {
     setLoading(true)
@@ -101,6 +103,8 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   }
 
   const handleImport = async (file: File, input: HTMLInputElement) => {
+    if (importing) return
+    setImporting(true)
     try {
       const text = await file.text()
       await storage.importJSON(text)
@@ -120,6 +124,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       // File inputs do not fire change again when the same file is selected.
       // Clearing it on both success and failure allows an immediate retry.
       input.value = ""
+      setImporting(false)
     }
   }
 
@@ -238,22 +243,27 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           <Button variant="outline" size="sm" className="flex-1" onClick={handleExport}>
             <Download className="size-3.5 mr-1" /> Export
           </Button>
-          <label className="flex-1">
-            <span className="flex min-h-9 cursor-pointer items-center justify-center gap-1 rounded-md border border-border px-2 py-1.5 text-xs hover:bg-muted">
-              <Upload className="size-3.5" /> Import
-            </span>
-            <input
-              type="file"
-              accept="application/json,.json"
-              aria-label="Import Assembly history JSON"
-              className="sr-only"
-              onChange={(e) => {
-                const input = e.currentTarget
-                const file = input.files?.[0]
-                if (file) void handleImport(file, input)
-              }}
-            />
-          </label>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            disabled={importing}
+            onClick={() => importInputRef.current?.click()}
+          >
+            <Upload className="size-3.5 mr-1" /> {importing ? "Importing…" : "Import"}
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            aria-label="Import Assembly history JSON"
+            className="hidden"
+            onChange={(e) => {
+              const input = e.currentTarget
+              const file = input.files?.[0]
+              if (file) void handleImport(file, input)
+            }}
+          />
         </div>
         <Link
           href="/settings"
