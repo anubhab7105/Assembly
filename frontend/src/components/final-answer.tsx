@@ -58,9 +58,12 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
   const confidenceColors = {
     High: "bg-success/20 text-success border-success/30",
     Moderate: "bg-warning/20 text-warning border-warning/30",
-    Low: "bg-danger/20 text-danger border-danger/30"
-  }
-  const conf = state.confidence || "High"
+    Low: "bg-danger/20 text-danger border-danger/30",
+    "Not assessed": "bg-muted/40 text-muted-foreground border-border",
+  } as const
+  // Missing data is not a confidence assessment. In particular, never turn a
+  // legacy history record or incomplete backend event into a positive claim.
+  const conf = state.confidence ?? "Not assessed"
   const confColor = confidenceColors[conf]
 
   const distinctFamilies = new Set(state.team.map(a => a.model_family)).size
@@ -79,7 +82,12 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
               Final Synthesis
             </CardTitle>
             <div className="flex items-center gap-3 mt-2">
-              <button 
+              <button
+                data-testid="confidence-label"
+                data-confidence={state.confidence ?? "unknown"}
+                aria-label={`Confidence assessment: ${conf}. ${verificationOpen ? "Hide" : "Show"} verification details`}
+                aria-expanded={verificationOpen}
+                aria-controls="final-answer-verification"
                 onClick={() => setVerificationOpen(!verificationOpen)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors hover:opacity-80 ${confColor}`}
               >
@@ -100,7 +108,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
 
         {/* Expandable Verification Panel */}
         {verificationOpen && (
-          <div className="bg-muted/30 border-b border-border/50 p-4 text-sm grid sm:grid-cols-4 gap-4 animate-in slide-in-from-top-2">
+          <div id="final-answer-verification" className="bg-muted/30 border-b border-border/50 p-4 text-sm grid sm:grid-cols-4 gap-4 animate-in slide-in-from-top-2">
             <div>
               <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Team Size</p>
               <p className="font-semibold text-foreground flex items-center gap-2">
