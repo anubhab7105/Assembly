@@ -54,7 +54,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [selection, setSelection] = useState<ModelSelection>({ selected: [], pins: {} })
-  const [hasKeys, setHasKeys] = useState(false)
   const [privacyAcked, setPrivacyAcked] = useState(false)
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
@@ -73,14 +72,17 @@ export default function Home() {
     const fams: string[] = []
     if (catalog) {
       for (const p of catalog.providers) {
-        if (!p.enabled || !enabled.has(p.id)) continue
+        if (!p.enabled || !p.limits_ready || !enabled.has(p.id)) continue
         for (const m of p.models) {
           if (selection.selected.length > 0 && !selection.selected.includes(m.id)) continue
           if (!fams.includes(m.family)) fams.push(m.family)
         }
       }
     }
-    return evaluateGate(fams, enabled.size)
+    const runnableProviderCount = catalog?.providers.filter(
+      (provider) => provider.enabled && provider.limits_ready && enabled.has(provider.id),
+    ).length ?? 0
+    return evaluateGate(fams, runnableProviderCount)
   }, [catalog, enabledIds, selection.selected])
 
   const gateSignature = JSON.stringify({
@@ -100,7 +102,6 @@ export default function Home() {
       globalVault.allKeys().then((k) => {
         // Tavily is an optional search credential, not a runnable model provider.
         const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
-        setHasKeys(modelProviderIds.length > 0)
         setEnabledIds(modelProviderIds)
       }).catch(() => {})
     }
@@ -453,7 +454,7 @@ export default function Home() {
           </p>
         </div>
 
-        {!hasKeys && (
+        {gate.families_count === 0 && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-3 py-2.5">
             <p className="text-xs font-medium text-warning">
               Set up provider keys in Settings. Two ready model families are the minimum for a normal run; three are recommended. Providers with unverified quota limits do not count toward readiness.
