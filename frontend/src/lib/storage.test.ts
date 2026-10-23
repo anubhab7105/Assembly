@@ -147,6 +147,15 @@ describe("BrowserStorage lifecycle contracts", () => {
     await expect(storage.importJSON(incoming)).rejects.toBeInstanceOf(StorageError)
     expect(await storage.listHistory()).toEqual([baseRecord])
     expect(await storage.getUsage()).toEqual(existingUsage)
+
+    // The one-shot storage failure is gone, so the same valid backup can be
+    // retried without clearing or recreating the existing local history.
+    await storage.importJSON(incoming)
+    expect((await storage.listHistory()).map((record) => record.id).sort()).toEqual(["imported", "run-1"])
+    expect(await storage.getUsage()).toEqual([
+      { provider: "groq", model: "m1", count: 2, tokens: 20 },
+      { provider: "gemini", model: "m2", count: 7, tokens: 70 },
+    ])
   })
 
   it("merges imports without deleting unrelated local history and is idempotent", async () => {
