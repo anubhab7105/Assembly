@@ -97,7 +97,12 @@ export default function Home() {
 
   useEffect(() => {
     const refreshKeys = () => {
-      globalVault.allKeys().then((k) => { setHasKeys(Object.keys(k).length > 0); setEnabledIds(Object.keys(k)) }).catch(() => {})
+      globalVault.allKeys().then((k) => {
+        // Tavily is an optional search credential, not a runnable model provider.
+        const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
+        setHasKeys(modelProviderIds.length > 0)
+        setEnabledIds(modelProviderIds)
+      }).catch(() => {})
     }
     refreshKeys()
     // The vault is persistent: re-read when the tab regains focus so the
@@ -450,7 +455,9 @@ export default function Home() {
 
         {!hasKeys && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-3 py-2.5">
-            <p className="text-xs font-medium text-warning">Add provider keys to run an investigation.</p>
+            <p className="text-xs font-medium text-warning">
+              Set up provider keys in Settings. Two ready model families are the minimum for a normal run; three are recommended. Providers with unverified quota limits do not count toward readiness.
+            </p>
             <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0">
               <Settings className="mr-1.5 size-3.5" />
               Add keys
