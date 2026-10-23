@@ -147,6 +147,9 @@ describe("useExecution hook", () => {
       expect(result.current.question).toBe("What is stored?")
     })
     expect(result.current.finalAnswer).toBe("Stored answer")
+    // Older local history records without a confidence field stay unknown;
+    // they must not be promoted to a high-confidence result by the UI.
+    expect(result.current.confidence).toBeNull()
     // No websocket for local runs.
     expect((globalThis as GlobalWithMockSocket).mockWs).toBeUndefined()
   })
