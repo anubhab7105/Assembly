@@ -3,15 +3,18 @@ import { BrowserStorage, StorageError } from "./storage"
 
 const local = new Map<string, string>()
 
-function setLocalStorage(options?: { blocked?: boolean; full?: boolean }) {
+function setLocalStorage(options?: { blocked?: boolean; full?: boolean; failAt?: number }) {
+  let writeCount = 0
   const storage = {
     getItem: (key: string) => {
       if (options?.blocked) throw new Error("localStorage blocked")
       return local.get(key) ?? null
     },
     setItem: (key: string, value: string) => {
+      writeCount += 1
       if (options?.blocked) throw new Error("localStorage blocked")
       if (options?.full) throw new Error("quota exceeded")
+      if (options?.failAt === writeCount) throw new Error("simulated one-off quota failure")
       local.set(key, value)
     },
     removeItem: (key: string) => {
@@ -93,24 +96,66 @@ describe("BrowserStorage lifecycle contracts", () => {
     expect(await storage.listHistory()).toEqual([baseRecord])
   })
 
-  it("skips malformed records and keeps the first duplicate history id", async () => {
+  it("rejects malformed records as a whole without changing existing history or usage", async () => {
+    const storage = new BrowserStorage()
+    await storage.saveHistory(baseRecord)
+    const existingUsage = [{ provider: "groq", model: "m1", count: 3, tokens: 10 }]
+    await storage.setUsage(existingUsage)
+    await expect(storage.importJSON(JSON.stringify({
+      version: 1,
+      history: [
+        { ...baseRecord, id: "run-2" },
+        { ...baseRecord, id: "", answer: "malformed" },
+      ],
+      usage: [{ provider: "", model: "broken", count: 0, tokens: 0 }],
+    }))).rejects.toThrow(/invalid history record at row 2/i)
+    expect(await storage.listHistory()).toEqual([baseRecord])
+    expect(await storage.getUsage()).toEqual(existingUsage)
+  })
+
+  it("keeps the first duplicate valid history id and merges duplicate usage conservatively", async () => {
     const storage = new BrowserStorage()
     await storage.importJSON(JSON.stringify({
       version: 1,
       history: [
         baseRecord,
         { ...baseRecord, answer: "duplicate should be ignored" },
-        { ...baseRecord, id: "", answer: "malformed" },
-        { ...baseRecord, id: "run-2", minutes: "five" },
       ],
       usage: [
         { provider: "groq", model: "m1", count: 3, tokens: 10 },
         { provider: "groq", model: "m1", count: 4, tokens: 9 },
-        { provider: "", model: "broken", count: 0, tokens: 0 },
       ],
     }))
     expect(await storage.listHistory()).toEqual([baseRecord])
     expect(await storage.getUsage()).toEqual([{ provider: "groq", model: "m1", count: 4, tokens: 10 }])
+  })
+
+  it("rolls back a partial localStorage import when writing usage fails", async () => {
+    const storage = new BrowserStorage()
+    await storage.saveHistory(baseRecord)
+    const existingUsage = [{ provider: "groq", model: "m1", count: 2, tokens: 20 }]
+    await storage.setUsage(existingUsage)
+    const incoming = JSON.stringify({
+      version: 1,
+      history: [{ ...baseRecord, id: "imported" }],
+      usage: [{ provider: "gemini", model: "m2", count: 7, tokens: 70 }],
+    })
+
+    // Simulate the second write failing after the history write succeeds.
+    // The one-shot failure still allows rollback writes to complete.
+    setLocalStorage({ failAt: 2 })
+    await expect(storage.importJSON(incoming)).rejects.toBeInstanceOf(StorageError)
+    expect(await storage.listHistory()).toEqual([baseRecord])
+    expect(await storage.getUsage()).toEqual(existingUsage)
+
+    // The one-shot storage failure is gone, so the same valid backup can be
+    // retried without clearing or recreating the existing local history.
+    await storage.importJSON(incoming)
+    expect((await storage.listHistory()).map((record) => record.id).sort()).toEqual(["imported", "run-1"])
+    expect(await storage.getUsage()).toEqual([
+      { provider: "groq", model: "m1", count: 2, tokens: 20 },
+      { provider: "gemini", model: "m2", count: 7, tokens: 70 },
+    ])
   })
 
   it("merges imports without deleting unrelated local history and is idempotent", async () => {

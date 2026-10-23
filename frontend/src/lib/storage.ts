@@ -134,6 +134,73 @@ async function idbSet(key: string, value: unknown): Promise<void> {
   }
 }
 
+/**
+ * Persist imported history and usage together. IndexedDB commits both keys
+ * in one transaction; the localStorage fallback snapshots both old values
+ * and rolls back if either write fails.
+ */
+async function idbSetImportState(history: HistoryRecord[], usage: UsageRecord[]): Promise<void> {
+  let db: IDBDatabase
+  try {
+    db = await idb()
+  } catch {
+    try {
+      if (typeof window === "undefined") throw new Error("Browser storage is unavailable")
+      const local = window.localStorage
+      const historyKey = "assembly:history"
+      const usageKey = "assembly:usage"
+      const previousHistory = local.getItem(historyKey)
+      const previousUsage = local.getItem(usageKey)
+
+      try {
+        local.setItem(historyKey, JSON.stringify(history))
+        local.setItem(usageKey, JSON.stringify(usage))
+      } catch (writeError) {
+        try {
+          if (previousHistory === null) local.removeItem(historyKey)
+          else local.setItem(historyKey, previousHistory)
+          if (previousUsage === null) local.removeItem(usageKey)
+          else local.setItem(usageKey, previousUsage)
+        } catch {
+          throw new Error("Import failed and storage rollback could not be confirmed. Do not clear site data; retry after freeing browser storage.")
+        }
+        throw writeError
+      }
+      return
+    } catch (fallbackError) {
+      const error = storageError("import history", fallbackError)
+      if (fallbackError instanceof Error && fallbackError.message.includes("rollback could not be confirmed")) {
+        error.message = fallbackError.message
+      }
+      throw error
+    }
+  }
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      let tx: IDBTransaction
+      try {
+        tx = db.transaction(STORE, "readwrite")
+        const store = tx.objectStore(STORE)
+        store.put(history, "history")
+        store.put(usage, "usage")
+      } catch (error) {
+        reject(error)
+        return
+      }
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error ?? new Error("Import transaction failed"))
+      tx.onabort = () => reject(tx.error ?? new Error("Import transaction was aborted"))
+    })
+  } catch (error) {
+    // A failed IndexedDB transaction aborts both puts, preserving old values.
+    // Do not write a competing localStorage copy here.
+    throw storageError("import history", error)
+  } finally {
+    db.close()
+  }
+}
+
 async function idbDel(key: string): Promise<void> {
   let idbError: unknown
   try {
@@ -266,26 +333,31 @@ function parseImport(text: string): { history: HistoryRecord[]; usage: UsageReco
   }
 
   const historyById = new Map<string, HistoryRecord>()
-  // Keep the first valid instance of a duplicated id. Invalid records are
-  // skipped, and duplicates never create duplicate visible history rows.
-  for (const candidate of raw.history) {
+  // Reject malformed records as a whole. Silently skipping rows makes a
+  // partial import look successful and can cause users to miss lost history.
+  // Valid duplicate ids remain deterministic: the first instance wins.
+  raw.history.forEach((candidate, index) => {
     const record = normalizeHistory(candidate)
-    if (record && !historyById.has(record.id)) historyById.set(record.id, record)
-  }
-  const usageByKey = new Map<string, UsageRecord>()
-  for (const candidate of raw.usage) {
-    const entry = normalizeUsage(candidate)
-    if (entry) {
-      const key = `${entry.provider}\u0000${entry.model}`
-      const previous = usageByKey.get(key)
-      if (!previous) usageByKey.set(key, entry)
-      else usageByKey.set(key, {
-        ...entry,
-        count: Math.max(previous.count, entry.count),
-        tokens: Math.max(previous.tokens, entry.tokens),
-      })
+    if (!record) {
+      throw new Error(`Import contains an invalid history record at row ${index + 1}. No saved data was changed.`)
     }
-  }
+    if (!historyById.has(record.id)) historyById.set(record.id, record)
+  })
+  const usageByKey = new Map<string, UsageRecord>()
+  raw.usage.forEach((candidate, index) => {
+    const entry = normalizeUsage(candidate)
+    if (!entry) {
+      throw new Error(`Import contains an invalid usage record at row ${index + 1}. No saved data was changed.`)
+    }
+    const key = `${entry.provider}\u0000${entry.model}`
+    const previous = usageByKey.get(key)
+    if (!previous) usageByKey.set(key, entry)
+    else usageByKey.set(key, {
+      ...entry,
+      count: Math.max(previous.count, entry.count),
+      tokens: Math.max(previous.tokens, entry.tokens),
+    })
+  })
   return {
     history: [...historyById.values()].slice(0, MAX_HISTORY),
     usage: [...usageByKey.values()].slice(0, MAX_USAGE),
@@ -374,9 +446,11 @@ class BaseStorage implements StorageService {
     }
 
     // Preserve unrelated local history/settings and make repeated imports
-    // idempotent. Both payloads have already been normalized before writes.
-    await idbSet("history", [...mergedHistory.values()].slice(0, MAX_HISTORY))
-    await idbSet("usage", [...mergedUsage.values()].slice(0, MAX_USAGE))
+    // idempotent. Both payloads are written as one logical transaction.
+    await idbSetImportState(
+      [...mergedHistory.values()].slice(0, MAX_HISTORY),
+      [...mergedUsage.values()].slice(0, MAX_USAGE),
+    )
   }
 }
 
