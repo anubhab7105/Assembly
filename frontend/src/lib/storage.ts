@@ -143,7 +143,7 @@ async function idbSetImportState(history: HistoryRecord[], usage: UsageRecord[])
   let db: IDBDatabase
   try {
     db = await idb()
-  } catch (openError) {
+  } catch {
     try {
       if (typeof window === "undefined") throw new Error("Browser storage is unavailable")
       const local = window.localStorage
@@ -172,7 +172,6 @@ async function idbSetImportState(history: HistoryRecord[], usage: UsageRecord[])
       if (fallbackError instanceof Error && fallbackError.message.includes("rollback could not be confirmed")) {
         error.message = fallbackError.message
       }
-      error.cause = openError
       throw error
     }
   }
