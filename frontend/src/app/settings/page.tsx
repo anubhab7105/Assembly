@@ -41,7 +41,7 @@ export default function SetupPage() {
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-foreground">Add your free keys</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Paste two free keys. Get answers from three or more model families.
+                Configure at least two ready model families. Three are recommended; providers with unverified quota limits are excluded from runs.
               </p>
             </div>
           </div>
