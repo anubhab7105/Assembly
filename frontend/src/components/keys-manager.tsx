@@ -294,6 +294,9 @@ export function KeysManager() {
         <CardHeader className="pb-3">
           <CardTitle>Minimum to start</CardTitle>
           <CardDescription data-testid="minimum-to-start-text">{banner}</CardDescription>
+          <CardDescription className="mt-1">
+            Quick setup: (1) save keys for available providers, (2) check that each provider has usable quota limits, and (3) return to New Investigation. Three distinct model families are recommended; two can run with a warning. The readiness status below counts only configured providers whose quota metadata is ready.
+          </CardDescription>
         </CardHeader>
       </Card>
       <Card className={gate.level === "OK" ? "border-success/30" : "border-warning/30"}>
