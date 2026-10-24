@@ -122,8 +122,17 @@ def main() -> int:
             env=env,
         )
         frontend_env = env.copy()
-        # The frontend gets the public API endpoint and app mode; it does not
-        # need the backend's provider keys or other server-only environment.
+        # Do not pass provider keys to the frontend process; it needs only the
+        # local API endpoint and web mode. Browser-supplied keys remain in the UI.
+        for key_name in (
+            "GEMINI_API_KEY",
+            "GROQ_API_KEY",
+            "CEREBRAS_API_KEY",
+            "OPENROUTER_API_KEY",
+            "HUGGINGFACE_API_KEY",
+            "TAVILY_API_KEY",
+        ):
+            frontend_env.pop(key_name, None)
         frontend = subprocess.Popen(
             _command(["npm", "run", "dev", "--", "--hostname", args.frontend_host, "--port", args.frontend_port]),
             cwd=FRONTEND,
