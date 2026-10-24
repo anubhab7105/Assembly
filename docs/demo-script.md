@@ -27,6 +27,10 @@ This script is timed for a fast-paced 3-minute hackathon pitch.
    - **If the live run stalls (provider rate limits, network issues)**: Wait 15 seconds. The UI will automatically show a "Play recorded run" button. Click it.
    - **If you need to instantly force a fallback**: Add `?demo=1` to the URL to reveal the hidden "Recorded demo" toggle before clicking Send.
 
+## Pre-demo release gate
+
+Before presenting the deployed R1 website as reliable, complete the [Hosted Web Rehearsal runbook](hosted-rehearsal.md): verify a full 5-minute run on the actual host, measure first-progress latency and final elapsed time, record ten attempts, test safe failure outcomes, and rehearse a recorded replay. CI or a local mocked run is not a substitute for this evidence. If the hosted stream is terminated by the platform, present the rehearsed local or recorded fallback instead of claiming the hosted rung is ready.
+
 ## Likely Judge Questions & Concise Answers
 
 1. **What is the cost of running this?**

@@ -6,6 +6,14 @@
 - Regression coverage: added deterministic requests for malformed, negative, and oversized lengths. Assertions check status codes and generic response bodies; no provider or external network is involved.
 - Verification: targeted test execution is pending CI because repository code is edited through the GitHub API in this environment; run `pytest -q tests/test_security_boundaries.py tests/test_limits.py tests/test_stateless_web.py`.
 
+
+## 2026-10-24 — Issue #37 release rehearsal and local fallback
+
+- Added `scripts/dev_web.py` as a one-command managed local web stack launcher. It starts the FastAPI backend and Next.js dev frontend together, injects local API/CORS configuration without writing `.env` files, checks port conflicts and readiness, and shuts down both child processes together.
+- Added `docs/hosted-rehearsal.md` with a live-host smoke-test matrix, measurement guidance, ten-attempt release record, privacy guardrails, local fallback, and recorded replay instructions.
+- Added offline launcher tests; no live keys, provider traffic, or hosted environment variables are required in CI.
+- Live-host status: NOT RUN in this automated change. The target deployment, provider keys, first-progress latency, 5-minute host cutoff, and ten-run rehearsal must be verified by the operator before calling R1 demo-ready.
+
 # Project Progress Log
 
 ## 2026-10-24 — Patchable frontend high-severity dependency paths (audit:high)

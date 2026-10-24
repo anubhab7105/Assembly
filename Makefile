@@ -1,4 +1,4 @@
-.PHONY: test lint run install-dev
+.PHONY: test lint run run-web install-dev
 
 install-dev:
 	python -m pip install -r requirements.txt -r requirements-dev.txt
@@ -12,3 +12,6 @@ lint:
 
 run:
 	python -m uvicorn src.main:app --reload
+
+run-web:
+	python scripts/dev_web.py
