@@ -44,7 +44,6 @@ providers:
     # Keep enabled only for key setup/test; quota freshness guard excludes it
     # from routing until the account limits below have real values.
     quota_source: https://aistudio.google.com/rate-limit
-    quota_last_verified: null # checked: pending account-dashboard verification
     enabled: true
     privacy_note: "Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information."
     key_steps:
@@ -167,10 +166,11 @@ providers:
     url: https://openrouter.ai/api/v1
     key_url: https://openrouter.ai/keys
     # Public Free-plan page documents 50 requests/day. Per-model and
-    # context assumptions below still need a complete current recheck.
-    # Values last checked 2026-10-09, so stale metadata blocks routing.
+    # context assumptions require account/model-specific confirmation.
+    # Checked 2026-10-24 (public plan page only); values still stale until
+    # the account's exact quota fields are checked on the dashboard.
     quota_source: https://openrouter.ai/pricing
-    quota_last_verified: 2026-10-09
+    quota_last_verified: 2026-10-24
     enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
