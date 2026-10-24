@@ -78,11 +78,6 @@ providers:
     # 2026-10-09; stale metadata is deliberately blocked until re-verified.
     quota_source: https://console.groq.com/docs/rate-limits
     quota_last_verified: 2026-10-09
-    # Public Free-plan page documents an account-wide 50 requests/day cap;
-    # per-model/context assumptions below require the model page/dashboard.
-    # This was last verified 2026-10-09 and is stale pending full recheck.
-    quota_source: https://openrouter.ai/pricing
-    quota_last_verified: 2026-10-09
     enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
@@ -171,6 +166,11 @@ providers:
     base: openai-compatible
     url: https://openrouter.ai/api/v1
     key_url: https://openrouter.ai/keys
+    # Public Free-plan page documents 50 requests/day. Per-model and
+    # context assumptions below still need a complete current recheck.
+    # Values last checked 2026-10-09, so stale metadata blocks routing.
+    quota_source: https://openrouter.ai/pricing
+    quota_last_verified: 2026-10-09
     enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
