@@ -8,6 +8,14 @@
 
 # Project Progress Log
 
+## 2026-10-24 — Patchable frontend high-severity dependency paths (audit:high)
+
+- Reproduced audit paths: `body-parser@2.3.0`, `undici@7.30.0` and `undici@8.11.2`, and root `zod@4.6.5` were behind published fixes. `body-parser@2.4.0` also requires `qs@6.16.1`, which fixes a separate dependency issue.
+- Change: updated the lockfile to `body-parser@2.4.0`, `qs@6.16.1`, `undici@7.30.1`, `undici@8.12.3`, and `zod@4.6.7`; declared Zod explicitly so the manifest matches the locked patched root version.
+- Upstream gap: `shadcn@4.21.4` and `@shadcn/registry@0.1.3` still resolve nested Zod 3.x. Added a package-scoped, short-dated exception for the Zod advisory only; no blanket allowance was added. Review by 2026-11-07 and remove as soon as the CLI dependency chain publishes a compatible patched release.
+- Retained the existing `braces` exception as a separate unpatched transitive finding.
+- Verification to run in CI: `npm ci --legacy-peer-deps`, `npm run audit:high`, and `npm run audit:test`; this environment cannot execute npm against the registry, so no local pass is claimed.
+
 ## 2026-10-15 — Clear stateless run request secrets on terminal paths (Issue #12)
 
 - Boundary tested: `POST /api/run` owns provider and search-key dictionaries only for one run; run failures must not echo key material or leave request-only state behind.
