@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
-from src.providers.config import load_models_config, provider_limits_issue
+from src.providers.config import QUOTA_METADATA_MAX_AGE_DAYS, load_models_config, provider_limits_issue
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 
@@ -35,6 +35,9 @@ class CatalogProvider(BaseModel):
     enabled: bool
     limits_ready: bool
     limits_issue: str | None = None
+    quota_source: str | None = None
+    quota_last_verified: str | None = None
+    quota_stale_after_days: int = QUOTA_METADATA_MAX_AGE_DAYS
     key_url: str = ""
     privacy_note: str | None = None
     key_steps: list[str] | None = None
@@ -102,6 +105,13 @@ def get_catalog() -> CatalogResponse:
                 enabled=spec.enabled,
                 limits_ready=limits_ready,
                 limits_issue=limits_issue,
+                quota_source=spec.quota_source,
+                quota_last_verified=(
+                    spec.quota_last_verified.isoformat()
+                    if spec.quota_last_verified
+                    else None
+                ),
+                quota_stale_after_days=QUOTA_METADATA_MAX_AGE_DAYS,
                 key_url=spec.key_url,
                 privacy_note=spec.privacy_note,
                 key_steps=list(spec.key_steps) if spec.key_steps else None,
