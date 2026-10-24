@@ -6,7 +6,7 @@ No test touches the network: respx intercepts all httpx calls, and the
 conftest socket guard would fail anything that slipped through.
 """
 
-from datetime import date, timedelta
+from datetime import date
 
 import httpx
 import pytest
