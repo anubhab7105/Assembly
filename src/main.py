@@ -168,18 +168,33 @@ async def limit_upload_size(request: Request, call_next):
     from src.core.rate_limit import client_ip, count_invalid_request
 
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > settings.max_body_bytes:
+    if content_length is not None:
+        # Content-Length is untrusted input. Never let malformed or negative
+        # values bubble out of middleware as an unhandled 500.
         try:
-            await count_invalid_request(client_ip(request))
-        except HTTPException as exc:
-            if exc.status_code == 429:
-                return JSONResponse(
-                    status_code=429,
-                    content={"detail": "Too many invalid requests; try again later."},
-                )
-        except Exception:  # noqa: BLE001 — oversized bodies fail closed either way
-            pass
-        return JSONResponse(status_code=413, content={"detail": "Request body too large."})
+            body_size = int(content_length)
+        except (TypeError, ValueError):
+            return JSONResponse(
+                status_code=400, content={"detail": "Invalid Content-Length."}
+            )
+        if body_size < 0:
+            return JSONResponse(
+                status_code=400, content={"detail": "Invalid Content-Length."}
+            )
+        if body_size > settings.max_body_bytes:
+            try:
+                await count_invalid_request(client_ip(request))
+            except HTTPException as exc:
+                if exc.status_code == 429:
+                    return JSONResponse(
+                        status_code=429,
+                        content={"detail": "Too many invalid requests; try again later."},
+                    )
+            except Exception:  # noqa: BLE001 — oversized bodies fail closed either way
+                pass
+            return JSONResponse(
+                status_code=413, content={"detail": "Request body too large."}
+            )
 
     # SSE/WebSocket origin check (web mode with allow-list configured).
     if settings.is_web and settings.cors_origins:
