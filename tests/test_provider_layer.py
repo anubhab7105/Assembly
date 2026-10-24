@@ -205,7 +205,7 @@ def test_validate_filled_raises_on_enabled_nulls(tmp_path) -> None:
 def test_repo_catalog_validation_flags_gemini() -> None:
     from src.providers.config import LimitsNotFilledError, validate_limits_filled
 
-    with pytest.raises(LimitsNotFilledError, match="gemini-3.8-flash"):
+    with pytest.raises(LimitsNotFilledError, match="quota_last_verified"):
         validate_limits_filled(load_models_config())
 
 
