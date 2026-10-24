@@ -36,9 +36,9 @@ providers:
     # 50 models incl. gemini-3.8-flash) and disabling hides the frontend
     # setup card + makes POST /api/keys/test 404 ("Unknown or disabled
     # provider") — verified by 12 test failures on the disabled variant.
-    # rpm/rpd/tpm stay null pending dashboard values or a re-probe that
-    # returns rate-limit headers (2026-10-12 60 s probe: HTTP 503
-    # high-demand, no headers); the router loud-skips until filled.
+    # rpm/rpd/tpm stay null pending account-dashboard values (2026-10-12
+    # 60 s probe returned HTTP 503 high-demand with no headers). The router
+    # blocks this provider until quota values AND a verification date exist.
     # Official docs say exact limits depend on the project and must be read
     # in AI Studio. No live account dashboard was available for this change.
     # The provider is intentionally unavailable for routing until dashboard
@@ -62,12 +62,11 @@ providers:
         roles: [solver, researcher, critic, synthesizer, planner]
         scope: model
         limits:
-          # rpm/rpd/tpm: pending re-probe (verify 2026-10-09 transport-error
-          # at 20 s; re-run with --provider gemini --timeout 60 first).
-          rpm: null # source: aistudio.google.com/rate-limit; checked: pending re-probe
-          rpd: null # source: aistudio.google.com/rate-limit; checked: pending re-probe
-          tpm: null # source: aistudio.google.com/rate-limit; checked: pending re-probe
-          context_tokens: 1000000 # source: aistudio.google.com/rate-limit; checked: pending re-probe
+          # Context size is also unverified; don't use this placeholder.
+          rpm: null # source: https://ai.google.dev/gemini-api/docs/rate-limits; checked: pending account dashboard
+          rpd: null # source: https://ai.google.dev/gemini-api/docs/rate-limits; checked: pending account dashboard
+          tpm: null # source: https://ai.google.dev/gemini-api/docs/rate-limits; checked: pending account dashboard
+          context_tokens: null # source: https://ai.google.dev/gemini-api/docs/models; checked: pending model confirmation
 
   groq:
     base: openai-compatible
