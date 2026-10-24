@@ -40,10 +40,11 @@ providers:
     # returns rate-limit headers (2026-10-12 60 s probe: HTTP 503
     # high-demand, no headers); the router loud-skips until filled.
     # Official docs say exact limits depend on the project and must be read
-    # in AI Studio. No live account dashboard is available in this repo.
-    # Keep enabled only for key setup/test; quota freshness guard excludes it
-    # from routing until the account limits below have real values.
+    # in AI Studio. No live account dashboard was available for this change.
+    # The provider is intentionally unavailable for routing until dashboard
+    # values and an actual verification date are recorded.
     quota_source: https://aistudio.google.com/rate-limit
+    quota_last_verified: null # pending account-dashboard verification
     enabled: true
     privacy_note: "Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information."
     key_steps:
