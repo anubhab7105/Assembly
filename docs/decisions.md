@@ -2,6 +2,12 @@
 
 Append-only log of significant technical and product decisions.
 
+## 2026-10-24 — One-command local web fallback and evidence-based hosted release gate
+
+- Context: Issue #37 requires release evidence for hosted streaming, but unit/CI tests cannot establish behavior of a live deployment or provider quotas. The documented `make run` started only the backend and left a second frontend command.
+- Decision: Add a local supervisor that starts frontend/backend together, checks chosen ports and HTTP readiness, injects local connection/CORS environment for children, and cleans up both children on exit. Add a runbook for measuring hosted SSE timing, budget enforcement, safe failures, replay readiness, and ten attempts. Keep live secrets and hosted-provider tests out of default CI.
+- Consequences: One-command local fallback becomes reproducible; release readiness remains blocked until the operator records actual hosted evidence and a replay rehearsal.
+
 ## Format
 
 ```markdown
