@@ -18,83 +18,162 @@ from src.providers.config import ProviderSpec, provider_limits_issue
 
 
 def test_quota_metadata_requires_source_and_verification_date() -> None:
-    spec = ProviderSpec.model_validate({
-        "base": "openai-compatible",
-        "url": "https://api.test-verify/v1",
-        "enabled": True,
-        "models": [{
-            "id": "m1",
-            "family": "gpt-oss",
-            "roles": ["solver"],
-            "limits": {"rpm": 30, "rpd": 1000, "tpm": 8000, "context_tokens": 8000},
-        }],
-    })
-    assert "quota_source" in provider_limits_issue("testprov", spec)
-    assert "quota_last_verified" in provider_limits_issue("testprov", spec)
+    spec = ProviderSpec.model_validate(
+        {
+            "base": "openai-compatible",
+            "url": "https://api.test-verify/v1",
+            "enabled": True,
+            "models": [
+                {
+                    "id": "m1",
+                    "family": "gpt-oss",
+                    "roles": ["solver"],
+                    "limits": {
+                        "rpm": 30,
+                        "rpd": 1000,
+                        "tpm": 8000,
+                        "context_tokens": 8000,
+                    },
+                }
+            ],
+        }
+    )
+    issue = provider_limits_issue("testprov", spec)
+    assert issue is not None and "quota_source" in issue
+    dated = spec.model_copy(
+        update={"quota_source": "https://provider.example/limits"}
+    )
+    issue = provider_limits_issue("testprov", dated)
+    assert issue is not None and "quota_last_verified" in issue
 
 
 def test_verified_quota_metadata_is_routable() -> None:
-    spec = ProviderSpec.model_validate({
-        "base": "openai-compatible",
-        "url": "https://api.test-verify/v1",
-        "enabled": True,
-        "quota_source": "https://provider.example/limits",
-        "quota_last_verified": date(2026, 10, 24),
-        "models": [{
-            "id": "m1",
-            "family": "gpt-oss",
-            "roles": ["solver"],
-            "limits": {"rpm": 30, "rpd": 1000, "tpm": 8000, "context_tokens": 8000},
-        }],
-    })
+    spec = ProviderSpec.model_validate(
+        {
+            "base": "openai-compatible",
+            "url": "https://api.test-verify/v1",
+            "enabled": True,
+            "quota_source": "https://provider.example/limits",
+            "quota_last_verified": date(2026, 10, 24),
+            "models": [
+                {
+                    "id": "m1",
+                    "family": "gpt-oss",
+                    "roles": ["solver"],
+                    "limits": {
+                        "rpm": 30,
+                        "rpd": 1000,
+                        "tpm": 8000,
+                        "context_tokens": 8000,
+                    },
+                }
+            ],
+        }
+    )
     assert provider_limits_issue("testprov", spec, today=date(2026, 10, 24)) is None
 
 
 def test_stale_metadata_is_unavailable_not_zero_or_unlimited() -> None:
-    spec = ProviderSpec.model_validate({
-        "base": "openai-compatible",
-        "url": "https://api.test-verify/v1",
-        "enabled": True,
-        "quota_source": "https://provider.example/limits",
-        "quota_last_verified": date(2026, 10, 9),
-        "models": [{
-            "id": "m1",
-            "family": "gpt-oss",
-            "roles": ["solver"],
-            "limits": {"rpm": 30, "rpd": 1000, "tpm": 8000, "context_tokens": 8000},
-        }],
-    })
-    assert "STALE" in provider_limits_issue("testprov", spec, today=date(2026, 10, 24))
+    spec = ProviderSpec.model_validate(
+        {
+            "base": "openai-compatible",
+            "url": "https://api.test-verify/v1",
+            "enabled": True,
+            "quota_source": "https://provider.example/limits",
+            "quota_last_verified": date(2026, 10, 9),
+            "models": [
+                {
+                    "id": "m1",
+                    "family": "gpt-oss",
+                    "roles": ["solver"],
+                    "limits": {
+                        "rpm": 30,
+                        "rpd": 1000,
+                        "tpm": 8000,
+                        "context_tokens": 8000,
+                    },
+                }
+            ],
+        }
+    )
+    issue = provider_limits_issue("testprov", spec, today=date(2026, 10, 24))
+    assert issue is not None and "STALE" in issue
 
 
 def test_future_verification_date_is_invalid() -> None:
-    spec = ProviderSpec.model_validate({
-        "base": "openai-compatible",
-        "url": "https://api.test-verify/v1",
-        "enabled": True,
-        "quota_source": "https://provider.example/limits",
-        "quota_last_verified": date(2026, 10, 25),
-        "models": [{
-            "id": "m1",
-            "family": "gpt-oss",
-            "roles": ["solver"],
-            "limits": {"rpm": 30, "rpd": 1000, "tpm": 8000, "context_tokens": 8000},
-        }],
-    })
-    assert "future" in provider_limits_issue("testprov", spec, today=date(2026, 10, 24))
+    spec = ProviderSpec.model_validate(
+        {
+            "base": "openai-compatible",
+            "url": "https://api.test-verify/v1",
+            "enabled": True,
+            "quota_source": "https://provider.example/limits",
+            "quota_last_verified": date(2026, 10, 25),
+            "models": [
+                {
+                    "id": "m1",
+                    "family": "gpt-oss",
+                    "roles": ["solver"],
+                    "limits": {
+                        "rpm": 30,
+                        "rpd": 1000,
+                        "tpm": 8000,
+                        "context_tokens": 8000,
+                    },
+                }
+            ],
+        }
+    )
+    issue = provider_limits_issue("testprov", spec, today=date(2026, 10, 24))
+    assert issue is not None and "future" in issue
+
+
+def test_invalid_quota_source_is_rejected() -> None:
+    spec = ProviderSpec.model_validate(
+        {
+            "base": "openai-compatible",
+            "url": "https://api.test-verify/v1",
+            "enabled": True,
+            "quota_source": "copied-from-a-chat",
+            "quota_last_verified": date(2026, 10, 24),
+            "models": [
+                {
+                    "id": "m1",
+                    "family": "gpt-oss",
+                    "roles": ["solver"],
+                    "limits": {
+                        "rpm": 30,
+                        "rpd": 1000,
+                        "tpm": 8000,
+                        "context_tokens": 8000,
+                    },
+                }
+            ],
+        }
+    )
+    issue = provider_limits_issue("testprov", spec, today=date(2026, 10, 24))
+    assert issue is not None and "quota_source" in issue
 
 
 def test_disabled_provider_with_unknown_limits_is_not_routable_requirement() -> None:
-    spec = ProviderSpec.model_validate({
-        "base": "openai-compatible",
-        "enabled": False,
-        "models": [{
-            "id": "m1",
-            "family": "gpt-oss",
-            "roles": ["solver"],
-            "limits": {"rpm": None, "rpd": None, "tpm": None, "context_tokens": None},
-        }],
-    })
+    spec = ProviderSpec.model_validate(
+        {
+            "base": "openai-compatible",
+            "enabled": False,
+            "models": [
+                {
+                    "id": "m1",
+                    "family": "gpt-oss",
+                    "roles": ["solver"],
+                    "limits": {
+                        "rpm": None,
+                        "rpd": None,
+                        "tpm": None,
+                        "context_tokens": None,
+                    },
+                }
+            ],
+        }
+    )
     assert provider_limits_issue("testprov", spec, today=date(2026, 10, 24)) is None
 
 
