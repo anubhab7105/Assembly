@@ -79,7 +79,7 @@ def test_router_excludes_provider_with_stale_quota_metadata(tmp_path) -> None:
     raw = path.read_text(encoding="utf-8")
     raw = raw.replace(
         "providers:",
-        "providers:\\n  pa:\\n    quota_source: https://example.test/limits\\n"
+        "providers:\n  pa:\n    quota_source: https://example.test/limits\n"
         f"    quota_last_verified: {(date.today() - timedelta(days=15)).isoformat()}",
         1,
     )
