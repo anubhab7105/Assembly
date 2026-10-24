@@ -6,6 +6,7 @@ no response or log.
 """
 
 import logging
+from datetime import date
 
 from fastapi.testclient import TestClient
 
@@ -25,13 +26,53 @@ def _ctx(**over):
         "usage_snapshot": [],
     }
     args.update(over)
-    return build_request_context(
-        args["provider_keys"],
-        args["search_keys"],
-        args["selected"],
-        args["pins"],
-        args["usage_snapshot"],
-    )
+    # Keep tests independent of production models.yaml freshness. Offline
+    # tests use a temporary, explicit synthetic catalog for provider keys.
+    from pathlib import Path
+    import tempfile
+
+    import src.providers.config as config_mod
+    from tests.conftest import make_models_yaml
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = make_models_yaml(
+            Path(tmp),
+            {
+                "groq": [
+                    {
+                        "id": "openai/gpt-oss-20b",
+                        "family": "gpt-oss",
+                        "roles": ["solver", "critic", "planner"],
+                    }
+                ],
+                "openrouter": [
+                    {
+                        "id": "google/gemma-4-26b-a4b-it:free",
+                        "family": "gemma",
+                        "roles": ["solver", "critic", "planner"],
+                    }
+                ],
+                "cerebras": [
+                    {
+                        "id": "gpt-oss-120b",
+                        "family": "qwen",
+                        "roles": ["solver", "critic", "planner"],
+                    }
+                ],
+            },
+        )
+        original = config_mod.default_catalog_path
+        config_mod.default_catalog_path = lambda: path
+        try:
+            return build_request_context(
+                args["provider_keys"],
+                args["search_keys"],
+                args["selected"],
+                args["pins"],
+                args["usage_snapshot"],
+            )
+        finally:
+            config_mod.default_catalog_path = original
 
 
 def test_builder_empty_keys_is_blocked() -> None:
