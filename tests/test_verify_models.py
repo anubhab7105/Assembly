@@ -12,9 +12,8 @@ import httpx
 import pytest
 import respx
 
-from src.providers.config import ProviderSpec, provider_limits_issue
-
 import scripts.verify_models as verify
+from src.providers.config import ProviderSpec, provider_limits_issue
 
 
 
