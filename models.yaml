@@ -7,6 +7,7 @@
 # the fast models without any code changes.
 #
 # SHAPE (one shape only — no legacy aliases):
+#   providers.<id>: {quota_source, quota_last_verified, enabled, ...}
 #   providers.<id>.models[]: {id, family, roles, scope, limits}
 #   limits: {rpm, rpd, tpm, context_tokens} — each is a positive int, the
 #     literal `unlimited` (provider enforces no limit there; the limiter
@@ -17,11 +18,11 @@
 # half-migrated file fails validation loudly instead of routing on
 # stale numbers.
 #
-# FILL RULE: every value carries a source + checked-date comment. Never
-# invent numbers — fill them from the dashboard page named in the comment
-# (or `scripts/verify_models.py --save` output). Null on an ENABLED
-# provider fails startup loudly (validate_limits_filled); providers you
-# have not filled in must stay enabled: false.
+# FILL RULE: never invent numbers or refresh a date without checking the
+# source. Enabled provider metadata requires a source and last-verified date
+# within 14 days; each model's required fields must also be filled. Stale or
+# unknown enabled entries remain visible for key setup but cannot route or
+# contribute capacity. Disabled providers may keep null limits.
 # Families must come from the KNOWN_FAMILIES set in src/providers/config.py
 # (gemini, llama, qwen, gpt-oss, deepseek, mistral, kimi, gemma, nemotron,
 # allam, phi). Unknown families fail startup loudly — that is intentional:
