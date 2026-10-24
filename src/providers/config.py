@@ -7,6 +7,7 @@ file, or a half-migrated shape — a misconfigured catalog must crash at
 startup, never silently route to the wrong model.
 
 Shape (one shape only — no legacy aliases):
+  providers.<id>: quota_source + quota_last_verified
   providers.<id>.models[].limits: {rpm, rpd, tpm, context_tokens}
   providers.<id>.models[].scope: "model" | "account"
 
