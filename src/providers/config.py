@@ -7,6 +7,7 @@ file, or a half-migrated shape — a misconfigured catalog must crash at
 startup, never silently route to the wrong model.
 
 Shape (one shape only — no legacy aliases):
+  providers.<id>: quota_source + quota_last_verified
   providers.<id>.models[].limits: {rpm, rpd, tpm, context_tokens}
   providers.<id>.models[].scope: "model" | "account"
 
@@ -17,6 +18,7 @@ see validate_limits_filled — fill it from the provider dashboard or set
 enabled: false.
 """
 
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -48,6 +50,12 @@ KNOWN_ROLES = frozenset({"solver", "researcher", "critic", "synthesizer", "plann
 
 # Provider backends the registry knows how to construct.
 KNOWN_BASES = frozenset({"openai-compatible", "google-genai", "huggingface"})
+
+
+# Quota evidence must be refreshed before a release/demo. Metadata older
+# than this window is treated as stale and is never used for routing or
+# capacity estimates, even if numeric values remain in the YAML.
+QUOTA_METADATA_MAX_AGE_DAYS = 14
 
 
 class LimitsNotFilledError(ValueError):
@@ -156,6 +164,14 @@ class ProviderSpec(BaseModel):
         description="Provider-specific signup fact or null when unconfirmed.",
     )
     models: list[ModelSpec] = Field(default_factory=list)
+    quota_source: str | None = Field(
+        default=None,
+        description="Authoritative URL or dashboard location for quota evidence.",
+    )
+    quota_last_verified: date | None = Field(
+        default=None,
+        description="Date the provider quota fields were checked against the source.",
+    )
 
     @field_validator("base")
     @classmethod
@@ -200,15 +216,47 @@ class ModelsConfig(BaseModel):
         return self.model_spec(provider_id, model_id).scope
 
 
-def validate_provider_limits(provider_id: str, spec: ProviderSpec) -> None:
-    """Raise LimitsNotFilledError listing every null field on a provider.
+def quota_metadata_issue(
+    provider_id: str,
+    spec: ProviderSpec,
+    *,
+    today: date | None = None,
+    max_age_days: int = QUOTA_METADATA_MAX_AGE_DAYS,
+) -> str | None:
+    """Return why enabled provider quota metadata is not safe to plan with.
 
-    Only applies to enabled providers with at least one model: anything
-    else is either opted out (enabled: false) or has nothing to check.
-    "unlimited" counts as filled (known); null counts as unknown.
+    Metadata is valid only when a source URL/location and verification date
+    are present, recent, and not in the future, and required quota fields are
+    filled for every model. Disabled providers are intentionally not gated.
     """
     if not spec.enabled or not spec.models:
-        return
+        return None
+    current_date = today or date.today()
+    if not spec.quota_source or not spec.quota_source.strip():
+        return f"QUOTA METADATA MISSING for provider {provider_id!r}: add quota_source"
+    if spec.quota_last_verified is None:
+        return f"QUOTA METADATA MISSING for provider {provider_id!r}: add quota_last_verified"
+    source = spec.quota_source.strip()
+    if not (
+        source.startswith("https://")
+        or source.lower().startswith(("ai studio:", "dashboard:", "provider console:"))
+    ):
+        return (
+            f"QUOTA METADATA INVALID for provider {provider_id!r}: "
+            "quota_source must be an HTTPS URL or a documented dashboard location"
+        )
+    if spec.quota_last_verified > current_date:
+        return (
+            f"QUOTA METADATA INVALID for provider {provider_id!r}: "
+            "quota_last_verified is in the future"
+        )
+    expires_on = spec.quota_last_verified + timedelta(days=max_age_days)
+    if current_date > expires_on:
+        return (
+            f"QUOTA METADATA STALE for provider {provider_id!r}: verified "
+            f"{spec.quota_last_verified.isoformat()}, maximum age {max_age_days} days; "
+            "recheck the provider dashboard before routing"
+        )
     problems: list[str] = []
     for model in spec.models:
         missing = [
@@ -219,14 +267,36 @@ def validate_provider_limits(provider_id: str, spec: ProviderSpec) -> None:
         if missing:
             problems.append(f"{model.id}: {', '.join(missing)}")
     if problems:
-        raise LimitsNotFilledError(
+        return (
             f"LIMITS NOT FILLED for enabled provider {provider_id!r} "
-            f"(fill from the dashboard or set enabled: false): " + "; ".join(problems)
+            "(fill from the dashboard or set enabled: false): " + "; ".join(problems)
         )
+    return None
+
+
+def validate_provider_limits(
+    provider_id: str,
+    spec: ProviderSpec,
+    *,
+    today: date | None = None,
+    max_age_days: int = QUOTA_METADATA_MAX_AGE_DAYS,
+) -> None:
+    """Raise LimitsNotFilledError unless quota metadata is complete and fresh."""
+    issue = quota_metadata_issue(
+        provider_id, spec, today=today, max_age_days=max_age_days
+    )
+    if issue:
+        raise LimitsNotFilledError(issue)
 
 
 
-def provider_limits_issue(provider_id: str, spec: ProviderSpec) -> str | None:
+def provider_limits_issue(
+    provider_id: str,
+    spec: ProviderSpec,
+    *,
+    today: date | None = None,
+    max_age_days: int = QUOTA_METADATA_MAX_AGE_DAYS,
+) -> str | None:
     """Return a safe, actionable reason a provider cannot be routed.
 
     Provider limit gaps are a capability/readiness issue, not a reason to
@@ -234,14 +304,16 @@ def provider_limits_issue(provider_id: str, spec: ProviderSpec) -> str | None:
     a provider is never advertised as runnable while its limits are unknown.
     """
     try:
-        validate_provider_limits(provider_id, spec)
+        validate_provider_limits(
+            provider_id, spec, today=today, max_age_days=max_age_days
+        )
     except LimitsNotFilledError as exc:
         return str(exc)
     return None
 
 
 def validate_limits_filled(config: ModelsConfig) -> None:
-    """Raise LimitsNotFilledError if any enabled provider has null limits."""
+    """Raise LimitsNotFilledError if any enabled provider metadata is missing or stale."""
     for provider_id, spec in config.providers.items():
         validate_provider_limits(provider_id, spec)
 

@@ -7,6 +7,7 @@
 # the fast models without any code changes.
 #
 # SHAPE (one shape only — no legacy aliases):
+#   providers.<id>: {quota_source, quota_last_verified, enabled, ...}
 #   providers.<id>.models[]: {id, family, roles, scope, limits}
 #   limits: {rpm, rpd, tpm, context_tokens} — each is a positive int, the
 #     literal `unlimited` (provider enforces no limit there; the limiter
@@ -17,11 +18,11 @@
 # half-migrated file fails validation loudly instead of routing on
 # stale numbers.
 #
-# FILL RULE: every value carries a source + checked-date comment. Never
-# invent numbers — fill them from the dashboard page named in the comment
-# (or `scripts/verify_models.py --save` output). Null on an ENABLED
-# provider fails startup loudly (validate_limits_filled); providers you
-# have not filled in must stay enabled: false.
+# FILL RULE: never invent numbers or refresh a date without checking the
+# source. Enabled provider metadata requires a source and last-verified date
+# within 14 days; each model's required fields must also be filled. Stale or
+# unknown enabled entries remain visible for key setup but cannot route or
+# contribute capacity. Disabled providers may keep null limits.
 # Families must come from the KNOWN_FAMILIES set in src/providers/config.py
 # (gemini, llama, qwen, gpt-oss, deepseek, mistral, kimi, gemma, nemotron,
 # allam, phi). Unknown families fail startup loudly — that is intentional:
@@ -36,11 +37,15 @@ providers:
     # 50 models incl. gemini-3.8-flash) and disabling hides the frontend
     # setup card + makes POST /api/keys/test 404 ("Unknown or disabled
     # provider") — verified by 12 test failures on the disabled variant.
-    # rpm/rpd/tpm stay null pending dashboard values or a re-probe that
-    # returns rate-limit headers (2026-10-12 60 s probe: HTTP 503
-    # high-demand, no headers); the router loud-skips until filled.
-    # Fill rpm/rpd/tpm from aistudio.google.com/rate-limit with a
-    # source + checked-date comment, then remove this note.
+    # rpm/rpd/tpm stay null pending account-dashboard values (2026-10-12
+    # 60 s probe returned HTTP 503 high-demand with no headers). The router
+    # blocks this provider until quota values AND a verification date exist.
+    # Official docs say exact limits depend on the project and must be read
+    # in AI Studio. No live account dashboard was available for this change.
+    # The provider is intentionally unavailable for routing until dashboard
+    # values and an actual verification date are recorded.
+    quota_source: https://aistudio.google.com/rate-limit
+    quota_last_verified: null # pending account-dashboard verification
     enabled: true
     privacy_note: "Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information."
     key_steps:
@@ -58,17 +63,20 @@ providers:
         roles: [solver, researcher, critic, synthesizer, planner]
         scope: model
         limits:
-          # rpm/rpd/tpm: pending re-probe (verify 2026-10-09 transport-error
-          # at 20 s; re-run with --provider gemini --timeout 60 first).
-          rpm: null # source: aistudio.google.com/rate-limit; checked: pending re-probe
-          rpd: null # source: aistudio.google.com/rate-limit; checked: pending re-probe
-          tpm: null # source: aistudio.google.com/rate-limit; checked: pending re-probe
-          context_tokens: 1000000 # source: aistudio.google.com/rate-limit; checked: pending re-probe
+          # Context size is also unverified; don't use this placeholder.
+          rpm: null # source: https://ai.google.dev/gemini-api/docs/rate-limits; checked: pending account dashboard
+          rpd: null # source: https://ai.google.dev/gemini-api/docs/rate-limits; checked: pending account dashboard
+          tpm: null # source: https://ai.google.dev/gemini-api/docs/rate-limits; checked: pending account dashboard
+          context_tokens: null # source: https://ai.google.dev/gemini-api/docs/models; checked: pending model confirmation
 
   groq:
     base: openai-compatible
     url: https://api.groq.com/openai/v1
     key_url: https://console.groq.com/keys
+    # Official docs are a high-level reference; exact limits are organization-specific.
+    # Recorded 2026-10-09, so the 14-day guard blocks routing until refreshed.
+    quota_source: https://console.groq.com/docs/rate-limits
+    quota_last_verified: 2026-10-09
     enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
@@ -157,6 +165,12 @@ providers:
     base: openai-compatible
     url: https://openrouter.ai/api/v1
     key_url: https://openrouter.ai/keys
+    # Public Free-plan cap checked 2026-10-24; exact per-model and
+    # context assumptions still need account/model confirmation. Since this
+    # date only verifies the public plan cap, it does not certify the values
+    # below; keep the provider out of routing pending the dashboard review.
+    quota_source: https://openrouter.ai/pricing
+    quota_last_verified: 2026-10-09
     enabled: true
     key_steps:
       - "Open the key page via the Get free key link."

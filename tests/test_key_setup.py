@@ -30,7 +30,7 @@ def test_catalog_includes_key_steps_and_fallback() -> None:
     gemini = by_id.get("gemini")
     assert gemini is not None and gemini["enabled"] is True
     assert gemini["limits_ready"] is False
-    assert "rpm" in gemini["limits_issue"]
+    assert "quota_last_verified" in gemini["limits_issue"]
     assert "gemini" not in data["families"]
     assert "gemini" not in data["recommended_order"]
     assert SENSITIVE_SIGNUP_FALLBACK.startswith("Check this during signup")
@@ -66,6 +66,8 @@ def test_recommended_order_prefers_capacity() -> None:
                     "base": "openai-compatible",
                     "url": "http://127.0.0.1:9/v1",
                     "enabled": True,
+                    "quota_source": "https://test.invalid/limits",
+                    "quota_last_verified": "2026-10-24",
                     "models": [
                         {
                             "id": "s-1",
@@ -85,6 +87,8 @@ def test_recommended_order_prefers_capacity() -> None:
                     "base": "openai-compatible",
                     "url": "http://127.0.0.1:9/v1",
                     "enabled": True,
+                    "quota_source": "https://test.invalid/limits",
+                    "quota_last_verified": "2026-10-24",
                     "models": [
                         {
                             "id": "b-1",

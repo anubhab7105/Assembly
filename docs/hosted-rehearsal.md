@@ -75,6 +75,26 @@ Record a suitable run privately with `python scripts/record_run.py --budget 3 --
 
 Replay without network access: `python scripts/replay_run.py recordings/demo-run.json`. Confirm it exits with code 0 and the expected answer and sources render. Retain a sanitized, demo-safe recording and know its exact path before the presentation.
 
+## 8. Provider quota metadata refresh (Issue #39)
+
+Quota metadata is release-critical configuration. It must not be refreshed by changing dates alone.
+
+Before each release/demo, and at least every 14 days:
+1. Open the provider's own authenticated Limits/Rate Limits dashboard for the exact account/project/tier used for the demo. Public docs are context, not a substitute for project-specific quotas.
+2. Run `python scripts/verify_models.py --provider <provider> --timeout 60 --save` with the provider's key loaded from ignored `.env.dev`. This makes a single tiny probe per catalog model; it may consume quota. Do not run against an account whose remaining budget is needed for a demo.
+3. Compare source dashboard values with the report and actual model page. Record quota RPM, RPD, TPM (and TPD if enforced), context constraints, scope (model vs account), the exact source URL, UTC check date, plan/tier and any discrepancy in `models.yaml` comments and provider-level `quota_source` / `quota_last_verified`.
+4. Never treat a 200 probe as proof of numeric quotas. Use response limit headers only when they specify the limit (not remaining/reset values); if a field cannot be verified, leave it null and the provider must remain unavailable for routing.
+5. Stale metadata is over 14 days old. The catalog and router block it with a safe readiness reason until rechecked. Never bump the date without checking the source.
+6. After editing quota configuration, run `python -m pytest -q tests/test_verify_models.py tests/test_routing.py`, inspect `GET /api/catalog` and readiness to confirm enabled+fresh providers alone count toward capacity, then review the diff as a configuration change.
+
+Provider-specific source notes:
+- **Gemini:** the official rate-limit docs say quotas vary by model, project and usage tier; read the live AI Studio project's Rate Limits page. A successful model-list request or transient 503 does not prove RPM/RPD/TPM.
+- **Groq:** the public rate-limits page explicitly calls its table a high-level summary and points to the organization-specific Limits page. Use that page/header evidence for actual account values. The public table may differ from a free account.
+- **OpenRouter:** the public pricing page currently advertises 50 requests/day for the Free plan and its rate-limits docs describe free-model RPM/RPD limits. Confirm your key/account status and exact model/context values before recording them; the shared account cap must be counted once.
+- **Cerebras, Mistral, NVIDIA, Hugging Face:** disabled entries stay disabled until model IDs, required quota fields, source and verification date are filled and a deliberate config review enables them.
+
+Current audit finding (2026-10-24): Groq and OpenRouter limit notes were checked 2026-10-09 and are stale under this policy. Gemini's quota fields remain unknown pending a live dashboard check. Those values have **not** been relabelled as verified. No live account key/dashboard was available during this code change, so the actual quotas must be re-verified by the operator before those providers can route.
+
 ## 7. What CI can and cannot prove
 
 CI should test launcher argument/port checks and docs/runbook invariants without requiring provider keys or reaching external providers. CI does **not** prove live hosted streaming, provider quota behavior, platform timeout limits, ten successful demo runs, or that a real recorded replay is presentation-ready. Those need an operator rehearsal with real deployments and disposable/controlled keys.

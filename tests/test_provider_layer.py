@@ -1,5 +1,7 @@
 """Tests for the config-driven provider layer (all offline via respx)."""
 
+from datetime import date
+
 import httpx
 import pytest
 import respx
@@ -203,7 +205,7 @@ def test_validate_filled_raises_on_enabled_nulls(tmp_path) -> None:
 def test_repo_catalog_validation_flags_gemini() -> None:
     from src.providers.config import LimitsNotFilledError, validate_limits_filled
 
-    with pytest.raises(LimitsNotFilledError, match="gemini-3.8-flash"):
+    with pytest.raises(LimitsNotFilledError, match="quota_last_verified"):
         validate_limits_filled(load_models_config())
 
 
@@ -213,10 +215,12 @@ def test_provider_limits_issue_is_safe_and_actionable(tmp_path) -> None:
     providers = _custom_providers()
     providers["groq"][0]["limits"] = {"rpm": None, "rpd": None, "tpm": None}
     config = load_models_config(make_models_yaml(tmp_path, providers))
-    issue = provider_limits_issue("groq", config.providers["groq"])
+    spec = config.providers["groq"].model_copy(
+        update={"quota_source": None, "quota_last_verified": None}
+    )
+    issue = provider_limits_issue("groq", spec)
     assert issue is not None
-    assert "groq-custom-fast" in issue
-    assert "rpm" in issue and "rpd" in issue and "tpm" in issue
+    assert "quota_source" in issue
     assert "test-key" not in issue
 
 
@@ -245,8 +249,16 @@ def test_router_skips_provider_with_unfilled_limits(tmp_path, monkeypatch) -> No
     router = ModelRouter(config=config)
     assert "groq" not in router.get_available_providers()
     assert router.get_live_count() == 2
+    # Source/date validation is checked before per-model limits, so remove
+    # the evidence fields too to specifically exercise unfilled numeric limits.
+    spec = config.providers["groq"].model_copy(
+        update={
+            "quota_source": "https://test.invalid/limits",
+            "quota_last_verified": date(2026, 10, 24),
+        }
+    )
     with pytest.raises(LimitsNotFilledError, match="LIMITS NOT FILLED"):
-        validate_provider_limits("groq", config.providers["groq"])
+        validate_provider_limits("groq", spec)
 
 
 # ── Generic provider: success ─────────────────────────────────────────

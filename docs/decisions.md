@@ -8,6 +8,12 @@ Append-only log of significant technical and product decisions.
 - Decision: Add a local supervisor that starts frontend/backend together, checks chosen ports and HTTP readiness, injects local connection/CORS environment for children, and cleans up both children on exit. Add a runbook for measuring hosted SSE timing, budget enforcement, safe failures, replay readiness, and ten attempts. Keep live secrets and hosted-provider tests out of default CI.
 - Consequences: One-command local fallback becomes reproducible; release readiness remains blocked until the operator records actual hosted evidence and a replay rehearsal.
 
+## 2026-10-24 — Fail closed on stale quota metadata (Issue #39)
+
+- Context: `models.yaml` included provider quota values last checked 2026-10-09 and Gemini unknown limits, but only null numeric fields were guarded. Known numeric values could continue to influence routing/capacity indefinitely without a source timestamp; public provider tables also are not necessarily account-specific.
+- Decision: Add provider-level `quota_source` and `quota_last_verified` fields. Required quota values are routable only when all required fields are filled, the source is present, and the verification date is not in the future or older than 14 days. Catalog metadata exposes source/date and the freshness window; router and capacity use the same guard so stale providers are excluded. Keep old quota values visibly stale rather than refresh their dates without account-dashboard evidence.
+- Consequences: Offline tests cover valid, missing, stale, future-dated, and disabled metadata, including router exclusion. Release runbook gives a safe source/probe checklist. Real account quota values remain an operator task: no keys or account dashboard were available for live verification during this change. Public provider docs do not replace account-specific limits.
+
 ## Format
 
 ```markdown

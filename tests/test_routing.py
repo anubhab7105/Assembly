@@ -67,6 +67,32 @@ def _team(*agent_types):
     ]
 
 
+# ── Quota metadata freshness ────────────────────────────────────────
+
+
+def test_router_excludes_provider_with_stale_quota_metadata(tmp_path) -> None:
+    """Expired source dates must not make a configured key look routable."""
+    from datetime import date, timedelta
+
+    providers = _fam4()
+    path = make_models_yaml(tmp_path, providers)
+    raw = path.read_text(encoding="utf-8")
+    raw = raw.replace(
+        "quota_last_verified: '2026-10-24'",
+        f"quota_last_verified: '{(date.today() - timedelta(days=15)).isoformat()}'",
+        1,
+    )
+    path.write_text(raw, encoding="utf-8")
+    config = load_models_config(path)
+    router = ModelRouter(
+        config=config,
+        keys={"pa": "k1", "pb": "k2", "pc": "k3", "pd": "k4"},
+        limiter=QuotaLimiter(config=config),
+    )
+    assert "pa" not in router.get_available_providers()
+    assert router.diversity_gate().families_count == 3
+
+
 # ── Family distinctness ─────────────────────────────────────────────
 
 
