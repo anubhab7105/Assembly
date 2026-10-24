@@ -69,6 +69,50 @@ def _command(args: Sequence[str]) -> list[str]:
     return [str(item) for item in args]
 
 
+def _prepare_child_env(
+    inherited: dict[str, str],
+    backend_host: str,
+    backend_port: int,
+    frontend_host: str,
+    frontend_port: int,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Build independent child-process environments without leaking keys to npm."""
+    backend_env = inherited.copy()
+    backend_env["APP_ENV"] = "development"
+    backend_env["DEBUG"] = "false"
+    backend_env["APP_MODE"] = "dev"
+    backend_env["HOST"] = backend_host
+    backend_env["PORT"] = str(backend_port)
+    backend_env["FRONTEND_URL"] = f"http://{frontend_host}:{frontend_port}"
+    origins = [
+        item.strip()
+        for item in backend_env.get("CORS_ALLOW_LIST", "").split(",")
+        if item.strip()
+    ]
+    for origin in (
+        f"http://localhost:{frontend_port}",
+        f"http://127.0.0.1:{frontend_port}",
+    ):
+        if origin not in origins:
+            origins.append(origin)
+    backend_env["CORS_ALLOW_LIST"] = ",".join(origins)
+    backend_env["NEXT_PUBLIC_API_URL"] = f"http://{backend_host}:{backend_port}"
+    backend_env["NEXT_PUBLIC_APP_MODE"] = "web"
+
+    frontend_env = backend_env.copy()
+    # Provider credentials must never be inherited by the frontend/npm process.
+    for key_name in (
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "CEREBRAS_API_KEY",
+        "OPENROUTER_API_KEY",
+        "HUGGINGFACE_API_KEY",
+        "TAVILY_API_KEY",
+    ):
+        frontend_env.pop(key_name, None)
+    return backend_env, frontend_env
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend-host", default=DEFAULT_HOST, help="Backend bind host (default: 127.0.0.1)")
@@ -92,24 +136,13 @@ def main() -> int:
         print(f"ERROR: frontend address {args.frontend_host}:{args.frontend_port} is already in use.", file=sys.stderr)
         return 2
 
-    env = os.environ.copy()
-    # Local launcher settings intentionally override production/.env values,
-    # but API keys continue to come from the user's local ignored .env or browser.
-    env["APP_ENV"] = "development"
-    env["DEBUG"] = "false"
-    env["APP_MODE"] = "dev"
-    env["HOST"] = args.backend_host
-    env["PORT"] = str(args.backend_port)
-    env["FRONTEND_URL"] = f"http://{args.frontend_host}:{args.frontend_port}"
-    existing_cors = [item.strip() for item in env.get("CORS_ALLOW_LIST", "").split(",") if item.strip()]
-    for origin in (f"http://localhost:{args.frontend_port}", f"http://127.0.0.1:{args.frontend_port}"):
-        if origin not in existing_cors:
-            existing_cors.append(origin)
-    env["CORS_ALLOW_LIST"] = ",".join(existing_cors)
-    env["NEXT_PUBLIC_API_URL"] = f"http://{args.backend_host}:{args.backend_port}"
-    # Next.js inlines NEXT_PUBLIC_* at build/dev startup, so set it explicitly
-    # for the frontend process and avoid inheriting an unrelated production API.
-    env["NEXT_PUBLIC_APP_MODE"] = "web"
+    backend_env, frontend_env = _prepare_child_env(
+        os.environ,
+        args.backend_host,
+        args.backend_port,
+        args.frontend_host,
+        args.frontend_port,
+    )
 
     backend: subprocess.Popen[bytes] | None = None
     frontend: subprocess.Popen[bytes] | None = None
@@ -119,20 +152,8 @@ def main() -> int:
         backend = subprocess.Popen(
             _command([sys.executable, "-m", "uvicorn", "src.main:app", "--host", args.backend_host, "--port", args.backend_port, "--reload"]),
             cwd=ROOT,
-            env=env,
+            env=backend_env,
         )
-        frontend_env = env.copy()
-        # Do not pass provider keys to the frontend process; it needs only the
-        # local API endpoint and web mode. Browser-supplied keys remain in the UI.
-        for key_name in (
-            "GEMINI_API_KEY",
-            "GROQ_API_KEY",
-            "CEREBRAS_API_KEY",
-            "OPENROUTER_API_KEY",
-            "HUGGINGFACE_API_KEY",
-            "TAVILY_API_KEY",
-        ):
-            frontend_env.pop(key_name, None)
         frontend = subprocess.Popen(
             _command(["npm", "run", "dev", "--", "--hostname", args.frontend_host, "--port", args.frontend_port]),
             cwd=FRONTEND,
