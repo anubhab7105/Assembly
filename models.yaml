@@ -39,8 +39,12 @@ providers:
     # rpm/rpd/tpm stay null pending dashboard values or a re-probe that
     # returns rate-limit headers (2026-10-12 60 s probe: HTTP 503
     # high-demand, no headers); the router loud-skips until filled.
-    # Fill rpm/rpd/tpm from aistudio.google.com/rate-limit with a
-    # source + checked-date comment, then remove this note.
+    # Official docs say exact limits depend on the project and must be read
+    # in AI Studio. No live account dashboard is available in this repo.
+    # Keep enabled only for key setup/test; quota freshness guard excludes it
+    # from routing until the account limits below have real values.
+    quota_source: https://aistudio.google.com/rate-limit
+    quota_last_verified: null # checked: pending account-dashboard verification
     enabled: true
     privacy_note: "Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information."
     key_steps:
@@ -69,6 +73,16 @@ providers:
     base: openai-compatible
     url: https://api.groq.com/openai/v1
     key_url: https://console.groq.com/keys
+    # Official limits reference (base tier summary, not a substitute for
+    # the account/org-specific Limits page). Values below were last recorded
+    # 2026-10-09; stale metadata is deliberately blocked until re-verified.
+    quota_source: https://console.groq.com/docs/rate-limits
+    quota_last_verified: 2026-10-09
+    # Public Free-plan page documents an account-wide 50 requests/day cap;
+    # per-model/context assumptions below require the model page/dashboard.
+    # This was last verified 2026-10-09 and is stale pending full recheck.
+    quota_source: https://openrouter.ai/pricing
+    quota_last_verified: 2026-10-09
     enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
