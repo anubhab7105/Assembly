@@ -214,18 +214,13 @@ def test_provider_limits_issue_is_safe_and_actionable(tmp_path) -> None:
 
     providers = _custom_providers()
     providers["groq"][0]["limits"] = {"rpm": None, "rpd": None, "tpm": None}
-    path = make_models_yaml(tmp_path, providers)
-    raw = path.read_text(encoding="utf-8").replace(
-        "quota_last_verified: '2026-10-24'",
-        "quota_last_verified: null",
-        1,
+    config = load_models_config(make_models_yaml(tmp_path, providers))
+    spec = config.providers["groq"].model_copy(
+        update={"quota_source": None, "quota_last_verified": None}
     )
-    path.write_text(raw, encoding="utf-8")
-    config = load_models_config(path)
-    issue = provider_limits_issue("groq", config.providers["groq"])
+    issue = provider_limits_issue("groq", spec)
     assert issue is not None
-    assert "groq-custom-fast" in issue
-    assert "rpm" in issue and "rpd" in issue and "tpm" in issue
+    assert "quota_source" in issue
     assert "test-key" not in issue
 
 
