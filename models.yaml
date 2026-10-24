@@ -73,9 +73,8 @@ providers:
     base: openai-compatible
     url: https://api.groq.com/openai/v1
     key_url: https://console.groq.com/keys
-    # Official limits reference (base tier summary, not a substitute for
-    # the account/org-specific Limits page). Values below were last recorded
-    # 2026-10-09; stale metadata is deliberately blocked until re-verified.
+    # Official docs are a high-level reference; exact limits are organization-specific.
+    # Recorded 2026-10-09, so the 14-day guard blocks routing until refreshed.
     quota_source: https://console.groq.com/docs/rate-limits
     quota_last_verified: 2026-10-09
     enabled: true
@@ -166,12 +165,12 @@ providers:
     base: openai-compatible
     url: https://openrouter.ai/api/v1
     key_url: https://openrouter.ai/keys
-    # Public Free-plan page documents 50 requests/day. Per-model and
-    # context assumptions require account/model-specific confirmation.
-    # Checked 2026-10-24 (public plan page only); values still stale until
-    # the account's exact quota fields are checked on the dashboard.
+    # Public Free-plan cap checked 2026-10-24; exact per-model and
+    # context assumptions still need account/model confirmation. Since this
+    # date only verifies the public plan cap, it does not certify the values
+    # below; keep the provider out of routing pending the dashboard review.
     quota_source: https://openrouter.ai/pricing
-    quota_last_verified: 2026-10-24
+    quota_last_verified: 2026-10-09
     enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
