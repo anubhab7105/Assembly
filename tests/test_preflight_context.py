@@ -28,6 +28,7 @@ def _ctx(**over):
     # Keep tests independent of production models.yaml freshness. Offline
     # tests use a temporary, explicit synthetic catalog for provider keys.
     from pathlib import Path
+    import tempfile
     from unittest.mock import patch
 
     from tests.conftest import make_models_yaml
