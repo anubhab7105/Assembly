@@ -1,5 +1,7 @@
 """Tests for the config-driven provider layer (all offline via respx)."""
 
+from datetime import date
+
 import httpx
 import pytest
 import respx
@@ -254,13 +256,14 @@ def test_router_skips_provider_with_unfilled_limits(tmp_path, monkeypatch) -> No
     assert router.get_live_count() == 2
     # Source/date validation is checked before per-model limits, so remove
     # the evidence fields too to specifically exercise unfilled numeric limits.
-    raw = config.model_dump()
-    raw["providers"]["groq"].quota_source = "https://test.invalid/limits"
-    raw["providers"]["groq"].quota_last_verified = __import__("datetime").date(2026, 10, 24)
+    spec = config.providers["groq"].model_copy(
+        update={
+            "quota_source": "https://test.invalid/limits",
+            "quota_last_verified": date(2026, 10, 24),
+        }
+    )
     with pytest.raises(LimitsNotFilledError, match="LIMITS NOT FILLED"):
-        validate_provider_limits(
-            "groq", type(config.providers["groq"]).model_validate(raw["providers"]["groq"].model_dump())
-        )
+        validate_provider_limits("groq", spec)
 
 
 # ── Generic provider: success ─────────────────────────────────────────
