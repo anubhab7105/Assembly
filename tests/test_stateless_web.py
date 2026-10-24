@@ -68,9 +68,26 @@ def test_web_mode_creates_no_database_file(web_mode, tmp_path, monkeypatch) -> N
     assert list(tmp_path.glob("*.db")) == []
 
 
-def test_catalog_returns_providers_models_families(web_mode) -> None:
+def test_catalog_returns_providers_models_families(web_mode, monkeypatch, tmp_path) -> None:
     from src.main import app
+    from tests.conftest import make_models_yaml
 
+    path = make_models_yaml(
+        tmp_path,
+        {
+            "groq": [{
+                "id": "openai/gpt-oss-20b",
+                "family": "gpt-oss",
+                "roles": ["solver", "critic", "planner"],
+            }],
+            "openrouter": [{
+                "id": "google/gemma-4-26b-a4b-it:free",
+                "family": "gemma",
+                "roles": ["solver", "critic", "planner"],
+            }],
+        },
+    )
+    monkeypatch.setattr("src.providers.config.default_catalog_path", lambda: path)
     client = TestClient(app)
     res = client.get("/api/catalog")
     assert res.status_code == 200, res.text
