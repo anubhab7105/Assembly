@@ -15,6 +15,14 @@ export const ALLOWLIST = [
     reason:
       "braces <=3.0.3 has no patched version; transitive via micromatch/fast-glob from shadcn and eslint-config-next dev tooling. npm audit fix is a no-op and --force wants a breaking shadcn 4.x -> 1.0.0 downgrade.",
   },
+  {
+    ghsa: "GHSA-mrhx-c7xc-m3w5",
+    package: "zod",
+    owner: "assembly-maintainers",
+    reviewBy: "2026-11-07",
+    reason:
+      "The root Zod dependency is upgraded to 4.6.7. shadcn 4.21.4 and @shadcn/registry 0.1.3 still pin nested Zod 3.x; forcing Zod 4 into this CLI chain may break its Zod-3-oriented schema tooling. Temporary, scoped exception for the maintainer-run CLI only; remove when upstream ships a compatible patched release.",
+  },
 ];
 
 export function advisoryDetailsFromVia(via) {
