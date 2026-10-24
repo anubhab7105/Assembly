@@ -365,16 +365,16 @@ class ModelRouter:
     def _affordable(self, time_budget_minutes: int) -> dict[str, bool]:
         """Providers able to afford a solve+critique pair for this budget.
 
-        Unknown limits count as affordable (fail-open: the repo catalog
-        ships null limits until filled from dashboards).
+        A missing or failed estimate is not evidence of available capacity;
+        providers excluded by the quota metadata guard never reach this path.
         """
         try:
             estimate = self.capacity_estimate(time_budget_minutes)
-        except Exception:  # noqa: BLE001 — unknown capacity, not zero
-            return {pid: True for pid in self._providers}
+        except Exception:  # noqa: BLE001 — unknown capacity must not be called available
+            return {pid: False for pid in self._providers}
         per_provider = estimate.get("per_provider", {})
         return {
-            pid: (calls is None or calls >= MIN_AFFORDABLE_CALLS)
+            pid: (calls is not None and calls >= MIN_AFFORDABLE_CALLS)
             for pid, calls in per_provider.items()
         }
 
