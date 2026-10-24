@@ -36,6 +36,31 @@ def test_command_construction_does_not_use_shell() -> None:
     assert cmd == [sys.executable, "-m", "uvicorn", "src.main:app"]
 
 
+def test_frontend_environment_does_not_receive_provider_keys() -> None:
+    backend_env, frontend_env = dev_web._prepare_child_env(
+        {
+            "GROQ_API_KEY": "sensitive-canary",
+            "TAVILY_API_KEY": "search-canary",
+            "UNRELATED_SETTING": "preserved",
+            "CORS_ALLOW_LIST": "https://example.test",
+        },
+        backend_host="127.0.0.1",
+        backend_port=8001,
+        frontend_host="127.0.0.1",
+        frontend_port=3001,
+    )
+
+    assert backend_env["APP_MODE"] == "dev"
+    assert backend_env["PORT"] == "8001"
+    assert "http://127.0.0.1:3001" in backend_env["CORS_ALLOW_LIST"]
+    assert backend_env["GROQ_API_KEY"] == "sensitive-canary"
+    assert "GROQ_API_KEY" not in frontend_env
+    assert "TAVILY_API_KEY" not in frontend_env
+    assert frontend_env["NEXT_PUBLIC_API_URL"] == "http://127.0.0.1:8001"
+    assert frontend_env["NEXT_PUBLIC_APP_MODE"] == "web"
+    assert frontend_env["UNRELATED_SETTING"] == "preserved"
+
+
 def test_rehearsal_report_keeps_unrun_attempts_explicit() -> None:
     report = (SCRIPT.parents[1] / "docs" / "hosted-rehearsal.md").read_text(encoding="utf-8")
     assert report.count("| NOT RUN |") == 10
