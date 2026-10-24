@@ -235,6 +235,15 @@ def quota_metadata_issue(
         return f"QUOTA METADATA MISSING for provider {provider_id!r}: add quota_source"
     if spec.quota_last_verified is None:
         return f"QUOTA METADATA MISSING for provider {provider_id!r}: add quota_last_verified"
+    source = spec.quota_source.strip()
+    if not (
+        source.startswith("https://")
+        or source.lower().startswith(("ai studio:", "dashboard:", "provider console:"))
+    ):
+        return (
+            f"QUOTA METADATA INVALID for provider {provider_id!r}: "
+            "quota_source must be an HTTPS URL or a documented dashboard location"
+        )
     if spec.quota_last_verified > current_date:
         return (
             f"QUOTA METADATA INVALID for provider {provider_id!r}: "
