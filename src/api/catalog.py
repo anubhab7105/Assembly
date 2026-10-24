@@ -57,12 +57,8 @@ class CatalogResponse(BaseModel):
 
 
 def recommended_provider_order(catalog: object) -> list[str]:
-    """Enabled providers, most capacity first (names only, never keys).
+    """Enabled providers with fresh, complete quota evidence, most capacity first."""
 
-    Score = sum of integer rpd + rpm/10 across models; unknown limits
-    score 0 so unfilled providers sort last. Pure helper for the setup
-    banner's recommended order.
-    """
     scored: list[tuple[float, str]] = []
     providers = getattr(catalog, "providers", {}) or {}
     for pid, spec in providers.items():
