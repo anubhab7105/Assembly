@@ -212,7 +212,14 @@ def test_provider_limits_issue_is_safe_and_actionable(tmp_path) -> None:
 
     providers = _custom_providers()
     providers["groq"][0]["limits"] = {"rpm": None, "rpd": None, "tpm": None}
-    config = load_models_config(make_models_yaml(tmp_path, providers))
+    path = make_models_yaml(tmp_path, providers)
+    raw = path.read_text(encoding="utf-8").replace(
+        "quota_last_verified: '2026-10-24'",
+        "quota_last_verified: null",
+        1,
+    )
+    path.write_text(raw, encoding="utf-8")
+    config = load_models_config(path)
     issue = provider_limits_issue("groq", config.providers["groq"])
     assert issue is not None
     assert "groq-custom-fast" in issue
@@ -245,8 +252,15 @@ def test_router_skips_provider_with_unfilled_limits(tmp_path, monkeypatch) -> No
     router = ModelRouter(config=config)
     assert "groq" not in router.get_available_providers()
     assert router.get_live_count() == 2
+    # Source/date validation is checked before per-model limits, so remove
+    # the evidence fields too to specifically exercise unfilled numeric limits.
+    raw = config.model_dump()
+    raw["providers"]["groq"].quota_source = "https://test.invalid/limits"
+    raw["providers"]["groq"].quota_last_verified = __import__("datetime").date(2026, 10, 24)
     with pytest.raises(LimitsNotFilledError, match="LIMITS NOT FILLED"):
-        validate_provider_limits("groq", config.providers["groq"])
+        validate_provider_limits(
+            "groq", type(config.providers["groq"]).model_validate(raw["providers"]["groq"].model_dump())
+        )
 
 
 # ── Generic provider: success ─────────────────────────────────────────
