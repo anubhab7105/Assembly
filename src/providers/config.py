@@ -303,7 +303,7 @@ def provider_limits_issue(
 
 
 def validate_limits_filled(config: ModelsConfig) -> None:
-    """Raise LimitsNotFilledError if any enabled provider has null limits."""
+    """Raise LimitsNotFilledError if any enabled provider metadata is missing or stale."""
     for provider_id, spec in config.providers.items():
         validate_provider_limits(provider_id, spec)
 
