@@ -6,7 +6,6 @@ no response or log.
 """
 
 import logging
-from datetime import date
 
 from fastapi.testclient import TestClient
 
@@ -29,9 +28,8 @@ def _ctx(**over):
     # Keep tests independent of production models.yaml freshness. Offline
     # tests use a temporary, explicit synthetic catalog for provider keys.
     from pathlib import Path
-    import tempfile
+    from unittest.mock import patch
 
-    import src.providers.config as config_mod
     from tests.conftest import make_models_yaml
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -61,9 +59,7 @@ def _ctx(**over):
                 ],
             },
         )
-        original = config_mod.default_catalog_path
-        config_mod.default_catalog_path = lambda: path
-        try:
+        with patch("src.providers.config.default_catalog_path", return_value=path):
             return build_request_context(
                 args["provider_keys"],
                 args["search_keys"],
@@ -71,8 +67,6 @@ def _ctx(**over):
                 args["pins"],
                 args["usage_snapshot"],
             )
-        finally:
-            config_mod.default_catalog_path = original
 
 
 def test_builder_empty_keys_is_blocked() -> None:
