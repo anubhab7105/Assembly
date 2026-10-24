@@ -47,6 +47,10 @@ In web mode, questions, provider keys, and intermediate execution state are proc
 
 External model and search providers receive the relevant request data under their own policies. Review the privacy notice before sending sensitive material.
 
-## 5. Rollback
+## 5. One-command local web stack
+
+For local R1 development, install root Python dependencies and `frontend/` npm dependencies once, then run `python scripts/dev_web.py` (or `make run-web`) from the repository root. It starts FastAPI and Next.js together, checks both readiness endpoints, applies the selected frontend API URL and local CORS origins to child processes without rewriting `.env`, and stops both on Ctrl+C. See [Hosted Web Rehearsal](hosted-rehearsal.md) for port overrides, the ten-run evidence matrix, hosted duration checks, and recorded replay steps.
+
+## 6. Rollback
 
 Use the Vercel or Render dashboard to promote/redeploy a previous working deployment. The stateless web release has no database migration or database rollback step.
