@@ -64,5 +64,5 @@ def test_frontend_environment_does_not_receive_provider_keys() -> None:
 def test_rehearsal_report_keeps_unrun_attempts_explicit() -> None:
     report = (SCRIPT.parents[1] / "docs" / "hosted-rehearsal.md").read_text(encoding="utf-8")
     assert report.count("| NOT RUN |") == 10
-    assert "does not prove live hosted" in report
+    assert "not evidence of a hosted live run" in report
     assert "Never paste credentials" in report
