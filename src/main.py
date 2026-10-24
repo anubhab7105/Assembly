@@ -171,16 +171,11 @@ async def limit_upload_size(request: Request, call_next):
     if content_length is not None:
         # Content-Length is untrusted input. Never let malformed or negative
         # values bubble out of middleware as an unhandled 500.
-        try:
-            body_size = int(content_length)
-        except (TypeError, ValueError):
+        if not content_length.isascii() or not content_length.isdecimal():
             return JSONResponse(
                 status_code=400, content={"detail": "Invalid Content-Length."}
             )
-        if body_size < 0:
-            return JSONResponse(
-                status_code=400, content={"detail": "Invalid Content-Length."}
-            )
+        body_size = int(content_length)
         if body_size > settings.max_body_bytes:
             try:
                 await count_invalid_request(client_ip(request))
