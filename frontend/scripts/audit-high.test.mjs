@@ -61,6 +61,43 @@ describe("audit-high allowlist enforcement", () => {
     assert.equal(allowlisted.length, 2);
   });
 
+  it("allowlists only the known Zod advisory while it remains in shadcn CLI dependencies", () => {
+    const zodAdvisory = {
+      source: 1240992,
+      name: "zod",
+      dependency: "zod",
+      title: "Zod can exhaust memory while validating oversized constrained collections",
+      url: "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+      severity: "high",
+      range: "<4.6.6",
+    };
+    const report = {
+      vulnerabilities: {
+        zod: {
+          name: "zod",
+          severity: "high",
+          range: "<4.6.6",
+          via: [zodAdvisory],
+        },
+        "@shadcn/registry": {
+          name: "@shadcn/registry",
+          severity: "high",
+          range: "0.1.0 - 0.1.4",
+          via: ["zod"],
+        },
+        shadcn: {
+          name: "shadcn",
+          severity: "high",
+          range: "2.0.0 - 4.21.5",
+          via: ["@shadcn/registry", "zod"],
+        },
+      },
+    };
+    const { blocking, allowlisted } = collectBlocking(report);
+    assert.equal(blocking.length, 0);
+    assert.equal(allowlisted.length, 3);
+  });
+
   it("blocks a synthetic new high advisory (regression)", () => {
     const report = {
       vulnerabilities: {
