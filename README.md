@@ -169,6 +169,17 @@ Five focused contributor tasks are open:
 
 Start with one small, reproducible improvement. If you have a different idea, open an issue to discuss its scope before investing in a large change.
 
+## Local web demo fallback
+
+After installing Python dependencies at the root and npm dependencies under `frontend/`, start both local services with one command from the repository root:
+
+```bash
+python scripts/dev_web.py
+# or: make run-web
+```
+
+The launcher reports both service URLs, waits for readiness, uses loopback defaults, checks port conflicts, and stops both processes on Ctrl+C. For hosted demo readiness, timing measurements, safe failure scenarios, and the replay fallback, follow [the Hosted Web Rehearsal runbook](docs/hosted-rehearsal.md). A successful CI run does not replace the required real-host rehearsal.
+
 ## Project documentation
 
 - [Contributor guide](CONTRIBUTING.md) — development setup, checks, and pull requests.
