@@ -87,6 +87,8 @@ def test_recommended_order_prefers_capacity() -> None:
                     "base": "openai-compatible",
                     "url": "http://127.0.0.1:9/v1",
                     "enabled": True,
+                    "quota_source": "https://test.invalid/limits",
+                    "quota_last_verified": "2026-10-24",
                     "models": [
                         {
                             "id": "b-1",
