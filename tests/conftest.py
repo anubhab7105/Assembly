@@ -176,6 +176,10 @@ def make_models_yaml(
             "base": base,
             "url": url,
             "enabled": flag,
+            # Synthetic offline catalogs have explicit test-only provenance;
+            # stale/unverified behavior is tested by overriding these fields.
+            "quota_source": "https://test.invalid/quota-fixture",
+            "quota_last_verified": "2099-01-01",
             "models": rendered,
         }
     path = Path(tmp_path) / filename
