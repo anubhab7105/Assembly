@@ -93,17 +93,23 @@ def main() -> int:
         return 2
 
     env = os.environ.copy()
-    env.setdefault("APP_ENV", "development")
+    # Local launcher settings intentionally override production/.env values,
+    # but API keys continue to come from the user's local ignored .env or browser.
+    env["APP_ENV"] = "development"
+    env["DEBUG"] = "false"
     env["APP_MODE"] = "dev"
     env["HOST"] = args.backend_host
     env["PORT"] = str(args.backend_port)
-    env.setdefault("FRONTEND_URL", f"http://{args.frontend_host}:{args.frontend_port}")
+    env["FRONTEND_URL"] = f"http://{args.frontend_host}:{args.frontend_port}"
     existing_cors = [item.strip() for item in env.get("CORS_ALLOW_LIST", "").split(",") if item.strip()]
     for origin in (f"http://localhost:{args.frontend_port}", f"http://127.0.0.1:{args.frontend_port}"):
         if origin not in existing_cors:
             existing_cors.append(origin)
     env["CORS_ALLOW_LIST"] = ",".join(existing_cors)
     env["NEXT_PUBLIC_API_URL"] = f"http://{args.backend_host}:{args.backend_port}"
+    # Next.js inlines NEXT_PUBLIC_* at build/dev startup, so set it explicitly
+    # for the frontend process and avoid inheriting an unrelated production API.
+    env["NEXT_PUBLIC_APP_MODE"] = "web"
 
     backend: subprocess.Popen[bytes] | None = None
     frontend: subprocess.Popen[bytes] | None = None
@@ -115,10 +121,13 @@ def main() -> int:
             cwd=ROOT,
             env=env,
         )
+        frontend_env = env.copy()
+        # The frontend gets the public API endpoint and app mode; it does not
+        # need the backend's provider keys or other server-only environment.
         frontend = subprocess.Popen(
             _command(["npm", "run", "dev", "--", "--hostname", args.frontend_host, "--port", args.frontend_port]),
             cwd=FRONTEND,
-            env=env,
+            env=frontend_env,
         )
         print(f"Starting backend:  {backend_url}", flush=True)
         print(f"Starting frontend: {frontend_url}", flush=True)
