@@ -78,9 +78,9 @@ def test_router_excludes_provider_with_stale_quota_metadata(tmp_path) -> None:
     path = make_models_yaml(tmp_path, providers)
     raw = path.read_text(encoding="utf-8")
     raw = raw.replace(
-        "providers:",
-        "providers:\n  pa:\n    quota_source: https://example.test/limits\n"
-        f"    quota_last_verified: {(date.today() - timedelta(days=15)).isoformat()}",
+        "  pa:\\n",
+        "  pa:\\n    quota_source: https://example.test/limits\\n"
+        f"    quota_last_verified: {(date.today() - timedelta(days=15)).isoformat()}\\n",
         1,
     )
     path.write_text(raw, encoding="utf-8")
