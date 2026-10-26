@@ -14,8 +14,10 @@ import { PrivacyDialog } from "@/components/privacy-dialog"
 import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
+import { makeChatStatus, type ChatStatus } from "@/lib/chat-status"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
+import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Zap, Send, Settings, Clock, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
 
@@ -52,7 +54,7 @@ export default function Home() {
   const [minutes, setMinutes] = useState(5)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
+  const [status, setStatus] = useState<ChatStatus | null>(null)
   const [selection, setSelection] = useState<ModelSelection>({ selected: [], pins: {} })
   const [privacyAcked, setPrivacyAcked] = useState(false)
   const [showPrivacy, setShowPrivacy] = useState(false)
@@ -93,9 +95,6 @@ export default function Home() {
     pins: selection.pins,
   })
   const degradedConfirmed = confirmedGateSignature === gateSignature
-  const statusIsError = Boolean(
-    status && status !== "Checking capacity…" && status !== "Running team… (streaming)",
-  )
 
   useEffect(() => {
     const refreshKeys = () => {
@@ -172,7 +171,7 @@ export default function Home() {
     if (!files?.length) return
     const picked = Array.from(files)
     if (attachments.length + picked.length > MAX_ATTACHMENTS) {
-      setStatus(`Attach up to ${MAX_ATTACHMENTS} files per investigation.`)
+      setStatus(makeChatStatus(`Attach up to ${MAX_ATTACHMENTS} files per investigation.`, "info"))
       if (fileInputRef.current) fileInputRef.current.value = ""
       return
     }
@@ -184,21 +183,28 @@ export default function Home() {
         ? "env.example"
         : lower.includes(".") ? lower.split(".").pop() ?? "" : ""
       if (!SUPPORTED_EXTENSIONS.has(extension)) {
-        setStatus(`${file.name}: unsupported type. Choose a text, Markdown, CSV, JSON, log, or source/configuration file.`)
+        setStatus(
+          makeChatStatus(
+            `${file.name}: unsupported type. Choose a text, Markdown, CSV, JSON, log, or source/configuration file.`,
+            "warning",
+          ),
+        )
         continue
       }
       if (file.size <= 0) {
-        setStatus(`${file.name}: file is empty.`)
+        setStatus(makeChatStatus(`${file.name}: file is empty.`, "warning"))
         continue
       }
       if (file.size > MAX_FILE_BYTES) {
-        setStatus(`${file.name}: file exceeds the 256 KiB per-file limit.`)
+        setStatus(
+          makeChatStatus(`${file.name}: file exceeds the 256 KiB per-file limit.`, "warning"),
+        )
         continue
       }
       total += file.size
       if (total > MAX_TOTAL_BYTES) {
         total -= file.size
-        setStatus("Attachments exceed the 384 KiB combined limit.")
+        setStatus(makeChatStatus("Attachments exceed the 384 KiB combined limit.", "warning"))
         continue
       }
       try {
@@ -209,19 +215,24 @@ export default function Home() {
         })
         if (hasUnsupportedControls) {
           total -= file.size
-          setStatus(`${file.name}: binary or unsupported control characters aren't supported.`)
+          setStatus(
+            makeChatStatus(
+              `${file.name}: binary or unsupported control characters aren't supported.`,
+              "warning",
+            ),
+          )
           continue
         }
         if (extension === "json") {
           try { JSON.parse(content) } catch {
             total -= file.size
-            setStatus(`${file.name}: invalid JSON.`)
+            setStatus(makeChatStatus(`${file.name}: invalid JSON.`, "warning"))
             continue
           }
         }
         if (!content.trim()) {
           total -= file.size
-          setStatus(`${file.name}: file is empty.`)
+          setStatus(makeChatStatus(`${file.name}: file is empty.`, "warning"))
           continue
         }
         accepted.push({
@@ -233,12 +244,17 @@ export default function Home() {
         })
       } catch {
         total -= file.size
-        setStatus(`${file.name}: couldn't read this file.`)
+        setStatus(makeChatStatus(`${file.name}: couldn't read this file.`, "warning"))
       }
     }
     if (accepted.length) {
       setAttachments((current) => [...current, ...accepted])
-      setStatus(`${accepted.length} file${accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.`)
+      setStatus(
+        makeChatStatus(
+          `${accepted.length} file${accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.`,
+          "info",
+        ),
+      )
     }
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
@@ -247,19 +263,19 @@ export default function Home() {
     if ((!question.trim() && attachments.length === 0) || loading) return
     if (!privacyAcked) {
       setShowPrivacy(true)
-      setStatus("Please acknowledge the privacy notice first.")
+      setStatus(makeChatStatus("Please acknowledge the privacy notice first.", "info"))
       return
     }
     if (gate.level === "BLOCKED") {
-      setStatus(gate.reasons[0] ?? "No model families ready.")
+      setStatus(makeChatStatus(gate.reasons[0] ?? "No model families ready.", "info"))
       return
     }
     if (gate.level === "DEGRADED" && !degradedConfirmed) {
-      setStatus("Confirm the single-family run below before launching.")
+      setStatus(makeChatStatus("Confirm the single-family run below before launching.", "info"))
       return
     }
     setLoading(true)
-    setStatus("Checking capacity…")
+    setStatus(makeChatStatus("Checking capacity…", "progress"))
     // Run state hoisted above try: the catch block persists a cancelled
     // record on mid-stream failure, so it must see these bindings.
     let finalAnswer = ""
@@ -287,11 +303,11 @@ export default function Home() {
         { selected: selection.selected, pins: selection.pins },
       )
       if (!preflight.feasible) {
-        setStatus(`Not feasible: ${preflight.explanation ?? "quota exhausted"}`)
+        setStatus(makeChatStatus(`Not feasible: ${preflight.explanation ?? "quota exhausted"}`, "error"))
         setLoading(false)
         return
       }
-      setStatus("Running team… (streaming)")
+      setStatus(makeChatStatus("Running team… (streaming)", "progress"))
       const result = await ApiClient.startRunStream(
         {
           question: questionForRun,
@@ -358,11 +374,14 @@ export default function Home() {
           })),
         })
         setStatus(
-          failureMessage({
-            status: failedStatus,
-            stage: result.stage,
-            errorCode: result.errorCode,
-          }),
+          makeChatStatus(
+            failureMessage({
+              status: failedStatus,
+              stage: result.stage,
+              errorCode: result.errorCode,
+            }),
+            "error",
+          ),
         )
         setLoading(false)
         return
@@ -423,7 +442,7 @@ export default function Home() {
           // Storage failure must not hide the original error.
         }
       }
-      setStatus(message)
+      setStatus(makeChatStatus(message, "error"))
       setLoading(false)
     }
   }
@@ -584,17 +603,7 @@ export default function Home() {
             </div>
           </div>
           {status && (
-            <p
-              id="question-status"
-              role={statusIsError ? "alert" : "status"}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                statusIsError
-                  ? "border-danger/40 bg-danger-subtle text-danger"
-                  : "border-border bg-muted/40 text-muted-foreground"
-              }`}
-            >
-              {status}
-            </p>
+            <ChatStatusMessage status={status} />
           )}
         </div>
 
