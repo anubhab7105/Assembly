@@ -331,6 +331,14 @@ export default function Home() {
             debate_rounds?: number
             tokens_used?: number
             elapsed_seconds?: number
+            verification?: {
+              agents?: number
+              families?: string[]
+              rounds?: number
+              disagreements_total?: number
+              disagreements_resolved?: number
+              sources_verified?: number
+            }
           }
           usage?: UsageEntry[]
         }) => {
@@ -341,8 +349,8 @@ export default function Home() {
             confidence = event.data?.confidence_label ?? null
             agentCount = event.data?.agent_count ?? null
             providers = event.data?.providers_used ?? []
-            modelFamilies = event.data?.model_families ?? null
-            debateRounds = event.data?.debate_rounds ?? null
+            modelFamilies = event.data?.model_families ?? event.data?.verification?.families ?? null
+            debateRounds = event.data?.debate_rounds ?? event.data?.verification?.rounds ?? null
             tokens = event.data?.tokens_used ?? null
             elapsedSeconds = event.data?.elapsed_seconds ?? null
           }
@@ -405,6 +413,8 @@ export default function Home() {
         debateRounds,
         tokens,
         elapsedSeconds,
+        modelFamilies,
+        disagreements: [],
         attachments: attachments.map(({ filename, media_type, size }) => ({
           filename,
           media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
