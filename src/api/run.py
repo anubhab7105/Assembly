@@ -84,6 +84,12 @@ def _failure_code_for(exc: BaseException) -> str:
 
 def _safe_failure_message(stage: str, code: str) -> str:
     """Actionable client message with no secrets, bodies, or raw errors."""
+    if code == "pin_violation":
+        return (
+            "A role model pin conflicts with the active selection, provider keys, "
+            "or team family-isolation rules. Choose an available model in the selected "
+            "set; the critic must use a different family from the solvers."
+        )
     return (
         f"Run failed during {stage} ({code}). "
         "Check your provider keys and quota, then try again."
@@ -338,13 +344,21 @@ async def start_run(req: RunRequest, request: Request):
 
     # One shared per-request context for keys, selection, and quota, so
     # the diversity verdict here and the router used below cannot diverge.
-    ctx = build_request_context(
-        dict(req.provider_keys or {}),
-        dict(req.search_keys) if req.search_keys is not None else None,
-        list(req.model_selection.selected or []),
-        dict(req.model_selection.pins or {}),
-        [u.model_dump() for u in (req.usage_snapshot or [])],
-    )
+    from src.providers.router import PinViolationError
+
+    try:
+        ctx = build_request_context(
+            dict(req.provider_keys or {}),
+            dict(req.search_keys) if req.search_keys is not None else None,
+            list(req.model_selection.selected or []),
+            dict(req.model_selection.pins or {}),
+            [u.model_dump() for u in (req.usage_snapshot or [])],
+        )
+    except PinViolationError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={"code": "pin_violation", "detail": str(exc)},
+        )
     allowed, pins = ctx.allowed, ctx.pins
 
     # No usable model family: refuse before streaming or spending quota.
