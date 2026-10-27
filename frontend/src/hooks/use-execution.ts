@@ -49,8 +49,16 @@ export interface ExecutionState {
     tokens: number | null
     elapsedSeconds: number | null
     modelFamilies: string[] | null
+    familyCount: number | null
     disagreementCount: number | null
     resolvedDisagreementCount: number | null
+    verification: {
+      agents?: number
+      families?: number
+      rounds?: number
+      disagreements_resolved?: number
+      sources_verified?: number
+    } | null
   } | null
 }
 
@@ -197,8 +205,13 @@ export function useExecution(executionId: string | null) {
             tokens: compData.tokens_used ?? null,
             elapsedSeconds: compData.elapsed_seconds ?? null,
             modelFamilies: compData.model_families ?? null,
+            familyCount: compData.verification?.families ?? null,
             disagreementCount: compData.disagreement_count ?? null,
-            resolvedDisagreementCount: compData.resolved_disagreement_count ?? null,
+            resolvedDisagreementCount:
+              compData.resolved_disagreement_count ??
+              compData.verification?.disagreements_resolved ??
+              null,
+            verification: compData.verification ?? null,
           }
           pushFeed("Execution completed. Final answer synthesised.", "success")
           break
@@ -282,10 +295,14 @@ export function useExecution(executionId: string | null) {
               tokens: h.tokens ?? null,
               elapsedSeconds: h.elapsedSeconds ?? null,
               modelFamilies: h.modelFamilies ?? null,
+              familyCount: h.verification?.families ?? h.modelFamilies?.length ?? null,
               disagreementCount: h.disagreements?.length ?? null,
-              resolvedDisagreementCount: h.disagreements
-                ? h.disagreements.filter((disagreement) => disagreement.resolved).length
-                : null,
+              resolvedDisagreementCount:
+                h.verification?.disagreements_resolved ??
+                (h.disagreements
+                  ? h.disagreements.filter((disagreement) => disagreement.resolved).length
+                  : null),
+              verification: h.verification ?? null,
             },
           }))
         }
