@@ -289,9 +289,9 @@ export function useExecution(executionId: string | null) {
             confidence: h.confidence ?? null,
             disagreements: h.disagreements ?? [],
             summary: {
-              agentCount: h.agentCount ?? null,
+              agentCount: h.verification?.agents ?? h.agentCount ?? null,
               providers: h.providers ?? null,
-              debateRounds: h.debateRounds ?? null,
+              debateRounds: h.verification?.rounds ?? h.debateRounds ?? null,
               tokens: h.tokens ?? null,
               elapsedSeconds: h.elapsedSeconds ?? null,
               modelFamilies: h.modelFamilies ?? null,
