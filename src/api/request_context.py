@@ -1,4 +1,4 @@
-""""Assembly — per-request execution context (preflight + run share this).
+"""Assembly — per-request execution context (preflight + run share this).
 
 One builder for provider keys, search-key presence, usage snapshots, and
 model selection, so the preflight verdict and run routing cannot diverge.
@@ -181,7 +181,9 @@ def _filtered_router(
     class _PinRouter:
         """Delegate to ModelRouter while applying validated model pins."""
 
-        def __init__(self, wrapped: ModelRouter, resolved: dict[str, tuple[str, object]]) -> None:
+        def __init__(
+            self, wrapped: ModelRouter, resolved: dict[str, tuple[str, object]]
+        ) -> None:
             self._w = wrapped
             self._pins = resolved
             self.config = wrapped.config
@@ -197,7 +199,8 @@ def _filtered_router(
             provider = self._w._providers.get(provider_id)
             if provider is None:
                 raise PinViolationError(
-                    f"Pinned provider for {role!r} is no longer available. Check its API key and retry."
+                    f"Pinned provider for {role!r} is no longer available. "
+                    "Check its API key and retry."
                 )
             # Update the complete assignment, including the adapter. Build a
             # fresh decision to avoid exposing a half-mutated assignment.
@@ -239,8 +242,9 @@ def _filtered_router(
                 and critic.family in solver_families
             ):
                 raise PinViolationError(
-                    "Role pins place the critic in a solver's family, so critic independence cannot be guaranteed. "
-                    "Pin the critic or solver to a different model family."
+                    "Role pins place the critic in a solver's family, so critic "
+                    "independence cannot be guaranteed. Pin the critic or solver "
+                    "to a different model family."
                 )
 
             solver_decisions = [d for d in decisions if d.role == "solver"]
@@ -248,7 +252,9 @@ def _filtered_router(
             available_solver_families = {
                 family for _, _, family in self._w._candidates("solver")
             }
-            required_distinct = min(len(solver_decisions), len(available_solver_families))
+            required_distinct = min(
+                len(solver_decisions), len(available_solver_families)
+            )
             if (
                 solver_was_pinned
                 and len(set(solver_families_ordered)) < required_distinct
