@@ -196,6 +196,7 @@ describe("useExecution hook", () => {
       tokens: 7000,
       elapsedSeconds: 35.7,
       familyCount: 2,
+      resolvedDisagreementCount: 3,
       verification: {
         agents: 3,
         families: 2,
