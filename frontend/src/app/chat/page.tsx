@@ -286,6 +286,7 @@ export default function Home() {
     let debateRounds: number | null = null
     let tokens: number | null = null
     let elapsedSeconds: number | null = null
+    let modelFamilies: string[] | null = null
     let streamStarted = false
     const runId = `local-${Date.now()}`
     const questionForRun = question.trim() || "Analyze the attached files and summarize their key contents, important claims, and uncertainties."
@@ -326,6 +327,7 @@ export default function Home() {
             confidence_label?: "High" | "Moderate" | "Low"
             agent_count?: number
             providers_used?: string[]
+            model_families?: string[]
             debate_rounds?: number
             tokens_used?: number
             elapsed_seconds?: number
@@ -339,6 +341,7 @@ export default function Home() {
             confidence = event.data?.confidence_label ?? null
             agentCount = event.data?.agent_count ?? null
             providers = event.data?.providers_used ?? []
+            modelFamilies = event.data?.model_families ?? null
             debateRounds = event.data?.debate_rounds ?? null
             tokens = event.data?.tokens_used ?? null
             elapsedSeconds = event.data?.elapsed_seconds ?? null
@@ -367,6 +370,8 @@ export default function Home() {
           debateRounds,
           tokens,
           elapsedSeconds,
+          modelFamilies,
+          disagreements: [],
           attachments: attachments.map(({ filename, media_type, size }) => ({
             filename,
             media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
