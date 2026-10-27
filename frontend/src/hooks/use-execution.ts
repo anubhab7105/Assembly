@@ -50,7 +50,6 @@ export interface ExecutionState {
     elapsedSeconds: number | null
     modelFamilies: string[] | null
     familyCount: number | null
-    disagreementCount: number | null
     resolvedDisagreementCount: number | null
     verification: {
       agents?: number
@@ -204,9 +203,8 @@ export function useExecution(executionId: string | null) {
             debateRounds: compData.debate_rounds ?? null,
             tokens: compData.tokens_used ?? null,
             elapsedSeconds: compData.elapsed_seconds ?? null,
-            modelFamilies: compData.model_families ?? null,
+            modelFamilies: null,
             familyCount: compData.verification?.families ?? null,
-            disagreementCount: compData.disagreement_count ?? null,
             resolvedDisagreementCount:
               compData.resolved_disagreement_count ??
               compData.verification?.disagreements_resolved ??
@@ -296,7 +294,6 @@ export function useExecution(executionId: string | null) {
               elapsedSeconds: h.elapsedSeconds ?? null,
               modelFamilies: h.modelFamilies ?? null,
               familyCount: h.verification?.families ?? h.modelFamilies?.length ?? null,
-              disagreementCount: h.disagreements?.length ?? null,
               resolvedDisagreementCount:
                 h.verification?.disagreements_resolved ??
                 (h.disagreements
