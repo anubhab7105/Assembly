@@ -80,7 +80,6 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
   const roundCount = completed
     ? state.summary?.verification?.rounds ?? state.summary?.debateRounds ?? null
     : state.round
-  const disagreementCount = completed ? state.summary?.disagreementCount ?? null : state.disagreements.length
   const resolvedDisagreementCount = completed
     ? state.summary?.resolvedDisagreementCount ??
       state.summary?.verification?.disagreements_resolved ??
@@ -144,7 +143,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
             <div>
               <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Conflicts Resolved</p>
               <p className="font-semibold text-foreground text-success flex items-center gap-1">
-                <CheckCircle2 className="size-4" /> {resolvedDisagreementCount === null || disagreementCount === null
+                <CheckCircle2 className="size-4" /> {resolvedDisagreementCount === null
                   ? "Unavailable"
                   : `${resolvedDisagreementCount} resolved`}
               </p>
