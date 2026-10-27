@@ -286,7 +286,6 @@ export default function Home() {
     let debateRounds: number | null = null
     let tokens: number | null = null
     let elapsedSeconds: number | null = null
-    let modelFamilies: string[] | null = null
     let verification: {
       agents?: number
       families?: number
@@ -384,7 +383,6 @@ export default function Home() {
           debateRounds,
           tokens,
           elapsedSeconds,
-          modelFamilies,
           disagreements: [],
           attachments: attachments.map(({ filename, media_type, size }) => ({
             filename,
@@ -419,7 +417,6 @@ export default function Home() {
         debateRounds,
         tokens,
         elapsedSeconds,
-        modelFamilies,
         verification: verification ?? undefined,
         disagreements: [],
         attachments: attachments.map(({ filename, media_type, size }) => ({
