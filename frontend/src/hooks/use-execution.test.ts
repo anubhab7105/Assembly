@@ -174,7 +174,6 @@ describe("useExecution hook", () => {
           debate_rounds: 1,
           tokens_used: 7000,
           elapsed_seconds: 35.7,
-          resolved_disagreement_count: 3,
           verification: {
             agents: 3,
             families: 2,
@@ -197,7 +196,6 @@ describe("useExecution hook", () => {
       tokens: 7000,
       elapsedSeconds: 35.7,
       familyCount: 2,
-      resolvedDisagreementCount: 3,
       verification: {
         agents: 3,
         families: 2,
