@@ -66,8 +66,22 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
   const conf = state.confidence ?? "Not assessed"
   const confColor = confidenceColors[conf]
 
-  const distinctFamilies = new Set(state.team.map(a => a.model_family)).size
-  const resolvedCount = state.disagreements.filter(d => d.resolved).length
+  const completed = state.status === "completed"
+  const distinctFamilies = completed
+    ? state.summary?.familyCount ?? null
+    : new Set(state.team.map((agent) => agent.model_family)).size
+  const resolvedCount = state.disagreements.filter((d) => d.resolved).length
+  const teamCount = completed
+    ? state.summary?.verification?.agents ?? state.summary?.agentCount ?? null
+    : state.team.length
+  const roundCount = completed
+    ? state.summary?.verification?.rounds ?? state.summary?.debateRounds ?? null
+    : state.round
+  const resolvedDisagreementCount = completed
+    ? state.summary?.resolvedDisagreementCount ??
+      state.summary?.verification?.disagreements_resolved ??
+      null
+    : resolvedCount
 
   return (
     <>
@@ -112,21 +126,23 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
             <div>
               <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Team Size</p>
               <p className="font-semibold text-foreground flex items-center gap-2">
-                <Layers className="size-4 text-brand" /> {state.team.length} Agents
+                <Layers className="size-4 text-brand" /> {teamCount === null ? "Unavailable" : `${teamCount} Agents`}
               </p>
             </div>
             <div>
               <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Diversity</p>
-              <p className="font-semibold text-foreground">{distinctFamilies} Model Families</p>
+              <p className="font-semibold text-foreground">{distinctFamilies === null ? "Unavailable" : `${distinctFamilies} Model Families`}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Rounds</p>
-              <p className="font-semibold text-foreground">{state.round} Debate Rounds</p>
+              <p className="font-semibold text-foreground">{roundCount === null ? "Unavailable" : `${roundCount} Debate Rounds`}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Conflicts Resolved</p>
               <p className="font-semibold text-foreground text-success flex items-center gap-1">
-                <CheckCircle2 className="size-4" /> {resolvedCount} / {state.disagreements.length}
+                <CheckCircle2 className="size-4" /> {resolvedDisagreementCount === null
+                  ? "Unavailable"
+                  : `${resolvedDisagreementCount} resolved`}
               </p>
             </div>
           </div>

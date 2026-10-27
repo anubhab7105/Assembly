@@ -286,6 +286,13 @@ export default function Home() {
     let debateRounds: number | null = null
     let tokens: number | null = null
     let elapsedSeconds: number | null = null
+    let verification: {
+      agents?: number
+      families?: number
+      rounds?: number
+      disagreements_resolved?: number
+      sources_verified?: number
+    } | null = null
     let streamStarted = false
     const runId = `local-${Date.now()}`
     const questionForRun = question.trim() || "Analyze the attached files and summarize their key contents, important claims, and uncertainties."
@@ -329,6 +336,14 @@ export default function Home() {
             debate_rounds?: number
             tokens_used?: number
             elapsed_seconds?: number
+            verification?: {
+              agents?: number
+              families?: number
+              rounds?: number
+              disagreements_total?: number
+              disagreements_resolved?: number
+              sources_verified?: number
+            }
           }
           usage?: UsageEntry[]
         }) => {
@@ -339,7 +354,8 @@ export default function Home() {
             confidence = event.data?.confidence_label ?? null
             agentCount = event.data?.agent_count ?? null
             providers = event.data?.providers_used ?? []
-            debateRounds = event.data?.debate_rounds ?? null
+            verification = event.data?.verification ?? null
+            debateRounds = event.data?.debate_rounds ?? event.data?.verification?.rounds ?? null
             tokens = event.data?.tokens_used ?? null
             elapsedSeconds = event.data?.elapsed_seconds ?? null
           }
@@ -367,6 +383,7 @@ export default function Home() {
           debateRounds,
           tokens,
           elapsedSeconds,
+          disagreements: [],
           attachments: attachments.map(({ filename, media_type, size }) => ({
             filename,
             media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
@@ -400,6 +417,8 @@ export default function Home() {
         debateRounds,
         tokens,
         elapsedSeconds,
+        verification: verification ?? undefined,
+        disagreements: [],
         attachments: attachments.map(({ filename, media_type, size }) => ({
           filename,
           media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",

@@ -44,10 +44,20 @@ export interface ExecutionState {
   // Frozen post-run summary (from device history for local runs).
   summary: {
     agentCount: number | null
-    providers: string[]
+    providers: string[] | null
     debateRounds: number | null
     tokens: number | null
     elapsedSeconds: number | null
+    modelFamilies: string[] | null
+    familyCount: number | null
+    resolvedDisagreementCount: number | null
+    verification: {
+      agents?: number
+      families?: number
+      rounds?: number
+      disagreements_resolved?: number
+      sources_verified?: number
+    } | null
   } | null
 }
 
@@ -189,10 +199,17 @@ export function useExecution(executionId: string | null) {
           next.question = compData.question || null
           next.summary = {
             agentCount: compData.agent_count ?? null,
-            providers: compData.providers_used ?? [],
+            providers: compData.providers_used ?? null,
             debateRounds: compData.debate_rounds ?? null,
             tokens: compData.tokens_used ?? null,
             elapsedSeconds: compData.elapsed_seconds ?? null,
+            modelFamilies: null,
+            familyCount: compData.verification?.families ?? null,
+            resolvedDisagreementCount:
+              compData.resolved_disagreement_count ??
+              compData.verification?.disagreements_resolved ??
+              null,
+            verification: compData.verification ?? null,
           }
           pushFeed("Execution completed. Final answer synthesised.", "success")
           break
@@ -268,12 +285,21 @@ export function useExecution(executionId: string | null) {
             attachments: h.attachments ?? [],
             consensusScore: h.consensus ?? null,
             confidence: h.confidence ?? null,
+            disagreements: h.disagreements ?? [],
             summary: {
-              agentCount: h.agentCount ?? null,
-              providers: h.providers ?? [],
-              debateRounds: h.debateRounds ?? null,
+              agentCount: h.verification?.agents ?? h.agentCount ?? null,
+              providers: h.providers ?? null,
+              debateRounds: h.verification?.rounds ?? h.debateRounds ?? null,
               tokens: h.tokens ?? null,
               elapsedSeconds: h.elapsedSeconds ?? null,
+              modelFamilies: h.modelFamilies ?? null,
+              familyCount: h.verification?.families ?? h.modelFamilies?.length ?? null,
+              resolvedDisagreementCount:
+                h.verification?.disagreements_resolved ??
+                (h.disagreements
+                  ? h.disagreements.filter((disagreement) => disagreement.resolved).length
+                  : null),
+              verification: h.verification ?? null,
             },
           }))
         }

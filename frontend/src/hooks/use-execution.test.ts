@@ -174,6 +174,13 @@ describe("useExecution hook", () => {
           debate_rounds: 1,
           tokens_used: 7000,
           elapsed_seconds: 35.7,
+          verification: {
+            agents: 3,
+            families: 2,
+            rounds: 1,
+            disagreements_resolved: 3,
+            sources_verified: 2,
+          },
         },
       })
     })
@@ -188,6 +195,15 @@ describe("useExecution hook", () => {
       debateRounds: 1,
       tokens: 7000,
       elapsedSeconds: 35.7,
+      familyCount: 2,
+      resolvedDisagreementCount: 3,
+      verification: {
+        agents: 3,
+        families: 2,
+        rounds: 1,
+        disagreements_resolved: 3,
+        sources_verified: 2,
+      },
     })
   })
 
@@ -216,5 +232,69 @@ describe("useExecution hook", () => {
       expect(result.current.confidence).toBe("Moderate")
     })
     expect(result.current.summary).toMatchObject({ agentCount: 3, tokens: 7000 })
+  })
+
+  it("preserves completed verification metrics when reopening local history", async () => {
+    vi.useRealTimers()
+    const { storage } = await import("@/lib/storage")
+    vi.mocked(storage.getHistory).mockResolvedValue({
+      id: "local-metrics",
+      question: "Q?",
+      answer: "A.",
+      status: "completed",
+      created_at: new Date().toISOString(),
+      minutes: 5,
+      agentCount: 3,
+      debateRounds: 2,
+      providers: ["groq", "openrouter"],
+      verification: {
+        agents: 3,
+        families: 2,
+        rounds: 2,
+        disagreements_resolved: 4,
+        sources_verified: 3,
+      },
+      disagreements: [
+        { id: "d1", agent_id: "a1", issue: "Conflicting premise", resolved: true },
+        { id: "d2", agent_id: "a2", issue: "Missing citation", resolved: true },
+      ],
+    })
+
+    const { result } = renderHook(() => useExecution("local-metrics"))
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("completed")
+    })
+    expect(result.current.summary).toMatchObject({
+      agentCount: 3,
+      familyCount: 2,
+      debateRounds: 2,
+      resolvedDisagreementCount: 4,
+      verification: { disagreements_resolved: 4, sources_verified: 3 },
+    })
+    expect(result.current.disagreements).toHaveLength(2)
+  })
+
+  it("keeps legacy history metrics unavailable when they were never persisted", async () => {
+    vi.useRealTimers()
+    const { storage } = await import("@/lib/storage")
+    vi.mocked(storage.getHistory).mockResolvedValue({
+      id: "local-legacy",
+      question: "Q?",
+      answer: "A.",
+      status: "completed",
+      created_at: new Date().toISOString(),
+      minutes: 3,
+    })
+
+    const { result } = renderHook(() => useExecution("local-legacy"))
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("completed")
+    })
+    expect(result.current.summary?.agentCount).toBeNull()
+    expect(result.current.summary?.familyCount).toBeNull()
+    expect(result.current.summary?.debateRounds).toBeNull()
+    expect(result.current.summary?.resolvedDisagreementCount).toBeNull()
   })
 })

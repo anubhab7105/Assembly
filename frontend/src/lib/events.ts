@@ -88,9 +88,17 @@ export interface ExecutionCompletedData {
   consensus_score?: number
   agent_count?: number
   providers_used?: string[]
+  resolved_disagreement_count?: number
   debate_rounds?: number
   tokens_used?: number
   elapsed_seconds?: number
+  verification?: {
+    agents?: number
+    families?: number
+    rounds?: number
+    disagreements_resolved?: number
+    sources_verified?: number
+  }
   uncertainty_note?: string
   question?: string
   // Legacy aliases (never sent by current backends; read tolerantly).

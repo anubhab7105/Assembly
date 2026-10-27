@@ -22,6 +22,18 @@ export interface HistoryRecord {
   debateRounds?: number | null
   tokens?: number | null
   elapsedSeconds?: number | null
+  /** Distinct model families used by the completed team, when known. */
+  modelFamilies?: string[]
+  /** Verification summary captured by the orchestrator when the run completed. */
+  verification?: {
+    agents?: number
+    families?: number
+    rounds?: number
+    disagreements_resolved?: number
+    sources_verified?: number
+  }
+  /** Disagreements captured during the live run; omitted for legacy histories. */
+  disagreements?: Array<{ id: string; agent_id: string; issue: string; resolved?: boolean }>
   /** Display-only metadata; file content is deliberately never persisted. */
   attachments?: Array<{ filename: string; media_type: string; size_bytes: number }>
 }
@@ -269,6 +281,46 @@ function normalizeHistory(value: unknown): HistoryRecord | null {
   else if (value.tokens === null) record.tokens = null
   if (typeof value.elapsedSeconds === "number" && Number.isFinite(value.elapsedSeconds)) record.elapsedSeconds = value.elapsedSeconds
   else if (value.elapsedSeconds === null) record.elapsedSeconds = null
+  if (Array.isArray(value.modelFamilies) && value.modelFamilies.every((item) => typeof item === "string")) {
+    record.modelFamilies = [...new Set(value.modelFamilies)]
+  }
+  if (
+    isRecord(value.verification) &&
+    Object.entries(value.verification).every(([key, metric]) =>
+      ["agents", "families", "rounds", "disagreements_resolved", "sources_verified"].includes(key)
+        ? typeof metric === "number" && Number.isFinite(metric) && metric >= 0
+        : false
+    )
+  ) {
+    record.verification = {
+      ...(typeof value.verification.agents === "number" ? { agents: value.verification.agents } : {}),
+      ...(typeof value.verification.families === "number" ? { families: value.verification.families } : {}),
+      ...(typeof value.verification.rounds === "number" ? { rounds: value.verification.rounds } : {}),
+      ...(typeof value.verification.disagreements_resolved === "number"
+        ? { disagreements_resolved: value.verification.disagreements_resolved }
+        : {}),
+      ...(typeof value.verification.sources_verified === "number"
+        ? { sources_verified: value.verification.sources_verified }
+        : {}),
+    }
+  }
+  if (
+    Array.isArray(value.disagreements) &&
+    value.disagreements.every((item) =>
+      isRecord(item) &&
+      isNonEmptyString(item.id) &&
+      typeof item.agent_id === "string" &&
+      typeof item.issue === "string" &&
+      (item.resolved === undefined || typeof item.resolved === "boolean")
+    )
+  ) {
+    record.disagreements = value.disagreements.map((item) => ({
+      id: item.id as string,
+      agent_id: item.agent_id as string,
+      issue: item.issue as string,
+      ...(typeof item.resolved === "boolean" ? { resolved: item.resolved } : {}),
+    }))
+  }
   if (
     Array.isArray(value.attachments) &&
     value.attachments.length <= 5 &&

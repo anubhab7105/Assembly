@@ -45,6 +45,62 @@ describe("FinalAnswer confidence display", () => {
     expect(label.getAttribute("aria-label")).toContain(`Confidence assessment: ${confidence}`)
   })
 
+  it("renders persisted metrics for completed investigations", () => {
+    const state = makeState("Moderate")
+    state.team = []
+    state.round = 0
+    state.disagreements = []
+    state.summary = {
+      agentCount: 3,
+      providers: ["groq", "openrouter"],
+      debateRounds: 2,
+      tokens: 1200,
+      elapsedSeconds: 42,
+      modelFamilies: null,
+      familyCount: 2,
+      resolvedDisagreementCount: 4,
+      verification: {
+        agents: 3,
+        families: 2,
+        rounds: 2,
+        disagreements_resolved: 4,
+        sources_verified: 3,
+      },
+    }
+
+    render(<FinalAnswer state={state} />)
+    fireEvent.click(screen.getByTestId("confidence-label"))
+
+    expect(screen.getByText("3 Agents")).toBeDefined()
+    expect(screen.getByText("2 Model Families")).toBeDefined()
+    expect(screen.getByText("2 Debate Rounds")).toBeDefined()
+    expect(screen.getByText("4 resolved")).toBeDefined()
+  })
+
+  it("shows unavailable rather than fabricated zeroes for legacy completed runs", () => {
+    const state = makeState(null)
+    state.team = []
+    state.round = 0
+    state.summary = {
+      agentCount: null,
+      providers: null,
+      debateRounds: null,
+      tokens: null,
+      elapsedSeconds: null,
+      modelFamilies: null,
+      familyCount: null,
+      resolvedDisagreementCount: null,
+      verification: null,
+    }
+
+    render(<FinalAnswer state={state} />)
+    fireEvent.click(screen.getByTestId("confidence-label"))
+
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(4)
+    expect(screen.queryByText("0 Agents")).toBeNull()
+    expect(screen.queryByText("0 Debate Rounds")).toBeNull()
+  })
+
   it("renders missing confidence as a neutral, accessible Not assessed state", () => {
     render(<FinalAnswer state={makeState(null)} />)
 
