@@ -1128,6 +1128,9 @@ class Orchestrator:
                     "tokens_used": total_tokens,
                     "debate_rounds": round_number,
                     "elapsed_seconds": round(budget.state.elapsed_seconds, 1),
+                    "model_families": result.verification.get("families", []),
+                    "disagreement_count": result.verification.get("disagreement_count"),
+                    "resolved_disagreement_count": result.verification.get("disagreements_resolved"),
                     "verification": result.verification,
                 },
             )
