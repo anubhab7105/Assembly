@@ -7,6 +7,7 @@ no response or log.
 
 import logging
 
+import pytest
 from fastapi.testclient import TestClient
 
 CANARY_PROV = "gsk-CANARY-CTX-D4E5F6"
@@ -93,16 +94,80 @@ def test_builder_selection_and_search_flag() -> None:
         provider_keys={"groq": CANARY_PROV},
         search_keys={"tavily": CANARY_SEARCH},
         selected=["openai/gpt-oss-20b", "no-such-model"],
-        pins={"critic": "openai/gpt-oss-120b"},
+        pins={"solver": "openai/gpt-oss-20b"},
     )
     assert ctx.allowed == {"openai/gpt-oss-20b"}
-    assert ctx.pins == {"critic": "openai/gpt-oss-120b"}
+    assert ctx.pins == {"solver": "openai/gpt-oss-20b"}
     assert ctx.has_search_key is True
 
 
 def test_builder_empty_search_value_means_keyless() -> None:
     ctx = _ctx(search_keys={"tavily": ""})
     assert ctx.has_search_key is False
+
+
+
+def test_cross_provider_pin_uses_matching_provider_adapter() -> None:
+    ctx = _ctx(
+        provider_keys={"groq": CANARY_PROV, "cerebras": "csk-TEST-KEY-123"},
+        pins={"critic": "gpt-oss-120b"},
+    )
+
+    decision = ctx.router.route("critic")
+
+    assert decision.model == "gpt-oss-120b"
+    assert decision.provider_name == "cerebras"
+    assert decision.provider is ctx.router._w._providers["cerebras"]
+
+
+def test_pin_without_provider_key_fails_clearly() -> None:
+    from src.providers.router import PinViolationError
+
+    with pytest.raises(PinViolationError, match="not configured or available"):
+        _ctx(
+            provider_keys={"groq": CANARY_PROV},
+            pins={"critic": "gpt-oss-120b"},
+        )
+
+
+def test_pin_excluded_by_model_selection_is_rejected() -> None:
+    from src.providers.router import PinViolationError
+
+    with pytest.raises(PinViolationError, match="excluded by the current model selection"):
+        _ctx(
+            provider_keys={"groq": CANARY_PROV, "cerebras": "csk-TEST-KEY-123"},
+            selected=["openai/gpt-oss-20b"],
+            pins={"critic": "gpt-oss-120b"},
+        )
+
+
+def test_critic_pin_sharing_solver_family_is_rejected() -> None:
+    from src.providers.router import PinViolationError
+
+    ctx = _ctx(
+        provider_keys={"groq": CANARY_PROV, "openrouter": "sk-TEST-KEY-456"},
+        pins={
+            "solver": "openai/gpt-oss-20b",
+            "critic": "openai/gpt-oss-20b",
+        },
+    )
+
+    with pytest.raises(PinViolationError, match="critic in a solver's family"):
+        ctx.router.route_team(
+            [
+                {"agent_type": "solver", "role_description": "Solve the problem"},
+                {"agent_type": "critic", "role_description": "Review the solution"},
+            ]
+        )
+
+
+def test_unpinned_routing_keeps_router_choice() -> None:
+    ctx = _ctx(provider_keys={"groq": CANARY_PROV, "cerebras": "csk-TEST-KEY-123"})
+
+    decision = ctx.router.route("critic")
+
+    assert decision.provider_name == "groq"
+    assert decision.model == "openai/gpt-oss-20b"
 
 
 def test_preflight_uses_request_keys(monkeypatch) -> None:
