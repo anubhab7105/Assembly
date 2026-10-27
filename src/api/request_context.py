@@ -219,6 +219,13 @@ def _filtered_router(
             decision = self._w.route(agent_type, *a, **k)
             return self._apply_pin(decision, agent_type)
 
+        def fallback_for(self, decision, error):  # type: ignore[no-untyped-def]
+            # A role pin is strict across retries too. Never let the router's
+            # normal fallback chain silently substitute another model.
+            if getattr(decision, "role", "") in self._pins:
+                return None
+            return self._w.fallback_for(decision, error)
+
         def route_team(self, team: list, *a, **k):  # type: ignore[no-untyped-def]
             from src.providers.router import TeamRouting
 
