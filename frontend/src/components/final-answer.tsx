@@ -70,13 +70,22 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
   const modelFamilies = completed
     ? state.summary?.modelFamilies ?? null
     : [...new Set(state.team.map((agent) => agent.model_family))]
-  const distinctFamilies = modelFamilies?.length ?? null
+  const distinctFamilies = completed
+    ? state.summary?.familyCount ?? modelFamilies?.length ?? null
+    : modelFamilies.length
   const resolvedCount = state.disagreements.filter((d) => d.resolved).length
-  const teamCount = completed ? state.summary?.agentCount ?? null : state.team.length
-  const roundCount = completed ? state.summary?.debateRounds ?? null : state.round
+  const teamCount = completed
+    ? state.summary?.verification?.agents ?? state.summary?.agentCount ?? null
+    : state.team.length
+  const roundCount = completed
+    ? state.summary?.verification?.rounds ?? state.summary?.debateRounds ?? null
+    : state.round
   const disagreementCount = completed ? state.summary?.disagreementCount ?? null : state.disagreements.length
-  const resolvedDisagreementCount = completed ? state.summary?.resolvedDisagreementCount ?? null : resolvedCount
-  const unavailable = "Unavailable"
+  const resolvedDisagreementCount = completed
+    ? state.summary?.resolvedDisagreementCount ??
+      state.summary?.verification?.disagreements_resolved ??
+      null
+    : resolvedCount
 
   return (
     <>
