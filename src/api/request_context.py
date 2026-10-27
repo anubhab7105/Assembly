@@ -202,6 +202,11 @@ def _filtered_router(
                     f"Pinned provider for {role!r} is no longer available. "
                     "Check its API key and retry."
                 )
+            if not self._w._usable_model(provider_id, model.id):
+                raise PinViolationError(
+                    f"Pinned model for {role!r} is unavailable due to quota or cooldown. "
+                    "Choose another available model or retry after the quota resets."
+                )
             # Update the complete assignment, including the adapter. Build a
             # fresh decision to avoid exposing a half-mutated assignment.
             from src.providers.router import RoutingDecision
@@ -219,7 +224,7 @@ def _filtered_router(
             decision = self._w.route(agent_type, *a, **k)
             return self._apply_pin(decision, agent_type)
 
-        def fallback_for(self, decision, error):  # type: ignore[no-untyped-def]
+        def fallback_for(self, decision, _error):  # type: ignore[no-untyped-def]
             # A role pin is strict across retries too. Never let the router's
             # normal fallback chain silently substitute another model.
             if getattr(decision, "role", "") in self._pins:
@@ -279,6 +284,11 @@ def _filtered_router(
                 if message not in warnings:
                     warnings.append(message)
             families = [fam for fam in dict.fromkeys(d.family for d in decisions) if fam]
+            if len(families) < len(routing.families):
+                raise PinViolationError(
+                    "Role pins reduce the team's final model-family diversity. "
+                    "Choose pins from different families or remove conflicting pins."
+                )
             return TeamRouting(
                 decisions=decisions,
                 warnings=warnings,
