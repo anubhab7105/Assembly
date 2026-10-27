@@ -22,6 +22,10 @@ export interface HistoryRecord {
   debateRounds?: number | null
   tokens?: number | null
   elapsedSeconds?: number | null
+  /** Distinct model families used by the completed team, when known. */
+  modelFamilies?: string[]
+  /** Disagreements captured during the live run; omitted for legacy histories. */
+  disagreements?: Array<{ id: string; agent_id: string; issue: string; resolved?: boolean }>
   /** Display-only metadata; file content is deliberately never persisted. */
   attachments?: Array<{ filename: string; media_type: string; size_bytes: number }>
 }
@@ -269,6 +273,26 @@ function normalizeHistory(value: unknown): HistoryRecord | null {
   else if (value.tokens === null) record.tokens = null
   if (typeof value.elapsedSeconds === "number" && Number.isFinite(value.elapsedSeconds)) record.elapsedSeconds = value.elapsedSeconds
   else if (value.elapsedSeconds === null) record.elapsedSeconds = null
+  if (Array.isArray(value.modelFamilies) && value.modelFamilies.every((item) => typeof item === "string")) {
+    record.modelFamilies = [...new Set(value.modelFamilies)]
+  }
+  if (
+    Array.isArray(value.disagreements) &&
+    value.disagreements.every((item) =>
+      isRecord(item) &&
+      isNonEmptyString(item.id) &&
+      typeof item.agent_id === "string" &&
+      typeof item.issue === "string" &&
+      (item.resolved === undefined || typeof item.resolved === "boolean")
+    )
+  ) {
+    record.disagreements = value.disagreements.map((item) => ({
+      id: item.id as string,
+      agent_id: item.agent_id as string,
+      issue: item.issue as string,
+      ...(typeof item.resolved === "boolean" ? { resolved: item.resolved } : {}),
+    }))
+  }
   if (
     Array.isArray(value.attachments) &&
     value.attachments.length <= 5 &&
