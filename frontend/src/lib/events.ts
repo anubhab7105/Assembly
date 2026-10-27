@@ -88,6 +88,7 @@ export interface ExecutionCompletedData {
   consensus_score?: number
   agent_count?: number
   providers_used?: string[]
+  model_families?: string[]
   debate_rounds?: number
   tokens_used?: number
   elapsed_seconds?: number
