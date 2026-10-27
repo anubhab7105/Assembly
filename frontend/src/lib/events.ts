@@ -88,8 +88,6 @@ export interface ExecutionCompletedData {
   consensus_score?: number
   agent_count?: number
   providers_used?: string[]
-  model_families?: string[]
-  disagreement_count?: number
   resolved_disagreement_count?: number
   debate_rounds?: number
   tokens_used?: number
@@ -98,7 +96,6 @@ export interface ExecutionCompletedData {
     agents?: number
     families?: number
     rounds?: number
-    disagreements_total?: number
     disagreements_resolved?: number
     sources_verified?: number
   }
