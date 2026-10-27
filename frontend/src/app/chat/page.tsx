@@ -334,7 +334,6 @@ export default function Home() {
             confidence_label?: "High" | "Moderate" | "Low"
             agent_count?: number
             providers_used?: string[]
-            model_families?: string[]
             debate_rounds?: number
             tokens_used?: number
             elapsed_seconds?: number
@@ -356,7 +355,6 @@ export default function Home() {
             confidence = event.data?.confidence_label ?? null
             agentCount = event.data?.agent_count ?? null
             providers = event.data?.providers_used ?? []
-            modelFamilies = event.data?.model_families ?? null
             verification = event.data?.verification ?? null
             debateRounds = event.data?.debate_rounds ?? event.data?.verification?.rounds ?? null
             tokens = event.data?.tokens_used ?? null
