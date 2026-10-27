@@ -67,12 +67,9 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
   const confColor = confidenceColors[conf]
 
   const completed = state.status === "completed"
-  const modelFamilies = completed
-    ? state.summary?.modelFamilies ?? null
-    : [...new Set(state.team.map((agent) => agent.model_family))]
   const distinctFamilies = completed
-    ? state.summary?.familyCount ?? modelFamilies?.length ?? null
-    : modelFamilies.length
+    ? state.summary?.familyCount ?? null
+    : new Set(state.team.map((agent) => agent.model_family)).size
   const resolvedCount = state.disagreements.filter((d) => d.resolved).length
   const teamCount = completed
     ? state.summary?.verification?.agents ?? state.summary?.agentCount ?? null
