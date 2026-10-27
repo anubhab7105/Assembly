@@ -58,7 +58,6 @@ describe("FinalAnswer confidence display", () => {
       elapsedSeconds: 42,
       modelFamilies: null,
       familyCount: 2,
-      disagreementCount: null,
       resolvedDisagreementCount: 4,
       verification: {
         agents: 3,
@@ -90,7 +89,6 @@ describe("FinalAnswer confidence display", () => {
       elapsedSeconds: null,
       modelFamilies: null,
       familyCount: null,
-      disagreementCount: null,
       resolvedDisagreementCount: null,
       verification: null,
     }
