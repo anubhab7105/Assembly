@@ -49,6 +49,8 @@ export interface ExecutionState {
     tokens: number | null
     elapsedSeconds: number | null
     modelFamilies: string[] | null
+    disagreementCount: number | null
+    resolvedDisagreementCount: number | null
   } | null
 }
 
@@ -195,6 +197,8 @@ export function useExecution(executionId: string | null) {
             tokens: compData.tokens_used ?? null,
             elapsedSeconds: compData.elapsed_seconds ?? null,
             modelFamilies: compData.model_families ?? null,
+            disagreementCount: compData.disagreement_count ?? null,
+            resolvedDisagreementCount: compData.resolved_disagreement_count ?? null,
           }
           pushFeed("Execution completed. Final answer synthesised.", "success")
           break
@@ -278,6 +282,10 @@ export function useExecution(executionId: string | null) {
               tokens: h.tokens ?? null,
               elapsedSeconds: h.elapsedSeconds ?? null,
               modelFamilies: h.modelFamilies ?? null,
+              disagreementCount: h.disagreements?.length ?? null,
+              resolvedDisagreementCount: h.disagreements
+                ? h.disagreements.filter((disagreement) => disagreement.resolved).length
+                : null,
             },
           }))
         }
