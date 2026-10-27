@@ -94,9 +94,14 @@ export interface ExecutionCompletedData {
   debate_rounds?: number
   tokens_used?: number
   elapsed_seconds?: number
-  model_families?: string[]
-  disagreement_count?: number
-  resolved_disagreement_count?: number
+  verification?: {
+    agents?: number
+    families?: string[]
+    rounds?: number
+    disagreements_total?: number
+    disagreements_resolved?: number
+    sources_verified?: number
+  }
   uncertainty_note?: string
   question?: string
   // Legacy aliases (never sent by current backends; read tolerantly).
