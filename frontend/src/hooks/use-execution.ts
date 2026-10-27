@@ -44,10 +44,11 @@ export interface ExecutionState {
   // Frozen post-run summary (from device history for local runs).
   summary: {
     agentCount: number | null
-    providers: string[]
+    providers: string[] | null
     debateRounds: number | null
     tokens: number | null
     elapsedSeconds: number | null
+    modelFamilies: string[] | null
   } | null
 }
 
@@ -189,10 +190,11 @@ export function useExecution(executionId: string | null) {
           next.question = compData.question || null
           next.summary = {
             agentCount: compData.agent_count ?? null,
-            providers: compData.providers_used ?? [],
+            providers: compData.providers_used ?? null,
             debateRounds: compData.debate_rounds ?? null,
             tokens: compData.tokens_used ?? null,
             elapsedSeconds: compData.elapsed_seconds ?? null,
+            modelFamilies: compData.model_families ?? null,
           }
           pushFeed("Execution completed. Final answer synthesised.", "success")
           break
@@ -268,12 +270,14 @@ export function useExecution(executionId: string | null) {
             attachments: h.attachments ?? [],
             consensusScore: h.consensus ?? null,
             confidence: h.confidence ?? null,
+            disagreements: h.disagreements ?? [],
             summary: {
               agentCount: h.agentCount ?? null,
-              providers: h.providers ?? [],
+              providers: h.providers ?? null,
               debateRounds: h.debateRounds ?? null,
               tokens: h.tokens ?? null,
               elapsedSeconds: h.elapsedSeconds ?? null,
+              modelFamilies: h.modelFamilies ?? null,
             },
           }))
         }
