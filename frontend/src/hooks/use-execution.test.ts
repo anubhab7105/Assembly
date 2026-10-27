@@ -174,8 +174,6 @@ describe("useExecution hook", () => {
           debate_rounds: 1,
           tokens_used: 7000,
           elapsed_seconds: 35.7,
-          model_families: ["gpt-oss", "gemini"],
-          disagreement_count: 4,
           resolved_disagreement_count: 3,
           verification: {
             agents: 3,
@@ -199,7 +197,6 @@ describe("useExecution hook", () => {
       tokens: 7000,
       elapsedSeconds: 35.7,
       familyCount: 2,
-      disagreementCount: 4,
       resolvedDisagreementCount: 3,
       verification: {
         agents: 3,
