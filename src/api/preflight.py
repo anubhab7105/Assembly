@@ -33,13 +33,21 @@ async def preflight(req: RunRequest, request: Request):
         return JSONResponse(status_code=422, content={"detail": "Invalid request."})
     if req.time_budget_minutes not in (3, 5, 10, 15):
         return JSONResponse(status_code=422, content={"detail": "Invalid request."})
-    ctx = build_request_context(
-        dict(req.provider_keys or {}),
-        dict(req.search_keys) if req.search_keys is not None else None,
-        list(req.model_selection.selected or []),
-        dict(req.model_selection.pins or {}),
-        [u.model_dump() for u in (req.usage_snapshot or [])],
-    )
+    from src.providers.router import PinViolationError
+
+    try:
+        ctx = build_request_context(
+            dict(req.provider_keys or {}),
+            dict(req.search_keys) if req.search_keys is not None else None,
+            list(req.model_selection.selected or []),
+            dict(req.model_selection.pins or {}),
+            [u.model_dump() for u in (req.usage_snapshot or [])],
+        )
+    except PinViolationError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={"code": "pin_violation", "detail": str(exc)},
+        )
     try:
         return _build_preflight(
             question,

@@ -100,8 +100,14 @@ def diversity_payload(router: object, allowed: set[str]) -> dict[str, object]:
 def _filtered_router(
     provider_keys: dict[str, str], allowed: set[str], pins: dict[str, str]
 ):
-    """Build a ModelRouter restricted to selected models + pin wrapper."""
-    from src.providers.router import ModelRouter
+    """Build a ModelRouter restricted to selected models + validated role pins.
+
+    Pins are strict: they must exist in the active selection (when one is
+    provided), have a configured/live provider adapter, and be valid for the
+    requested role. Invalid pins raise PinViolationError rather than silently
+    falling back to a different model.
+    """
+    from src.providers.router import ModelRouter, PinViolationError
 
     keys = wrap_keys(provider_keys or {})
     revealed = {
@@ -124,64 +130,173 @@ def _filtered_router(
     if base_router is None:
         base_router = ModelRouter(keys=revealed)
 
-    valid_pins = {}
-    if pins:
-        catalog_ids: set[str] = set()
-        for spec in base_router.config.providers.values():
-            catalog_ids.update(m.id for m in spec.models)
-        if not allowed:
-            full = load_models_config()
-            for spec in full.providers.values():
-                catalog_ids.update(m.id for m in spec.models)
-        for role, model_id in list(pins.items())[:10]:
-            if model_id in catalog_ids:
-                valid_pins[str(role)] = model_id
-            else:
-                logger.warning("Run     │ ignoring unknown pin model")
-    if not valid_pins:
+    if not pins:
         return base_router
 
-    inner = base_router
+    # Resolve each pin against the full catalog first, then verify the model
+    # survived the active selection. Never quietly widen that selection.
+    catalog = load_models_config()
+    pin_specs: dict[str, tuple[str, object]] = {}
+    for role, model_id in list(pins.items())[:10]:
+        role = str(role).strip()
+        model_id = str(model_id).strip()
+        if not role or not model_id:
+            continue
+        match = next(
+            (
+                (pid, model)
+                for pid, spec in catalog.providers.items()
+                if spec.enabled
+                for model in spec.models
+                if model.id == model_id
+            ),
+            None,
+        )
+        if match is None:
+            raise PinViolationError(
+                f"Pinned model for {role!r} is unknown or disabled. "
+                "Choose an enabled model from the model picker."
+            )
+        provider_id, model = match
+        if allowed and model_id not in allowed:
+            raise PinViolationError(
+                f"Pinned model for {role!r} is excluded by the current model selection. "
+                "Add it to the selection or choose a model within the selection."
+            )
+        if provider_id not in base_router._providers:
+            raise PinViolationError(
+                f"Pinned provider for {role!r} is not configured or available. "
+                "Add a valid API key for that provider, then retry."
+            )
+        if role not in model.roles:
+            raise PinViolationError(
+                f"Pinned model {model_id!r} does not support the {role!r} role. "
+                "Choose a model that supports this role."
+            )
+        pin_specs[role] = (provider_id, model)
+
+    if not pin_specs:
+        return base_router
 
     class _PinRouter:
-        """Delegate to ModelRouter, forcing pinned models per role."""
+        """Delegate to ModelRouter while applying validated model pins."""
 
-        def __init__(self, wrapped: ModelRouter, pin_map: dict[str, str]) -> None:
+        def __init__(
+            self, wrapped: ModelRouter, resolved: dict[str, tuple[str, object]]
+        ) -> None:
             self._w = wrapped
-            self._pins = pin_map
+            self._pins = resolved
             self.config = wrapped.config
 
         def __getattr__(self, name: str):  # delegate everything else
             return getattr(self._w, name)
 
         def _apply_pin(self, decision, role: str):
-            pinned = self._pins.get(role)
-            if not pinned:
+            pin = self._pins.get(role)
+            if pin is None:
                 return decision
-            try:
-                for pid, pspec in self.config.providers.items():
-                    for m in pspec.models:
-                        if m.id == pinned:
-                            decision.model = pinned
-                            decision.provider_name = pid
-                            decision.family = m.family
-                            return decision
-            except Exception as exc:  # noqa: BLE001 — pin is best-effort
-                logger.debug(f"Run     │ pin apply skipped: {exc}")
-            return decision
+            provider_id, model = pin
+            provider = self._w._providers.get(provider_id)
+            if provider is None:
+                raise PinViolationError(
+                    f"Pinned provider for {role!r} is no longer available. "
+                    "Check its API key and retry."
+                )
+            if not self._w._usable_model(provider_id, model.id):
+                raise PinViolationError(
+                    f"Pinned model for {role!r} is unavailable due to quota or cooldown. "
+                    "Choose another available model or retry after the quota resets."
+                )
+            # Update the complete assignment, including the adapter. Build a
+            # fresh decision to avoid exposing a half-mutated assignment.
+            from src.providers.router import RoutingDecision
+
+            return RoutingDecision(
+                provider=provider,
+                model=model.id,
+                provider_name=provider_id,
+                family=model.family,
+                role=role,
+                reason=f"pinned model {provider_id}/{model.id} for {role}",
+            )
 
         def route(self, agent_type: str, *a, **k):  # type: ignore[no-untyped-def]
-            d = self._w.route(agent_type, *a, **k)
-            return self._apply_pin(d, agent_type)
+            decision = self._w.route(agent_type, *a, **k)
+            return self._apply_pin(decision, agent_type)
+
+        def fallback_for(self, decision, _error):  # type: ignore[no-untyped-def]
+            # A role pin is strict across retries too. Never let the router's
+            # normal fallback chain silently substitute another model.
+            if getattr(decision, "role", "") in self._pins:
+                return None
+            return self._w.fallback_for(decision, error)
 
         def route_team(self, team: list, *a, **k):  # type: ignore[no-untyped-def]
-            routing = self._w.route_team(team, *a, **k)
-            for d, spec in zip(routing.decisions, team):
-                role = spec.get("agent_type", "") if isinstance(spec, dict) else ""
-                self._apply_pin(d, role)
-            return routing
+            from src.providers.router import TeamRouting
 
-    return _PinRouter(inner, valid_pins)
+            routing = self._w.route_team(team, *a, **k)
+            decisions = []
+            for decision, spec in zip(routing.decisions, team):
+                role = spec.get("agent_type", "") if isinstance(spec, dict) else ""
+                decisions.append(self._apply_pin(decision, role))
+
+            # Routing's solver spread / critic isolation were computed before
+            # role pins. Revalidate against the final assignments.
+            solver_families = {
+                d.family for d in decisions if d.role == "solver"
+            }
+            critic = next((d for d in decisions if d.role == "critic"), None)
+            pinned_critic = self._pins.get("critic")
+            solver_was_pinned = "solver" in self._pins
+            if (
+                critic is not None
+                and (pinned_critic is not None or solver_was_pinned)
+                and critic.family in solver_families
+            ):
+                raise PinViolationError(
+                    "Role pins place the critic in a solver's family, so critic "
+                    "independence cannot be guaranteed. Pin the critic or solver "
+                    "to a different model family."
+                )
+
+            solver_decisions = [d for d in decisions if d.role == "solver"]
+            solver_families_ordered = [d.family for d in solver_decisions]
+            available_solver_families = {
+                family for _, _, family in self._w._candidates("solver")
+            }
+            required_distinct = min(
+                len(solver_decisions), len(available_solver_families)
+            )
+            if (
+                solver_was_pinned
+                and len(set(solver_families_ordered)) < required_distinct
+            ):
+                raise PinViolationError(
+                    "The solver pin prevents the team from using distinct available model families. "
+                    "Choose a solver pin from another family or remove the solver pin."
+                )
+
+            warnings = list(routing.warnings)
+            if len(solver_families_ordered) != len(set(solver_families_ordered)):
+                message = (
+                    "Solver family reused after role pins; those agents are not independent."
+                )
+                if message not in warnings:
+                    warnings.append(message)
+            families = [fam for fam in dict.fromkeys(d.family for d in decisions) if fam]
+            if len(families) < len(routing.families):
+                raise PinViolationError(
+                    "Role pins reduce the team's final model-family diversity. "
+                    "Choose pins from different families or remove conflicting pins."
+                )
+            return TeamRouting(
+                decisions=decisions,
+                warnings=warnings,
+                degraded=routing.degraded,
+                families=families,
+            )
+
+    return _PinRouter(base_router, pin_specs)
 
 
 @dataclass
