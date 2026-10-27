@@ -143,12 +143,14 @@ function ExecutionContent() {
         {/* ─── Frozen run summary (post-run totals, not live state) ─────────── */}
         {terminal && state.summary && (
           <div data-testid="run-summary-strip" className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-border bg-card px-4 py-2.5 text-xs text-muted-foreground font-mono">
-            <span>{state.summary.agentCount ?? 0} agents</span>
-            {state.summary.providers.length > 0 && (
-              <span>providers: {state.summary.providers.join(", ")}</span>
+            <span>{state.summary.agentCount === null ? "agents unavailable" : `${state.summary.agentCount} agents`}</span>
+            {(state.summary.providers?.length ?? 0) > 0 && (
+              <span>providers: {state.summary.providers?.join(", ")}</span>
             )}
-            {state.summary.debateRounds !== null && (
+            {state.summary.debateRounds !== null ? (
               <span>{state.summary.debateRounds} debate rounds</span>
+            ) : (
+              <span>debate rounds unavailable</span>
             )}
             {state.summary.tokens !== null && (
               <span>{state.summary.tokens.toLocaleString()} tokens</span>
