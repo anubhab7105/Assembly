@@ -76,6 +76,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
   const roundCount = completed ? state.summary?.debateRounds ?? null : state.round
   const disagreementCount = completed ? state.summary?.disagreementCount ?? null : state.disagreements.length
   const resolvedDisagreementCount = completed ? state.summary?.resolvedDisagreementCount ?? null : resolvedCount
+  const unavailable = "Unavailable"
 
   return (
     <>
@@ -136,7 +137,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
               <p className="font-semibold text-foreground text-success flex items-center gap-1">
                 <CheckCircle2 className="size-4" /> {resolvedDisagreementCount === null || disagreementCount === null
                   ? "Unavailable"
-                  : `${resolvedDisagreementCount} / `${disagreementCount}`}
+                  : `${resolvedDisagreementCount} / ${disagreementCount}`}
               </p>
             </div>
           </div>
