@@ -106,7 +106,6 @@ def test_builder_empty_search_value_means_keyless() -> None:
     assert ctx.has_search_key is False
 
 
-
 def test_cross_provider_pin_uses_matching_provider_adapter() -> None:
     ctx = _ctx(
         provider_keys={"groq": CANARY_PROV, "cerebras": "csk-TEST-KEY-123"},
@@ -118,6 +117,7 @@ def test_cross_provider_pin_uses_matching_provider_adapter() -> None:
     assert decision.model == "gpt-oss-120b"
     assert decision.provider_name == "cerebras"
     assert decision.provider is ctx.router._w._providers["cerebras"]
+    assert ctx.router.fallback_for(decision, RuntimeError("simulated provider failure")) is None
 
 
 def test_pin_without_provider_key_fails_clearly() -> None:
