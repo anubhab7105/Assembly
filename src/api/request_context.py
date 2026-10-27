@@ -232,14 +232,32 @@ def _filtered_router(
             }
             critic = next((d for d in decisions if d.role == "critic"), None)
             pinned_critic = self._pins.get("critic")
-            if critic is not None and pinned_critic is not None and critic.family in solver_families:
+            solver_was_pinned = "solver" in self._pins
+            if (
+                critic is not None
+                and (pinned_critic is not None or solver_was_pinned)
+                and critic.family in solver_families
+            ):
                 raise PinViolationError(
-                    "The pinned critic model shares a family with a solver, so critic independence cannot be guaranteed. "
-                    "Pin the critic to a different model family."
+                    "Role pins place the critic in a solver's family, so critic independence cannot be guaranteed. "
+                    "Pin the critic or solver to a different model family."
                 )
 
             solver_decisions = [d for d in decisions if d.role == "solver"]
             solver_families_ordered = [d.family for d in solver_decisions]
+            available_solver_families = {
+                family for _, _, family in self._w._candidates("solver")
+            }
+            required_distinct = min(len(solver_decisions), len(available_solver_families))
+            if (
+                solver_was_pinned
+                and len(set(solver_families_ordered)) < required_distinct
+            ):
+                raise PinViolationError(
+                    "The solver pin prevents the team from using distinct available model families. "
+                    "Choose a solver pin from another family or remove the solver pin."
+                )
+
             warnings = list(routing.warnings)
             if len(solver_families_ordered) != len(set(solver_families_ordered)):
                 message = (
