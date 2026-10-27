@@ -146,7 +146,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
               <p className="font-semibold text-foreground text-success flex items-center gap-1">
                 <CheckCircle2 className="size-4" /> {resolvedDisagreementCount === null || disagreementCount === null
                   ? "Unavailable"
-                  : `${resolvedDisagreementCount} / ${disagreementCount}`}
+                  : `${resolvedDisagreementCount} resolved`}
               </p>
             </div>
           </div>
