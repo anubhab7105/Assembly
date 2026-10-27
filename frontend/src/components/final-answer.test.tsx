@@ -74,7 +74,7 @@ describe("FinalAnswer confidence display", () => {
     expect(screen.getByText("3 Agents")).toBeDefined()
     expect(screen.getByText("2 Model Families")).toBeDefined()
     expect(screen.getByText("2 Debate Rounds")).toBeDefined()
-    expect(screen.getByText("Unavailable")).toBeDefined()
+    expect(screen.getByText("4 resolved")).toBeDefined()
   })
 
   it("shows unavailable rather than fabricated zeroes for legacy completed runs", () => {
