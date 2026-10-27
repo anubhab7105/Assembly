@@ -96,7 +96,7 @@ export interface ExecutionCompletedData {
   elapsed_seconds?: number
   verification?: {
     agents?: number
-    families?: string[]
+    families?: number
     rounds?: number
     disagreements_total?: number
     disagreements_resolved?: number
