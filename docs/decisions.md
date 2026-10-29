@@ -455,3 +455,9 @@ Append-only log of significant technical and product decisions.
 - Decision: Update patched transitive packages in the lockfile, declare patched root Zod 4.6.7, and use a package-specific exception for GHSA-mrhx-c7xc-m3w5 with review due 2026-11-07. Do not force Zod 4 into the CLI chain because that may break schema tooling. Keep the existing braces exception distinct.
 - Consequences: The audit gate remains fail-closed for any other high/critical advisory; the Zod exception is temporary and must be removed once shadcn publishes a compatible patched dependency chain.
 
+## 2026-10-29 — Resolve new frontend high-severity audit blockers
+
+- Context: The frontend audit began blocking on the transitive `systeminformation@5.33.15` dependency supplied by `@dotenvx/dotenvx`, plus `deepmerge` and the CLI-nested Zod advisory under `shadcn`/`@shadcn/registry`. Upstream fixes `systeminformation` in 5.33.16; no patched `deepmerge` release is published yet.
+- Decision: Add a package override for `systeminformation@^5.33.16` and update the corresponding lock entry. Keep the Zod exception specific to its package/advisory; add a time-bounded `deepmerge` exception with a 2026-11-07 review date because it is currently present only in shadcn CLI scaffolding dependencies. Keep unknown advisories and package mismatches blocking.
+- Consequences: CI should no longer fail on the patched systeminformation version. The remaining upstream-unfixed tooling advisory is explicitly documented and time-bound; audit-gate regression coverage ensures the same GHSA on a different package still blocks. Run `npm ci --legacy-peer-deps`, `npm run audit:test` and `npm run audit:high` in CI before merge.
+
