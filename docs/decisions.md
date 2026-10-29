@@ -2,6 +2,12 @@
 
 Append-only log of significant technical and product decisions.
 
+## 2026-10-26 — Typed chat status states so success/info messages are not announced as errors (Issue #53)
+
+- Context: `frontend/src/app/chat/page.tsx` classified any status message that did not match one of two hard-coded progress strings (`"Checking capacity…"` / `"Running team… (streaming)"`) as an error (`statusIsError`). As a result, file-readiness, privacy, informational, and success messages were rendered with `role="alert"`, `aria-live="assertive"`, `text-danger`, and `bg-danger-subtle` — announcing ordinary messages as errors to screen readers.
+- Decision: Introduce an explicit semantic `ChatStatus` model (`ChatStatusType = "info" | "progress" | "success" | "warning" | "error"`) carrying text separate from type, with exhaustive style/ARIA mappings (`chatStatusClass`, `chatStatusRole`, `chatStatusAriaLive`) and a safe default (unknown/missing type → neutral info, never error). Present via a new `ChatStatusMessage` component: only `error` uses `role="alert"`/`assertive`; all other types use `role="status"`/`polite`. Assign the correct type at each status producer call site in the chat page.
+- Consequences: Success, info, progress, and warning messages can no longer enter the error-rendering branch. Error styling and assertive alerts are reserved for genuine failures. New unit/component tests cover all five types, ARIA semantics, type-change updates, and safe invalid handling. Two pre-existing, unrelated test failures remain (keys-manager "restored after refresh" text; server-status-banner "not a login" text).
+
 ## 2026-10-24 — One-command local web fallback and evidence-based hosted release gate
 
 - Context: Issue #37 requires release evidence for hosted streaming, but unit/CI tests cannot establish behavior of a live deployment or provider quotas. The documented `make run` started only the backend and left a second frontend command.
