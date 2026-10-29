@@ -98,6 +98,54 @@ describe("audit-high allowlist enforcement", () => {
     assert.equal(allowlisted.length, 3);
   });
 
+  it("allowlists the known deepmerge advisory only when the package matches", () => {
+    const deepmergeAdvisory = {
+      source: 1240992,
+      name: "deepmerge",
+      dependency: "deepmerge",
+      title: "deepmerge mergeObject() allows prototype poisoning of returned objects",
+      url: "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+      severity: "high",
+      range: ">=4.2.0 <=4.3.1",
+    };
+    const report = {
+      vulnerabilities: {
+        deepmerge: {
+          name: "deepmerge",
+          severity: "high",
+          range: "4.2.0 - 4.3.1",
+          via: [deepmergeAdvisory],
+        },
+        shadcn: {
+          name: "shadcn",
+          severity: "high",
+          range: "4.21.4",
+          via: ["deepmerge"],
+        },
+      },
+    };
+    const { blocking, allowlisted } = collectBlocking(report);
+    assert.equal(blocking.length, 0);
+    assert.equal(allowlisted.length, 2);
+
+    const mismatchedPackage = {
+      vulnerabilities: {
+        "unrelated-package": {
+          name: "unrelated-package",
+          severity: "high",
+          range: "*",
+          via: [
+            {
+              name: "unrelated-package",
+              url: "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+            },
+          ],
+        },
+      },
+    };
+    assert.equal(collectBlocking(mismatchedPackage).blocking.length, 1);
+  });
+
   it("blocks a synthetic new high advisory (regression)", () => {
     const report = {
       vulnerabilities: {

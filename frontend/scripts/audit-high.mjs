@@ -16,6 +16,14 @@ export const ALLOWLIST = [
       "braces <=3.0.3 has no patched version; transitive via micromatch/fast-glob from shadcn and eslint-config-next dev tooling. npm audit fix is a no-op and --force wants a breaking shadcn 4.x -> 1.0.0 downgrade.",
   },
   {
+    ghsa: "GHSA-gcqx-w48m-w2h4",
+    package: "deepmerge",
+    owner: "assembly-maintainers",
+    reviewBy: "2026-11-07",
+    reason:
+      "deepmerge <=4.3.1 has no patched release yet (upstream issue #273). It is currently transitive only through shadcn/@shadcn/registry CLI scaffolding dependencies, not an Assembly runtime dependency. Temporary exception for maintainer-run CLI tooling; reassess the upstream fix and dependency exposure by the review date.",
+  },
+  {
     ghsa: "GHSA-mrhx-c7xc-m3w5",
     package: "zod",
     owner: "assembly-maintainers",
