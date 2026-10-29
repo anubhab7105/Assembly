@@ -697,3 +697,11 @@
 - Added a concise GitHub step summary with scan state, finding counts, allowlisted findings, blocking findings and fix versions; logs contain package/advisory metadata only.
 - Added deterministic offline tests for clean scans, vulnerable results, scanner errors, malformed output, exact exception matching and expired exceptions. CI also runs the npm audit-gate regression tests.
 - Verification: tests are network-free; GitHub Actions on the PR is the integration/merge gate.
+
+## 2026-10-29 — Frontend high audit blockers
+
+- Updated the lockfile-resolved `systeminformation` transitive dependency from 5.33.15 to patched 5.33.16 with a package override.
+- Added a scoped, review-dated exception for `GHSA-gcqx-w48m-w2h4` on `deepmerge` because upstream has not published a patched version and it currently enters via the shadcn CLI dependency chain.
+- Expanded audit gate tests to verify this exception and ensure the same advisory identifier attached to another package remains blocking.
+- CI still needs to verify lockfile installation and the live `npm audit` report.
+
