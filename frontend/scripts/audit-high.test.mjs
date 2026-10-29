@@ -98,7 +98,6 @@ describe("audit-high allowlist enforcement", () => {
     assert.equal(allowlisted.length, 3);
   });
 
-
   it("allowlists the known deepmerge advisory only when the package matches", () => {
     const deepmergeAdvisory = {
       source: 1240992,
@@ -146,7 +145,8 @@ describe("audit-high allowlist enforcement", () => {
     };
     assert.equal(collectBlocking(mismatchedPackage).blocking.length, 1);
   });
-\n  it("blocks a synthetic new high advisory (regression)", () => {
+
+  it("blocks a synthetic new high advisory (regression)", () => {
     const report = {
       vulnerabilities: {
         "evil-pkg": {
