@@ -1,3 +1,10 @@
+## 2026-10-26 — Typed chat status states (Issue #53)
+
+- Root cause: `frontend/src/app/chat/page.tsx` derived `statusIsError` from string matching (any status not equal to `"Checking capacity…"` or `"Running team… (streaming)"` was treated as an error), so file-readiness, privacy, informational, and success messages were rendered as `role="alert"` / `text-danger` / `bg-danger-subtle` — announced as errors to screen readers.
+- Change: added `frontend/src/lib/chat-status.ts` (typed `ChatStatus` model: `info | progress | success | warning | error`, text separate from type, exhaustive style/ARIA mappings, safe default to info), `frontend/src/components/chat-status-message.tsx` (renders `role="alert"`/`assertive` only for `error`, `role="status"`/`polite` otherwise), and rewired the chat page's `status` state and all `setStatus` call sites to assign the correct type at the source.
+- Tests: added `src/lib/chat-status.test.ts` (9 tests) and `src/components/chat-status-message.test.tsx` (14 tests) covering all five types, ARIA role/politeness, no-error styling for success/info/progress/warning, type-change updates, and safe handling of missing/invalid types.
+- Verification: `npx tsc --noEmit` passes; `npx eslint src` passes; `npx prettier --check` passes on new files; vitest new tests pass (23/23). Full suite: 99 passed, 2 failed — both failures are pre-existing and unrelated (keys-manager "restored after refresh" text; server-status-banner "not a login" text). No new regressions introduced.
+
 ## 2026-10-24 — Reject malformed Content-Length at the HTTP boundary (Issue #20)
 
 - Existing coverage already exercises provider-key canaries, generic 422 responses, proxy-header trust, WebSocket origin checks, concurrency caps, SSE failure diagnostics, and cancellation cleanup.
