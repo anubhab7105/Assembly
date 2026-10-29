@@ -12,7 +12,8 @@
     "audit:test": "node --test scripts/audit-high.test.mjs"
   },
   "overrides": {
-    "katex": "$katex"
+    "katex": "$katex",
+    "systeminformation": "^5.33.16"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
