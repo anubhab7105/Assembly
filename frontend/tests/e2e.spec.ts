@@ -162,6 +162,15 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
   test("each application route exposes exactly one primary main landmark", async ({ page }) => {
     for (const route of ["/", "/chat", "/settings", "/executions"]) {
       await page.goto(route)
+
+      if (route === "/chat") {
+        const privacyDialog = page.getByTestId("privacy-dialog")
+        await expect(privacyDialog).toBeVisible({ timeout: 10000 })
+        await page.getByLabel(/my question is sent to the model providers/i).check()
+        await page.getByTestId("privacy-acknowledge").click()
+        await expect(privacyDialog).toBeHidden()
+      }
+
       await expect(page.getByRole("main")).toHaveCount(1)
       await expect(page.locator("#main-content")).toHaveJSProperty("tagName", "MAIN")
     }
