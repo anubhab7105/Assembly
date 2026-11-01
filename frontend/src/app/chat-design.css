@@ -1,0 +1,87 @@
+/* Chat workspace visual system: calm two-column research shell, soft surfaces, and subtle motion. */
+#main-content {
+  position: relative;
+  isolation: isolate;
+}
+
+@media (min-width: 1024px) {
+  #main-content {
+    display: grid;
+    grid-template-columns: minmax(150px, 190px) minmax(0, 760px);
+    align-content: center;
+    justify-content: center;
+    column-gap: clamp(28px, 5vw, 72px);
+    max-width: 1180px;
+  }
+
+  #main-content::before {
+    content: "ASSEMBLY\\A\\AIndependent research\\AOne sourced answer\\A\\A• Multi-model analysis\\A• Evidence-aware synthesis\\A• Local-first credentials";
+    white-space: pre-line;
+    align-self: center;
+    color: var(--muted-foreground);
+    font-size: 0.72rem;
+    line-height: 1.65;
+    letter-spacing: 0.02em;
+    border-right: 1px solid color-mix(in oklch, var(--border), transparent 25%);
+    padding: 18px 28px 18px 0;
+    min-height: 210px;
+  }
+}
+
+#main-content > .mb-7 {
+  position: relative;
+  overflow: visible;
+}
+
+#main-content > .mb-7::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 320px;
+  height: 180px;
+  left: 50%;
+  top: -70px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, color-mix(in oklch, var(--brand), transparent 82%), transparent 70%);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+#main-content > .mb-7 > div:first-child {
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--brand), transparent 78%), 0 12px 40px color-mix(in oklch, var(--brand), transparent 92%);
+}
+
+#main-content textarea {
+  transition: min-height 180ms ease, height 180ms ease;
+}
+
+#main-content textarea:focus {
+  min-height: 112px;
+}
+
+#main-content .rounded-2xl.border.bg-card {
+  box-shadow: 0 14px 40px color-mix(in oklch, var(--foreground), transparent 94%);
+}
+
+@keyframes chat-thinking-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+#main-content .animate-spin {
+  animation: chat-thinking-pulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #main-content textarea,
+  #main-content .animate-spin {
+    transition: none;
+    animation: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  #main-content {
+    max-width: 760px;
+  }
+}
