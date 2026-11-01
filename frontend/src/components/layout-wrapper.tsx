@@ -322,6 +322,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         <Dialog open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <DialogContent
             showCloseButton={false}
+            aria-modal="true"
             aria-describedby="mobile-menu-description"
             className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 rounded-none border-r border-border bg-card p-0 sm:max-w-sm"
           >

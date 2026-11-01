@@ -33,6 +33,7 @@ export function PrivacyDialog({
     <Dialog open>
       <DialogContent
         showCloseButton={false}
+        aria-modal="true"
         aria-describedby="privacy-dialog-description"
         data-testid="privacy-dialog"
         className="max-h-[min(90vh,48rem)] max-w-lg overflow-y-auto border border-border bg-card p-6 shadow-xl"

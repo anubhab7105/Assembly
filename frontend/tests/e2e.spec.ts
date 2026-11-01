@@ -180,7 +180,9 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto("/settings")
 
-    const trigger = page.getByRole("button", { name: "Open menu" })
+    // The modal makes the page background inert, so use a DOM locator
+    // to inspect the trigger's expanded state while the dialog is open.
+    const trigger = page.locator('button[aria-label="Open menu"]')
     await expect(trigger).toHaveAttribute("aria-expanded", "false")
     await expect(trigger).not.toHaveAttribute("aria-controls")
     await trigger.click()
