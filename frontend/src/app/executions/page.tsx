@@ -138,7 +138,7 @@ function ExecutionContent() {
       </header>
 
       {/* ─── Main Content ────────────────────────────────────────────────────── */}
-      <main className="mx-auto max-w-7xl px-6 pt-10 space-y-8">
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-7xl px-6 pt-10 space-y-8">
 
         {/* ─── Frozen run summary (post-run totals, not live state) ─────────── */}
         {terminal && state.summary && (

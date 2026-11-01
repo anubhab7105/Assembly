@@ -140,7 +140,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-12 lg:py-20">
+      <main id="main-content" tabIndex={-1} className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-12 lg:py-20">
         <div className="flex flex-col lg:flex-row items-center justify-between gap-12 lg:gap-8">
           <div className="flex flex-1 flex-col items-start text-left">
             <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-subtle px-4 py-1.5 text-xs font-medium text-brand">

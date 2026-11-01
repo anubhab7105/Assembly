@@ -1,37 +1,51 @@
-"use client";
+"use client"
 
-import React from "react";
+import React from "react"
 import {
   DESKTOP_PRIVACY_PARAGRAPHS,
   WEB_PRIVACY_PARAGRAPHS,
   providerNoteFor,
   type EnabledProviderNote,
-} from "@/lib/privacy-notice";
-import { Button } from "@/components/ui/button";
+} from "@/lib/privacy-notice"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export function PrivacyDialog({
   mode,
   providers,
   onAcknowledge,
 }: {
-  mode: "web" | "desktop";
-  providers: EnabledProviderNote[];
-  onAcknowledge: () => void;
+  mode: "web" | "desktop"
+  providers: EnabledProviderNote[]
+  onAcknowledge: () => void
 }) {
-  const [checked, setChecked] = React.useState(false);
+  const [checked, setChecked] = React.useState(false)
   const paragraphs =
-    mode === "desktop" ? DESKTOP_PRIVACY_PARAGRAPHS : WEB_PRIVACY_PARAGRAPHS;
+    mode === "desktop" ? DESKTOP_PRIVACY_PARAGRAPHS : WEB_PRIVACY_PARAGRAPHS
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Privacy notice"
-      data-testid="privacy-dialog"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-    >
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-xl">
-        <h2 className="text-lg font-bold">Privacy notice</h2>
-        <div className="mt-3 space-y-3 text-sm text-muted-foreground">
+    <Dialog open>
+      <DialogContent
+        showCloseButton={false}
+        aria-modal="true"
+        aria-describedby="privacy-dialog-description"
+        data-testid="privacy-dialog"
+        className="max-h-[min(90vh,48rem)] max-w-lg overflow-y-auto border border-border bg-card p-6 shadow-xl"
+      >
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold">Privacy notice</DialogTitle>
+          <DialogDescription id="privacy-dialog-description" className="sr-only">
+            Review how your question and selected provider information are handled,
+            then acknowledge the notice to continue.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 text-sm text-muted-foreground">
           {paragraphs.map((p, i) =>
             p === "Each model provider handles your inputs under its own policy:" ? (
               <div key={i}>
@@ -55,13 +69,13 @@ export function PrivacyDialog({
         </div>
         <label
           htmlFor="privacy-consent"
-          className="mt-5 flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm"
+          className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm"
         >
           <input
             id="privacy-consent"
             type="checkbox"
             checked={checked}
-            onChange={(e) => setChecked(e.target.checked)}
+            onChange={(event) => setChecked(event.target.checked)}
             className="mt-0.5 size-5 shrink-0 accent-brand"
           />
           <span>
@@ -70,13 +84,13 @@ export function PrivacyDialog({
         </label>
         <Button
           data-testid="privacy-acknowledge"
-          className="mt-3 w-full"
+          className="w-full"
           disabled={!checked}
           onClick={onAcknowledge}
         >
           I understand
         </Button>
-      </div>
-    </div>
-  );
+      </DialogContent>
+    </Dialog>
+  )
 }

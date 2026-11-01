@@ -95,9 +95,11 @@ test.describe("Keys survive refresh (P0)", () => {
     // The informational cookie notice is fixed to the viewport bottom and can
     // overlap the sidebar's bottom Settings link in browser automation.
     const cookieNotice = page.getByRole("region", { name: /Cookie notice/i })
-    if (await cookieNotice.isVisible()) {
-      await cookieNotice.getByRole("button", { name: /Got it/i }).click()
-    }
+    // Wait for the client-side cookie notice to hydrate before deciding
+    // whether it needs dismissing; the initial server snapshot is hidden.
+    await expect(cookieNotice).toBeVisible()
+    await cookieNotice.getByRole("button", { name: /Got it/i }).click()
+    await expect(cookieNotice).toBeHidden()
 
     await page.getByRole("link", { name: /Settings/i }).click()
     await expect(page).toHaveURL(/\/settings/)

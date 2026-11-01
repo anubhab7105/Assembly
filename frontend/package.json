@@ -13,7 +13,10 @@
   },
   "overrides": {
     "katex": "$katex",
-    "systeminformation": "^5.33.16"
+    "systeminformation": "^5.33.16",
+    "@ts-morph/common": {
+      "minimatch": "11.0.3"
+    }
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

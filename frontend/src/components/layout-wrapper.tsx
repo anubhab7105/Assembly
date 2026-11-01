@@ -7,6 +7,7 @@ import { ToastProvider, useToast } from "@/components/ui/toast"
 import { storage, type HistoryRecord } from "@/lib/storage"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import {
   Zap, Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload,
 } from "lucide-react"
@@ -282,14 +283,20 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const isOffline = useOfflineStatus()
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const menuTriggerRef = React.useRef<HTMLButtonElement>(null)
+  const menuCloseRef = React.useRef<HTMLButtonElement>(null)
+  const wasMenuOpen = React.useRef(false)
 
   useEffect(() => {
-    if (!mobileMenuOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileMenuOpen(false)
+    if (mobileMenuOpen) {
+      wasMenuOpen.current = true
+      menuCloseRef.current?.focus()
+      return
     }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    if (wasMenuOpen.current) {
+      wasMenuOpen.current = false
+      menuTriggerRef.current?.focus()
+    }
   }, [mobileMenuOpen])
 
   // The landing page renders its own nav; hide the app sidebar there.
@@ -312,27 +319,33 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
           </aside>
         )}
 
-        {mobileMenuOpen && (
-          <div className="md:hidden fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Menu">
-            <button
-              aria-label="Close menu"
-              className="fixed inset-0 bg-background/80 backdrop-blur-sm cursor-default"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-            <div className="relative w-4/5 max-w-sm h-full shadow-2xl">
+        <Dialog open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <DialogContent
+            showCloseButton={false}
+            aria-modal="true"
+            aria-describedby="mobile-menu-description"
+            className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 rounded-none border-r border-border bg-card p-0 sm:max-w-sm"
+          >
+            <DialogTitle className="sr-only">Navigation menu</DialogTitle>
+            <DialogDescription id="mobile-menu-description" className="sr-only">
+              Navigate between Assembly pages and manage your investigation history.
+            </DialogDescription>
+            <div id="mobile-menu" className="relative h-full min-h-0">
               <Suspense fallback={<div className="p-4">Loading menu...</div>}>
                 <SidebarContent onClose={() => setMobileMenuOpen(false)} />
               </Suspense>
               <button
+                ref={menuCloseRef}
+                type="button"
                 onClick={() => setMobileMenuOpen(false)}
                 aria-label="Close menu"
-                className="absolute top-4 right-4 p-3 min-h-11 min-w-11 bg-background/50 rounded-full hover:bg-muted"
+                className="absolute right-3 top-3 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-background/80 hover:bg-muted"
               >
                 <X className="size-5" />
               </button>
             </div>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           {!isLandingPage && (
@@ -342,10 +355,11 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                 <span className="font-bold tracking-tight">Assembly</span>
               </div>
               <button
+                ref={menuTriggerRef}
                 onClick={() => setMobileMenuOpen(true)}
                 aria-label="Open menu"
                 aria-expanded={mobileMenuOpen}
-                aria-controls="mobile-menu"
+                aria-controls={mobileMenuOpen ? "mobile-menu" : undefined}
                 className="p-3 -mr-1 min-h-11 min-w-11 rounded hover:bg-muted"
               >
                 <Menu className="size-6" />
@@ -360,9 +374,9 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          <main id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden relative focus-visible:outline-none" tabIndex={-1}>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
             {children}
-          </main>
+          </div>
         </div>
       </div>
     </ToastProvider>

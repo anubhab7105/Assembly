@@ -151,7 +151,7 @@ export default function StyleguidePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-14 px-6 py-12">
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl space-y-14 px-6 py-12">
         {/* ── Colors ─────────────────────────────────────────────────────── */}
         <Section id="colors" title="Color Tokens">
           <div className="space-y-4">
