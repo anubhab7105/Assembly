@@ -158,4 +158,59 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.locator("#question-status")).toContainText("unsupported type")
     await expect(page.locator('[aria-label="Selected attachments"]')).toHaveCount(0)
   })
+
+  test("each application route exposes exactly one primary main landmark", async ({ page }) => {
+    for (const route of ["/", "/chat", "/settings", "/executions"]) {
+      await page.goto(route)
+      await expect(page.getByRole("main")).toHaveCount(1)
+      await expect(page.locator("#main-content")).toHaveJSProperty("tagName", "MAIN")
+    }
+  })
+
+  test("mobile navigation traps focus, closes on Escape, and restores its trigger", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto("/settings")
+
+    const trigger = page.getByRole("button", { name: "Open menu" })
+    await expect(trigger).toHaveAttribute("aria-expanded", "false")
+    await expect(trigger).not.toHaveAttribute("aria-controls")
+    await trigger.click()
+
+    const dialog = page.getByRole("dialog", { name: "Navigation menu" })
+    await expect(dialog).toBeVisible()
+    await expect(trigger).toHaveAttribute("aria-expanded", "true")
+    await expect(trigger).toHaveAttribute("aria-controls", "mobile-menu")
+    await expect(dialog.locator("#mobile-menu")).toHaveCount(1)
+    await expect.poll(() =>
+      dialog.locator("#mobile-menu").evaluate((menu) => menu.contains(document.activeElement)),
+    ).toBe(true)
+
+    for (let index = 0; index < 12; index += 1) {
+      await page.keyboard.press("Tab")
+      await expect(dialog.locator(":focus")).toBeVisible()
+    }
+
+    await page.keyboard.press("Escape")
+    await expect(dialog).toBeHidden()
+    await expect(trigger).toBeFocused()
+    await expect(trigger).toHaveAttribute("aria-expanded", "false")
+    await expect(trigger).not.toHaveAttribute("aria-controls")
+  })
+
+  test("privacy notice has accessible naming and remains until acknowledged", async ({ page }) => {
+    await page.goto("/chat")
+    const dialog = page.getByRole("dialog", { name: "Privacy notice" })
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toHaveAttribute("aria-modal", "true")
+    await expect(dialog).toHaveAttribute("aria-describedby", "privacy-dialog-description")
+    await expect.poll(() =>
+      dialog.evaluate((element) => element.contains(document.activeElement)),
+    ).toBe(true)
+
+    await page.keyboard.press("Escape")
+    await expect(dialog).toBeVisible()
+    await page.getByLabel(/my question is sent to the model providers/i).check()
+    await page.getByTestId("privacy-acknowledge").click()
+    await expect(dialog).toBeHidden()
+  })
 })

@@ -479,7 +479,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-8 sm:px-6 sm:py-12">
+      <main id="main-content" tabIndex={-1} className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-8 sm:px-6 sm:py-12">
         <div className="mb-7 text-center">
           <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-brand/10 text-brand">
             <Zap className="size-6" aria-hidden />

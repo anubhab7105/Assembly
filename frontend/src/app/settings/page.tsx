@@ -49,7 +49,7 @@ export default function SetupPage() {
       </header>
 
       {/* Content */}
-      <main className="mx-auto max-w-5xl px-6 pt-8 space-y-8">
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 pt-8 space-y-8">
         {catalogFailed && (
           <ServerStatusBanner url={env.apiUrl} onRetry={() => setRetryTick((t) => t + 1)} />
         )}
