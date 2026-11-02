@@ -65,7 +65,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.getByRole("button", { name: "Switch to light mode" }).first()).toBeVisible()
 
     const themeToggles = await page.evaluate(() =>
-      (window as Window & { __assemblyThemeToggles: boolean[] }).__assemblyThemeToggles,
+      (window as unknown as { __assemblyThemeToggles: boolean[] }).__assemblyThemeToggles,
     )
     expect(themeToggles.length).toBeGreaterThan(0)
     expect(themeToggles.every(Boolean)).toBe(true)
