@@ -10,7 +10,11 @@ const THEME_EVENT = "assembly:theme-change"
 let memoryTheme: Theme | null = null
 
 function getSystemTheme(): Theme {
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+  try {
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+  } catch {
+    return "light"
+  }
 }
 
 function getThemeSnapshot(): Theme {

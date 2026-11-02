@@ -59,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <body className="flex min-h-full flex-col bg-background text-foreground">
       <Script id="assembly-theme-bootstrap" strategy="beforeInteractive">
         {`(() => {
           let theme = null;
@@ -78,7 +79,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           document.documentElement.classList.toggle("dark", theme === "dark");
         })();`}
       </Script>
-      <body className="flex min-h-full flex-col bg-background text-foreground">
         <LayoutWrapper>{children}</LayoutWrapper>
         <CookieBanner />
       </body>

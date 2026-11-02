@@ -53,6 +53,13 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.getByRole("button", { name: "Switch to light mode" }).first()).toBeVisible()
   })
 
+  test("uses the system dark preference before hydration when no theme is saved", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" })
+    await page.goto("/")
+    await expect(page.locator("html")).toHaveClass(/dark/)
+    await expect(page.locator("head #assembly-theme-bootstrap")).toHaveCount(1)
+  })
+
   test("landing page explains the research workflow and remembers the chosen theme", async ({ page }) => {
     await page.goto("/")
     await expect(page.getByRole("heading", { name: /one question/i })).toBeVisible()
