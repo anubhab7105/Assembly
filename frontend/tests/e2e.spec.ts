@@ -52,7 +52,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.locator("html")).toHaveClass(/dark/)
 
     await page.getByRole("link", { name: "Start an investigation" }).first().click()
-    await expect(page).toHaveURL(/\\/chat$/)
+    await expect(page).toHaveURL(/\/chat$/)
     await expect(page.locator("html")).toHaveClass(/dark/)
   })
 

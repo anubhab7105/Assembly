@@ -1,12 +1,35 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useSyncExternalStore } from "react"
 import { Moon, Sun } from "lucide-react"
 
 type Theme = "light" | "dark"
 
 const STORAGE_KEY = "assembly:theme"
 const THEME_EVENT = "assembly:theme-change"
+
+function getThemeSnapshot(): Theme {
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY)
+    if (stored === "light" || stored === "dark") return stored
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+  } catch {
+    return "light"
+  }
+}
+
+function getServerThemeSnapshot(): Theme {
+  return "light"
+}
+
+function subscribeTheme(onStoreChange: () => void) {
+  window.addEventListener(THEME_EVENT, onStoreChange)
+  window.addEventListener("storage", onStoreChange)
+  return () => {
+    window.removeEventListener(THEME_EVENT, onStoreChange)
+    window.removeEventListener("storage", onStoreChange)
+  }
+}
 
 function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle("dark", theme === "dark")
@@ -19,33 +42,13 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const [theme, setTheme] = useState<Theme>("light")
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot)
 
   useEffect(() => {
-    let initial: Theme = "light"
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY)
-      if (stored === "light" || stored === "dark") initial = stored
-      else if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) initial = "dark"
-    } catch {
-      // Fall back to the light palette when browser preferences are unavailable.
-    }
-    setTheme(initial)
-    document.documentElement.classList.toggle("dark", initial === "dark")
+    document.documentElement.classList.toggle("dark", theme === "dark")
+  }, [theme])
 
-    const syncTheme = (event: Event) => {
-      const next = (event as CustomEvent<Theme>).detail
-      if (next === "light" || next === "dark") setTheme(next)
-    }
-    window.addEventListener(THEME_EVENT, syncTheme)
-    return () => window.removeEventListener(THEME_EVENT, syncTheme)
-  }, [])
-
-  const toggle = () => {
-    const next: Theme = theme === "dark" ? "light" : "dark"
-    setTheme(next)
-    applyTheme(next)
-  }
+  const toggle = () => applyTheme(theme === "dark" ? "light" : "dark")
 
   return (
     <button
