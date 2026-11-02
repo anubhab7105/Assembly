@@ -42,8 +42,20 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     })
   })
 
-  test("restores a saved dark theme from the document head before hydration", async ({ page }) => {
+  test("restores a saved dark theme from the document head without a hydration flash", async ({ page }) => {
     await page.addInitScript(() => {
+      const toggles: boolean[] = []
+      Object.defineProperty(window, "__assemblyThemeToggles", {
+        value: toggles,
+        configurable: true,
+      })
+      const nativeToggle = DOMTokenList.prototype.toggle
+      DOMTokenList.prototype.toggle = function (token, force) {
+        if (this === document.documentElement.classList && token === "dark") {
+          toggles.push(force === undefined ? !this.contains(token) : force)
+        }
+        return nativeToggle.call(this, token, force)
+      }
       window.localStorage.setItem("assembly:theme", "dark")
     })
 
@@ -51,6 +63,12 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.locator("html")).toHaveClass(/dark/)
     await expect(page.locator("head #assembly-theme-bootstrap")).toHaveCount(1)
     await expect(page.getByRole("button", { name: "Switch to light mode" }).first()).toBeVisible()
+
+    const themeToggles = await page.evaluate(() =>
+      (window as Window & { __assemblyThemeToggles: boolean[] }).__assemblyThemeToggles,
+    )
+    expect(themeToggles.length).toBeGreaterThan(0)
+    expect(themeToggles.every(Boolean)).toBe(true)
   })
 
   test("uses the system dark preference before hydration when no theme is saved", async ({ page }) => {
