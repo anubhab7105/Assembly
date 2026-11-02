@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   ArrowRight,
   ArrowUpRight,
@@ -94,6 +95,7 @@ export default function LandingPage() {
         </nav>
 
         <div className="assembly-landing-actions">
+          <ThemeToggle className="assembly-theme-toggle" />
           <Link href="/settings" className="assembly-nav-secondary">Set up keys</Link>
           <Link href="/chat" className="assembly-nav-cta">
             Start an investigation
