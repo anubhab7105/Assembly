@@ -42,6 +42,20 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     })
   })
 
+  test("landing page explains the research workflow and remembers the chosen theme", async ({ page }) => {
+    await page.goto("/")
+    await expect(page.getByRole("heading", { name: /one question/i })).toBeVisible()
+    await expect(page.getByRole("link", { name: "Set up keys" })).toHaveAttribute("href", "/settings")
+
+    const themeToggle = page.getByRole("button", { name: "Switch to dark mode" })
+    await themeToggle.click()
+    await expect(page.locator("html")).toHaveClass(/dark/)
+
+    await page.getByRole("link", { name: "Start an investigation" }).first().click()
+    await expect(page).toHaveURL(/\\/chat$/)
+    await expect(page.locator("html")).toHaveClass(/dark/)
+  })
+
   test("New Investigation opens the composer, not the landing page", async ({ page }) => {
     await page.goto("/executions")
     await page.getByRole("button", { name: /New Investigation/i }).click()

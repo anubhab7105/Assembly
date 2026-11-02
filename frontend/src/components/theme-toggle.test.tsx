@@ -36,7 +36,7 @@ describe("ThemeToggle", () => {
     render(<ThemeToggle />)
 
     await waitFor(() => {
-      expect(document.documentElement).toHaveClass("dark")
+      expect(document.documentElement.classList.contains("dark")).toBe(true)
     })
     expect(screen.getByRole("button", { name: "Switch to light mode" })).toBeTruthy()
   })
