@@ -1,314 +1,347 @@
-import Link from "next/link";
+import Link from "next/link"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   ArrowRight,
-  Brain,
+  ArrowUpRight,
   CheckCircle2,
-  Code,
-  Compass,
-  Cpu,
   GitBranch,
+  LockKeyhole,
   MessageSquare,
   Search,
+  ShieldCheck,
   Sparkles,
+  Timer,
   Users,
   Zap,
 } from "lucide-react"
 
-const agents = [
-  { icon: Sparkles, label: "Gemini", role: "Family", color: "#4285F4" },
-  { icon: Code, label: "GPT-OSS", role: "Family", color: "#10B981" },
-  { icon: Search, label: "Qwen", role: "Family", color: "#059669" },
-  { icon: Cpu, label: "Gemma", role: "Family", color: "#D97706" },
-  { icon: Brain, label: "Nemotron", role: "Family", color: "#14B8A6" },
-  { icon: Zap, label: "Solver", role: "Role", color: "#E8A020" },
-  { icon: GitBranch, label: "Critic", role: "Role", color: "#8B5CF6" },
-  { icon: Compass, label: "Researcher", role: "Role", color: "#E11D48" },
-  { icon: CheckCircle2, label: "Verifier", role: "Role", color: "#2563EB" },
-  { icon: MessageSquare, label: "Synthesizer", role: "Role", color: "#6366F1" },
+const processSteps = [
+  {
+    number: "01",
+    icon: Users,
+    title: "Independent perspectives",
+    description: "Different model families work on the same question separately before they see one another's conclusions.",
+    detail: "Start with diversity, not groupthink.",
+  },
+  {
+    number: "02",
+    icon: GitBranch,
+    title: "Challenge the weak points",
+    description: "A critic looks for gaps and contradictions. Research can bring evidence into the discussion.",
+    detail: "Disagreement is useful signal.",
+  },
+  {
+    number: "03",
+    icon: ShieldCheck,
+    title: "A synthesis you can inspect",
+    description: "The final answer brings the strongest points together, with sources, confidence, and uncertainty made visible.",
+    detail: "You decide what deserves trust.",
+  },
 ]
 
-const steps = [
-  { icon: Zap, title: "Ask once", desc: "Put the hard question in. Pick 3, 5, 10 or 15 minutes." },
-  { icon: Users, title: "Get a team", desc: "Agents from 3 or more model families take it separately." },
-  { icon: GitBranch, title: "Watch them argue", desc: "Each answer gets cross examined before it counts." },
-  { icon: Sparkles, title: "Keep one answer", desc: "Sources numbered. Confidence stated. Doubt flagged." },
+const faqs = [
+  {
+    question: "Why use more than one model?",
+    answer: "A single model can miss a counterargument or sound certain about a weak claim. Assembly gives different model families independent passes, then uses cross-examination and evidence review before synthesizing an answer.",
+  },
+  {
+    question: "Do I need an account or a subscription?",
+    answer: "No account is required. Assembly uses bring-your-own-key (BYOK): you add your own provider keys and use the providers' available tiers and quotas.",
+  },
+  {
+    question: "Where are my API keys and investigation history stored?",
+    answer: "In web mode, saved keys and local history stay in your browser. Your question and selected provider information are sent to the providers you choose. Read the privacy notice for the full details before your first run.",
+  },
+  {
+    question: "Can I control how long an investigation runs?",
+    answer: "Yes. Choose a 3, 5, 10, or 15 minute time budget before you start. Assembly uses that budget to coordinate the research workflow.",
+  },
 ]
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Assembly",
+  url: "https://assembly-murex.vercel.app/",
+  description: "Multi-model research that turns one hard question into one sourced, inspectable answer.",
+}
 
 export default function LandingPage() {
-  const base = "https://assembly-murex.vercel.app"
-  const jsonLd = [
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      name: "Assembly",
-      url: `${base}/`,
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      name: "Assembly",
-      url: `${base}/`,
-      founder: { "@type": "Person", name: "Anubhab Das" },
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      itemListElement: [
-        { "@type": "ListItem", position: 1, name: "Home", item: `${base}/` },
-        { "@type": "ListItem", position: 2, name: "Ask", item: `${base}/chat` },
-        { "@type": "ListItem", position: 3, name: "Setup", item: `${base}/settings` },
-      ],
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      mainEntity: [
-        {
-          "@type": "Question",
-          name: "Getting keys sounds like work. Is it?",
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: "Ten minutes, once. Grab free keys from two providers, paste them in, done. No card, no account.",
-          },
-        },
-        {
-          "@type": "Question",
-          name: "Why not just ask one good model?",
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: "One model gives one confident guess. Assembly makes agents from different families argue first, so weak claims die before you read them.",
-          },
-        },
-        {
-          "@type": "Question",
-          name: "Do my keys or questions leave my machine?",
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: "Keys stay in your browser. Questions go to the model providers you chose, nothing is stored on our server.",
-          },
-        },
-        {
-          "@type": "Question",
-          name: "Can I trust the final answer?",
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: "Trust it the way you trust a cited draft. Every answer lists numbered sources, a confidence level, and what stayed uncertain.",
-          },
-        },
-      ],
-    },
-  ]
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
-      {jsonLd.map((schema, i) => (
-        <script
-          key={i}
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
-        />
-      ))}
-      {/* Ambient background */}
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="animate-aurora absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-brand/20 blur-[140px]" />
-        <div className="animate-float-slow absolute top-1/3 -left-40 h-96 w-96 rounded-full bg-info/10 blur-[120px]" />
-        <div className="animate-float-slower absolute -right-40 bottom-0 h-96 w-96 rounded-full bg-brand/10 blur-[120px]" />
-        <div
-          className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
-          style={{
-            backgroundImage:
-              "linear-gradient(var(--foreground) 1px, transparent 1px), linear-gradient(90deg, var(--foreground) 1px, transparent 1px)",
-            backgroundSize: "64px 64px",
-          }}
-        />
+    <div className="assembly-landing-page">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      />
+
+      <div className="assembly-landing-atmosphere" aria-hidden="true">
+        <div className="assembly-atmosphere-glow assembly-glow-one" />
+        <div className="assembly-atmosphere-glow assembly-glow-two" />
+        <div className="assembly-atmosphere-grid" />
       </div>
 
-      {/* Nav */}
-      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-brand-foreground shadow-lg shadow-brand/30">
-            <Zap className="size-5" />
-          </div>
-          <span className="text-lg font-bold tracking-tight">Assembly</span>
-        </div>
-        <Link
-          href="/chat"
-          className="group inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-all hover:border-brand hover:text-brand hover:shadow-lg hover:shadow-brand/10"
-        >
-          Run my first question
-          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+      <header className="assembly-landing-header">
+        <Link href="/" className="assembly-wordmark" aria-label="Assembly home">
+          <span className="assembly-wordmark-mark"><Zap className="size-5" fill="currentColor" /></span>
+          <span>assembly</span>
+          <span className="assembly-wordmark-dot">.</span>
         </Link>
+
+        <nav className="assembly-landing-links" aria-label="Main navigation">
+          <Link href="#how-it-works">How it works</Link>
+          <Link href="#your-control">Your control</Link>
+          <Link href="#faq">FAQ</Link>
+        </nav>
+
+        <div className="assembly-landing-actions">
+          <ThemeToggle className="assembly-theme-toggle" />
+          <Link href="/settings" className="assembly-nav-secondary">Set up keys</Link>
+          <Link href="/chat" className="assembly-nav-cta">
+            Start an investigation
+            <ArrowUpRight className="size-4" />
+          </Link>
+        </div>
       </header>
 
-      {/* Hero */}
-      <main id="main-content" tabIndex={-1} className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-12 lg:py-20">
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-12 lg:gap-8">
-          <div className="flex flex-1 flex-col items-start text-left">
-            <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-subtle px-4 py-1.5 text-xs font-medium text-brand">
-              <Sparkles className="size-3.5" />
-              For skeptics with API keys
+      <main id="main-content" tabIndex={-1} className="assembly-landing-main">
+        <section className="assembly-hero">
+          <div className="assembly-hero-copy">
+            <div className="assembly-eyebrow">
+              <span className="assembly-eyebrow-spark"><Sparkles className="size-3.5" /></span>
+              A calmer way to research with AI
             </div>
 
-            <h1 className="animate-fade-up mt-8 max-w-2xl text-5xl font-bold leading-[1.1] tracking-tight sm:text-7xl" style={{ animationDelay: "0.1s" }}>
-              Stop trusting one model with hard questions.
+            <h1>
+              One question.
+              <br />
+              <span>More than one</span>
+              <br />
+              point of view.
             </h1>
 
-            <p className="animate-fade-up mt-6 max-w-xl text-lg text-muted-foreground sm:text-xl" style={{ animationDelay: "0.2s" }}>
-              Assembly runs your question past agents from 3 or more model families. You keep one sourced answer in 3 to 15 minutes.
+            <p className="assembly-hero-description">
+              Assembly brings independent AI perspectives into one focused research process — then gives you a sourced answer you can actually examine.
             </p>
 
-            <div className="animate-fade-up mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center" style={{ animationDelay: "0.3s" }}>
-              <Link
-                href="/chat"
-                className="group inline-flex h-12 items-center gap-2 rounded-xl bg-brand px-8 text-base font-semibold text-brand-foreground shadow-xl shadow-brand/30 transition-all hover:bg-brand-hover hover:shadow-2xl hover:shadow-brand/40 hover:-translate-y-0.5"
-              >
-                <Zap className="size-5" />
-                Run my first question
-                <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
+            <div className="assembly-hero-actions">
+              <Link href="/chat" className="assembly-button-primary">
+                Start an investigation
+                <ArrowRight className="size-4" />
               </Link>
-              <Link
-                href="/settings"
-                className="inline-flex h-12 items-center gap-2 rounded-xl border border-border bg-card px-8 text-base font-semibold text-foreground transition-all hover:border-brand/50 hover:text-brand hover:-translate-y-0.5"
-              >
-                Add my free keys
+              <Link href="#how-it-works" className="assembly-button-quiet">
+                See how it works
+                <span aria-hidden="true">↓</span>
               </Link>
             </div>
-            <p className="animate-fade-up mt-4 text-sm text-muted-foreground" style={{ animationDelay: "0.35s" }}>
-              No account. Keys stay in your browser. First progress in seconds.
-            </p>
+
+            <div className="assembly-trust-row" aria-label="Product principles">
+              <span><LockKeyhole className="size-3.5" /> Bring your own keys</span>
+              <i aria-hidden="true" />
+              <span><Timer className="size-3.5" /> 3–15 minute budget</span>
+              <i aria-hidden="true" />
+              <span><ShieldCheck className="size-3.5" /> No account required</span>
+            </div>
           </div>
 
-          {/* Agent orbit visual */}
-          <div className="animate-fade-up relative flex flex-shrink-0 items-center justify-center py-8 lg:py-0" style={{ animationDelay: "0.4s" }}>
-            <div className="relative flex h-72 w-72 items-center justify-center sm:h-80 sm:w-80">
-              {/* Orbit rings */}
-              <div className="animate-spin-slower absolute inset-0 rounded-full border border-border/50" />
-              <div className="animate-spin-reverse absolute inset-8 rounded-full border border-border/30" />
-              <div className="animate-spin-slow absolute inset-16 rounded-full border border-border/20" />
-
-              {/* Center */}
-              <div className="animate-pulse-glow relative z-10 flex h-24 w-24 items-center justify-center rounded-3xl bg-brand text-brand-foreground shadow-2xl shadow-brand/40">
-                <Zap className="size-10" />
+          <div className="assembly-hero-visual" aria-label="Illustration of Assembly's research process">
+            <div className="assembly-visual-frame">
+              <div className="assembly-visual-topline">
+                <span><span className="assembly-live-dot" /> THE RESEARCH LOOP</span>
+                <span className="assembly-visual-tag">ILLUSTRATIVE</span>
               </div>
 
-              {/* Agent nodes */}
-              {agents.map((agent, i) => {
-                const Icon = agent.icon
-                const angle = i * (360 / agents.length)
-                const delay = `-${((i * 16) / agents.length).toFixed(2)}s`
-                return (
-                  <div
-                    key={agent.label}
-                    className="animate-orbit absolute"
-                    style={{ animationDelay: delay, transform: `rotate(${angle}deg)` }}
-                  >
-                    <div
-                      className="animate-counter-orbit flex h-14 w-14 sm:h-16 sm:w-16 flex-col items-center justify-center gap-0.5 rounded-2xl border bg-card shadow-lg transition-all hover:scale-110 hover:shadow-xl"
-                      style={{ borderColor: agent.color + "40", animationDelay: delay }}
-                    >
-                      <Icon className="size-4 sm:size-5" style={{ color: agent.color }} />
-                      <span className="text-[9px] sm:text-[10px] font-semibold text-muted-foreground">{agent.label}</span>
-                    </div>
-                  </div>
-                )
-              })}
+              <div className="assembly-network-stage">
+                <svg className="assembly-network-lines" viewBox="0 0 600 420" fill="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="assembly-line-a" x1="80" y1="30" x2="520" y2="390" gradientUnits="userSpaceOnUse">
+                      <stop stopColor="var(--brand)" stopOpacity=".05" />
+                      <stop offset=".5" stopColor="var(--brand)" stopOpacity=".65" />
+                      <stop offset="1" stopColor="#6C9E99" stopOpacity=".12" />
+                    </linearGradient>
+                    <radialGradient id="assembly-node-glow">
+                      <stop stopColor="var(--brand)" stopOpacity=".24" />
+                      <stop offset="1" stopColor="var(--brand)" stopOpacity="0" />
+                    </radialGradient>
+                  </defs>
+                  <circle cx="300" cy="204" r="154" stroke="var(--border)" strokeDasharray="3 8" />
+                  <circle cx="300" cy="204" r="110" stroke="var(--border)" />
+                  <circle cx="300" cy="204" r="76" fill="url(#assembly-node-glow)" />
+                  <path d="M106 94 C180 94 197 154 260 178" stroke="url(#assembly-line-a)" strokeWidth="1.5" />
+                  <path d="M492 94 C420 94 403 154 340 178" stroke="url(#assembly-line-a)" strokeWidth="1.5" />
+                  <path d="M106 318 C180 318 197 254 260 230" stroke="url(#assembly-line-a)" strokeWidth="1.5" />
+                  <path d="M492 318 C420 318 403 254 340 230" stroke="url(#assembly-line-a)" strokeWidth="1.5" />
+                  <circle cx="106" cy="94" r="4" fill="var(--brand)" />
+                  <circle cx="492" cy="94" r="4" fill="#77A49C" />
+                  <circle cx="106" cy="318" r="4" fill="#8F8AC0" />
+                  <circle cx="492" cy="318" r="4" fill="#77A49C" />
+                </svg>
+
+                <div className="assembly-agent-card assembly-agent-a">
+                  <span className="assembly-agent-symbol symbol-amber">A</span>
+                  <span><b>Independent pass</b><small>Model family one</small></span>
+                  <span className="assembly-agent-index">01</span>
+                </div>
+                <div className="assembly-agent-card assembly-agent-b">
+                  <span className="assembly-agent-symbol symbol-teal">B</span>
+                  <span><b>Independent pass</b><small>Model family two</small></span>
+                  <span className="assembly-agent-index">02</span>
+                </div>
+                <div className="assembly-agent-card assembly-agent-c">
+                  <span className="assembly-agent-symbol symbol-violet">C</span>
+                  <span><b>Cross-examination</b><small>Challenge assumptions</small></span>
+                  <span className="assembly-agent-index">03</span>
+                </div>
+                <div className="assembly-agent-card assembly-agent-d">
+                  <span className="assembly-agent-symbol symbol-blue">D</span>
+                  <span><b>Evidence review</b><small>Check the supporting claims</small></span>
+                  <span className="assembly-agent-index">04</span>
+                </div>
+
+                <div className="assembly-core">
+                  <div className="assembly-core-mark"><Zap className="size-6" fill="currentColor" /></div>
+                  <b>Assembly</b>
+                  <small>Coordinate · Compare · Synthesize</small>
+                  <span className="assembly-core-ring assembly-ring-one" />
+                  <span className="assembly-core-ring assembly-ring-two" />
+                </div>
+              </div>
+
+              <div className="assembly-visual-result">
+                <div className="assembly-result-icon"><CheckCircle2 className="size-4" /></div>
+                <div>
+                  <b>One considered answer</b>
+                  <small>Sources, confidence, and uncertainty — together.</small>
+                </div>
+                <ArrowUpRight className="size-4 assembly-result-arrow" />
+              </div>
+            </div>
+
+            <div className="assembly-visual-caption">
+              <span className="assembly-caption-line" />
+              <span>Different perspectives. One clear place to think.</span>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* How it works */}
-        <div className="animate-fade-up mt-28 w-full" style={{ animationDelay: "0.5s" }}>
-          <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">One answer you can check</h2>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {steps.map((step, i) => {
+        <section id="how-it-works" className="assembly-section assembly-process-section">
+          <div className="assembly-section-heading">
+            <div>
+              <span className="assembly-section-kicker">A process you can follow</span>
+              <h2>Not another black box.</h2>
+            </div>
+            <p>
+              The value is not in asking more models. It is in making their reasoning, disagreements, and evidence useful to you.
+            </p>
+          </div>
+
+          <div className="assembly-process-grid">
+            {processSteps.map((step) => {
               const Icon = step.icon
               return (
-                <div
-                  key={step.title}
-                  className="group relative rounded-2xl border border-border bg-card p-6 text-left transition-all hover:-translate-y-1 hover:border-brand/40 hover:shadow-xl hover:shadow-brand/5"
-                >
-                  <div className="absolute right-4 top-4 font-mono text-xs text-muted-foreground/50">
-                    0{i + 1}
+                <article className="assembly-process-card" key={step.number}>
+                  <div className="assembly-process-card-top">
+                    <span className="assembly-step-number">{step.number}</span>
+                    <span className="assembly-process-icon"><Icon className="size-5" /></span>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand transition-all group-hover:scale-110 group-hover:bg-brand group-hover:text-brand-foreground">
-                    <Icon className="size-5" />
-                  </div>
-                  <h3 className="mt-4 text-lg font-semibold">{step.title}</h3>
-                  <p className="mt-1.5 text-sm text-muted-foreground">{step.desc}</p>
-                </div>
+                  <h3>{step.title}</h3>
+                  <p>{step.description}</p>
+                  <span className="assembly-process-detail">{step.detail}</span>
+                </article>
               )
             })}
           </div>
-        </div>
-        {/* FAQ (visible; matches FAQPage schema above) */}
-        <section aria-labelledby="faq-heading" className="mt-24 w-full max-w-3xl">
-          <h2 id="faq-heading" className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Worried? Read this</h2>
-          <div className="mt-6 space-y-4 text-left">
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h3 className="font-semibold">Getting keys sounds like work. Is it?</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">Ten minutes, once. Grab free keys from two providers, paste them in, done. No card, no account.</p>
+        </section>
+
+        <section id="your-control" className="assembly-control-section">
+          <div className="assembly-control-copy">
+            <span className="assembly-section-kicker">Built around your control</span>
+            <h2>You set the boundaries.<br /><em>Assembly does the legwork.</em></h2>
+            <p>
+              Choose the time budget, decide which models take part, attach the context that matters, and inspect the answer before you rely on it.
+            </p>
+            <Link href="/chat" className="assembly-text-link">
+              Open your research workspace <ArrowRight className="size-4" />
+            </Link>
+          </div>
+
+          <div className="assembly-control-list">
+            <div className="assembly-control-item">
+              <span className="assembly-control-icon"><LockKeyhole className="size-4" /></span>
+              <div><b>Your credentials</b><p>Bring your own provider keys. Saved web keys stay in your browser.</p></div>
+              <CheckCircle2 className="size-4 assembly-control-check" />
             </div>
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h3 className="font-semibold">Why not just ask one good model?</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">One model gives one confident guess. Assembly makes agents from different families argue first, so weak claims die before you read them.</p>
+            <div className="assembly-control-item">
+              <span className="assembly-control-icon"><Timer className="size-4" /></span>
+              <div><b>Your time</b><p>Choose 3, 5, 10, or 15 minutes for the investigation.</p></div>
+              <CheckCircle2 className="size-4 assembly-control-check" />
             </div>
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h3 className="font-semibold">Do my keys or questions leave my machine?</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">Keys stay in your browser. Questions go to the model providers you chose, nothing is stored on our server. Note: some free tiers (for example Gemini) may reuse inputs for training.</p>
+            <div className="assembly-control-item">
+              <span className="assembly-control-icon"><Search className="size-4" /></span>
+              <div><b>Your evidence</b><p>Review cited sources, confidence, and areas that remain uncertain.</p></div>
+              <CheckCircle2 className="size-4 assembly-control-check" />
             </div>
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h3 className="font-semibold">Can I trust the final answer?</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">Trust it the way you trust a cited draft. Every answer lists numbered sources, a confidence level, and what stayed uncertain.</p>
+            <div className="assembly-control-item">
+              <span className="assembly-control-icon"><MessageSquare className="size-4" /></span>
+              <div><b>Your history</b><p>Return to investigations saved locally on this device.</p></div>
+              <CheckCircle2 className="size-4 assembly-control-check" />
             </div>
+          </div>
+        </section>
+
+        <section className="assembly-final-cta">
+          <div className="assembly-cta-orbit" aria-hidden="true">
+            <span /><span /><span />
+          </div>
+          <div className="assembly-cta-content">
+            <span className="assembly-section-kicker">For questions worth getting right</span>
+            <h2>Make room for a second opinion.<br />And a third.</h2>
+            <p>Start with one question. You can shape the process as you go.</p>
+            <Link href="/chat" className="assembly-button-primary assembly-button-light">
+              Start an investigation <ArrowRight className="size-4" />
+            </Link>
+          </div>
+          <div className="assembly-cta-foot">
+            <span><ShieldCheck className="size-3.5" /> No account required</span>
+            <span><LockKeyhole className="size-3.5" /> Bring your own keys</span>
+            <span><Timer className="size-3.5" /> You choose the time budget</span>
+          </div>
+        </section>
+
+        <section id="faq" className="assembly-faq-section">
+          <div className="assembly-section-heading">
+            <div>
+              <span className="assembly-section-kicker">Good to know</span>
+              <h2>Before you begin.</h2>
+            </div>
+            <p>Clear answers about what Assembly does, what it uses, and what stays in your control.</p>
+          </div>
+          <div className="assembly-faq-list">
+            {faqs.map((faq) => (
+              <details className="assembly-faq-item" key={faq.question}>
+                <summary>{faq.question}<span><ArrowDownIcon /></span></summary>
+                <p>{faq.answer}</p>
+              </details>
+            ))}
           </div>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-border/50 py-6 text-center">
-        <nav aria-label="Breadcrumb" className="mb-4 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
-          <Link href="/" className="hover:text-brand">Home</Link>
-          <span aria-hidden>/</span>
-          <Link href="/chat" className="hover:text-brand">Ask</Link>
-          <span aria-hidden>/</span>
-          <Link href="/settings" className="hover:text-brand">Setup</Link>
-          <span aria-hidden>/</span>
-          <Link href="/executions" className="hover:text-brand">History</Link>
-          <span aria-hidden>/</span>
-          <Link href="/privacy" className="hover:text-brand">Privacy</Link>
-          <span aria-hidden>/</span>
-          <Link href="/terms" className="hover:text-brand">Terms</Link>
-          <span aria-hidden>/</span>
-          <Link href="/cookies" className="hover:text-brand">Cookies</Link>
-          <span aria-hidden>/</span>
-          <Link href="/refunds" className="hover:text-brand">Refunds</Link>
+      <footer className="assembly-landing-footer">
+        <Link href="/" className="assembly-wordmark assembly-wordmark-small">
+          <span className="assembly-wordmark-mark"><Zap className="size-4" fill="currentColor" /></span>
+          <span>assembly</span><span className="assembly-wordmark-dot">.</span>
+        </Link>
+        <span>Independent thinking, made inspectable.</span>
+        <nav aria-label="Legal and product links">
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+          <Link href="/settings">Settings</Link>
         </nav>
-        <div className="flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground sm:flex-row sm:gap-3">
-          <p>
-            Assembly &middot; One question in, one cited answer out
-          </p>
-          <span className="hidden sm:inline" aria-hidden>&middot;</span>
-          <p>
-            Developed by{" "}
-            <a
-              href="https://anubhab-protfolio.vercel.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-foreground underline decoration-brand/50 underline-offset-4 transition-colors hover:text-brand hover:decoration-brand"
-            >
-              Anubhab Das
-            </a>
-          </p>
-          <span className="hidden sm:inline" aria-hidden>&middot;</span>
-          <p>
-            <a
-              href="mailto:anubhab7105@gmail.com"
-              className="inline-flex min-h-11 items-center font-medium text-foreground underline decoration-brand/50 underline-offset-4 transition-colors hover:text-brand hover:decoration-brand"
-            >
-              anubhab7105@gmail.com
-            </a>
-          </p>
-        </div>
       </footer>
     </div>
   )
+}
+
+function ArrowDownIcon() {
+  return <ArrowRight className="size-4" aria-hidden="true" />
 }

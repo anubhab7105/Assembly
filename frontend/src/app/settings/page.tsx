@@ -30,9 +30,9 @@ export default function SetupPage() {
   }, [retryTick]);
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="assembly-settings-page min-h-screen bg-background pb-20">
       {/* Header */}
-      <header className="border-b border-border bg-card">
+      <header className="assembly-settings-heading border-b border-border bg-card">
         <div className="mx-auto max-w-5xl px-6 py-10">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-brand-foreground shadow-sm">
@@ -49,7 +49,7 @@ export default function SetupPage() {
       </header>
 
       {/* Content */}
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 pt-8 space-y-8">
+      <main id="main-content" tabIndex={-1} className="assembly-settings-main mx-auto space-y-8">
         {catalogFailed && (
           <ServerStatusBanner url={env.apiUrl} onRetry={() => setRetryTick((t) => t + 1)} />
         )}

@@ -76,7 +76,7 @@ function ExecutionContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-20 selection:bg-brand/30">
+    <div className="assembly-results-page min-h-screen bg-background text-foreground pb-20 selection:bg-brand/30">
       {/* ─── Graceful Banners ────────────────────────────────────────────────── */}
       {state.connectionState !== "connected" && (
         <div className="bg-warning-subtle text-warning px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2">
@@ -108,7 +108,7 @@ function ExecutionContent() {
       )}
 
       {/* ─── Header ──────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-xl">
+      <header className="assembly-results-header sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand shadow-inner">
@@ -138,7 +138,7 @@ function ExecutionContent() {
       </header>
 
       {/* ─── Main Content ────────────────────────────────────────────────────── */}
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-7xl px-6 pt-10 space-y-8">
+      <main id="main-content" tabIndex={-1} className="assembly-results-main mx-auto space-y-8">
 
         {/* ─── Frozen run summary (post-run totals, not live state) ─────────── */}
         {terminal && state.summary && (
@@ -162,7 +162,7 @@ function ExecutionContent() {
         )}
         
         {state.question && (
-          <section aria-label="Investigation question and attachments" className="rounded-xl border border-border bg-card p-4">
+          <section aria-label="Investigation question and attachments" className="assembly-investigation-question rounded-xl border border-border bg-card p-4">
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Investigation</h2>
             <p className="whitespace-pre-wrap break-words text-sm">{state.question}</p>
             {state.attachments.length > 0 && (
@@ -181,7 +181,7 @@ function ExecutionContent() {
         )}
 
         {/* ─── Top Row: Consensus & Final Answer ──────────────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="assembly-results-grid grid gap-6 lg:grid-cols-3">
           
           {/* Consensus Meter */}
           <Card className="lg:col-span-1 overflow-hidden relative isolate bg-card flex flex-col justify-between">
@@ -260,7 +260,7 @@ function ExecutionContent() {
             <CardContent>
               {state.team.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {state.team.map((agent) => (                    <div key={agent.id} className={`flex flex-col rounded-xl border p-3.5 transition-colors ${getAgentStyles(agent.state)}`}>
+                  {state.team.map((agent) => (                    <div key={agent.id} className={`assembly-agent-tile flex flex-col rounded-xl border p-3.5 transition-colors ${getAgentStyles(agent.state)}`}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-semibold tracking-tight">{agent.role}</span>
                         <Badge variant="outline" className="font-mono text-[10px] uppercase border-current bg-transparent opacity-80">
@@ -300,7 +300,7 @@ function ExecutionContent() {
         )}
 
         {/* ─── Middle Row: Disagreements & Sources ───────────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="assembly-secondary-results-grid grid gap-6 lg:grid-cols-2">
           
           {/* Disagreements */}
           <Card>

@@ -85,7 +85,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
 
   return (
     <>
-      <Card className="border-brand/30 bg-card shadow-lg relative overflow-hidden isolate">
+      <Card className="assembly-answer-card border-brand/30 bg-card shadow-lg relative overflow-hidden isolate">
         {/* Subtle glow background */}
         <div className="absolute inset-0 bg-brand/5 pointer-events-none -z-10" />
 
@@ -161,7 +161,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
           )}
 
           {/* Markdown Content */}
-          <div className="prose prose-invert max-w-full min-w-0 overflow-x-auto prose-pre:max-w-full prose-pre:overflow-x-auto prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border">
+          <div className="assembly-answer-prose prose dark:prose-invert max-w-full min-w-0 overflow-x-auto prose-pre:max-w-full prose-pre:overflow-x-auto prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[rehypeKatex, rehypeHighlight]}

@@ -705,3 +705,12 @@
 - Expanded audit gate tests to verify this exception and ensure the same advisory identifier attached to another package remains blocking.
 - CI still needs to verify lockfile installation and the live `npm audit` report.
 
+
+
+## 2026-11-02 — Chat-first UI/UX redesign
+
+- Created the isolated branch redesign/chatgpt-inspired-workspace from main.
+- Replaced the landing page with a research-first story, custom animated SVG workflow visual, user-control section, clear onboarding CTAs, and accessible FAQ disclosure.
+- Introduced shared light/dark tokens, a persistent theme switch, and a cleaner sidebar treatment with clearer local-history navigation.
+- Restyled the investigation composer, suggested prompts, results workspace, synthesis card, and settings shell while preserving existing interaction logic and test IDs.
+- Added DOM-enabled theme preference regression coverage for persistence and synchronization across multiple toggles. Validation: pending PR CI; packaged Windows desktop verification not run in this environment.

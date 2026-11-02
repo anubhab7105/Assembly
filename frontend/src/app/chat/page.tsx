@@ -478,18 +478,20 @@ export default function Home() {
   }, [loading])
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <main id="main-content" tabIndex={-1} className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-8 sm:px-6 sm:py-12">
-        <div className="mb-7 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-brand/10 text-brand">
+    <div className="assembly-chat-page flex min-h-screen flex-col bg-background">
+      <main id="main-content" tabIndex={-1} className="assembly-chat-main flex w-full flex-1 flex-col justify-center">
+        <div className="assembly-chat-intro">
+          <div className="assembly-chat-orb">
             <Zap className="size-6" aria-hidden />
           </div>
+          <div className="assembly-chat-kicker"><span className="assembly-live-dot" /> NEW INVESTIGATION</div>
           <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Ask one hard question
+            What would you like to investigate?
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Independent analysis. One sourced answer.
+            Bring the question, context, and time you want to spend. You stay in charge of the process.
           </p>
+          <div className="assembly-chat-personal-control" aria-label="Workspace principles"><span>Independent perspectives</span><span>Inspectable sources</span><span>Local history</span></div>
         </div>
 
         {gate.families_count === 0 && (
@@ -506,7 +508,7 @@ export default function Home() {
 
         <div
           data-testid="diversity-chip"
-          className={`mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
+          className={`assembly-readiness-chip mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
             gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
           }`}
         >
@@ -525,9 +527,9 @@ export default function Home() {
           </div>
         )}
 
-        <div className="space-y-3">
+        <div className="assembly-chat-form-stack space-y-3">
           {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2" aria-label="Selected attachments">
+            <div className="assembly-attachment-list flex flex-wrap gap-2" aria-label="Selected attachments">
               {attachments.map((attachment) => (
                 <div key={attachment.id} className="flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs">
                   <FileText className="size-4 shrink-0 text-brand" aria-hidden />
@@ -547,7 +549,7 @@ export default function Home() {
               ))}
             </div>
           )}
-          <div className="rounded-2xl border border-border bg-card p-3 shadow-sm transition-colors focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10">
+          <div className="assembly-chat-composer rounded-2xl border border-border bg-card p-3 shadow-sm transition-colors focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10">
             <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
             <textarea
               id="research-question"
@@ -556,13 +558,13 @@ export default function Home() {
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="Ask anything worth checking across multiple models…"
               aria-describedby="question-status"
-              className="max-h-56 min-h-24 w-full resize-y bg-transparent px-2 py-2 text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
+              className="assembly-chat-question-input max-h-56 min-h-24 w-full resize-y bg-transparent px-2 py-2 text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
               rows={3}
               maxLength={2000}
               required
             />
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="assembly-chat-composer-footer flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+              <div className="assembly-chat-composer-tools flex flex-wrap items-center gap-2">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -597,7 +599,7 @@ export default function Home() {
                   <SlidersHorizontal className="mr-1.5 size-3.5" />
                   Models{selection.selected.length > 0 ? ` · ${selection.selected.length}` : " · Auto"}
                 </Button>
-                <div className="flex items-center rounded-lg border border-border bg-background p-0.5" role="group" aria-label="Time budget">
+                <div className="assembly-chat-budget flex items-center rounded-lg border border-border bg-background p-0.5" role="group" aria-label="Time budget">
                   <Clock className="ml-2 mr-1 size-3.5 text-muted-foreground" aria-hidden />
                   {TIME_BUDGETS.map((m) => (
                     <button
@@ -615,7 +617,7 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <Button size="default" onClick={handleLaunch} disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"} className="min-h-10 rounded-xl px-4">
+              <Button size="default" onClick={handleLaunch} disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"} className="assembly-chat-run-button min-h-10 rounded-xl px-4">
                 {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="mr-1.5 size-4" />}
                 {loading ? "Running…" : "Run"}
               </Button>
@@ -626,20 +628,21 @@ export default function Home() {
           )}
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2" aria-label="Suggested questions">
-          <span className="mr-1 text-xs text-muted-foreground">Try</span>
+        <div className="assembly-chat-suggestions mt-4" aria-label="Suggested questions">
+          <div className="assembly-chat-suggestions-heading">Need a starting point?</div><div className="assembly-chat-suggestion-grid">
           {EXAMPLES.map((example) => (
             <button
               key={example.label}
               type="button"
               onClick={() => { setQuestion(example.question); textareaRef.current?.focus() }}
-              className="min-h-9 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-brand/40 hover:bg-brand/5 hover:text-foreground"
+              className="assembly-chat-suggestion"
               title={example.question}
             >
               {example.label}
             </button>
           ))}
         </div>
+</div>
       </main>
 
       <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
