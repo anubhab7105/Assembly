@@ -42,6 +42,17 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     })
   })
 
+  test("restores a saved dark theme from the document head before hydration", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("assembly:theme", "dark")
+    })
+
+    await page.goto("/")
+    await expect(page.locator("html")).toHaveClass(/dark/)
+    await expect(page.locator("head #assembly-theme-bootstrap")).toHaveCount(1)
+    await expect(page.getByRole("button", { name: "Switch to light mode" }).first()).toBeVisible()
+  })
+
   test("landing page explains the research workflow and remembers the chosen theme", async ({ page }) => {
     await page.goto("/")
     await expect(page.getByRole("heading", { name: /one question/i })).toBeVisible()

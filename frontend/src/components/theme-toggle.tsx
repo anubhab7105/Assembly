@@ -7,15 +7,20 @@ type Theme = "light" | "dark"
 
 const STORAGE_KEY = "assembly:theme"
 const THEME_EVENT = "assembly:theme-change"
+let memoryTheme: Theme | null = null
+
+function getSystemTheme(): Theme {
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+}
 
 function getThemeSnapshot(): Theme {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
     if (stored === "light" || stored === "dark") return stored
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
   } catch {
-    return "light"
+    return memoryTheme ?? getSystemTheme()
   }
+  return memoryTheme ?? getSystemTheme()
 }
 
 function getServerThemeSnapshot(): Theme {
@@ -31,22 +36,41 @@ function subscribeTheme(onStoreChange: () => void) {
   }
 }
 
+function subscribeHydration() {
+  return () => {}
+}
+
+function getHydrationSnapshot() {
+  return true
+}
+
+function getServerHydrationSnapshot() {
+  return false
+}
+
 function applyTheme(theme: Theme) {
+  memoryTheme = theme
   document.documentElement.classList.toggle("dark", theme === "dark")
   try {
     window.localStorage.setItem(STORAGE_KEY, theme)
   } catch {
-    // The current page still receives the selected theme when storage is blocked.
+    // The in-memory selection keeps the current page usable without browser storage.
   }
   window.dispatchEvent(new CustomEvent<Theme>(THEME_EVENT, { detail: theme }))
 }
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
   const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot)
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    getHydrationSnapshot,
+    getServerHydrationSnapshot,
+  )
 
   useEffect(() => {
+    if (!hydrated) return
     document.documentElement.classList.toggle("dark", theme === "dark")
-  }, [theme])
+  }, [hydrated, theme])
 
   const toggle = () => applyTheme(theme === "dark" ? "light" : "dark")
 

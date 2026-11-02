@@ -77,15 +77,15 @@
   --secondary-foreground: #242321;
   --muted-foreground: #706e68;
   --border: #e3e1dc;
-  --ring: #a96b20;
+  --ring: #885315;
   --radius: 0.8rem;
-  --primary: #a96b20;
+  --primary: #885315;
   --primary-foreground: #ffffff;
   --secondary: #efefec;
   --accent: #fbf1e2;
   --accent-foreground: #885315;
   --destructive: #b83030;
-  --brand: #a96b20;
+  --brand: #885315;
   --brand-subtle: #fbf1e2;
   --brand-hover: #8f5718;
   --brand-foreground: #ffffff;
@@ -99,12 +99,12 @@
   --info-subtle: #eaf1f7;
   --sidebar: #f0efec;
   --sidebar-foreground: #242321;
-  --sidebar-primary: #a96b20;
+  --sidebar-primary: #885315;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #e8e6e1;
   --sidebar-accent-foreground: #885315;
   --sidebar-border: #e3e1dc;
-  --sidebar-ring: #a96b20;
+  --sidebar-ring: #885315;
 }
 
 /* ─── Dark mode tokens ──────────────────────────────────────────────────────── */
