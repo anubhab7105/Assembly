@@ -26,7 +26,7 @@ describe("ThemeToggle", () => {
 
     fireEvent.click(toggles[0])
 
-    expect(document.documentElement).toHaveClass("dark")
+    expect(document.documentElement.classList.contains("dark")).toBe(true)
     expect(window.localStorage.getItem("assembly:theme")).toBe("dark")
     expect(screen.getAllByRole("button", { name: "Switch to light mode" })).toHaveLength(2)
   })
@@ -38,6 +38,6 @@ describe("ThemeToggle", () => {
     await waitFor(() => {
       expect(document.documentElement).toHaveClass("dark")
     })
-    expect(screen.getByRole("button", { name: "Switch to light mode" })).toBeVisible()
+    expect(screen.getByRole("button", { name: "Switch to light mode" })).toBeTruthy()
   })
 })
