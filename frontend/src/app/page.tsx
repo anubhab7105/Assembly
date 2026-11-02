@@ -3,7 +3,6 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import {
   ArrowRight,
   ArrowUpRight,
-  Brain,
   CheckCircle2,
   GitBranch,
   LockKeyhole,

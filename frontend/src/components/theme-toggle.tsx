@@ -26,7 +26,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY)
       if (stored === "light" || stored === "dark") initial = stored
-      else if (window.matchMedia("(prefers-color-scheme: dark)").matches) initial = "dark"
+      else if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) initial = "dark"
     } catch {
       // Fall back to the light palette when browser preferences are unavailable.
     }

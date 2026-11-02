@@ -268,16 +268,16 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           />
         </div>
         <div className="assembly-sidebar-preferences flex items-center gap-2">
-<Link
-          href="/settings"
-          onClick={onClose}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50"
-        >
-          <Settings className="size-4" />
-          Settings
-        </Link>
-<ThemeToggle className="assembly-theme-toggle" />
-</div>
+          <Link
+            href="/settings"
+            onClick={onClose}
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          >
+            <Settings className="size-4" />
+            Settings
+          </Link>
+          <ThemeToggle className="assembly-theme-toggle" />
+        </div>
       </div>
     </div>
   )
