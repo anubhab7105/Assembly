@@ -106,6 +106,12 @@ export interface ExecutionCompletedData {
   confidence?: "High" | "Moderate" | "Low"
 }
 
+export interface ExecutionFailedPartialData {
+  status?: "failed" | "failed_partial"
+  reason?: string
+  answer?: string
+}
+
 export interface ProgressEvent extends BaseEvent {
   data:
     | TeamReadyData
@@ -114,6 +120,7 @@ export interface ProgressEvent extends BaseEvent {
     | ConsensusData
     | TimerData
     | ExecutionCompletedData
+    | ExecutionFailedPartialData
     | AgentStatusData
     | QuotaWarningData
     | RoundData
