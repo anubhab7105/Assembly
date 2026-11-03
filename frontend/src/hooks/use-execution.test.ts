@@ -336,7 +336,7 @@ describe("useExecution hook", () => {
     if (event_type === "execution.failed_partial") {
       expect(result.current.feed[0]?.message).toBe(
         expected === "failed_partial"
-          ? "Execution failed partially. Some agents crashed."
+          ? "Execution ended with partial failures."
           : "Execution failed before producing an answer.",
       )
     }
