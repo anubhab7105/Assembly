@@ -228,7 +228,7 @@ export function useExecution(executionId: string | null) {
           next.status = isPartialFailure ? "failed_partial" : "failed"
           pushFeed(
             isPartialFailure
-              ? "Execution failed partially. Some agents crashed."
+              ? "Execution ended with partial failures."
               : "Execution failed before producing an answer.",
             "error",
           )
