@@ -9,6 +9,7 @@ import type {
   ConsensusData,
   TimerData,
   ExecutionCompletedData,
+  ExecutionFailedPartialData,
   AgentStatusData,
   QuotaWarningData,
   RoundData,
@@ -221,10 +222,18 @@ export function useExecution(executionId: string | null) {
           pushFeed("Execution completed. Final answer synthesised.", "success")
           break
         }
-        case "execution.failed_partial":
-          next.status = "failed_partial"
-          pushFeed("Execution failed partially. Some agents crashed.", "error")
+        case "execution.failed_partial": {
+          const failureData = event.data as ExecutionFailedPartialData
+          const isPartialFailure = failureData.status === "failed_partial"
+          next.status = isPartialFailure ? "failed_partial" : "failed"
+          pushFeed(
+            isPartialFailure
+              ? "Execution failed partially. Some agents crashed."
+              : "Execution failed before producing an answer.",
+            "error",
+          )
           break
+        }
         case "execution.cancelled":
           next.status = "cancelled"
           pushFeed("Execution was cancelled.", "error")
