@@ -298,14 +298,28 @@ describe("useExecution hook", () => {
     expect(result.current.summary?.resolvedDisagreementCount).toBeNull()
   })
   it.each([
-    { event_type: "execution.completed" as const, expected: "completed" },
-    { event_type: "execution.cancelled" as const, expected: "cancelled" },
-    { event_type: "execution.failed_partial" as const, expected: "failed_partial" },
-  ])("sets terminal status from the $event_type event when envelope state is missing", ({ event_type, expected }) => {
+    {
+      event_type: "execution.completed" as const,
+      expected: "completed",
+      data: { answer: "Finished." },
+    },
+    {
+      event_type: "execution.cancelled" as const,
+      expected: "cancelled",
+      data: {},
+    },
+    {
+      event_type: "execution.failed_partial" as const,
+      expected: "failed_partial",
+      data: { status: "failed_partial" as const, reason: "Some agents failed." },
+    },
+    {
+      event_type: "execution.failed_partial" as const,
+      expected: "failed",
+      data: { status: "failed" as const, reason: "Execution failed." },
+    },
+  ])("sets terminal status from the $event_type payload when envelope state is missing", ({ event_type, expected, data }) => {
     const { result } = renderHook(() => useExecution("exec_terminal"))
-    const data = event_type === "execution.completed"
-      ? { answer: "Finished." }
-      : {}
 
     act(() => {
       mockSocket().mockMessage({
@@ -319,6 +333,13 @@ describe("useExecution hook", () => {
     })
 
     expect(result.current.status).toBe(expected)
+    if (event_type === "execution.failed_partial") {
+      expect(result.current.feed[0]?.message).toBe(
+        expected === "failed_partial"
+          ? "Execution failed partially. Some agents crashed."
+          : "Execution failed before producing an answer.",
+      )
+    }
   })
 
   it("recognizes an active countdown when timer events omit lifecycle state", () => {
