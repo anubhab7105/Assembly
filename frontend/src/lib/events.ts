@@ -55,7 +55,7 @@ export interface ConsensusData {
 }
 
 export interface TimerData {
-  remaining_seconds: number
+  seconds_remaining: number
 }
 
 export interface AgentStatusData {

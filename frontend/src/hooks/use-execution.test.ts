@@ -297,4 +297,72 @@ describe("useExecution hook", () => {
     expect(result.current.summary?.debateRounds).toBeNull()
     expect(result.current.summary?.resolvedDisagreementCount).toBeNull()
   })
+  it.each([
+    { event_type: "execution.completed" as const, expected: "completed" },
+    { event_type: "execution.cancelled" as const, expected: "cancelled" },
+    { event_type: "execution.failed_partial" as const, expected: "failed_partial" },
+  ])("sets terminal status from the $event_type event when envelope state is missing", ({ event_type, expected }) => {
+    const { result } = renderHook(() => useExecution("exec_terminal"))
+    const data = event_type === "execution.completed"
+      ? { answer: "Finished." }
+      : {}
+
+    act(() => {
+      mockSocket().mockMessage({
+        event_type,
+        execution_id: "exec_terminal",
+        seq: 1,
+        state: null,
+        timestamp: new Date().toISOString(),
+        data,
+      })
+    })
+
+    expect(result.current.status).toBe(expected)
+  })
+
+  it("recognizes an active countdown when timer events omit lifecycle state", () => {
+    const { result } = renderHook(() => useExecution("exec_timer"))
+
+    act(() => {
+      mockSocket().mockMessage({
+        event_type: "timer.tick",
+        execution_id: "exec_timer",
+        seq: 1,
+        state: null,
+        timestamp: new Date().toISOString(),
+        data: { seconds_remaining: 45 },
+      })
+    })
+
+    expect(result.current.status).toBe("running")
+    expect(result.current.timerSeconds).toBe(45)
+  })
+
+  it("does not replace a known terminal state with an active timer state", () => {
+    const { result } = renderHook(() => useExecution("exec_terminal_timer"))
+
+    act(() => {
+      mockSocket().mockMessage({
+        event_type: "execution.cancelled",
+        execution_id: "exec_terminal_timer",
+        seq: 1,
+        state: null,
+        timestamp: new Date().toISOString(),
+        data: {},
+      })
+      mockSocket().mockMessage({
+        event_type: "timer.tick",
+        execution_id: "exec_terminal_timer",
+        seq: 2,
+        state: null,
+        timestamp: new Date().toISOString(),
+        data: { seconds_remaining: 30 },
+      })
+    })
+
+    expect(result.current.status).toBe("cancelled")
+    expect(result.current.timerSeconds).toBe(30)
+  })
+
 })

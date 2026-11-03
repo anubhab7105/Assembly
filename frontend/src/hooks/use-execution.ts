@@ -118,6 +118,9 @@ export function useExecution(executionId: string | null) {
       }
 
       switch (event.event_type) {
+        case "execution.started":
+          if (!event.state) next.status = "created"
+          break
         case "team.ready":
           next.team = (event.data as TeamReadyData).agents.map((a) => ({
             ...a,
@@ -185,9 +188,13 @@ export function useExecution(executionId: string | null) {
           break
         }
         case "timer.tick":
-          next.timerSeconds = (event.data as TimerData).remaining_seconds
+          if (!event.state && !["completed", "cancelled", "failed", "failed_partial"].includes(prev.status)) {
+            next.status = "running"
+          }
+          next.timerSeconds = (event.data as TimerData).seconds_remaining
           break
         case "execution.completed": {
+          next.status = "completed"
           const compData = event.data as ExecutionCompletedData
           // Backend wire names first (answer/confidence_label), legacy
           // aliases tolerated. The label is already capped server-side
@@ -215,9 +222,11 @@ export function useExecution(executionId: string | null) {
           break
         }
         case "execution.failed_partial":
+          next.status = "failed_partial"
           pushFeed("Execution failed partially. Some agents crashed.", "error")
           break
         case "execution.cancelled":
+          next.status = "cancelled"
           pushFeed("Execution was cancelled.", "error")
           break
       }
