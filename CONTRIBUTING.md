@@ -9,6 +9,10 @@ Thanks for considering a contribution. Assembly is experimental, and contributio
 3. For a new feature, major refactor, provider integration, or architectural change, open an issue first and describe the problem and intended approach.
 4. Never include real API keys, personal data, production logs, or other secrets in a commit, test fixture, issue, screenshot, or pull request. For a suspected vulnerability, follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
+## Questions and discussions
+
+Use GitHub Discussions (once enabled for this repository) for setup questions, architecture discussions, design ideas, and general contributor conversation. Use GitHub Issues for reproducible bugs and actionable work with a clear scope and acceptance criteria. Search existing issues before opening a new one, and keep security vulnerability reports private by following [SECURITY.md](SECURITY.md).
+
 ## Fork and branch
 
 After the repository is public, use the standard fork workflow:
