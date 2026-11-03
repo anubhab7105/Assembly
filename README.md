@@ -160,12 +160,16 @@ You don't have to build a new agent to make Assembly better. High-impact contrib
 - **Security and privacy:** strengthen key handling, redaction, safe defaults, dependency review, and threat-model documentation.
 - **Docs and developer experience:** make setup clearer, reduce first-run friction, and add small reproducible examples.
 
-Five focused contributor tasks are open:
-- **Frontend and UX** — [#9, a good first issue](https://github.com/anubhab7105/Assembly/issues/9): responsive layout, accessibility, chat interactions, execution progress, and Playwright coverage.
-- **Model provider integrations** — [#10](https://github.com/anubhab7105/Assembly/issues/10): adapter behavior, quotas, rate-limit recovery, and model configuration.
-- **Testing and evaluation** — [#11](https://github.com/anubhab7105/Assembly/issues/11): expand tests and compare Assembly with individual-model baselines using a documented protocol.
-- **Security and reliability** — [#12](https://github.com/anubhab7105/Assembly/issues/12): test key privacy, error recovery, and concurrency boundaries.
-- **Documentation** — [#8](https://github.com/anubhab7105/Assembly/issues/8): keep setup, API contracts, architecture diagrams, and troubleshooting current.
+The following starter tasks are individually scoped and have acceptance criteria in their issue descriptions. Check that an issue is still open before beginning, and comment before starting substantial work so contributors do not duplicate effort.
+
+- **CI and API contracts:** [#70 — Fail CI when the generated execution event schema is stale](https://github.com/anubhab7105/Assembly/issues/70) — add an offline check that keeps the committed event schema aligned with the backend.
+- **Developer experience:** [#71 — Test dev launcher cleanup when startup fails](https://github.com/anubhab7105/Assembly/issues/71) — add deterministic tests for child-process cleanup in the local web launcher.
+- **Frontend reliability:** [#72 — Show a recoverable error when saved history cannot be loaded](https://github.com/anubhab7105/Assembly/issues/72) — distinguish storage failures from a genuinely empty history and allow retry.
+- **Frontend testing:** [#73 — Test theme preference synchronization across browser tabs](https://github.com/anubhab7105/Assembly/issues/73) — cover the existing cross-tab storage-event behavior.
+- **Local data safety:** [#74 — Reject oversized history imports before reading the file](https://github.com/anubhab7105/Assembly/issues/74) — enforce a reasonable file-size limit before parsing imports.
+- **Accessibility:** [#75 — Announce offline connectivity changes to screen readers](https://github.com/anubhab7105/Assembly/issues/75) — expose the existing offline notice as a polite status message.
+
+Issues labeled **good first issue** are intended as approachable newcomer tasks. **help wanted** identifies work where additional community contributions are especially welcome.
 
 Start with one small, reproducible improvement. If you have a different idea, open an issue to discuss its scope before investing in a large change.
 
