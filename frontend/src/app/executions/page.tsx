@@ -19,11 +19,11 @@ import {
   Activity,
   X,
   PlayCircle,
-  Clock,
   Zap,
 } from "lucide-react"
 
 import { FinalAnswer } from "@/components/final-answer"
+import { ExecutionTiming } from "@/components/execution-timing"
 
 function ExecutionContent() {
   const searchParams = useSearchParams()
@@ -55,16 +55,11 @@ function ExecutionContent() {
     return `${m}:${s.toString().padStart(2, "0")}`
   }
 
-  const terminal = ["completed", "cancelled", "failed"].includes(state.status)
+  const terminal = ["completed", "cancelled", "failed", "failed_partial"].includes(state.status)
   // A failed run with no answer is a failure state, never an active team:
   // surface it explicitly instead of "Forming temporary team...".
   // Legacy/unknown histories read as failures for display (never active).
-  const failedBanner = state.status === "failed" || state.status === "unknown"
-  // After the run ends the live countdown is meaningless: freeze the
-  // final elapsed time instead of a dead --:--.
-  const timerDisplay =
-    state.timerSeconds ?? (terminal ? state.summary?.elapsedSeconds ?? null : null)
-
+  const failedBanner = ["failed", "failed_partial", "unknown"].includes(state.status)
   // Agent State styling
   const getAgentStyles = (status: string) => {
     switch (status) {
@@ -103,7 +98,9 @@ function ExecutionContent() {
           className="bg-danger-subtle text-danger px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2"
         >
           <XCircle className="size-4" />
-          This run failed before producing an answer. Check your provider keys and quota, then start a new run.
+          {state.status === "failed_partial"
+            ? "This run ended with partial failures. Review the event log for details."
+            : "This run failed before producing an answer. Check your provider keys and quota, then start a new run."}
         </div>
       )}
 
@@ -121,15 +118,13 @@ function ExecutionContent() {
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">Time Remaining</span>
-              <div className="flex items-center gap-1.5 font-mono text-2xl font-semibold tracking-tight text-foreground tabular-nums">
-                <Clock className="size-5 text-brand" />
-                {formatTime(timerDisplay)}
-              </div>
-            </div>
+            <ExecutionTiming
+              status={state.status}
+              remainingSeconds={state.timerSeconds}
+              elapsedSeconds={state.summary?.elapsedSeconds ?? null}
+            />
 
-            <Button variant="outline" size="sm" onClick={handleCancel} disabled={state.status === "completed" || state.status === "cancelled"}>
+            <Button variant="outline" size="sm" onClick={handleCancel} disabled={terminal}>
               <X className="size-4 mr-1.5" />
               Cancel
             </Button>

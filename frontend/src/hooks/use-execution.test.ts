@@ -297,4 +297,93 @@ describe("useExecution hook", () => {
     expect(result.current.summary?.debateRounds).toBeNull()
     expect(result.current.summary?.resolvedDisagreementCount).toBeNull()
   })
+  it.each([
+    {
+      event_type: "execution.completed" as const,
+      expected: "completed",
+      data: { answer: "Finished." },
+    },
+    {
+      event_type: "execution.cancelled" as const,
+      expected: "cancelled",
+      data: {},
+    },
+    {
+      event_type: "execution.failed_partial" as const,
+      expected: "failed_partial",
+      data: { status: "failed_partial" as const, reason: "Some agents failed." },
+    },
+    {
+      event_type: "execution.failed_partial" as const,
+      expected: "failed",
+      data: { status: "failed" as const, reason: "Execution failed." },
+    },
+  ])("sets terminal status from the $event_type payload when envelope state is missing", ({ event_type, expected, data }) => {
+    const { result } = renderHook(() => useExecution("exec_terminal"))
+
+    act(() => {
+      mockSocket().mockMessage({
+        event_type,
+        execution_id: "exec_terminal",
+        seq: 1,
+        state: null,
+        timestamp: new Date().toISOString(),
+        data,
+      })
+    })
+
+    expect(result.current.status).toBe(expected)
+    if (event_type === "execution.failed_partial") {
+      expect(result.current.feed[0]?.message).toBe(
+        expected === "failed_partial"
+          ? "Execution ended with partial failures."
+          : "Execution failed before producing an answer.",
+      )
+    }
+  })
+
+  it("recognizes an active countdown when timer events omit lifecycle state", () => {
+    const { result } = renderHook(() => useExecution("exec_timer"))
+
+    act(() => {
+      mockSocket().mockMessage({
+        event_type: "timer.tick",
+        execution_id: "exec_timer",
+        seq: 1,
+        state: null,
+        timestamp: new Date().toISOString(),
+        data: { seconds_remaining: 45 },
+      })
+    })
+
+    expect(result.current.status).toBe("running")
+    expect(result.current.timerSeconds).toBe(45)
+  })
+
+  it("does not replace a known terminal state with an active timer state", () => {
+    const { result } = renderHook(() => useExecution("exec_terminal_timer"))
+
+    act(() => {
+      mockSocket().mockMessage({
+        event_type: "execution.cancelled",
+        execution_id: "exec_terminal_timer",
+        seq: 1,
+        state: null,
+        timestamp: new Date().toISOString(),
+        data: {},
+      })
+      mockSocket().mockMessage({
+        event_type: "timer.tick",
+        execution_id: "exec_terminal_timer",
+        seq: 2,
+        state: null,
+        timestamp: new Date().toISOString(),
+        data: { seconds_remaining: 30 },
+      })
+    })
+
+    expect(result.current.status).toBe("cancelled")
+    expect(result.current.timerSeconds).toBe(30)
+  })
+
 })

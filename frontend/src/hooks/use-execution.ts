@@ -9,6 +9,7 @@ import type {
   ConsensusData,
   TimerData,
   ExecutionCompletedData,
+  ExecutionFailedPartialData,
   AgentStatusData,
   QuotaWarningData,
   RoundData,
@@ -118,6 +119,9 @@ export function useExecution(executionId: string | null) {
       }
 
       switch (event.event_type) {
+        case "execution.started":
+          if (!event.state) next.status = "created"
+          break
         case "team.ready":
           next.team = (event.data as TeamReadyData).agents.map((a) => ({
             ...a,
@@ -185,9 +189,13 @@ export function useExecution(executionId: string | null) {
           break
         }
         case "timer.tick":
-          next.timerSeconds = (event.data as TimerData).remaining_seconds
+          if (!event.state && !["completed", "cancelled", "failed", "failed_partial"].includes(prev.status)) {
+            next.status = "running"
+          }
+          next.timerSeconds = (event.data as TimerData).seconds_remaining
           break
         case "execution.completed": {
+          next.status = "completed"
           const compData = event.data as ExecutionCompletedData
           // Backend wire names first (answer/confidence_label), legacy
           // aliases tolerated. The label is already capped server-side
@@ -214,10 +222,20 @@ export function useExecution(executionId: string | null) {
           pushFeed("Execution completed. Final answer synthesised.", "success")
           break
         }
-        case "execution.failed_partial":
-          pushFeed("Execution failed partially. Some agents crashed.", "error")
+        case "execution.failed_partial": {
+          const failureData = event.data as ExecutionFailedPartialData
+          const isPartialFailure = failureData.status === "failed_partial"
+          next.status = isPartialFailure ? "failed_partial" : "failed"
+          pushFeed(
+            isPartialFailure
+              ? "Execution ended with partial failures."
+              : "Execution failed before producing an answer.",
+            "error",
+          )
           break
+        }
         case "execution.cancelled":
+          next.status = "cancelled"
           pushFeed("Execution was cancelled.", "error")
           break
       }
