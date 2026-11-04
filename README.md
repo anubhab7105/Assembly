@@ -147,7 +147,7 @@ npx playwright test
 - **Model diversity:** distinct families can reduce some shared failure modes, but they do not guarantee independent reasoning or factual accuracy.
 - **Credential hygiene:** never commit API keys, paste them into issues, or include them in logs and screenshots. Browser-persisted keys should be treated as sensitive local data.
 - **Desktop maturity:** desktop packaging and sidecar behavior may not be as straightforward to reproduce as the documented web development path.
-- **Performance and test coverage:** large or long-running tasks can be slow; not every provider/model combination is exercised against live APIs in CI.
+- **Performance and test coverage:** large or long-running tasks can be slow; not every provider/model combination is exercised against live APIs in CI.  
 
 ## Ways to contribute
 
@@ -193,3 +193,6 @@ The launcher reports both service URLs, waits for readiness, uses loopback defau
 ## License
 
 Assembly is distributed under the Apache License 2.0. See [LICENSE](LICENSE).
+
+
+
