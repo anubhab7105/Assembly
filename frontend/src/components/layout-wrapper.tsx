@@ -12,6 +12,10 @@ import {
   Zap, Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload,
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
+/**
+ * Maximum allowed history import size: 5 MiB.
+ */
+const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {}
@@ -105,30 +109,47 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   }
 
   const handleImport = async (file: File, input: HTMLInputElement) => {
-    if (importing) return
-    setImporting(true)
-    try {
-      const text = await file.text()
-      await storage.importJSON(text)
-      await loadExecutions()
-      toast({ title: "Import complete", description: "History and usage were imported successfully.", variant: "success" })
-    } catch (error) {
-      const message = error instanceof Error
+  if (importing) return
+
+  setImporting(true)
+
+  try {
+    // Reject oversized files before reading them into browser memory.
+    if (file.size > MAX_IMPORT_FILE_SIZE) {
+      throw new Error(
+        "This file is too large to import. Maximum allowed size is 5 MiB. Your existing history was not changed."
+      )
+    }
+
+    // Read and import only after the size validation succeeds.
+    const text = await file.text()
+
+    await storage.importJSON(text)
+    await loadExecutions()
+
+    toast({
+      title: "Import complete",
+      description: "History and usage were imported successfully.",
+      variant: "success",
+    })
+  } catch (error) {
+    const message =
+      error instanceof Error
         ? error.message
         : "Couldn't import this file. Check that it is a valid Assembly history export and try again."
-      toast({
-        title: "History import failed",
-        description: message,
-        variant: "danger",
-        duration: 7000,
-      })
-    } finally {
-      // File inputs do not fire change again when the same file is selected.
-      // Clearing it on both success and failure allows an immediate retry.
-      input.value = ""
-      setImporting(false)
-    }
+
+    toast({
+      title: "History import failed",
+      description: message,
+      variant: "danger",
+      duration: 7000,
+    })
+  } finally {
+    // Reset the input so the same file can be selected again.
+    input.value = ""
+    setImporting(false)
   }
+}
 
   const filtered = executions.filter((e) =>
     e.question.toLowerCase().includes(search.toLowerCase()),
