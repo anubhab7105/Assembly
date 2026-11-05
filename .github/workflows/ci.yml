@@ -37,6 +37,8 @@ jobs:
       run: npm run audit:high
     - name: Run npm audit gate regression tests
       run: npm run audit:test
+    - name: Verify Content Security Policy configuration
+      run: npm run security:csp:test
     - name: Lint
       run: npm run lint
     - name: Type Check
