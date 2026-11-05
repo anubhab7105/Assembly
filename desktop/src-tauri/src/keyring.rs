@@ -102,7 +102,7 @@ impl KeyRing for MemoryKeyring {
 
 // ── Convenience commands backed by the OS keyring (process-global) ─────
 
-static OS_KEYRING: std::sync::OnceLock<OsKeyring> = std::sync::OnceLock::new();
+static OS_KEYRING: OnceLock<OsKeyring> = OnceLock::new();
 
 fn os_keyring() -> &'static OsKeyring {
     OS_KEYRING.get_or_init(|| OsKeyring)
@@ -133,12 +133,12 @@ mod tests {
         let kr = MemoryKeyring::new();
         assert!(!kr.get(SERVICE, "gemini").unwrap().is_some());
         kr.set(SERVICE, "gemini", "secret-key-value").unwrap();
-        assert!(kr.has_key(SERVICE, "gemini").unwrap());
+        assert!(kr.get(SERVICE, "gemini").unwrap().is_some());
         assert_eq!(kr.get(SERVICE, "gemini").unwrap().as_deref(), Some("secret-key-value"));
         // Other providers unaffected.
         assert!(!kr.get(SERVICE, "groq").unwrap().is_some());
         kr.delete(SERVICE, "gemini").unwrap();
-        assert!(!kr.has_key(SERVICE, "gemini").unwrap());
+        assert!(!kr.get(SERVICE, "gemini").unwrap().is_some());
     }
 
     #[test]
