@@ -81,3 +81,43 @@ jobs:
       run: |
         alembic upgrade head
         pytest
+
+  rust-test:
+    # Exercises the Tauri sidecar supervision core (sidecar.rs) and keyring
+    # trait. Requires the system libraries the Tauri Linux build links against
+    # (libdbus, glib/gio, pkg-config). Runs on Ubuntu; Windows keyring/Job
+    # Object code paths compile under cfg(windows) but runtime verification
+    # needs a Windows runner (see windows-build job).
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+    - name: Install Tauri system dependencies (Linux)
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq libdbus-1-dev pkg-config libglib2.0-dev libssl-dev
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: cargo-registry-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+    - name: Run Rust tests
+      working-directory: ./desktop/src-tauri
+      run: cargo test
+
+  windows-build:
+    # Placeholder: a Windows runner is required to build the MSI installer,
+    # exercise the Job Object (kill-on-close) shutdown path, and validate the
+    # OS keyring (Windows Credential Manager) at runtime. Not feasible in this
+    # Linux environment; enable once a Windows runner is available.
+    runs-on: windows-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Note
+      run: |
+        echo "Windows desktop build and packaged-installer smoke checklist:"
+        echo "See docs/windows-release.md. Enable build steps once a Windows runner is provisioned."
+
