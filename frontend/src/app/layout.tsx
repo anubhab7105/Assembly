@@ -59,8 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <head>
-        {/* The theme must be applied before the browser paints the page. */}
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts -- Applies the saved theme before first paint. */}
         <script id="assembly-theme-bootstrap" src="/theme-bootstrap.js" />
       </head>
       <body className="flex min-h-full flex-col bg-background text-foreground">

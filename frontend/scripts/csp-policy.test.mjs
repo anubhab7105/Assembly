@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import vm from "node:vm";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 const config = JSON.parse(await read("../vercel.json"));
@@ -48,12 +49,56 @@ test("the only script-src inline exception is documented for static App Router o
   assert.match(documentation, /static[- ]export/i);
 });
 
-test("the application theme bootstrap is a same-origin external script", () => {
+function runThemeBootstrap(savedTheme, systemDark) {
+  const toggles = [];
+  let matchMediaCalls = 0;
+
+  vm.runInNewContext(themeBootstrap, {
+    window: {
+      localStorage: { getItem: () => savedTheme },
+      matchMedia: (query) => {
+        matchMediaCalls += 1;
+        assert.equal(query, "(prefers-color-scheme: dark)");
+        return { matches: systemDark };
+      },
+    },
+    document: {
+      documentElement: {
+        classList: {
+          toggle: (token, force) => toggles.push({ token, force }),
+        },
+      },
+    },
+  });
+
+  return { toggles, matchMediaCalls };
+}
+
+test("the application theme bootstrap is parser-blocking in the document head", () => {
   assert.match(
     layout,
     /<head>[\s\S]*?<script id="assembly-theme-bootstrap" src="\/theme-bootstrap\.js" \/>\s*<\/head>/,
   );
   assert.doesNotMatch(layout, /next\/script/);
+  assert.doesNotMatch(layout, /<Script\b/);
   assert.match(themeBootstrap, /localStorage\.getItem\("assembly:theme"\)/);
   assert.match(themeBootstrap, /prefers-color-scheme: dark/);
+});
+
+test("the theme bootstrap applies a saved dark preference without consulting the system", () => {
+  assert.deepEqual(runThemeBootstrap("dark", false), {
+    toggles: [{ token: "dark", force: true }],
+    matchMediaCalls: 0,
+  });
+});
+
+test("the theme bootstrap applies both system preference outcomes when no theme is saved", () => {
+  assert.deepEqual(runThemeBootstrap(null, true), {
+    toggles: [{ token: "dark", force: true }],
+    matchMediaCalls: 1,
+  });
+  assert.deepEqual(runThemeBootstrap(null, false), {
+    toggles: [{ token: "dark", force: false }],
+    matchMediaCalls: 1,
+  });
 });
