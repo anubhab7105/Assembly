@@ -7,15 +7,13 @@ import { ToastProvider, useToast } from "@/components/ui/toast"
 import { storage, type HistoryRecord } from "@/lib/storage"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { importHistoryFile } from "@/lib/history-import"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import {
   Zap, Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload,
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
-/**
- * Maximum allowed history import size: 5 MiB.
- */
-const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024
+
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {}
@@ -108,23 +106,14 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
     URL.revokeObjectURL(url)
   }
 
-  const handleImport = async (file: File, input: HTMLInputElement) => {
+const handleImport = async (file: File, input: HTMLInputElement) => {
   if (importing) return
 
   setImporting(true)
 
   try {
-    // Reject oversized files before reading them into browser memory.
-    if (file.size > MAX_IMPORT_FILE_SIZE) {
-      throw new Error(
-        "This file is too large to import. Maximum allowed size is 5 MiB. Your existing history was not changed."
-      )
-    }
+    await importHistoryFile(file, (text) => storage.importJSON(text))
 
-    // Read and import only after the size validation succeeds.
-    const text = await file.text()
-
-    await storage.importJSON(text)
     await loadExecutions()
 
     toast({
@@ -145,7 +134,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       duration: 7000,
     })
   } finally {
-    // Reset the input so the same file can be selected again.
     input.value = ""
     setImporting(false)
   }
