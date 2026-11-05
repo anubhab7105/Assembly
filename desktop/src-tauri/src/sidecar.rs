@@ -460,13 +460,13 @@ fn supervisor_loop(
         match cmd {
             SupervisorCmd::Spawn { reply } => {
                 let result = do_spawn(&source, &state, &logs, &mut child, &mut restarts);
-                let _ = reply.send(result.map_err(|e| e.message));
+                let _ = reply.send(result);
             }
             SupervisorCmd::Shutdown { reply } => {
                 let result = do_shutdown(&mut child, &state, &logs);
                 set_state(&state, BackendState::Stopped);
                 child = None;
-                let _ = reply.send(result.map_err(|e| e.message));
+                let _ = reply.send(result);
                 break;
             }
             SupervisorCmd::Restart { reply } => {
@@ -474,7 +474,7 @@ fn supervisor_loop(
                 child = None;
                 restarts = 0;
                 let result = do_spawn(&source, &state, &logs, &mut child, &mut restarts);
-                let _ = reply.send(result.map_err(|e| e.message));
+                let _ = reply.send(result.map_err(|e| RestartError { message: e.message }));
             }
             SupervisorCmd::Status { reply } => {
                 let _ = reply.send(state.lock().unwrap().clone());
