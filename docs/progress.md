@@ -714,3 +714,25 @@
 - Introduced shared light/dark tokens, a persistent theme switch, and a cleaner sidebar treatment with clearer local-history navigation.
 - Restyled the investigation composer, suggested prompts, results workspace, synthesis card, and settings shell while preserving existing interaction logic and test IDs.
 - Added DOM-enabled theme preference regression coverage for persistence and synchronization across multiple toggles. Validation: pending PR CI; packaged Windows desktop verification not run in this environment.
+
+## 2026-11-05 — Issue #93 / ASM-DESK-001: Tauri backend sidecar lifecycle, keyring, and IPC (branch feat/desktop-sidecar-keyring)
+
+- Implemented `desktop/src-tauri/src/sidecar.rs`: a `std`-only, unit-testable backend supervisor.
+  - Resolves the packaged executable per target triple (`binaries/backend-<triple>.exe`) with an explicit dev mode (`python src/main.py`, `APP_MODE=desktop`).
+  - Picks a free loopback port (`127.0.0.1` only), generates a per-launch random auth token, spawns via `std::process::Command` (no shell, controlled args/env only).
+  - Waits for readiness by polling `GET /health` with a 30s timeout + backoff; aborts early if the backend process exits.
+  - Explicit state machine: `Starting | Ready | Failed | Crashed | Stopping | Stopped`.
+  - Bounded redacted log ring buffer; startup failures and crashes surfaced via events/commands, no silent failures.
+  - Crash policy: limited restart with backoff (1s/2s/4s) up to `MAX_RESTARTS=3`, then `Failed`; documented.
+  - Clean shutdown: graceful `POST /shutdown` then kill after 5s; Windows Job Object under `cfg(windows)`; stale processes reaped; no-orphan verified by integration test.
+  - Fixed a backend contract bug in `src/main.py`: desktop mode now binds the sidecar-supplied `ASSEMMBLY_PORT` instead of ignoring it, so readiness polling hits the correct port.
+- Implemented `desktop/src-tauri/src/lib.rs`: Tauri commands (`get_backend_status`, `get_backend_endpoint`, `start_backend`, `restart_backend`, `stop_backend`, `get_backend_logs`) plus keyring commands (`save_provider_key`, `has_provider_key`, `delete_provider_key`, `read_provider_key`). Typed `CommandError` errors; `greet` removed; shell/opener plugins dropped; capabilities tightened to `core:default` only.
+- Implemented `desktop/src-tauri/src/keyring.rs`: `KeyRing` trait with `OsKeyring` (Windows Credential Manager via the `keyring` crate) and `MemoryKeyring` for tests. Stable service name `Assembly`.
+- Added `desktop/src-tauri/src/keyring.rs` + `keyring = "2"` to Cargo.toml; removed unused `tauri-plugin-shell`/`tauri-plugin-opener`.
+- Frontend: `desktop/src/ipc.ts` (TS contract mirroring Rust), `desktop/src/main.ts` rewritten to use IPC (loading/error/retry states, no `localStorage`/`IndexedDB` for secrets), `frontend/src/lib/env.ts` reads the dynamic backend endpoint/token from URL params in desktop mode so `api-client.ts` points at the running backend.
+- Tightened `desktop/src-tauri/capabilities/default.json` to `core:default` only.
+- Tests: Rust unit tests (path resolution, state transitions, redaction, token generation) + Rust integration tests with a fake Python backend (spawn→readiness→shutdown with no orphan, crash restart-then-fail, readiness timeout). All pass (`cargo test` in a standalone crate).
+- CI: added `rust-test` job (Ubuntu, installs libdbus/glib/pkg-config, runs `cargo test` in `desktop/src-tauri`) and a `windows-build` placeholder job.
+- Docs: expanded `desktop/README.md` (dev vs packaged launch, IPC contract, keyring, crash/shutdown policy).
+
+Not verified in this environment: full `cargo check/test` on `desktop/src-tauri` (missing system libdbus/glib cascade on Linux), the Tauri MSI build, the Windows Job Object shutdown path, OS keyring runtime behavior, and a clean-VM Windows packaged-installer smoke test. These are listed as gaps in the final report.
