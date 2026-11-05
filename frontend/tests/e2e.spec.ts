@@ -61,7 +61,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
     await page.goto("/")
     await expect(page.locator("html")).toHaveClass(/dark/)
-    await expect(page.locator("head #assembly-theme-bootstrap")).toHaveCount(1)
+    await expect(page.locator("head #assembly-theme-bootstrap")).toHaveAttribute("src", "/theme-bootstrap.js")
     await expect(page.getByRole("button", { name: "Switch to light mode" }).first()).toBeVisible()
 
     const themeToggles = await page.evaluate(() =>

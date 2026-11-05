@@ -714,3 +714,14 @@
 - Introduced shared light/dark tokens, a persistent theme switch, and a cleaner sidebar treatment with clearer local-history navigation.
 - Restyled the investigation composer, suggested prompts, results workspace, synthesis card, and settings shell while preserving existing interaction logic and test IDs.
 - Added DOM-enabled theme preference regression coverage for persistence and synchronization across multiple toggles. Validation: pending PR CI; packaged Windows desktop verification not run in this environment.
+
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:4c5894da69a596dac768d649d4498050c92e08ca7ea4de1505c4fbb67a827930 -->
+
+## 2026-11-05 — Theme bootstrap and hosted CSP guidance
+
+- Load the existing theme bootstrap as a synchronous script in the document head, and direct hosted operators to update both backend CSP origins and policy test values.
+- Verified the CSP policy test, production export, layout lint, and two theme browser tests. A live hosted run was not performed; it requires deployment and provider keys.
+
+<!-- /coderabbit-ai-generated:v1 -->
