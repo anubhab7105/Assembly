@@ -167,12 +167,14 @@ pub enum SupervisorEvent {
     Error { message: String },
 }
 
-/// Commands the supervisor task accepts. All reply channels carry a
-/// `Result<(), String>` so a single channel type can serve every command.
+/// Commands the supervisor task accepts. Each command carries a reply
+/// channel typed to that command's error so error codes are preserved
+/// across the thread boundary (a readiness timeout is not collapsed into a
+/// generic spawn failure).
 enum SupervisorCmd {
-    Spawn { reply: mpsc::Sender<Result<(), String>> },
-    Shutdown { reply: mpsc::Sender<Result<(), String>> },
-    Restart { reply: mpsc::Sender<Result<(), String>> },
+    Spawn { reply: mpsc::Sender<Result<(), StartError>> },
+    Shutdown { reply: mpsc::Sender<Result<(), ShutdownError>> },
+    Restart { reply: mpsc::Sender<Result<(), RestartError>> },
     Status { reply: mpsc::Sender<BackendStatus> },
 }
 
@@ -405,10 +407,7 @@ impl SidecarSupervisor {
         tx.send(SupervisorCmd::Spawn { reply }).ok();
         match rx.recv() {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(msg)) => Err(StartError {
-                code: StartErrorCode::SpawnFailed,
-                message: msg,
-            }),
+            Ok(Err(e)) => Err(e),
             Err(_) => Err(StartError {
                 code: StartErrorCode::SpawnFailed,
                 message: "supervisor channel closed".into(),
@@ -423,7 +422,7 @@ impl SidecarSupervisor {
         tx.send(SupervisorCmd::Shutdown { reply }).ok();
         match rx.recv() {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(msg)) => Err(ShutdownError { message: msg }),
+            Ok(Err(e)) => Err(e),
             Err(_) => Err(ShutdownError {
                 message: "supervisor channel closed".into(),
             }),
@@ -437,7 +436,7 @@ impl SidecarSupervisor {
         tx.send(SupervisorCmd::Restart { reply }).ok();
         match rx.recv() {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(msg)) => Err(RestartError { message: msg }),
+            Ok(Err(e)) => Err(RestartError { message: e.message }),
             Err(_) => Err(RestartError {
                 message: "supervisor channel closed".into(),
             }),
