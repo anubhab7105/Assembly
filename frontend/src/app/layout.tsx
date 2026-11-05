@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
-import Script from "next/script"
 import "./globals.css"
 import "./chat-design.css"
 
@@ -59,8 +58,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <script id="assembly-theme-bootstrap" src="/theme-bootstrap.js" />
+      </head>
       <body className="flex min-h-full flex-col bg-background text-foreground">
-        <Script id="assembly-theme-bootstrap" src="/theme-bootstrap.js" strategy="beforeInteractive" />
         <LayoutWrapper>{children}</LayoutWrapper>
         <CookieBanner />
       </body>
