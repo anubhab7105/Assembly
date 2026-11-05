@@ -231,21 +231,26 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     context,
   }) => {
     const offlineMessage = "You are currently offline. Some features may not work."
-    const offlineStatus = page.getByRole("status").filter({ hasText: offlineMessage })
+    const offlineStatus = page.getByRole("status")
+    const offlineBanner = page.getByTestId("offline-banner")
 
     await page.goto("/")
-    await expect(offlineStatus).toHaveCount(0)
+    await expect(offlineStatus).toBeEmpty()
+    await expect(offlineBanner).toHaveCount(0)
 
     await context.setOffline(true)
     try {
       await expect(offlineStatus).toHaveText(offlineMessage)
       await expect(offlineStatus).toHaveAttribute("aria-live", "polite")
+      await expect(offlineBanner).toHaveText(offlineMessage)
+      await expect(offlineBanner).toBeVisible()
       await expect(page.getByRole("alert").filter({ hasText: offlineMessage })).toHaveCount(0)
     } finally {
       await context.setOffline(false)
     }
 
-    await expect(offlineStatus).toHaveCount(0)
+    await expect(offlineStatus).toBeEmpty()
+    await expect(offlineBanner).toHaveCount(0)
   })
 
   test("mobile navigation traps focus, closes on Escape, and restores its trigger", async ({ page }) => {
