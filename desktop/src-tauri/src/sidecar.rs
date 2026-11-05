@@ -556,6 +556,9 @@ fn do_spawn(
     // process exits before becoming ready (a crash must not wait the full
     // timeout).
     let endpoint = format!("http://127.0.0.1:{port}");
+    // `exit_check` returns true once the backend process has exited (a
+    // crash). If it exits before becoming ready we abort immediately instead
+    // of waiting the full readiness timeout.
     let exit_check = || child_proc.try_wait().ok().flatten().is_some();
     match wait_for_readiness(&endpoint, &token, exit_check) {
         Ok(()) => {
@@ -612,7 +615,9 @@ where
     let mut attempt = 0u32;
     while start.elapsed() < READINESS_TIMEOUT {
         attempt += 1;
-        if !alive() {
+        // If the backend process exited before becoming ready, abort
+        // immediately instead of waiting the full readiness timeout.
+        if alive() {
             return Err("backend exited before becoming ready".into());
         }
         if check_health(endpoint, token) {
