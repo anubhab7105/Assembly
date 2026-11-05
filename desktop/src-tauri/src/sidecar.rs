@@ -552,9 +552,12 @@ fn do_spawn(
         });
     }
 
-    // Wait for readiness by polling /health.
+    // Wait for readiness by polling /health, aborting early if the backend
+    // process exits before becoming ready (a crash must not wait the full
+    // timeout).
     let endpoint = format!("http://127.0.0.1:{port}");
-    match wait_for_readiness(&endpoint, &token) {
+    let exit_check = || child_proc.try_wait().ok().flatten().is_some();
+    match wait_for_readiness(&endpoint, &token, exit_check) {
         Ok(()) => {
             *child = Some(child_proc);
             set_state(
@@ -598,12 +601,20 @@ fn do_spawn(
     }
 }
 
-/// Poll `/health` until ready or timeout, with backoff.
-fn wait_for_readiness(endpoint: &str, token: &str) -> Result<(), String> {
+/// Poll `/health` until ready or timeout, with backoff. `alive` is called
+/// each iteration; if it returns `false` (the backend process exited), we
+/// abort immediately instead of waiting the full timeout.
+fn wait_for_readiness<F>(endpoint: &str, token: &str, mut alive: F) -> Result<(), String>
+where
+    F: FnMut() -> bool,
+{
     let start = Instant::now();
     let mut attempt = 0u32;
     while start.elapsed() < READINESS_TIMEOUT {
         attempt += 1;
+        if !alive() {
+            return Err("backend exited before becoming ready".into());
+        }
         if check_health(endpoint, token) {
             return Ok(());
         }
