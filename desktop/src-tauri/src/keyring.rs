@@ -46,16 +46,31 @@ pub struct OsKeyring;
 
 impl KeyRing for OsKeyring {
     fn set(&self, service: &str, user: &str, password: &str) -> Result<(), KeyRingError> {
-        keyring::set_password(service, user, password)
+        Entry::new(service, user)
+            .map_err(|e| KeyRingError { code: "keyring_entry_failed".into(), message: e.to_string() })?
+            .set_password(password)
             .map_err(|e| KeyRingError { code: "keyring_set_failed".into(), message: e.to_string() })
     }
     fn get(&self, service: &str, user: &str) -> Result<Option<String>, KeyRingError> {
-        keyring::get_password(service, user)
-            .map_err(|e| KeyRingError { code: "keyring_get_failed".into(), message: e.to_string() })
+        match Entry::new(service, user)
+            .map_err(|e| KeyRingError { code: "keyring_entry_failed".into(), message: e.to_string() })?
+            .get_password()
+        {
+            Ok(password) => Ok(Some(password)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(KeyRingError { code: "keyring_get_failed".into(), message: e.to_string() }),
+        }
     }
     fn delete(&self, service: &str, user: &str) -> Result<(), KeyRingError> {
-        keyring::delete_password(service, user)
-            .map_err(|e| KeyRingError { code: "keyring_delete_failed".into(), message: e.to_string() })
+        // Deleting a missing entry is not an error.
+        match Entry::new(service, user)
+            .map_err(|e| KeyRingError { code: "keyring_entry_failed".into(), message: e.to_string() })?
+            .delete_password()
+        {
+            Ok(()) => Ok(()),
+            Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(KeyRingError { code: "keyring_delete_failed".into(), message: e.to_string() }),
+        }
     }
 }
 
@@ -90,7 +105,7 @@ impl KeyRing for MemoryKeyring {
 static OS_KEYRING: std::sync::OnceLock<OsKeyring> = std::sync::OnceLock::new();
 
 fn os_keyring() -> &'static OsKeyring {
-    OS_KEYRING.get_or_init(OsKeyring::new)
+    OS_KEYRING.get_or_init(|| OsKeyring)
 }
 
 pub fn save_key(provider: &str, key: &str) -> Result<(), KeyRingError> {
