@@ -75,16 +75,16 @@ function runThemeBootstrap(savedTheme, systemDark) {
 }
 
 test("the application theme bootstrap is parser-blocking in the document head", () => {
-  const scriptTag = layout.match(/<script id="assembly-theme-bootstrap"[^>]*\\/>/)?.[0];
+  const scriptTag = layout.match(/<script id="assembly-theme-bootstrap"[^>]*\/>/)?.[0];
   assert.ok(scriptTag, "the theme bootstrap must be present as a regular script element");
   assert.match(
     layout,
-    /<head>[\\s\\S]*?<script id="assembly-theme-bootstrap"[^>]*\\/>[\\s\\S]*?<\\/head>/,
+    /<head>[\s\S]*?<script id="assembly-theme-bootstrap"[^>]*\/>[\s\S]*?<\/head>/,
   );
-  assert.doesNotMatch(scriptTag, /\\b(?:async|defer)\\b/);
-  assert.doesNotMatch(layout, /from "next\\/script"/);
-  assert.doesNotMatch(layout, /<Script\\b/);
-  assert.match(themeBootstrap, /localStorage\\.getItem\\("assembly:theme"\\)/);
+  assert.doesNotMatch(scriptTag, /\b(?:async|defer)\b/);
+  assert.doesNotMatch(layout, /from "next\/script"/);
+  assert.doesNotMatch(layout, /<Script\b/);
+  assert.match(themeBootstrap, /localStorage\.getItem\("assembly:theme"\)/);
   assert.match(themeBootstrap, /prefers-color-scheme: dark/);
 });
 test("the theme bootstrap applies a saved dark preference without consulting the system", () => {
