@@ -572,18 +572,23 @@ fn do_spawn(
             Ok(())
         }
         Err(reason) => {
-            let code = child_proc.try_wait().ok().flatten();
+            let exited = child_proc.try_wait().ok().flatten().is_some();
             set_state(
                 state,
                 BackendState::Failed {
                     reason: reason.clone(),
                 },
             );
-            *child = None;
-            if code.is_some() {
+            if exited {
                 // Process already exited: treat as a crash eligible for
                 // restart, then surface the readiness failure.
                 let _ = maybe_restart(restarts, state, logs, source, child);
+            } else {
+                // Process is still running but not ready: kill it so we do
+                // not leave an orphan backend behind.
+                let _ = child_proc.kill();
+                let _ = child_proc.wait();
+                *child = None;
             }
             Err(StartError {
                 code: StartErrorCode::ReadinessTimeout,
