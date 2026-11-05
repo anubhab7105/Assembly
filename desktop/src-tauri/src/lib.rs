@@ -8,12 +8,22 @@ use tauri::State;
 use tauri_plugin_single_instance;
 
 mod sidecar;
+mod keyring;
+
+use sidecar::{BackendState, BackendStatus, BinarySource, SidecarSupervisor};
 
 /// Typed error returned by every IPC command. Never raw strings or panics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandError {
     pub code: String,
     pub message: String,
+}
+
+/// Backend base URL + per-launch auth token, returned by `get_backend_endpoint`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackendEndpoint {
+    pub url: String,
+    pub token: String,
 }
 
 impl std::fmt::Display for CommandError {
