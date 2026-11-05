@@ -43,6 +43,8 @@ jobs:
       run: npm run lint
     - name: Type Check
       run: npx tsc --noEmit
+    - name: Production Build
+      run: npm run build
     - name: Run confidence display regression tests
       run: npx vitest run --config vitest.config.mts src/components/final-answer.test.tsx src/components/execution-timing.test.tsx src/hooks/use-execution.test.ts src/lib/execution-timing.test.ts
     - name: Run privacy dialog tests
