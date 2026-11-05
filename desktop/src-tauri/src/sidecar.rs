@@ -738,6 +738,9 @@ fn maybe_restart(
         set_state(state, BackendState::Failed {
             reason: format!("Backend crashed after {MAX_RESTARTS} restart attempts; no further restarts"),
         });
+        if let Ok(mut st) = state.lock() {
+            st.restarts = *restarts; // == MAX_RESTARTS
+        }
         *child = None;
         false
     }
