@@ -59,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
+        <Script id="assembly-theme-bootstrap" src="/theme-bootstrap.js" strategy="beforeInteractive" />
         <LayoutWrapper>{children}</LayoutWrapper>
         <CookieBanner />
       </body>
