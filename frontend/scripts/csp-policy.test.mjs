@@ -45,7 +45,7 @@ test("the only script-src inline exception is documented for static App Router o
   assert.deepEqual(sources, ["'self'", "'unsafe-inline'"]);
   const documentation = await read("../../docs/csp.md");
   assert.match(documentation, /Next\.js App Router.*inline Flight/i);
-  assert.match(documentation, /static export/i);
+  assert.match(documentation, /static[- ]export/i);
 });
 
 test("the application theme bootstrap is a same-origin external script", () => {
