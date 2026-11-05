@@ -570,9 +570,10 @@ fn do_spawn(
                 },
             );
             *restarts = 0;
-            // Record pid.
+            // Record pid and reset the restart count in the public status.
             if let Ok(mut st) = state.lock() {
                 st.pid = Some(pid);
+                st.restarts = 0;
             }
             Ok(())
         }
@@ -717,6 +718,10 @@ fn maybe_restart(
 ) -> bool {
     if *restarts < MAX_RESTARTS {
         *restarts += 1;
+        // Reflect the restart count in the public status.
+        if let Ok(mut st) = state.lock() {
+            st.restarts = *restarts;
+        }
         let delay = Duration::from_secs(RESTART_BACKOFF_SECONDS
             [*restarts as usize - 1]);
         logs.lock().unwrap().push(
