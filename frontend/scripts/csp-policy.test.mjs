@@ -51,9 +51,9 @@ test("the only script-src inline exception is documented for static App Router o
 test("the application theme bootstrap is a same-origin external script", () => {
   assert.match(
     layout,
-    /<Script id="assembly-theme-bootstrap" src="\/theme-bootstrap\.js" strategy="beforeInteractive" \/>/,
+    /<head>[\s\S]*?<script id="assembly-theme-bootstrap" src="\/theme-bootstrap\.js" \/>\s*<\/head>/,
   );
-  assert.doesNotMatch(layout, /<Script\b[^>]*>[\s\S]*?<\/Script>/);
+  assert.doesNotMatch(layout, /next\/script/);
   assert.match(themeBootstrap, /localStorage\.getItem\("assembly:theme"\)/);
   assert.match(themeBootstrap, /prefers-color-scheme: dark/);
 });

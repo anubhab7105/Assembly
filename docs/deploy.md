@@ -39,7 +39,14 @@ Deploy the service, then verify its `/health` endpoint before connecting the fro
 4. Configure:
    - `NEXT_PUBLIC_API_URL`: the backend origin, with no trailing slash (for example, `https://your-backend.onrender.com`).
    - `NEXT_PUBLIC_APP_MODE`: `web`.
-5. Deploy and test a full run with browser-supplied provider keys.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:a521ef9de1c32fea513e42450e6031ed649e9d02db35758f5e0a6f619e5e71d1 -->
+
+5. Before deployment, if the backend differs from the default allowlist, update both the HTTP and WebSocket `connect-src` origins in `frontend/vercel.json` and the expected policy test values. Follow the [CSP instructions](csp.md#network-allowlist).
+6. Deploy and test a full run with browser-supplied provider keys.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## 4. Data handling
 
