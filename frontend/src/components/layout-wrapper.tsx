@@ -372,7 +372,11 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
           )}
 
           {isOffline && (
-            <div className="bg-danger/90 text-white px-4 py-1.5 text-center text-sm font-medium flex items-center justify-center gap-2">
+            <div
+              role="status"
+              aria-live="polite"
+              className="bg-danger/90 text-white px-4 py-1.5 text-center text-sm font-medium flex items-center justify-center gap-2"
+            >
               <WifiOff className="size-4" />
               You are currently offline. Some features may not work.
             </div>
