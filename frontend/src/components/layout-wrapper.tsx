@@ -13,6 +13,8 @@ import {
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
+const OFFLINE_MESSAGE = "You are currently offline. Some features may not work."
+
 function subscribeOnlineStatus(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {}
   window.addEventListener("online", onStoreChange)
@@ -371,10 +373,17 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
             </header>
           )}
 
+          <div role="status" aria-live="polite" className="sr-only">
+            {isOffline ? OFFLINE_MESSAGE : ""}
+          </div>
+
           {isOffline && (
-            <div className="bg-danger/90 text-white px-4 py-1.5 text-center text-sm font-medium flex items-center justify-center gap-2">
+            <div
+              data-testid="offline-banner"
+              className="bg-danger/90 text-white px-4 py-1.5 text-center text-sm font-medium flex items-center justify-center gap-2"
+            >
               <WifiOff className="size-4" />
-              You are currently offline. Some features may not work.
+              {OFFLINE_MESSAGE}
             </div>
           )}
 
