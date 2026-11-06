@@ -85,7 +85,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
 
   return (
     <>
-      <Card className="assembly-answer-card border-brand/30 bg-card shadow-lg relative overflow-hidden isolate">
+      <Card className="asm-answer-card assembly-answer-card border-brand/30 bg-card shadow-lg relative overflow-hidden isolate">
         {/* Subtle glow background */}
         <div className="absolute inset-0 bg-brand/5 pointer-events-none -z-10" />
 

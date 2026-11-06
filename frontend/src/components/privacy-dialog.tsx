@@ -29,6 +29,23 @@ export function PrivacyDialog({
   const paragraphs =
     mode === "desktop" ? DESKTOP_PRIVACY_PARAGRAPHS : WEB_PRIVACY_PARAGRAPHS
 
+  // Base UI marks every outside root aria-hidden while a modal is open. The
+  // dialog already exposes aria-modal and traps focus, so hiding the app shell
+  // as well only removes the sidebar navigation from the accessibility tree.
+  React.useEffect(() => {
+    const shell = document.querySelector<HTMLElement>(".assembly-app-shell")
+    if (!shell) return
+    const clearHidden = () => {
+      if (shell.getAttribute("aria-hidden") === "true") {
+        shell.removeAttribute("aria-hidden")
+      }
+    }
+    clearHidden()
+    const observer = new MutationObserver(clearHidden)
+    observer.observe(shell, { attributes: true, attributeFilter: ["aria-hidden"] })
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <Dialog open>
       <DialogContent

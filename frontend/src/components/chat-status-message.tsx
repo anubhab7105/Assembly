@@ -24,7 +24,6 @@ import {
 export function ChatStatusMessage({ status }: { status: ChatStatus }) {
   return (
     <p
-      id="question-status"
       role={chatStatusRole(status.type)}
       aria-live={chatStatusAriaLive(status.type)}
       className={`rounded-lg border px-3 py-2 text-xs font-medium ${chatStatusClass(status.type)}`}

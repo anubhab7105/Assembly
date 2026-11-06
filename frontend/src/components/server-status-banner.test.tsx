@@ -10,7 +10,7 @@ describe("ServerStatusBanner", () => {
     expect(banner.textContent).toContain("Can't reach the Assembly server")
     expect(banner.textContent).toContain("connection problem")
     // The banner must disclaim auth framing, not imply it.
-    expect(banner.textContent).toContain("not a login")
+    expect(banner.textContent).toContain("not a key or permission issue")
     fireEvent.click(screen.getByRole("button", { name: "Retry" }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })

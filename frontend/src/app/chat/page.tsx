@@ -19,7 +19,7 @@ import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Zap, Send, Settings, Clock, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
+import { ArrowRight, FileText, LockKeyhole, Paperclip, Search, Settings, SlidersHorizontal, Users, X } from "lucide-react"
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
@@ -478,28 +478,27 @@ export default function Home() {
   }, [loading])
 
   return (
-    <div className="assembly-chat-page flex min-h-screen flex-col bg-background">
-      <main id="main-content" tabIndex={-1} className="assembly-chat-main flex w-full flex-1 flex-col justify-center">
-        <div className="assembly-chat-intro">
-          <div className="assembly-chat-orb">
-            <Zap className="size-6" aria-hidden />
+    <div className="asm-page asm-workspace flex min-h-screen flex-col">
+      <main id="main-content" tabIndex={-1} className="asm-workspace-main flex flex-1 flex-col">
+        <div className="asm-workspace-head">
+          <div>
+            <span className="asm-index">[ 01 / New run ]</span>
+            <h1>Ask Assembly</h1>
           </div>
-          <div className="assembly-chat-kicker"><span className="assembly-live-dot" /> NEW INVESTIGATION</div>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            What would you like to investigate?
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Bring the question, context, and time you want to spend. You stay in charge of the process.
-          </p>
-          <div className="assembly-chat-personal-control" aria-label="Workspace principles"><span>Independent perspectives</span><span>Inspectable sources</span><span>Local history</span></div>
+          <div className="asm-workspace-head-note">
+            <span><Users className="size-3" /> Independent passes</span>
+            <span><Search className="size-3" /> Cited sources</span>
+            <span><LockKeyhole className="size-3" /> Local history</span>
+          </div>
         </div>
 
         {gate.families_count === 0 && (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-3 py-2.5">
-            <p className="text-xs font-medium text-warning">
-              Set up provider keys in Settings. Two ready model families are the minimum for a normal run; three are recommended. Providers with unverified quota limits do not count toward readiness.
+          <div className="asm-alert mb-3">
+            <p>
+              Set up provider keys in Settings. Two ready model families are the minimum for a normal run;
+              three are recommended. Providers with unverified quota limits do not count toward readiness.
             </p>
-            <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0">
+            <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0 rounded-none">
               <Settings className="mr-1.5 size-3.5" />
               Add keys
             </Button>
@@ -508,14 +507,12 @@ export default function Home() {
 
         <div
           data-testid="diversity-chip"
-          className={`assembly-readiness-chip mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
-            gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
-          }`}
+          data-level={gate.level}
+          className="asm-readiness mb-3"
         >
-          <span className="font-medium">{gateChipText(gate)}</span>
-          {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
+          <span><strong>{gateChipText(gate)}</strong>{gate.level !== "OK" && <span> — {gate.reasons[0]}</span>}</span>
           {gate.level === "DEGRADED" && !degradedConfirmed && (
-            <Button variant="outline" size="sm" className="min-h-8" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
+            <Button variant="outline" size="sm" className="min-h-8 rounded-none" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
               Run anyway
             </Button>
           )}
@@ -527,44 +524,48 @@ export default function Home() {
           </div>
         )}
 
-        <div className="assembly-chat-form-stack space-y-3">
-          {attachments.length > 0 && (
-            <div className="assembly-attachment-list flex flex-wrap gap-2" aria-label="Selected attachments">
-              {attachments.map((attachment) => (
-                <div key={attachment.id} className="flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs">
-                  <FileText className="size-4 shrink-0 text-brand" aria-hidden />
-                  <span className="max-w-48 truncate font-medium" title={attachment.filename}>{attachment.filename}</span>
-                  <span className="shrink-0 text-muted-foreground">{attachment.filename.toLowerCase().endsWith(".env.example") ? "ENV.EXAMPLE" : (attachment.filename.split(".").pop() || "TEXT").toUpperCase()}</span>
-                  <span className="shrink-0 text-muted-foreground">{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${attachment.filename}`}
-                    disabled={loading}
-                    onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
-                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                  >
-                    <X className="size-3.5" aria-hidden />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="assembly-chat-composer rounded-2xl border border-border bg-card p-3 shadow-sm transition-colors focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10">
-            <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
-            <textarea
-              id="research-question"
-              ref={textareaRef}
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask anything worth checking across multiple models…"
-              aria-describedby="question-status"
-              className="assembly-chat-question-input max-h-56 min-h-24 w-full resize-y bg-transparent px-2 py-2 text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
-              rows={3}
-              maxLength={2000}
-              required
-            />
-            <div className="assembly-chat-composer-footer flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
-              <div className="assembly-chat-composer-tools flex flex-wrap items-center gap-2">
+        <div className="asm-compose-grid">
+          <div className="flex min-w-0 flex-col gap-3">
+            {attachments.length > 0 && (
+              <div className="asm-attachment-row" aria-label="Selected attachments">
+                {attachments.map((attachment) => (
+                  <div key={attachment.id} className="asm-attachment">
+                    <FileText className="size-3.5 shrink-0 text-brand" aria-hidden />
+                    <b title={attachment.filename}>{attachment.filename}</b>
+                    <span>{attachment.filename.toLowerCase().endsWith(".env.example") ? "ENV.EXAMPLE" : (attachment.filename.split(".").pop() || "TEXT").toUpperCase()}</span>
+                    <span>{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${attachment.filename}`}
+                      disabled={loading}
+                      onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                    >
+                      <X className="size-3.5" aria-hidden />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <section className="asm-panel asm-question-panel" aria-labelledby="question-label">
+              <div className="asm-panel-head">
+                <span className="asm-label" id="question-label">Question</span>
+                <small>{question.length.toString().padStart(4, "0")} / 2000</small>
+              </div>
+              <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
+              <textarea
+                id="research-question"
+                ref={textareaRef}
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Should we adopt a multi-region database now, or wait until we reach 100k users?"
+                aria-describedby="question-status"
+                className="asm-question-input"
+                rows={4}
+                maxLength={2000}
+                required
+              />
+              <div className="asm-question-tools">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -575,32 +576,45 @@ export default function Home() {
                   disabled={loading}
                   onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
                 />
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-h-9"
+                  className="asm-tool-btn"
                   disabled={loading || attachments.length >= MAX_ATTACHMENTS}
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Attach files"
                 >
-                  <Paperclip className="mr-1.5 size-3.5" />
+                  <Paperclip aria-hidden />
                   Attach{attachments.length ? ` · ${attachments.length}` : ""}
-                </Button>
-                <Button
+                </button>
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-h-9"
+                  className="asm-tool-btn"
                   onClick={() => setShowModelSettings(true)}
                   aria-haspopup="dialog"
                   aria-label="Open model and role settings"
                 >
-                  <SlidersHorizontal className="mr-1.5 size-3.5" />
+                  <SlidersHorizontal aria-hidden />
                   Models{selection.selected.length > 0 ? ` · ${selection.selected.length}` : " · Auto"}
-                </Button>
-                <div className="assembly-chat-budget flex items-center rounded-lg border border-border bg-background p-0.5" role="group" aria-label="Time budget">
-                  <Clock className="ml-2 mr-1 size-3.5 text-muted-foreground" aria-hidden />
+                </button>
+                <span className="asm-label ml-auto hidden sm:inline">Plain text · Markdown · source files</span>
+              </div>
+            </section>
+
+            {status && (
+              <div className="asm-status-slot" id="question-status">
+                <ChatStatusMessage status={status} />
+              </div>
+            )}
+          </div>
+
+          <aside className="asm-setup-rail" aria-label="Run configuration">
+            <div className="asm-block">
+              <div className="asm-block-head">
+                <span className="asm-label">Time budget</span>
+                <span className="asm-label">Minutes</span>
+              </div>
+              <div className="asm-block-body">
+                <div className="asm-budget" role="group" aria-label="Time budget">
                   {TIME_BUDGETS.map((m) => (
                     <button
                       key={m}
@@ -608,41 +622,70 @@ export default function Home() {
                       onClick={() => setMinutes(m)}
                       aria-pressed={minutes === m}
                       aria-label={`${m} minutes`}
-                      className={`min-h-9 min-w-9 rounded-md px-2 text-xs font-medium transition-colors ${
-                        minutes === m ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                      }`}
+                      className="asm-budget-btn"
                     >
-                      {m}m
+                      {m}
+                      <small>min</small>
                     </button>
                   ))}
                 </div>
               </div>
-              <Button size="default" onClick={handleLaunch} disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"} className="assembly-chat-run-button min-h-10 rounded-xl px-4">
-                {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="mr-1.5 size-4" />}
-                {loading ? "Running…" : "Run"}
-              </Button>
             </div>
-          </div>
-          {status && (
-            <ChatStatusMessage status={status} />
-          )}
+
+            <div className="asm-block">
+              <div className="asm-block-head">
+                <span className="asm-label">Estimate</span>
+                <span className="asm-label">Auto</span>
+              </div>
+              <div className="asm-block-body asm-estimate !p-0">
+                <div className="asm-estimate-row"><span>Agents</span><b>4–5 temporary roles</b></div>
+                <div className="asm-estimate-row"><span>Models</span><b>3+ families</b></div>
+                <div className="asm-estimate-row"><span>Debate</span><b>Only if needed</b></div>
+                <div className="asm-estimate-row"><span>Output</span><b>One sourced answer</b></div>
+              </div>
+            </div>
+
+            <Button
+              size="default"
+              onClick={handleLaunch}
+              disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
+              className="asm-btn asm-btn-primary asm-run-btn"
+              aria-label={loading ? "Running" : "Run"}
+            >
+              <span>{loading ? "Running the team" : "Run preflight"}</span>
+              {loading
+                ? <span className="size-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                : <ArrowRight className="size-4" />}
+            </Button>
+
+            <p className="asm-legal-note">
+              Not a sole source for medical, legal, financial or security-critical decisions. Your question
+              is sent only to the providers you choose.
+            </p>
+          </aside>
         </div>
 
-        <div className="assembly-chat-suggestions mt-4" aria-label="Suggested questions">
-          <div className="assembly-chat-suggestions-heading">Need a starting point?</div><div className="assembly-chat-suggestion-grid">
-          {EXAMPLES.map((example) => (
-            <button
-              key={example.label}
-              type="button"
-              onClick={() => { setQuestion(example.question); textareaRef.current?.focus() }}
-              className="assembly-chat-suggestion"
-              title={example.question}
-            >
-              {example.label}
-            </button>
-          ))}
+        <div className="asm-suggestions" aria-label="Suggested questions">
+          <div className="asm-suggestion-head">
+            <span className="asm-label">Need a starting point?</span>
+            <span className="asm-label">04 prompts</span>
+          </div>
+          <div className="asm-suggestion-grid">
+            {EXAMPLES.map((example, index) => (
+              <button
+                key={example.label}
+                type="button"
+                onClick={() => { setQuestion(example.question); textareaRef.current?.focus() }}
+                className="asm-suggestion"
+                title={example.question}
+              >
+                <span className="asm-label">[ 0{index + 1} ] {example.label}</span>
+                <p>{example.question}</p>
+                <ArrowRight className="size-3.5" aria-hidden />
+              </button>
+            ))}
+          </div>
         </div>
-</div>
       </main>
 
       <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>

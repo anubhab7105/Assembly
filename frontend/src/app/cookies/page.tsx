@@ -17,9 +17,10 @@ const ROWS: [string, string, string][] = [
 
 export default function CookiesPage() {
   return (
-    <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
+    <main id="main-content" tabIndex={-1} className="asm-legal mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
+      <span className="asm-index">[ 10 / Cookies ]</span>
       <h1 className="text-4xl font-bold tracking-tight">Cookie policy</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
+      <p className="asm-legal-meta mt-2 text-sm text-muted-foreground">
         Last updated: 12 October 2026. Contact:{" "}
         <a
           href="mailto:anubhab7105@gmail.com"
