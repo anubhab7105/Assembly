@@ -7,11 +7,13 @@ import { ToastProvider, useToast } from "@/components/ui/toast"
 import { storage, type HistoryRecord } from "@/lib/storage"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { importHistoryFile } from "@/lib/history-import"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import {
   Zap, Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload,
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
+
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {}
@@ -104,31 +106,38 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
     URL.revokeObjectURL(url)
   }
 
-  const handleImport = async (file: File, input: HTMLInputElement) => {
-    if (importing) return
-    setImporting(true)
-    try {
-      const text = await file.text()
-      await storage.importJSON(text)
-      await loadExecutions()
-      toast({ title: "Import complete", description: "History and usage were imported successfully.", variant: "success" })
-    } catch (error) {
-      const message = error instanceof Error
+const handleImport = async (file: File, input: HTMLInputElement) => {
+  if (importing) return
+
+  setImporting(true)
+
+  try {
+    await importHistoryFile(file, (text) => storage.importJSON(text))
+
+    await loadExecutions()
+
+    toast({
+      title: "Import complete",
+      description: "History and usage were imported successfully.",
+      variant: "success",
+    })
+  } catch (error) {
+    const message =
+      error instanceof Error
         ? error.message
         : "Couldn't import this file. Check that it is a valid Assembly history export and try again."
-      toast({
-        title: "History import failed",
-        description: message,
-        variant: "danger",
-        duration: 7000,
-      })
-    } finally {
-      // File inputs do not fire change again when the same file is selected.
-      // Clearing it on both success and failure allows an immediate retry.
-      input.value = ""
-      setImporting(false)
-    }
+
+    toast({
+      title: "History import failed",
+      description: message,
+      variant: "danger",
+      duration: 7000,
+    })
+  } finally {
+    input.value = ""
+    setImporting(false)
   }
+}
 
   const filtered = executions.filter((e) =>
     e.question.toLowerCase().includes(search.toLowerCase()),

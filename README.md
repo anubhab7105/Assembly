@@ -194,6 +194,7 @@ The launcher reports both service URLs, waits for readiness, uses loopback defau
 - [Execution workflow](docs/WORKFLOW.md) — the intended run lifecycle.
 - [Tech stack notes](docs/TECH_STACK.md) — implementation choices and historical design context.
 
-## License
+## LICENSE
 
 Assembly is distributed under the Apache License 2.0. See [LICENSE](LICENSE).
+
