@@ -11,8 +11,7 @@
  * never recorded, stored, or uploaded.
  */
 
-export type HandDetection = {
-  present: boolean
+export type HandBlob = {
   /** Normalised centre in the camera frame, 0..1 (unmirrored). */
   x: number
   y: number
@@ -27,20 +26,38 @@ export type HandDetection = {
   area: number
 }
 
+export type HandDetection = HandBlob & {
+  present: boolean
+  /** The other hand while two hands are in frame. */
+  second: HandBlob | null
+}
+
+export type HandPoint = {
+  /** Mirrored position, -1..1, screen orientation. */
+  x: number
+  y: number
+}
+
 export type HandField = {
   present: boolean
-  /** Mirrored hand position, -1..1, screen orientation. */
+  /** Control point: one hand, or the midpoint while two hands are tracked. */
   x: number
   y: number
   /** Apparent nearness from blob size, 0..1. */
   depth: number
-  /** Openness proxy, 0..1. */
+  /** Openness proxy, 0..1. Two-hand span takes over when both are visible. */
   spread: number
   /** Closed-hand proxy, 0..1. */
   grab: number
   /** Motion inside the blob, 0..1. */
   energy: number
   confidence: number
+  /** First hand position in mirrored screen coordinates. */
+  first: HandPoint
+  /** Second hand position while both hands are tracked. */
+  second: HandPoint | null
+  /** Distance between two hands, normalised 0..1. */
+  span: number
 }
 
 export const EMPTY_HAND: HandField = {
@@ -52,6 +69,14 @@ export const EMPTY_HAND: HandField = {
   grab: 0,
   energy: 0,
   confidence: 0,
+  first: { x: 0, y: 0 },
+  second: null,
+  span: 0,
+}
+
+/** Deep copy so callers can mutate the field without touching the constant. */
+export function emptyHand(): HandField {
+  return { ...EMPTY_HAND, first: { ...EMPTY_HAND.first }, second: null }
 }
 
 export function clamp01(value: number) {
@@ -162,6 +187,7 @@ type Candidate = {
   motion: number
   confidence: number
   area: number
+  baseScore: number
   score: number
 }
 
@@ -254,7 +280,7 @@ export class HandTracker {
       if (this.skin[cell] / pixels >= SKIN_THRESHOLD) this.mask[cell] = 1
     }
 
-    let best: Candidate | null = null
+    const candidates: Candidate[] = []
     for (let start = 0; start < cells; start += 1) {
       if (this.mask[start] === 0 || this.visited[start] === 1) continue
 
@@ -335,28 +361,48 @@ export class HandTracker {
         prior = 0.65 + 0.35 * clamp01((y - 0.3) / 0.45)
       }
 
-      const score = Math.sqrt(area) * (0.5 + 2.4 * Math.min(1, motionAverage * 3)) * shape * prior
-      if (best === null || score > best.score) {
-        best = {
-          x,
-          y,
-          size,
-          fill,
-          motion: motionAverage,
-          confidence: clamp01(skinAverage * 0.75 + Math.min(1, motionAverage * 3) * 0.2 + Math.min(1, area / 25) * 0.15),
-          area,
-          score,
-        }
-      }
+      const baseScore = Math.sqrt(area) * (0.5 + 2.4 * Math.min(1, motionAverage * 3)) * shape
+      candidates.push({
+        x,
+        y,
+        size,
+        fill,
+        motion: motionAverage,
+        confidence: clamp01(skinAverage * 0.75 + Math.min(1, motionAverage * 3) * 0.2 + Math.min(1, area / 25) * 0.15),
+        area,
+        baseScore,
+        score: baseScore * prior,
+      })
     }
 
     // Keep this frame's gray buffer for the next diff, and recycle the old one.
     this.previousGray = this.gray
     this.gray = previousGray ?? new Uint8Array(width * height)
 
+    let best: Candidate | null = null
+    for (const candidate of candidates) {
+      if (best === null || candidate.score > best.score) best = candidate
+    }
+
     if (!best) {
       if (this.previous && timestampMs - this.previous.at > 500) this.previous = null
-      return { present: false, x: 0.5, y: 0.5, size: 0, fill: 0, motion: 0, confidence: 0, area: 0 }
+      return { present: false, x: 0.5, y: 0.5, size: 0, fill: 0, motion: 0, confidence: 0, area: 0, second: null }
+    }
+
+    // A second, well-separated hand enables the spread/open gesture. Rank it
+    // by motion and lower-frame position so a still face is not mistaken for it.
+    let second: Candidate | null = null
+    let secondScore = 0
+    for (const candidate of candidates) {
+      if (candidate === best) continue
+      const distance = Math.hypot(candidate.x - best.x, candidate.y - best.y)
+      if (distance < 0.15 || candidate.confidence < 0.16) continue
+      const lowerFrame = 0.45 + 0.55 * clamp01((candidate.y - 0.18) / 0.5)
+      const score = candidate.baseScore * lowerFrame
+      if (score > secondScore) {
+        secondScore = score
+        second = candidate
+      }
     }
 
     this.previous = { x: best.x, y: best.y, area: best.area, at: timestampMs }
@@ -369,6 +415,17 @@ export class HandTracker {
       motion: best.motion,
       confidence: best.confidence,
       area: best.area,
+      second: second
+        ? {
+            x: second.x,
+            y: second.y,
+            size: second.size,
+            fill: second.fill,
+            motion: second.motion,
+            confidence: second.confidence,
+            area: second.area,
+          }
+        : null,
     }
   }
 }
@@ -381,15 +438,24 @@ export class HandTracker {
 export class HandSmoother {
   private filterX = createOneEuroFilter(1.35, 0.06)
   private filterY = createOneEuroFilter(1.35, 0.06)
+  private filterMidX = createOneEuroFilter(1.35, 0.06)
+  private filterMidY = createOneEuroFilter(1.35, 0.06)
+  private filterOffsetX = createOneEuroFilter(1.5, 0.05)
+  private filterOffsetY = createOneEuroFilter(1.5, 0.05)
+  private filterSpan = createOneEuroFilter(1.2, 0.03)
   private filterDepth = createOneEuroFilter(0.7, 0.012)
   private filterSpread = createOneEuroFilter(0.8, 0.01)
   private filterGrab = createOneEuroFilter(0.95, 0.012)
   private filterEnergy = createOneEuroFilter(1.5, 0.035)
   private filterConfidence = createOneEuroFilter(0.9, 0.012)
-  private state: HandField = { ...EMPTY_HAND }
+  private state: HandField = emptyHand()
   private present = false
   private hits = 0
   private misses = 0
+  private secondPresent = false
+  private secondHits = 0
+  private secondMisses = 0
+  private mode: "none" | "single" | "two" = "none"
   private lastRawX = 0.5
   private lastRawY = 0.5
   private lastRawAt = 0
@@ -397,15 +463,24 @@ export class HandSmoother {
   reset() {
     this.filterX.reset()
     this.filterY.reset()
+    this.filterMidX.reset()
+    this.filterMidY.reset()
+    this.filterOffsetX.reset()
+    this.filterOffsetY.reset()
+    this.filterSpan.reset()
     this.filterDepth.reset()
     this.filterSpread.reset()
     this.filterGrab.reset()
     this.filterEnergy.reset()
     this.filterConfidence.reset()
-    this.state = { ...EMPTY_HAND }
+    this.state = emptyHand()
     this.present = false
     this.hits = 0
     this.misses = 0
+    this.secondPresent = false
+    this.secondHits = 0
+    this.secondMisses = 0
+    this.mode = "none"
     this.lastRawAt = 0
   }
 
@@ -414,6 +489,15 @@ export class HandSmoother {
       this.hits = 0
       this.misses += 1
       if (this.misses > 10) this.present = false
+      this.secondHits = 0
+      this.secondMisses += 1
+      if (this.secondMisses > 5) {
+        this.secondPresent = false
+        this.mode = "none"
+        this.state.second = null
+        this.state.span = 0
+        this.state.first = { x: this.state.x, y: this.state.y }
+      }
       if (this.misses > 24) this.reset()
       this.state.present = this.present
       return this.state
@@ -423,30 +507,121 @@ export class HandSmoother {
     this.misses = 0
     if (this.hits >= 2) this.present = true
 
+    if (raw.second) {
+      this.secondHits += 1
+      this.secondMisses = 0
+      if (this.secondHits >= 2) this.secondPresent = true
+    } else {
+      this.secondHits = 0
+      this.secondMisses += 1
+      if (this.secondMisses > 5) {
+        this.secondPresent = false
+        this.mode = "none"
+        this.state.second = null
+        this.state.span = 0
+        this.state.first = { x: this.state.x, y: this.state.y }
+      }
+    }
+
     const dt = this.lastRawAt === 0 ? 1 / 30 : Math.max(0.001, (timestampMs - this.lastRawAt) / 1000)
     const speed = Math.hypot(raw.x - this.lastRawX, raw.y - this.lastRawY) / dt
     this.lastRawX = raw.x
     this.lastRawY = raw.y
     this.lastRawAt = timestampMs
 
+    // While the second hand flickers, hold the last two-hand pose instead of
+    // collapsing the gesture on a single dropped detection.
+    if (this.secondPresent && !raw.second) {
+      this.state.present = this.present
+      return this.state
+    }
+
+    const depth = clamp01((raw.size - 0.12) / 0.34)
+    const energy = clamp01(raw.motion * 1.6 + speed * 0.35)
+    const confidence = this.filterConfidence(raw.confidence, timestampMs)
+
+    if (this.secondPresent && raw.second) {
+      if (this.mode !== "two") {
+        this.filterMidX.reset()
+        this.filterMidY.reset()
+        this.filterOffsetX.reset()
+        this.filterOffsetY.reset()
+        this.filterSpan.reset()
+        this.mode = "two"
+      }
+
+      const ax = clampSigned((0.5 - raw.x) * 2.4)
+      const ay = clampSigned((raw.y - 0.5) * 2.4)
+      const bx = clampSigned((0.5 - raw.second.x) * 2.4)
+      const by = clampSigned((raw.second.y - 0.5) * 2.4)
+      const firstX = Math.min(ax, bx)
+      const firstY = ax <= bx ? ay : by
+      const secondX = Math.max(ax, bx)
+      const secondY = ax <= bx ? by : ay
+      const midX = (firstX + secondX) / 2
+      const midY = (firstY + secondY) / 2
+      const offsetX = secondX - firstX
+      const offsetY = secondY - firstY
+      const distance = Math.hypot(offsetX, offsetY)
+
+      const smoothMidX = this.filterMidX(midX, timestampMs)
+      const smoothMidY = this.filterMidY(midY, timestampMs)
+      const smoothOffsetX = this.filterOffsetX(offsetX, timestampMs)
+      const smoothOffsetY = this.filterOffsetY(offsetY, timestampMs)
+      const span = this.filterSpan(clamp01((distance - 0.3) / 1.2), timestampMs)
+
+      this.state = {
+        present: this.present,
+        x: smoothMidX,
+        y: smoothMidY,
+        depth: this.filterDepth(Math.max(depth, clamp01((raw.second.size - 0.12) / 0.34)), timestampMs),
+        spread: span,
+        grab: clamp01(1 - span),
+        energy: this.filterEnergy(
+          Math.max(energy, clamp01(raw.second.motion * 1.6 + speed * 0.35)),
+          timestampMs,
+        ),
+        confidence: Math.max(confidence, raw.second.confidence),
+        first: {
+          x: smoothMidX - smoothOffsetX / 2,
+          y: smoothMidY - smoothOffsetY / 2,
+        },
+        second: {
+          x: smoothMidX + smoothOffsetX / 2,
+          y: smoothMidY + smoothOffsetY / 2,
+        },
+        span,
+      }
+      return this.state
+    }
+
+    if (this.mode !== "single") {
+      this.filterX.reset()
+      this.filterY.reset()
+      this.mode = "single"
+    }
+
     const x = clampSigned((0.5 - raw.x) * 2.4)
     const y = clampSigned((raw.y - 0.5) * 2.4)
-    const depth = clamp01((raw.size - 0.12) / 0.34)
+    const smoothX = this.filterX(x, timestampMs)
+    const smoothY = this.filterY(y, timestampMs)
     // Bounding-box fill separates a spread hand from a fist. The windows do
     // not overlap, so a hand is never pulled and pushed at the same time.
     const spread = clamp01((0.85 - raw.fill) / 0.4)
     const grab = clamp01((raw.fill - 0.68) / 0.22)
-    const energy = clamp01(raw.motion * 1.6 + speed * 0.35)
 
     this.state = {
       present: this.present,
-      x: this.filterX(x, timestampMs),
-      y: this.filterY(y, timestampMs),
+      x: smoothX,
+      y: smoothY,
       depth: this.filterDepth(depth, timestampMs),
       spread: this.filterSpread(spread, timestampMs),
       grab: this.filterGrab(grab, timestampMs),
       energy: this.filterEnergy(energy, timestampMs),
-      confidence: this.filterConfidence(raw.confidence, timestampMs),
+      confidence,
+      first: { x: smoothX, y: smoothY },
+      second: null,
+      span: 0,
     }
     return this.state
   }

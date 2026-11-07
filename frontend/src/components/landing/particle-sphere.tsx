@@ -34,6 +34,17 @@ type Palette = {
   glow: string
 }
 
+type ForceHand = {
+  x: number
+  y: number
+  z: number
+  radius2: number
+  push: number
+  pull: number
+  vx: number
+  vy: number
+}
+
 function fibonacciSphere(count: number): Particle[] {
   const points: Particle[] = []
   const golden = Math.PI * (3 - Math.sqrt(5))
@@ -88,11 +99,17 @@ function clamp01(value: number) {
   return Math.min(1, Math.max(0, value))
 }
 
+function clampSigned(value: number, limit: number) {
+  return Math.min(limit, Math.max(-limit, value))
+}
+
 export function ParticleSphere({
   field,
+  heroRef,
   className = "",
 }: {
   field: RefObject<MotionField>
+  heroRef?: RefObject<HTMLElement | null>
   className?: string
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -126,8 +143,16 @@ export function ParticleSphere({
       }
     }
 
+    // Screen position of the whole cloud. The canvas covers the viewport, so
+    // this is also the point around which particles are projected.
+    let cloudX = 0
+    let cloudY = 0
+    let previousCloudX = 0
+    let previousCloudY = 0
+
     const resize = () => {
       const rect = canvas.getBoundingClientRect()
+      const firstSize = width === 0 || height === 0
       width = Math.max(1, rect.width)
       height = Math.max(1, rect.height)
       dpr = Math.min(2, window.devicePixelRatio || 1)
@@ -136,6 +161,16 @@ export function ParticleSphere({
       context.setTransform(dpr, 0, 0, dpr, 0, 0)
       readPalette()
       for (const particle of particles) particle.hasScreen = false
+      if (firstSize) {
+        cloudX = width / 2
+        cloudY = height / 2
+        previousCloudX = cloudX
+        previousCloudY = cloudY
+      } else {
+        const edge = Math.min(width, height) * 0.06
+        cloudX = Math.min(width - edge, Math.max(edge, cloudX))
+        cloudY = Math.min(height - edge, Math.max(edge, cloudY))
+      }
     }
 
     resize()
@@ -152,35 +187,48 @@ export function ParticleSphere({
     let yaw = 0.45
     let pitch = -0.16
     let spin = 0
-    let cloudX = 0
-    let cloudY = 0
     let scatter = 1
-    let handX = 0
-    let handY = 0
-    let handVX = 0
-    let handVY = 0
     let handInfluence = 0
     let handWasOn = false
-    // A single radial impulse when the hand first appears: the ball visibly
-    // puffs apart before the springs pull it back together.
+    let handWasTracked = false
+    let wasTwoHands = false
+    let previousOpenness = 0
     let burst = 0
+    let previousPrimaryX = 0
+    let previousPrimaryY = 0
+    let previousSecondX = 0
+    let previousSecondY = 0
     let visible = true
+    let heroVisible = true
     let lastTime = performance.now()
 
-    const visibilityObserver = new IntersectionObserver(
-      (entries) => {
-        const nextVisible = entries.some((entry) => entry.isIntersecting)
-        if (nextVisible && !visible) {
-          visible = true
-          lastTime = performance.now()
-          raf = window.requestAnimationFrame(render)
-        } else {
-          visible = nextVisible
-        }
-      },
-      { threshold: 0.05 },
-    )
-    visibilityObserver.observe(canvas)
+    const drawRing = (
+      x: number,
+      y: number,
+      radius: number,
+      confidence: number,
+      dashed: boolean,
+    ) => {
+      context.globalAlpha = 0.3 + confidence * 0.4
+      context.strokeStyle = palette.brand
+      context.lineWidth = 0.8
+      context.setLineDash(dashed ? [2, 6] : [])
+      context.beginPath()
+      context.arc(x, y, radius, 0, Math.PI * 2)
+      context.stroke()
+      context.setLineDash([])
+
+      context.beginPath()
+      context.moveTo(x - radius - 4, y)
+      context.lineTo(x - radius + 4, y)
+      context.moveTo(x + radius - 4, y)
+      context.lineTo(x + radius + 4, y)
+      context.moveTo(x, y - radius - 4)
+      context.lineTo(x, y - radius + 4)
+      context.moveTo(x, y + radius - 4)
+      context.lineTo(x, y + radius + 4)
+      context.stroke()
+    }
 
     const render = (time: number) => {
       if (!visible) return
@@ -193,78 +241,163 @@ export function ParticleSphere({
       const motion = field.current
       const hand = motion.hand
       const handOn = motion.source === "camera" && hand.present
+      const twoHands = handOn && hand.second !== null
+      const pointerOn = motion.source === "pointer" && motion.pointerActive
+      const sensorOn = motion.source === "sensor"
 
-      // The hand carries the whole cloud; a soft cap keeps the ball inside
-      // the HUD frame even when the hand reaches the edge of the camera.
-      const targetCloudX = handOn ? Math.max(-0.55, Math.min(0.55, hand.x * 0.85)) : 0
-      const targetCloudY = handOn ? Math.max(-0.5, Math.min(0.5, hand.y * 0.85)) : 0
-      const cloudEase = 1 - Math.exp(-dt * (handOn ? 4.8 : 1.8))
-      cloudX += (targetCloudX - cloudX) * cloudEase
-      cloudY += (targetCloudY - cloudY) * cloudEase
+      const edge = Math.min(width, height) * 0.06
+      let targetX = width / 2
+      let targetY = height / 2
+      if (handOn) {
+        targetX = width / 2 + hand.x * (width / 2 - edge)
+        targetY = height / 2 + hand.y * (height / 2 - edge)
+      } else if (pointerOn) {
+        targetX = edge + ((motion.targetX + 1) / 2) * (width - edge * 2)
+        targetY = edge + ((motion.targetY + 1) / 2) * (height - edge * 2)
+      } else if (sensorOn) {
+        targetX = width / 2 + motion.targetX * width * 0.3
+        targetY = height / 2 + motion.targetY * height * 0.3
+      }
+      targetX = Math.min(width - edge, Math.max(edge, targetX))
+      targetY = Math.min(height - edge, Math.max(edge, targetY))
 
-      // Open hand → the cloud loosens and expands; fist → particles gather in.
-      const targetScatter = 1 + (handOn ? hand.spread * 0.5 + hand.energy * 0.1 : 0)
-      scatter += (targetScatter - scatter) * (1 - Math.exp(-dt * 4.2))
+      // The cloud chases a screen-space point. Pointer movement is near-direct;
+      // the hand is smoothed more so camera jitter does not shake the sphere.
+      const follow = handOn ? 8 : pointerOn ? 11 : sensorOn ? 5 : 3.4
+      const cloudEase = 1 - Math.exp(-dt * follow)
+      previousCloudX = cloudX
+      previousCloudY = cloudY
+      cloudX += (targetX - cloudX) * cloudEase
+      cloudY += (targetY - cloudY) * cloudEase
+      const cloudVX = clampSigned((cloudX - previousCloudX) / Math.max(dt, 0.001), 2600)
+      const cloudVY = clampSigned((cloudY - previousCloudY) / Math.max(dt, 0.001), 2600)
+
+      // Two hands apart open the shell; bringing them together contracts it
+      // below its resting size. A single open hand also loosens the cloud.
+      const singleOpen = handOn ? clamp01((hand.spread - 0.22) / 0.7) : 0
+      const openness = twoHands ? hand.span : handOn ? singleOpen : 0
+      // Closed hands pull the shell below its resting size; spread hands open
+      // it past the viewport edges.
+      const targetScatter = handOn ? 0.58 + openness * 1.62 : 1
+      scatter += (targetScatter - scatter) * (1 - Math.exp(-dt * (twoHands ? 5 : 3.6)))
 
       if (handOn && !handWasOn) burst = 1
+      if (twoHands && !wasTwoHands) burst = Math.max(burst, 0.35)
+      if (handOn) {
+        const openDelta = Math.max(0, openness - previousOpenness)
+        burst = Math.min(1.5, burst + openDelta * 2.1)
+      }
+      previousOpenness = handOn ? openness : 0
       handWasOn = handOn
-      burst *= Math.exp(-dt * 2.6)
+      wasTwoHands = twoHands
+      burst *= Math.exp(-dt * 2.3)
 
-      const previousHandX = handX
-      const previousHandY = handY
-      const targetHandX = handOn ? hand.x * 1.5 : 0
-      const targetHandY = handOn ? hand.y * 1.5 : 0
-      const handEase = 1 - Math.exp(-dt * (handOn ? 22 : 7))
-      handX += (targetHandX - handX) * handEase
-      handY += (targetHandY - handY) * handEase
-      handVX = Math.max(-7, Math.min(7, (handX - previousHandX) / Math.max(dt, 0.001)))
-      handVY = Math.max(-7, Math.min(7, (handY - previousHandY) / Math.max(dt, 0.001)))
-      handInfluence += ((handOn ? 1 : 0) - handInfluence) * (1 - Math.exp(-dt * 6))
+      handInfluence += ((handOn ? 1 : 0) - handInfluence) * (1 - Math.exp(-dt * 7))
 
-      if (!reduced) spin += dt * (0.055 + (handOn ? hand.energy * 0.22 : 0))
-      const pointerInfluence = motion.source === "pointer" ? 1 : 0
-      const targetYaw = 0.45 + spin + (handOn ? hand.x * 0.36 : motion.x * 0.55 * pointerInfluence)
+      if (!reduced) spin += dt * (0.045 + (handOn ? hand.energy * 0.2 : 0))
+      const targetYaw =
+        0.45 +
+        spin +
+        (handOn ? hand.x * 0.28 : pointerOn ? motion.x * 0.42 : sensorOn ? motion.x * 0.24 : 0)
       const targetPitch =
         -0.16 +
-        (handOn ? hand.y * 0.24 : motion.y * 0.34 * pointerInfluence) +
+        (handOn ? hand.y * 0.18 : pointerOn ? motion.y * 0.3 : sensorOn ? motion.y * 0.2 : 0) +
         (reduced ? 0 : Math.sin(time * 0.00022) * 0.05)
       const turnEase = 1 - Math.exp(-dt * 4)
       yaw += (targetYaw - yaw) * turnEase
       pitch += (targetPitch - pitch) * turnEase
 
       const breathing = reduced ? 1 : 1 + Math.sin(time * 0.0005) * 0.012
-      const depthScale = 1 + (handOn ? hand.depth * 0.12 : 0)
+      const depthScale = 1 + (handOn ? hand.depth * 0.1 : 0)
+      const globalScale = breathing * depthScale
+      const radius = Math.min(width, height) * (width < 720 ? 0.32 : 0.23)
+      const objectScale = Math.max(80, radius * globalScale)
 
-      // Integration: fixed substeps keep the springs stable on slow frames.
+      const primaryX = width / 2 + hand.first.x * (width / 2 - edge)
+      const primaryY = height / 2 + hand.first.y * (height / 2 - edge)
+      const secondX = hand.second ? width / 2 + hand.second.x * (width / 2 - edge) : 0
+      const secondY = hand.second ? height / 2 + hand.second.y * (height / 2 - edge) : 0
+
+      if (handOn) {
+        if (!handWasTracked) {
+          previousPrimaryX = primaryX
+          previousPrimaryY = primaryY
+          previousSecondX = secondX
+          previousSecondY = secondY
+        }
+        handWasTracked = true
+      } else {
+        handWasTracked = false
+      }
+      const primaryVX = clampSigned((primaryX - previousPrimaryX) / Math.max(dt, 0.001), 2600)
+      const primaryVY = clampSigned((primaryY - previousPrimaryY) / Math.max(dt, 0.001), 2600)
+      const secondVX = clampSigned((secondX - previousSecondX) / Math.max(dt, 0.001), 2600)
+      const secondVY = clampSigned((secondY - previousSecondY) / Math.max(dt, 0.001), 2600)
+      previousPrimaryX = primaryX
+      previousPrimaryY = primaryY
+      previousSecondX = secondX
+      previousSecondY = secondY
+
+      const handWorldZ = -0.82 - (handOn ? hand.depth * 0.08 : 0)
+      const handWorldX = (primaryX - cloudX) / objectScale
+      const handWorldY = (primaryY - cloudY) / objectScale
+      const secondWorldX = (secondX - cloudX) / objectScale
+      const secondWorldY = (secondY - cloudY) / objectScale
+      const handWorldVX = clampSigned(primaryVX / objectScale, 14)
+      const handWorldVY = clampSigned(primaryVY / objectScale, 14)
+      const secondWorldVX = clampSigned(secondVX / objectScale, 14)
+      const secondWorldVY = clampSigned(secondVY / objectScale, 14)
+
+      const push = handOn ? (5 + hand.energy * 14) * handInfluence : 0
+      const pull = handOn ? hand.grab * 16 * handInfluence : 0
+      const handRadius = 0.3 + (twoHands ? hand.span * 0.1 : hand.spread * 0.09) + hand.energy * 0.04
+      const forceHands: ForceHand[] = []
+      if (handInfluence > 0.01) {
+        forceHands.push({
+          x: handWorldX,
+          y: handWorldY,
+          z: handWorldZ,
+          radius2: handRadius * handRadius,
+          push,
+          pull,
+          vx: handWorldVX,
+          vy: handWorldVY,
+        })
+        if (twoHands) {
+          const secondRadius = 0.28 + hand.span * 0.08 + hand.energy * 0.03
+          forceHands.push({
+            x: secondWorldX,
+            y: secondWorldY,
+            z: handWorldZ,
+            radius2: secondRadius * secondRadius,
+            push: push * 0.9,
+            pull: pull * 0.9,
+            vx: secondWorldVX,
+            vy: secondWorldVY,
+          })
+        }
+      }
+
+      // The whole cloud is dragged along the hand or pointer path. Opposite
+      // wind makes particles lag behind, then the springs pull them back in.
+      const windX = clampSigned((-cloudVX / objectScale) * 1.5, 12)
+      const windY = clampSigned((-cloudVY / objectScale) * 1.5, 12)
+      const loosen = handOn ? (twoHands ? hand.span : hand.spread) * handInfluence : 0
+      const spring = 20 - loosen * 5
+      const outward = handOn
+        ? (burst * 3.6 * (0.62 + openness) + openness * 1.1) * handInfluence
+        : 0
+      const turbulence = reduced ? 0 : handOn ? hand.energy * 0.9 : motion.energy * 0.25
+      const zScatter = Math.min(scatter, 1.68)
       const steps = dt > 0.022 ? 2 : 1
       const h = dt / steps
-      // An open hand loosens the springs so particles can float apart.
-      const loosen = handOn ? hand.spread * handInfluence : 0
-      const spring = 20 - loosen * 5
-      const damping = Math.exp(-h * 3.7)
-      const handWorldX = handX
-      const handWorldY = handY
-      // The hand sits between the camera and the sphere: z is negative on the
-      // near face, so the force carves a visible cavity in the front surface.
-      const handWorldZ = -0.8 - (handOn ? hand.depth * 0.08 : 0)
-      const handRadius = 0.3 + (handOn ? hand.spread * 0.08 + hand.energy * 0.04 : 0)
-      const handRadius2 = handRadius * handRadius
-      const push = handOn ? (4.5 + hand.energy * 14) * handInfluence : 0
-      const pull = handOn ? hand.grab * 14 * handInfluence : 0
-      const turbulence = reduced ? 0 : handOn ? hand.energy * 0.9 : motion.energy * 0.3
-      // The whole cloud is also dragged along the hand's path, so a sweep
-      // carries every particle with it, not just the ones near the palm.
-      const windX = handOn ? handVX * handInfluence * (0.3 + loosen * 0.4) : 0
-      const windY = handOn ? handVY * handInfluence * (0.3 + loosen * 0.4) : 0
-      const outward = handOn
-        ? (burst * 5 * (0.6 + hand.spread) + hand.spread * 1.2) * handInfluence
-        : 0
+      const damping = Math.exp(-h * (3.7 - loosen * 0.9))
 
       for (let step = 0; step < steps; step += 1) {
         for (const particle of particles) {
-          const homeX = particle.hx * scatter + cloudX
-          const homeY = particle.hy * scatter + cloudY
-          const homeZ = particle.hz * scatter
+          const homeX = particle.hx * scatter
+          const homeY = particle.hy * scatter
+          const homeZ = particle.hz * zScatter
           let ax = (homeX - particle.x) * spring
           let ay = (homeY - particle.y) * spring
           let az = (homeZ - particle.z) * spring
@@ -275,28 +408,30 @@ export function ParticleSphere({
           }
 
           if (outward > 0.01) {
-            const length = Math.sqrt(particle.x * particle.x + particle.y * particle.y + particle.z * particle.z) + 0.001
+            const length =
+              Math.sqrt(particle.x * particle.x + particle.y * particle.y + particle.z * particle.z) +
+              0.001
             const radial = outward / length
             ax += particle.x * radial
             ay += particle.y * radial
             az += particle.z * radial
           }
 
-          if (handInfluence > 0.01) {
-            const dx = particle.x - handWorldX
-            const dy = particle.y - handWorldY
-            const dz = particle.z - handWorldZ
+          for (const forceHand of forceHands) {
+            const dx = particle.x - forceHand.x
+            const dy = particle.y - forceHand.y
+            const dz = particle.z - forceHand.z
             const distance2 = dx * dx + dy * dy + dz * dz
-            if (distance2 < handRadius2 * 9) {
-              const influence = Math.exp(-distance2 / handRadius2)
+            if (distance2 < forceHand.radius2 * 10) {
+              const influence = Math.exp(-distance2 / forceHand.radius2)
               const distance = Math.sqrt(distance2) + 0.0001
-              const force = (push - pull) * (influence / distance)
+              const force = (forceHand.push - forceHand.pull) * (influence / distance)
               ax += dx * force
               ay += dy * force
               az += dz * force
               // The wake is what visibly tears particles out of the sphere.
-              ax += handVX * influence * 2.4 * handInfluence
-              ay += handVY * influence * 2.4 * handInfluence
+              ax += forceHand.vx * influence * 1.8 * handInfluence
+              ay += forceHand.vy * influence * 1.8 * handInfluence
             }
           }
 
@@ -314,12 +449,12 @@ export function ParticleSphere({
 
           // Keep the cloud in front of the virtual camera; without this a
           // strong wave can push particles through the projection plane.
-          if (particle.z < -1.3) particle.z = -1.3
-          else if (particle.z > 1.5) particle.z = 1.5
-          if (particle.x < -2.2) particle.x = -2.2
-          else if (particle.x > 2.2) particle.x = 2.2
-          if (particle.y < -2.2) particle.y = -2.2
-          else if (particle.y > 2.2) particle.y = 2.2
+          if (particle.z < -1.55) particle.z = -1.55
+          else if (particle.z > 2.4) particle.z = 2.4
+          if (particle.x < -4.2) particle.x = -4.2
+          else if (particle.x > 4.2) particle.x = 4.2
+          if (particle.y < -4.2) particle.y = -4.2
+          else if (particle.y > 4.2) particle.y = 4.2
         }
       }
 
@@ -334,17 +469,14 @@ export function ParticleSphere({
         }
       }
 
-      // cloudX/cloudY already move the particles in object space; keeping the
-      // projection centred avoids moving the cloud twice.
-      const cx = width / 2
-      const cy = height / 2
-      const radius = Math.min(width, height) * 0.3
       const fov = 3.1
       const cosYaw = Math.cos(yaw)
       const sinYaw = Math.sin(yaw)
       const cosPitch = Math.cos(pitch)
       const sinPitch = Math.sin(pitch)
-      const globalScale = breathing * depthScale
+      const cx = cloudX
+      const cy = cloudY
+      const dispersion = clamp01((scatter - 1) / 1.2)
 
       context.clearRect(0, 0, width, height)
 
@@ -368,21 +500,24 @@ export function ParticleSphere({
 
       for (const particle of particles) {
         const nearness = clamp01((1.25 - particle.screenZ) / 2.5)
-        const alpha = 0.16 + nearness * 0.8
+        const alpha = (0.16 + nearness * 0.8) * (1 - dispersion * 0.22)
         const twinkle = 0.82 + Math.sin(time * 0.0013 + particle.seed) * 0.18
         const vertical = clamp01((particle.y + 1) / 2)
         const color = mix(warm, cool, 1 - vertical)
-        const size = Math.max(0.55, particle.screenSize * 1.65)
+        const size = Math.max(0.55, particle.screenSize * 1.65 * (1 - dispersion * 0.18))
 
         if (particle.hasScreen) {
           const sx = particle.screenX - particle.sx
           const sy = particle.screenY - particle.sy
-          if (sx * sx + sy * sy > 3.5) {
+          const distance2 = sx * sx + sy * sy
+          if (distance2 > 3.5) {
+            // Cap trail length so a fast sweep leaves a streak, not a wall.
+            const scale = Math.min(1, 48 / Math.sqrt(distance2))
             context.globalAlpha = alpha * 0.44 * twinkle
             context.strokeStyle = color
             context.lineWidth = Math.max(0.5, size * 0.6)
             context.beginPath()
-            context.moveTo(particle.sx, particle.sy)
+            context.moveTo(particle.screenX - sx * scale, particle.screenY - sy * scale)
             context.lineTo(particle.screenX, particle.screenY)
             context.stroke()
           }
@@ -403,45 +538,77 @@ export function ParticleSphere({
       }
       context.globalAlpha = 1
 
-      // Hand feedback: a hairline field ring around the tracked hand.
-      if (handOn && hand.confidence > 0.1) {
-        const glowX = width / 2 + hand.x * width * 0.37
-        const glowY = height / 2 + hand.y * height * 0.37
-        const ringRadius = Math.min(width, height) * (0.055 + hand.spread * 0.1)
-        context.globalAlpha = 0.35 + hand.confidence * 0.35
+      // The open shell reveals a small signal core at its centre.
+      if (dispersion > 0.01) {
+        const coreRadius = 2 + openness * 3.5
+        context.globalAlpha = 0.22 + dispersion * 0.5
+        context.fillStyle = palette.brand
+        context.beginPath()
+        context.arc(cx, cy, coreRadius, 0, Math.PI * 2)
+        context.fill()
+
+        context.globalAlpha = 0.12 + dispersion * 0.3
         context.strokeStyle = palette.brand
         context.lineWidth = 0.8
-        context.setLineDash(hand.grab > 0.5 ? [] : [2, 6])
+        const arm = 8 + dispersion * 12
         context.beginPath()
-        context.arc(glowX, glowY, ringRadius, 0, Math.PI * 2)
+        context.moveTo(cx - arm, cy)
+        context.lineTo(cx - arm / 3, cy)
+        context.moveTo(cx + arm / 3, cy)
+        context.lineTo(cx + arm, cy)
+        context.moveTo(cx, cy - arm)
+        context.lineTo(cx, cy - arm / 3)
+        context.moveTo(cx, cy + arm / 3)
+        context.lineTo(cx, cy + arm)
         context.stroke()
-        context.setLineDash([])
+      }
 
-        context.beginPath()
-        context.moveTo(glowX - ringRadius - 4, glowY)
-        context.lineTo(glowX - ringRadius + 4, glowY)
-        context.moveTo(glowX + ringRadius - 4, glowY)
-        context.lineTo(glowX + ringRadius + 4, glowY)
-        context.moveTo(glowX, glowY - ringRadius - 4)
-        context.lineTo(glowX, glowY - ringRadius + 4)
-        context.moveTo(glowX, glowY + ringRadius - 4)
-        context.lineTo(glowX, glowY + ringRadius + 4)
-        context.stroke()
+      // Hand feedback: a hairline field ring around each tracked hand.
+      if (handOn && hand.confidence > 0.1) {
+        const ringBase = Math.min(width, height)
+        const ringRadius = ringBase * (0.045 + (twoHands ? hand.span * 0.07 : hand.spread * 0.1))
+        drawRing(primaryX, primaryY, ringRadius, hand.confidence, hand.grab <= 0.5 && !twoHands)
+        if (twoHands && hand.second) {
+          const secondRadius = ringBase * (0.04 + hand.span * 0.05)
+          drawRing(secondX, secondY, secondRadius, hand.confidence, false)
+          context.globalAlpha = 0.12 + hand.span * 0.12
+          context.strokeStyle = palette.brand
+          context.lineWidth = 0.8
+          context.setLineDash([2, 8])
+          context.beginPath()
+          context.moveTo(primaryX, primaryY)
+          context.lineTo(secondX, secondY)
+          context.stroke()
+          context.setLineDash([])
+        }
       }
       context.globalAlpha = 1
 
-      // A faint orbital arc anchors the cloud to the HUD frame.
-      context.beginPath()
-      context.ellipse(cx, cy, radius * 1.075, radius * 0.3, -0.2, 0, Math.PI * 2)
-      context.strokeStyle = palette.glow
-      context.globalAlpha = 0.14
-      context.lineWidth = 0.8
-      context.setLineDash([3, 7])
-      context.stroke()
-      context.setLineDash([])
-      context.globalAlpha = 1
-
       raf = window.requestAnimationFrame(render)
+    }
+
+    // Fade the field away once the hero has scrolled out of view, and pause the
+    // animation entirely while it is hidden.
+    const visibilityObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        const ratio = entry ? entry.intersectionRatio : 1
+        heroVisible = ratio > 0.02
+        canvas.style.opacity = `${Math.min(1, ratio * 1.8).toFixed(3)}`
+        if (heroVisible && !visible) {
+          visible = true
+          lastTime = performance.now()
+          raf = window.requestAnimationFrame(render)
+        } else if (!heroVisible) {
+          visible = false
+        }
+      },
+      { threshold: [0, 0.05, 0.15, 0.3, 0.5, 0.75, 1] },
+    )
+    if (heroRef?.current) {
+      visibilityObserver.observe(heroRef.current)
+    } else {
+      canvas.style.opacity = "1"
     }
 
     raf = window.requestAnimationFrame(render)
@@ -453,7 +620,7 @@ export function ParticleSphere({
       visibilityObserver.disconnect()
       motionQuery?.removeEventListener?.("change", onMotionPreference)
     }
-  }, [field])
+  }, [field, heroRef])
 
-  return <canvas ref={canvasRef} className={`asm-orb-canvas ${className}`} aria-hidden="true" />
+  return <canvas ref={canvasRef} className={`asm-field-canvas ${className}`} aria-hidden="true" />
 }

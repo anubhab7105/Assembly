@@ -139,6 +139,7 @@ const crossPositions = [
 
 export default function LandingPage() {
   const rootRef = useRef<HTMLDivElement>(null)
+  const heroRef = useRef<HTMLElement>(null)
   const {
     field,
     cameraState,
@@ -193,6 +194,7 @@ export default function LandingPage() {
       />
 
       <Cursor3D />
+      <ParticleSphere field={field} heroRef={heroRef} />
 
       <div className="asm-landing-crosses" aria-hidden="true">
         {crossPositions.map(([left, top]) => (
@@ -233,7 +235,7 @@ export default function LandingPage() {
       </header>
 
       <main id="main-content" tabIndex={-1} className="asm-landing-main">
-        <section className="asm-hero" aria-label="Assembly introduction">
+        <section ref={heroRef} className="asm-hero" aria-label="Assembly introduction">
           <div className="asm-hero-copy">
             <div className="asm-eyebrow">
               <span className="asm-eyebrow-tick" aria-hidden="true" />
@@ -280,25 +282,22 @@ export default function LandingPage() {
             </dl>
           </div>
 
-          <div className="asm-hero-visual">
-            <div className="asm-orb">
-              <div className="asm-orb-frame" aria-hidden="true" />
-              <div className="asm-orb-stage" aria-hidden="true">
-                <ParticleSphere field={field} />
-                <span className="asm-orb-halo" />
-              </div>
-              <div className="asm-orb-hud asm-orb-hud-top">
-                <span className="is-live">Temporary team / live field</span>
-                <span>(A)</span>
-              </div>
-              <div className="asm-orb-hud asm-orb-hud-bottom">
-                <span>001 / 008</span>
-                <span>Solvers · critic · synthesis</span>
-              </div>
-              <span className="asm-orb-tag asm-orb-tag-1">Independent pass</span>
-              <span className="asm-orb-tag asm-orb-tag-2">Cross-examination</span>
-              <span className="asm-orb-tag asm-orb-tag-3">Evidence review</span>
-              <span className="asm-orb-tag asm-orb-tag-4">Synthesis</span>
+          <div className="asm-hero-visual asm-field-console">
+            <div className="asm-field-console-head">
+              <span className="is-live">Temporary team / live field</span>
+              <span className="asm-field-console-code">[ A ]</span>
+            </div>
+
+            <p className="asm-field-console-guide">
+              Move the field with your cursor or one hand. Spread both hands to open the cloud;
+              bring them together to collapse it back to a point.
+            </p>
+
+            <div className="asm-field-tags" aria-label="Investigation stages">
+              <span>Independent pass</span>
+              <span>Cross-examination</span>
+              <span>Evidence review</span>
+              <span>Synthesis</span>
             </div>
 
             <div className="asm-sensor-bar">
@@ -313,9 +312,9 @@ export default function LandingPage() {
                 <p>
                   {cameraActive
                     ? handActive
-                      ? "Move your hand to drag the cloud. Open it to scatter the particles, close it to gather them."
-                      : "Hold your hand in frame. The field follows skin and motion in this tab — nothing is recorded or uploaded."
-                    : "Hold a hand in frame to drag the cloud and scatter its particles. Frames are analysed on this device — never recorded, never uploaded."}
+                      ? "One hand moves the field. Spread both hands to open the cloud; bring them together to collapse it."
+                      : "Hold one hand in frame to drag the field, or two hands apart to open it. Nothing is recorded or uploaded."
+                    : "Use a hand to drag the field. Spread both hands to scatter the particles, then close them to pull the cloud back in. Frames never leave this device."}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -352,6 +351,11 @@ export default function LandingPage() {
                 {cameraError}
               </p>
             )}
+
+            <div className="asm-field-console-foot">
+              <span>001 / 008</span>
+              <span>Solvers · critic · synthesis</span>
+            </div>
           </div>
         </section>
 

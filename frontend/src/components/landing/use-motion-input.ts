@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
-  EMPTY_HAND,
+  emptyHand,
   HandSmoother,
   HandTracker,
   type HandField,
@@ -20,6 +20,8 @@ export type MotionField = {
   /** How much movement the camera is currently seeing (0..1). */
   energy: number
   source: MotionSource
+  /** True while a pointer is actively steering the field. */
+  pointerActive: boolean
   /** Hand tracking state; present is only true while a hand is in frame. */
   hand: HandField
 }
@@ -34,7 +36,8 @@ const EMPTY_FIELD: MotionField = {
   targetY: 0,
   energy: 0,
   source: "pointer",
-  hand: { ...EMPTY_HAND },
+  pointerActive: false,
+  hand: emptyHand(),
 }
 
 type PermissionCapableEvent = typeof DeviceOrientationEvent & {
@@ -80,12 +83,13 @@ export function useMotionInput(options: {
   const { rootRef, enabled = true } = options
   const fieldRef = useRef<MotionField>({
     ...EMPTY_FIELD,
-    hand: { ...EMPTY_HAND },
+    hand: emptyHand(),
   })
 
   const pointerTarget = useRef({ x: 0, y: 0 })
+  const pointerActiveRef = useRef(false)
   const sensorTarget = useRef({ x: 0, y: 0 })
-  const cameraHandRef = useRef<HandField>({ ...EMPTY_HAND })
+  const cameraHandRef = useRef<HandField>(emptyHand())
 
   const [cameraState, setCameraState] = useState<CameraState>("off")
   const [cameraError, setCameraError] = useState<string | null>(null)
@@ -126,7 +130,7 @@ export function useMotionInput(options: {
       videoRef.current = null
     }
     analysisRef.current = null
-    cameraHandRef.current = { ...EMPTY_HAND }
+    cameraHandRef.current = emptyHand()
     handPresenceRef.current = false
     setHandActive(false)
     setCameraState("off")
@@ -257,7 +261,7 @@ export function useMotionInput(options: {
         tracker: new HandTracker(),
         smoother: new HandSmoother(),
       }
-      cameraHandRef.current = { ...EMPTY_HAND }
+      cameraHandRef.current = emptyHand()
       handPresenceRef.current = false
       lastAnalysisRef.current = 0
       setHandActive(false)
@@ -324,22 +328,32 @@ export function useMotionInput(options: {
     reduceQuery?.addEventListener?.("change", onReduceChange)
 
     const onPointer = (event: PointerEvent) => {
+      pointerActiveRef.current = true
       pointerTarget.current = {
         x: clamp((event.clientX / window.innerWidth) * 2 - 1),
         y: clamp((event.clientY / window.innerHeight) * 2 - 1),
       }
     }
     const onLeave = () => {
+      pointerActiveRef.current = false
       pointerTarget.current = { x: 0, y: 0 }
+    }
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") return
+      onLeave()
     }
 
     window.addEventListener("pointermove", onPointer, { passive: true })
     document.addEventListener("pointerleave", onLeave)
+    window.addEventListener("pointerup", onPointerUp)
+    window.addEventListener("blur", onLeave)
 
     return () => {
       reduceQuery?.removeEventListener?.("change", onReduceChange)
       window.removeEventListener("pointermove", onPointer)
       document.removeEventListener("pointerleave", onLeave)
+      window.removeEventListener("pointerup", onPointerUp)
+      window.removeEventListener("blur", onLeave)
     }
   }, [enabled])
 
@@ -375,6 +389,7 @@ export function useMotionInput(options: {
       const sensorOn = sensorState === "on"
       const hand = cameraHandRef.current
       const handOn = cameraOn && hand.present
+      const pointerOn = !cameraOn && !sensorOn && pointerActiveRef.current
       const field = fieldRef.current
 
       // While the camera is searching, the field settles to centre instead of
@@ -390,10 +405,10 @@ export function useMotionInput(options: {
         targetX = sensorTarget.current.x
         targetY = sensorTarget.current.y
         rate = 9
-      } else if (!cameraOn) {
+      } else if (pointerOn) {
         targetX = pointerTarget.current.x
         targetY = pointerTarget.current.y
-        rate = 8
+        rate = 9
       }
 
       const easing = reducedRef.current ? 1 : 1 - Math.exp(-dt * rate)
@@ -402,6 +417,7 @@ export function useMotionInput(options: {
       field.targetX = targetX
       field.targetY = targetY
       field.source = cameraOn ? "camera" : sensorOn ? "sensor" : "pointer"
+      field.pointerActive = pointerOn
 
       if (handOn) {
         field.hand.present = true
@@ -412,6 +428,16 @@ export function useMotionInput(options: {
         field.hand.grab = hand.grab
         field.hand.energy = hand.energy
         field.hand.confidence = hand.confidence
+        field.hand.first.x = hand.first.x
+        field.hand.first.y = hand.first.y
+        if (hand.second) {
+          if (!field.hand.second) field.hand.second = { x: 0, y: 0 }
+          field.hand.second.x = hand.second.x
+          field.hand.second.y = hand.second.y
+        } else {
+          field.hand.second = null
+        }
+        field.hand.span = hand.span
         field.energy = hand.energy
       } else {
         field.hand.present = false
@@ -422,6 +448,10 @@ export function useMotionInput(options: {
         field.hand.grab = 0
         field.hand.energy = 0
         field.hand.confidence = 0
+        field.hand.first.x = 0
+        field.hand.first.y = 0
+        field.hand.second = null
+        field.hand.span = 0
         field.energy *= Math.exp(-dt * 3)
       }
 

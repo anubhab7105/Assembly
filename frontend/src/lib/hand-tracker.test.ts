@@ -51,6 +51,7 @@ function missingHand(): HandDetection {
     motion: 0,
     confidence: 0,
     area: 0,
+    second: null,
   };
 }
 
@@ -64,6 +65,7 @@ function hand(overrides: Partial<HandDetection> = {}): HandDetection {
     motion: 0.2,
     confidence: 0.7,
     area: 40,
+    second: null,
     ...overrides,
   };
 }
@@ -152,6 +154,28 @@ describe("HandTracker", () => {
     expect(moved.motion).toBeGreaterThan(0);
   });
 
+  it("finds a second hand when the blobs are separated", () => {
+    const tracker = new HandTracker();
+    const frame = blankFrame();
+    paint(frame, 16, 50, 20, 24);
+    paint(frame, 92, 50, 20, 24);
+    const result = tracker.process(frame, WIDTH, HEIGHT, 0);
+
+    expect(result.present).toBe(true);
+    expect(result.second).not.toBeNull();
+    expect(result.second?.confidence).toBeGreaterThan(0.3);
+    expect(Math.abs((result.second?.x ?? 0) - result.x)).toBeGreaterThan(0.3);
+  });
+
+  it("does not invent a second hand for a single blob", () => {
+    const tracker = new HandTracker();
+    const frame = blankFrame();
+    paint(frame, 40, 50, 24, 28);
+    const result = tracker.process(frame, WIDTH, HEIGHT, 0);
+    expect(result.present).toBe(true);
+    expect(result.second).toBeNull();
+  });
+
   it("rejects an enormous skin-coloured background", () => {
     const tracker = new HandTracker();
     const frame = blankFrame();
@@ -199,5 +223,44 @@ describe("HandSmoother", () => {
     const result = smoother.update(hand({ fill: 0.9, size: 0.2 }), 33);
     expect(result.grab).toBeGreaterThan(0.8);
     expect(result.spread).toBeLessThan(0.2);
+  });
+
+  it("tracks two hands as a midpoint and a normalised span", () => {
+    const smoother = new HandSmoother();
+    const two = hand({
+      x: 0.25,
+      second: { x: 0.75, y: 0.6, size: 0.25, fill: 0.5, motion: 0.2, confidence: 0.7, area: 40 },
+    });
+    smoother.update(two, 0);
+    const result = smoother.update(two, 33);
+
+    expect(result.present).toBe(true);
+    expect(result.second).not.toBeNull();
+    expect(result.first.x).toBeLessThan(-0.4);
+    expect(result.second?.x).toBeGreaterThan(0.4);
+    expect(result.x).toBeCloseTo(0, 1);
+    expect(result.span).toBeGreaterThan(0.5);
+    expect(result.spread).toBe(result.span);
+    expect(result.grab).toBeLessThan(0.5);
+  });
+
+  it("contracts the span when two hands come together", () => {
+    const smoother = new HandSmoother();
+    const apart = hand({
+      x: 0.25,
+      second: { x: 0.75, y: 0.6, size: 0.25, fill: 0.5, motion: 0.2, confidence: 0.7, area: 40 },
+    });
+    for (let index = 0; index < 8; index += 1) smoother.update(apart, index * 33);
+
+    const close = hand({
+      x: 0.45,
+      second: { x: 0.55, y: 0.6, size: 0.25, fill: 0.5, motion: 0.2, confidence: 0.7, area: 40 },
+    });
+    let result = smoother.update(close, 8 * 33);
+    for (let index = 9; index < 30; index += 1) result = smoother.update(close, index * 33);
+
+    expect(result.second).not.toBeNull();
+    expect(result.span).toBeLessThan(0.1);
+    expect(result.grab).toBeGreaterThan(0.9);
   });
 });

@@ -616,7 +616,8 @@
 }
 
 .asm-hero h1 .asm-hero-outline {
-  color: transparent;
+  /* Opaque fill keeps the particle field from showing through the outline. */
+  color: var(--background);
   -webkit-text-stroke: 1px color-mix(in oklab, var(--foreground) 52%, transparent);
 }
 
@@ -626,6 +627,9 @@
   color: var(--muted-foreground);
   font-size: 0.98rem;
   line-height: 1.78;
+  text-shadow:
+    0 0 6px var(--background),
+    0 0 18px var(--background);
 }
 
 .asm-hero-actions {
@@ -668,60 +672,45 @@
   line-height: 1.5;
 }
 
-/* Hero visual: particle sphere + HUD */
+/* Hero visual: full-screen particle field + borderless field console */
 .asm-hero-visual {
   position: relative;
+  z-index: 2;
   min-width: 0;
   animation: asm-rise 1s 0.1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-.asm-orb {
-  position: relative;
-  width: 100%;
-  max-width: 620px;
-  margin-inline: auto;
-  aspect-ratio: 1 / 1.06;
-  padding: 18px;
-}
-
-.asm-orb-frame {
-  position: absolute;
+.asm-field-canvas {
+  position: fixed;
   inset: 0;
-  border: 1px solid var(--hairline);
-  pointer-events: none;
-}
-
-.asm-orb-frame::before,
-.asm-orb-frame::after {
-  content: "";
-  position: absolute;
-  background: var(--hairline);
-}
-
-.asm-orb-frame::before {
-  top: 50%;
-  left: 0;
+  z-index: 1;
+  display: block;
   width: 100%;
-  height: 1px;
-  opacity: 0.5;
-}
-
-.asm-orb-frame::after {
-  top: 0;
-  left: 50%;
-  width: 1px;
   height: 100%;
-  opacity: 0.5;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
-.asm-orb-hud {
-  position: absolute;
-  z-index: 4;
+.asm-field-console {
   display: flex;
-  width: calc(100% - 24px);
+  width: 100%;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: 0;
+  flex-direction: column;
+  padding: 16px 18px 14px;
+  border: 1px solid var(--hairline);
+  background: color-mix(in oklab, var(--background) 82%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.asm-field-console-head {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   color: var(--muted-foreground);
   font-family: var(--font-mono);
   font-size: 0.58rem;
@@ -729,24 +718,14 @@
   text-transform: uppercase;
 }
 
-.asm-orb-hud-top {
-  top: 12px;
-  left: 12px;
-}
-
-.asm-orb-hud-bottom {
-  bottom: 10px;
-  left: 12px;
-}
-
-.asm-orb-hud .is-live {
+.asm-field-console-head .is-live {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   color: var(--ink-soft);
 }
 
-.asm-orb-hud .is-live::before {
+.asm-field-console-head .is-live::before {
   content: "";
   width: 5px;
   height: 5px;
@@ -755,120 +734,89 @@
   animation: asm-blink 2.8s steps(1, end) infinite;
 }
 
-.asm-orb-stage {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  transform: perspective(1300px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg))
-    translate3d(var(--shift-x, 0px), var(--shift-y, 0px), 0);
-  transform-style: preserve-3d;
-  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
-  will-change: transform;
-}
-
-.asm-orb-canvas {
-  display: block;
-  width: 88%;
-  height: 88%;
-  filter: drop-shadow(0 0 42px color-mix(in oklab, var(--brand) 18%, transparent));
-}
-
-.asm-orb-halo {
-  position: absolute;
-  width: 64%;
-  height: 64%;
-  border: 1px solid color-mix(in oklab, var(--brand) 20%, transparent);
-  border-radius: 50%;
-  transform: translateZ(-60px) rotateX(72deg);
-  box-shadow: 0 0 80px color-mix(in oklab, var(--brand) 12%, transparent) inset;
-}
-
-.asm-orb-halo::after {
-  content: "";
-  position: absolute;
-  inset: 12%;
-  border: 1px dashed color-mix(in oklab, var(--brand) 24%, transparent);
-  border-radius: 50%;
-  animation: asm-spin 34s linear infinite;
-}
-
-.asm-orb-tag {
-  position: absolute;
-  z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border: 1px solid var(--hairline);
-  background: color-mix(in oklab, var(--background) 74%, transparent);
+.asm-field-console-code {
   color: var(--ink-soft);
+}
+
+.asm-field-console-guide {
+  max-width: 430px;
+  margin-top: 30px;
+  color: var(--muted-foreground);
+  font-size: 0.84rem;
+  line-height: 1.75;
+  text-shadow:
+    0 0 6px var(--background),
+    0 0 18px var(--background);
+}
+
+.asm-field-tags {
+  display: grid;
+  margin-top: 36px;
+  border-top: 1px solid var(--hairline);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--hairline);
+}
+
+.asm-field-tags span {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  background: color-mix(in oklab, var(--background) 88%, transparent);
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.asm-field-tags span::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  flex: 0 0 auto;
+  background: var(--brand);
+}
+
+.asm-field-console-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding-block: 13px;
+  border-top: 1px solid var(--hairline);
+  color: var(--muted-foreground);
   font-family: var(--font-mono);
   font-size: 0.54rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  backdrop-filter: blur(8px);
-  transform: translateZ(70px);
-  pointer-events: none;
 }
 
-.asm-orb-tag::before {
-  content: "";
-  width: 4px;
-  height: 4px;
-  background: var(--brand);
-}
-
-.asm-orb-tag-1 {
-  top: 21%;
-  left: 1%;
-}
-
-.asm-orb-tag-2 {
-  top: 13%;
-  right: 2%;
-}
-
-.asm-orb-tag-3 {
-  bottom: 22%;
-  right: 0;
-}
-
-.asm-orb-tag-4 {
-  bottom: 12%;
-  left: 6%;
-}
-
-.asm-orb-caption {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
-  z-index: 4;
-  color: var(--muted-foreground);
-  font-family: var(--font-mono);
-  font-size: 0.56rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-/* Camera / motion sensor control */
+/* Camera / motion sensor control — part of the console stack, not a box. */
 .asm-sensor-bar {
   display: flex;
-  max-width: 620px;
-  margin: 14px auto 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  border: 1px solid var(--hairline);
-  border-top: 0;
-  padding: 13px 15px;
-  background: color-mix(in oklab, var(--panel) 80%, transparent);
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  padding: 14px 0 0;
+  background: transparent;
 }
 
 .asm-sensor-bar .asm-label {
   display: block;
   color: var(--foreground);
   font-size: 0.58rem;
+  text-shadow:
+    0 0 6px var(--background),
+    0 0 18px var(--background);
 }
 
 .asm-sensor-bar p {
@@ -877,6 +825,9 @@
   color: var(--muted-foreground);
   font-size: 0.62rem;
   line-height: 1.55;
+  text-shadow:
+    0 0 6px var(--background),
+    0 0 18px var(--background);
 }
 
 .asm-sensor-toggle {
@@ -927,8 +878,8 @@
 }
 
 .asm-sensor-error {
-  max-width: 620px;
-  margin: 8px auto 0;
+  max-width: none;
+  margin: 8px 0 0;
   color: var(--warning);
   font-family: var(--font-mono);
   font-size: 0.6rem;
@@ -3004,11 +2955,6 @@
     grid-template-columns: minmax(0, 1fr) minmax(380px, 0.86fr);
   }
 
-  .asm-orb-tag-1,
-  .asm-orb-tag-3 {
-    display: none;
-  }
-
   .asm-nav {
     gap: 18px;
   }
@@ -3069,6 +3015,10 @@
 
   .asm-hero-visual {
     width: min(100%, 560px);
+    margin-inline: auto;
+  }
+
+  .asm-field-console {
     margin-inline: auto;
   }
 
@@ -3225,18 +3175,18 @@
     margin-top: 12px;
   }
 
-  .asm-orb {
-    padding: 8px;
+  .asm-field-console-guide {
+    margin-top: 20px;
+    font-size: 0.8rem;
   }
 
-  .asm-orb-tag {
-    font-size: 0.46rem;
-    padding: 4px 6px;
+  .asm-field-tags {
+    margin-top: 28px;
   }
 
-  .asm-orb-tag-2,
-  .asm-orb-tag-4 {
-    display: none;
+  .asm-field-tags span {
+    min-height: 38px;
+    font-size: 0.5rem;
   }
 
   .asm-sensor-bar {
