@@ -85,3 +85,38 @@ jobs:
       run: |
         alembic upgrade head
         pytest
+
+  rust-build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+    - name: Install Tauri Linux system dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwebkit2gtk-4.1-dev \
+          libayatana-appindicator3-dev \
+          libdbus-1-dev \
+          librsvg2-dev \
+          build-essential \
+          curl \
+          pkg-config
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          desktop/src-tauri/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    - name: Check Rust crate compiles
+      working-directory: desktop/src-tauri
+      run: cargo check
