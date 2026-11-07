@@ -36,7 +36,7 @@ function ExecutionContent() {
   const state = useExecution(id)
 
   const handleCancel = async () => {
-    if (id && confirm("Are you sure you want to cancel this execution?")) {
+    if (id && confirm("Cancel this run? The team will stop and you can start a new investigation.")) {
       if (!id.startsWith("local-")) {
         try {
           await ApiClient.cancelExecution(id)
@@ -46,6 +46,31 @@ function ExecutionContent() {
       }
       router.push("/chat")
     }
+  }
+
+  if (!id) {
+    return (
+      <div className="asm-page asm-run min-h-screen pb-20">
+        <main id="main-content" tabIndex={-1} className="asm-run-main">
+          <section className="asm-panel mx-auto mt-10 max-w-xl p-8 text-center">
+            <span className="asm-index">[ 03 / Result ]</span>
+            <h1 className="mt-4 text-3xl font-bold uppercase tracking-tight">No run selected</h1>
+            <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              Choose a saved run from History, or start a new investigation to see the team work.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <Link href="/history" className="asm-btn asm-btn-outline">
+                Open history
+              </Link>
+              <Link href="/chat" className="asm-btn asm-btn-primary">
+                Start an investigation
+                <ArrowRight className="size-4" aria-hidden />
+              </Link>
+            </div>
+          </section>
+        </main>
+      </div>
+    )
   }
 
   const formatTime = (secs: number | null) => {
@@ -139,8 +164,14 @@ function ExecutionContent() {
                 : "Run in progress"}
             </h1>
             <p className="mt-3 max-w-full break-all font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-              Run ID: {id ?? "unavailable"}
+              Run ID: {id}
             </p>
+            <Link
+              href="/history"
+              className="mt-2 inline-flex items-center font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-brand"
+            >
+              ← All runs
+            </Link>
           </div>
 
           <div className="asm-run-head-meta">
@@ -155,7 +186,7 @@ function ExecutionContent() {
                 Cancel
               </Button>
               <Link href="/chat" className="asm-btn asm-btn-primary !min-h-9 !px-3 !text-[0.6rem]">
-                New question
+                New investigation
                 <ArrowRight className="size-3.5" />
               </Link>
             </div>

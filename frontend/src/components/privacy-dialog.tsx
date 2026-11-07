@@ -53,7 +53,7 @@ export function PrivacyDialog({
         aria-modal="true"
         aria-describedby="privacy-dialog-description"
         data-testid="privacy-dialog"
-        className="max-h-[min(90vh,48rem)] max-w-lg overflow-y-auto border border-border bg-card p-6 shadow-xl"
+        className="flex max-h-[min(90vh,48rem)] max-w-lg flex-col gap-4 overflow-hidden border border-border bg-card p-6 shadow-xl"
       >
         <DialogHeader>
           <DialogTitle className="text-lg font-bold">Privacy notice</DialogTitle>
@@ -62,7 +62,7 @@ export function PrivacyDialog({
             then acknowledge the notice to continue.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 text-sm text-muted-foreground">
+        <div className="-mr-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-2 text-sm text-muted-foreground">
           {paragraphs.map((p, i) =>
             p === "Each model provider handles your inputs under its own policy:" ? (
               <div key={i}>
@@ -84,29 +84,31 @@ export function PrivacyDialog({
             ),
           )}
         </div>
-        <label
-          htmlFor="privacy-consent"
-          className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm"
-        >
-          <input
-            id="privacy-consent"
-            type="checkbox"
-            checked={checked}
-            onChange={(event) => setChecked(event.target.checked)}
-            className="mt-0.5 size-5 shrink-0 accent-brand"
-          />
-          <span>
-            I understand my question is sent to the model providers I chose, under their policies.
-          </span>
-        </label>
-        <Button
-          data-testid="privacy-acknowledge"
-          className="w-full"
-          disabled={!checked}
-          onClick={onAcknowledge}
-        >
-          I understand
-        </Button>
+        <div className="space-y-3 border-t border-border pt-4">
+          <label
+            htmlFor="privacy-consent"
+            className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm"
+          >
+            <input
+              id="privacy-consent"
+              type="checkbox"
+              checked={checked}
+              onChange={(event) => setChecked(event.target.checked)}
+              className="mt-0.5 size-5 shrink-0 accent-brand"
+            />
+            <span>
+              I understand my question is sent to the model providers I chose, under their policies.
+            </span>
+          </label>
+          <Button
+            data-testid="privacy-acknowledge"
+            className="w-full"
+            disabled={!checked}
+            onClick={onAcknowledge}
+          >
+            I understand
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )

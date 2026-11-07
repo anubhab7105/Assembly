@@ -133,9 +133,9 @@ await mobile.waitForTimeout(2500)
 await mobile.screenshot({ path: `${out}\\assembly-field-mobile-raw.png`, fullPage: false })
 await dismissCookie(mobile)
 await mobile.screenshot({ path: `${out}\\assembly-field-mobile.png`, fullPage: false })
-await mobile.locator(".asm-field-console").scrollIntoViewIfNeeded()
+await mobile.locator(".asm-camera-toggle").scrollIntoViewIfNeeded()
 await mobile.waitForTimeout(600)
-await mobile.screenshot({ path: `${out}\\assembly-field-mobile-console.png`, fullPage: false })
+await mobile.screenshot({ path: `${out}\\assembly-field-mobile-camera.png`, fullPage: false })
 
 console.log(
   JSON.stringify(

@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { storage, type HistoryRecord } from "@/lib/storage"
 import { useToast } from "@/components/ui/toast"
-import { ArrowRight, Download, Search, Trash2, Upload } from "lucide-react"
+import { ArrowRight, Download, Search, Trash2, Upload, X } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 
 function formatDate(value: string) {
   const date = new Date(value)
@@ -117,7 +118,7 @@ export default function HistoryPage() {
               <span className="asm-index">[ 06 / History ]</span>
               <h1 className="asm-page-title">Run history</h1>
             </div>
-            <p className="asm-page-head-note">
+            <p className="asm-page-head-note" aria-live="polite">
               {records.length.toString().padStart(3, "0")} runs on this device · {completed} completed
               {averageConsensus !== null
                 ? ` · ${Math.round(averageConsensus * 100)}% average agreement`
@@ -129,15 +130,26 @@ export default function HistoryPage() {
 
       <main id="main-content" tabIndex={-1} className="asm-history">
         <div className="asm-history-tools">
-          <label className="asm-search">
+          <div className="asm-search">
             <Search className="size-3.5 shrink-0" aria-hidden />
-            <span className="sr-only">Search past runs</span>
+            <label htmlFor="history-search" className="sr-only">Search past runs</label>
             <input
+              id="history-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search past runs…"
             />
-          </label>
+            {search && (
+              <button
+                type="button"
+                className="asm-search-clear"
+                aria-label="Clear search"
+                onClick={() => setSearch("")}
+              >
+                <X className="size-3.5" aria-hidden />
+              </button>
+            )}
+          </div>
 
           <div className="asm-history-actions">
             <input
@@ -167,8 +179,13 @@ export default function HistoryPage() {
         </div>
 
         {loading ? (
-          <div className="border border-border px-6 py-16 text-center">
+          <div className="border border-border px-6 py-10" aria-busy="true">
             <p className="asm-label">Loading local history…</p>
+            <div className="mt-6 space-y-3">
+              {[0, 1, 2].map((index) => (
+                <Skeleton key={index} className="h-12 w-full rounded-none" />
+              ))}
+            </div>
           </div>
         ) : filtered.length === 0 ? (
           <div className="border border-dashed border-border px-6 py-20 text-center">
@@ -181,10 +198,17 @@ export default function HistoryPage() {
                 ? "Try a different question or clear the search."
                 : "Your first investigation will appear here. History stays in this browser unless you export it."}
             </p>
-            <Link href="/chat" className="asm-btn asm-btn-primary mt-6">
-              Start an investigation
-              <ArrowRight className="size-4" />
-            </Link>
+            {search ? (
+              <button type="button" className="asm-btn asm-btn-outline mt-6" onClick={() => setSearch("")}>
+                Clear search
+                <X className="size-4" aria-hidden />
+              </button>
+            ) : (
+              <Link href="/chat" className="asm-btn asm-btn-primary mt-6">
+                Start an investigation
+                <ArrowRight className="size-4" />
+              </Link>
+            )}
           </div>
         ) : (
           <table className="asm-table">

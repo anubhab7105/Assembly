@@ -61,6 +61,7 @@ export default function Home() {
   const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [catalogFailed, setCatalogFailed] = useState(false)
+  const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogTick, setCatalogTick] = useState(0)
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
@@ -95,6 +96,18 @@ export default function Home() {
     pins: selection.pins,
   })
   const degradedConfirmed = confirmedGateSignature === gateSignature
+  const missingQuestion = !question.trim() && attachments.length === 0
+  const runHint = missingQuestion
+    ? "Write a question to start."
+    : catalogLoading
+      ? "Checking provider keys…"
+      : catalogFailed
+        ? "Provider status is unavailable. Retry the connection above."
+        : gate.level === "BLOCKED"
+          ? "Add at least two provider keys in Settings to enable Run."
+          : gate.level === "DEGRADED" && !degradedConfirmed
+            ? "Choose Run anyway above to start with one model family."
+            : null
 
   useEffect(() => {
     const refreshKeys = () => {
@@ -135,6 +148,7 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
+    setCatalogLoading(true)
     ApiClient.catalog()
       .then((c) => {
         setCatalog(c)
@@ -149,6 +163,7 @@ export default function Home() {
         setCatalog(null)
         setCatalogFailed(true)
       })
+      .finally(() => setCatalogLoading(false))
   }, [catalogTick])
 
   useEffect(() => {
@@ -492,11 +507,11 @@ export default function Home() {
           </div>
         </div>
 
-        {gate.families_count === 0 && (
+        {!catalogLoading && !catalogFailed && gate.families_count === 0 && (
           <div className="asm-alert mb-3">
             <p>
-              Set up provider keys in Settings. Two ready model families are the minimum for a normal run;
-              three are recommended. Providers with unverified quota limits do not count toward readiness.
+              <strong>Add provider keys to start.</strong> Two model families are the minimum; three are
+              recommended. Saved keys stay in this browser.
             </p>
             <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0 rounded-none">
               <Settings className="mr-1.5 size-3.5" />
@@ -507,14 +522,29 @@ export default function Home() {
 
         <div
           data-testid="diversity-chip"
-          data-level={gate.level}
+          data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
           className="asm-readiness mb-3"
+          aria-live="polite"
         >
-          <span><strong>{gateChipText(gate)}</strong>{gate.level !== "OK" && <span> — {gate.reasons[0]}</span>}</span>
-          {gate.level === "DEGRADED" && !degradedConfirmed && (
-            <Button variant="outline" size="sm" className="min-h-8 rounded-none" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
-              Run anyway
-            </Button>
+          {catalogLoading ? (
+            <span><strong>Checking provider keys…</strong></span>
+          ) : catalogFailed ? (
+            <span>
+              <strong>Provider status unavailable</strong>
+              <span> — retry the connection above.</span>
+            </span>
+          ) : (
+            <>
+              <span>
+                <strong>{gateChipText(gate)}</strong>
+                {gate.level !== "OK" && gate.families_count > 0 && <span> — {gate.reasons[0]}</span>}
+              </span>
+              {gate.level === "DEGRADED" && !degradedConfirmed && (
+                <Button variant="outline" size="sm" className="min-h-8 rounded-none" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
+                  Run anyway
+                </Button>
+              )}
+            </>
           )}
         </div>
 
@@ -648,15 +678,22 @@ export default function Home() {
             <Button
               size="default"
               onClick={handleLaunch}
-              disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
+              disabled={loading || missingQuestion || catalogLoading || catalogFailed || gate.level === "BLOCKED"}
               className="asm-btn asm-btn-primary asm-run-btn"
               aria-label={loading ? "Running" : "Run"}
+              aria-describedby={runHint ? "run-hint" : undefined}
             >
-              <span>{loading ? "Running the team" : "Run preflight"}</span>
+              <span>{loading ? "Running the team" : "Start investigation"}</span>
               {loading
                 ? <span className="size-3.5 animate-spin rounded-full border border-current border-t-transparent" />
                 : <ArrowRight className="size-4" />}
             </Button>
+
+            {runHint && (
+              <p className="asm-run-hint" id="run-hint">
+                {runHint}
+              </p>
+            )}
 
             <p className="asm-legal-note">
               Not a sole source for medical, legal, financial or security-critical decisions. Your question

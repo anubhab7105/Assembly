@@ -147,9 +147,6 @@ export default function LandingPage() {
     cameraActive,
     handActive,
     toggleCamera,
-    sensorState,
-    sensorActive,
-    toggleSensors,
   } = useMotionInput({ rootRef })
 
   useEffect(() => {
@@ -179,12 +176,23 @@ export default function LandingPage() {
       ? "ASKING"
       : cameraState === "unsupported"
         ? "N/A"
-        : cameraActive
-          ? handActive
-            ? "TRACKING"
-            : "ON"
-          : "OFF"
-  const showSensorToggle = sensorState !== "unsupported"
+        : cameraState === "error"
+          ? "RETRY"
+          : cameraActive
+            ? handActive
+              ? "TRACKING"
+              : "CAM ON"
+            : "CAM OFF"
+  const cameraButtonLabel =
+    cameraState === "requesting"
+      ? "Cancel camera request"
+      : cameraState === "unsupported"
+        ? "Camera not supported in this browser"
+        : cameraState === "error"
+          ? "Retry hand tracking with the camera"
+          : cameraActive
+            ? "Turn off hand tracking"
+            : "Turn on hand tracking"
 
   return (
     <div ref={rootRef} className="asm-landing">
@@ -224,14 +232,44 @@ export default function LandingPage() {
 
         <div className="asm-topbar-actions">
           <ThemeToggle className="asm-theme-toggle" />
+          <button
+            type="button"
+            className="asm-camera-toggle"
+            data-state={cameraActive ? "on" : "off"}
+            aria-pressed={cameraActive}
+            aria-label={cameraButtonLabel}
+            aria-describedby="camera-privacy"
+            title="Use the camera to track your hand locally"
+            onClick={() => void toggleCamera()}
+            disabled={cameraState === "unsupported"}
+          >
+            <Video className="size-3.5" aria-hidden="true" />
+            <span className="asm-camera-toggle-label">{cameraLabel}</span>
+            <span className="asm-camera-toggle-dot" aria-hidden="true" />
+          </button>
+          <span id="camera-privacy" className="sr-only">
+            Hand tracking runs in this browser. Frames are never recorded or uploaded.
+          </span>
           <Link href="/settings" className="asm-link-quiet">
             Set up keys
           </Link>
-          <Link href="/chat" className="asm-btn asm-btn-primary">
-            Start an investigation
+          <Link
+            href="/chat"
+            className="asm-btn asm-btn-primary asm-topbar-cta"
+            aria-label="Start an investigation"
+          >
+            <span className="asm-topbar-cta-full">Start an investigation</span>
+            <span className="asm-topbar-cta-short" aria-hidden="true">
+              Start
+            </span>
             <ArrowUpRight className="size-3.5" />
           </Link>
         </div>
+        {cameraError && (
+          <p className="asm-camera-error" role="status">
+            {cameraError}
+          </p>
+        )}
       </header>
 
       <main id="main-content" tabIndex={-1} className="asm-landing-main">
@@ -280,82 +318,6 @@ export default function LandingPage() {
                 <dd>No sign-up, no tracking.</dd>
               </div>
             </dl>
-          </div>
-
-          <div className="asm-hero-visual asm-field-console">
-            <div className="asm-field-console-head">
-              <span className="is-live">Temporary team / live field</span>
-              <span className="asm-field-console-code">[ A ]</span>
-            </div>
-
-            <p className="asm-field-console-guide">
-              Move the field with your cursor or one hand. Spread both hands to open the cloud;
-              bring them together to collapse it back to a point.
-            </p>
-
-            <div className="asm-field-tags" aria-label="Investigation stages">
-              <span>Independent pass</span>
-              <span>Cross-examination</span>
-              <span>Evidence review</span>
-              <span>Synthesis</span>
-            </div>
-
-            <div className="asm-sensor-bar">
-              <div>
-                <span className="asm-label">
-                  {cameraActive
-                    ? handActive
-                      ? "Hand field / tracking"
-                      : "Hand field / searching"
-                    : "Hand field"}
-                </span>
-                <p>
-                  {cameraActive
-                    ? handActive
-                      ? "One hand moves the field. Spread both hands to open the cloud; bring them together to collapse it."
-                      : "Hold one hand in frame to drag the field, or two hands apart to open it. Nothing is recorded or uploaded."
-                    : "Use a hand to drag the field. Spread both hands to scatter the particles, then close them to pull the cloud back in. Frames never leave this device."}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {showSensorToggle && (
-                  <button
-                    type="button"
-                    className="asm-sensor-toggle"
-                    data-state={sensorActive ? "on" : "off"}
-                    aria-pressed={sensorActive}
-                    onClick={toggleSensors}
-                    title="Use device orientation to move the field"
-                  >
-                    Tilt
-                    <span className="asm-switch" aria-hidden="true" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="asm-sensor-toggle"
-                  data-state={cameraActive ? "on" : "off"}
-                  aria-pressed={cameraActive}
-                  onClick={() => void toggleCamera()}
-                  disabled={cameraState === "unsupported"}
-                  title="Use the camera to track your hand locally"
-                >
-                  <Video className="size-3" aria-hidden="true" />
-                  {cameraLabel}
-                  <span className="asm-switch" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            {cameraError && (
-              <p className="asm-sensor-error" role="status">
-                {cameraError}
-              </p>
-            )}
-
-            <div className="asm-field-console-foot">
-              <span>001 / 008</span>
-              <span>Solvers · critic · synthesis</span>
-            </div>
           </div>
         </section>
 

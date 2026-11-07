@@ -131,7 +131,7 @@
   font-size: 0.76rem;
 }
 
-:where(.asm-btn, .asm-sensor-toggle, .asm-budget-btn, .asm-side-link):focus-visible {
+:where(.asm-btn, .asm-camera-toggle, .asm-budget-btn, .asm-side-link):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
@@ -419,15 +419,17 @@
 
 /* Top navigation */
 .asm-topbar {
+  --asm-topbar-h: 78px;
   position: relative;
   z-index: 20;
   display: grid;
   width: min(1320px, calc(100% - 56px));
-  min-height: 78px;
+  min-height: var(--asm-topbar-h);
   margin-inline: auto;
   grid-template-columns: auto 1fr auto;
+  grid-template-rows: minmax(var(--asm-topbar-h), auto) auto;
   align-items: center;
-  gap: clamp(20px, 4vw, 56px);
+  column-gap: clamp(20px, 4vw, 56px);
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -547,10 +549,86 @@
   color: var(--brand);
 }
 
+/* Camera toggle: compact state button in the top bar. */
+.asm-camera-toggle {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 0;
+  padding-inline: 10px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    background 0.18s ease;
+}
+
+.asm-camera-toggle:hover:not(:disabled) {
+  border-color: var(--brand);
+  background: var(--brand-subtle);
+  color: var(--brand);
+}
+
+.asm-camera-toggle[data-state="on"] {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.asm-camera-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.asm-camera-toggle-label {
+  line-height: 1;
+}
+
+.asm-camera-toggle-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  background: var(--hairline-strong);
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.asm-camera-toggle[data-state="on"] .asm-camera-toggle-dot {
+  background: var(--brand);
+  box-shadow: 0 0 10px var(--brand);
+}
+
+.asm-camera-error {
+  max-width: 360px;
+  margin: 6px 0 10px;
+  border: 1px solid var(--hairline-strong);
+  padding: 9px 11px;
+  background: var(--background);
+  color: var(--warning);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  line-height: 1.5;
+  text-transform: uppercase;
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
 .asm-topbar .asm-btn {
   min-height: 38px;
   padding-inline: 15px;
   font-size: 0.64rem;
+}
+
+.asm-topbar-cta-short {
+  display: none;
 }
 
 /* Hero */
@@ -672,14 +750,7 @@
   line-height: 1.5;
 }
 
-/* Hero visual: full-screen particle field + borderless field console */
-.asm-hero-visual {
-  position: relative;
-  z-index: 2;
-  min-width: 0;
-  animation: asm-rise 1s 0.1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
+/* Hero visual: full-screen particle field */
 .asm-field-canvas {
   position: fixed;
   inset: 0;
@@ -690,200 +761,6 @@
   pointer-events: none;
   opacity: 1;
   transition: opacity 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-
-.asm-field-console {
-  display: flex;
-  width: 100%;
-  max-width: 500px;
-  margin-left: auto;
-  margin-right: 0;
-  flex-direction: column;
-  padding: 16px 18px 14px;
-  border: 1px solid var(--hairline);
-  background: color-mix(in oklab, var(--background) 82%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-.asm-field-console-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  color: var(--muted-foreground);
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.asm-field-console-head .is-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--ink-soft);
-}
-
-.asm-field-console-head .is-live::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  background: var(--brand);
-  box-shadow: 0 0 10px var(--brand);
-  animation: asm-blink 2.8s steps(1, end) infinite;
-}
-
-.asm-field-console-code {
-  color: var(--ink-soft);
-}
-
-.asm-field-console-guide {
-  max-width: 430px;
-  margin-top: 30px;
-  color: var(--muted-foreground);
-  font-size: 0.84rem;
-  line-height: 1.75;
-  text-shadow:
-    0 0 6px var(--background),
-    0 0 18px var(--background);
-}
-
-.asm-field-tags {
-  display: grid;
-  margin-top: 36px;
-  border-top: 1px solid var(--hairline);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--hairline);
-}
-
-.asm-field-tags span {
-  display: inline-flex;
-  min-height: 42px;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 11px;
-  background: color-mix(in oklab, var(--background) 88%, transparent);
-  color: var(--ink-soft);
-  font-family: var(--font-mono);
-  font-size: 0.55rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.asm-field-tags span::before {
-  content: "";
-  width: 4px;
-  height: 4px;
-  flex: 0 0 auto;
-  background: var(--brand);
-}
-
-.asm-field-console-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-  padding-block: 13px;
-  border-top: 1px solid var(--hairline);
-  color: var(--muted-foreground);
-  font-family: var(--font-mono);
-  font-size: 0.54rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-/* Camera / motion sensor control — part of the console stack, not a box. */
-.asm-sensor-bar {
-  display: flex;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  border: 0;
-  border-top: 1px solid var(--hairline);
-  padding: 14px 0 0;
-  background: transparent;
-}
-
-.asm-sensor-bar .asm-label {
-  display: block;
-  color: var(--foreground);
-  font-size: 0.58rem;
-  text-shadow:
-    0 0 6px var(--background),
-    0 0 18px var(--background);
-}
-
-.asm-sensor-bar p {
-  max-width: 380px;
-  margin-top: 5px;
-  color: var(--muted-foreground);
-  font-size: 0.62rem;
-  line-height: 1.55;
-  text-shadow:
-    0 0 6px var(--background),
-    0 0 18px var(--background);
-}
-
-.asm-sensor-toggle {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 9px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 0;
-  padding: 7px 9px;
-  background: transparent;
-  color: var(--muted-foreground);
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  transition:
-    color 0.18s ease,
-    border-color 0.18s ease;
-}
-
-.asm-sensor-toggle[data-state="on"] {
-  border-color: var(--brand);
-  color: var(--brand);
-}
-
-.asm-switch {
-  position: relative;
-  display: inline-block;
-  width: 26px;
-  height: 12px;
-  border: 1px solid currentColor;
-}
-
-.asm-switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 6px;
-  height: 6px;
-  background: currentColor;
-  transition: transform 0.18s ease;
-}
-
-.asm-sensor-toggle[data-state="on"] .asm-switch::after {
-  transform: translateX(14px);
-}
-
-.asm-sensor-error {
-  max-width: none;
-  margin: 8px 0 0;
-  color: var(--warning);
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-  line-height: 1.55;
 }
 
 /* Ticker */
@@ -2007,6 +1884,16 @@
   padding-inline: 18px;
 }
 
+.asm-run-hint {
+  margin-top: -6px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.04em;
+  line-height: 1.55;
+  text-transform: uppercase;
+}
+
 .asm-legal-note {
   color: var(--muted-foreground);
   font-size: 0.62rem;
@@ -2026,6 +1913,10 @@
   font-size: 0.58rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.asm-readiness[data-level="LOADING"] {
+  border-left: 2px solid var(--hairline-strong);
 }
 
 .asm-readiness[data-level="OK"] {
@@ -2709,6 +2600,21 @@
   color: var(--muted-foreground);
 }
 
+.asm-search-clear {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  transition: color 0.18s ease;
+}
+
+.asm-search-clear:hover {
+  color: var(--foreground);
+}
+
 .asm-history-actions {
   display: flex;
   gap: 8px;
@@ -2990,8 +2896,8 @@
   }
 
   .asm-topbar {
+    --asm-topbar-h: 66px;
     grid-template-columns: auto 1fr;
-    min-height: 66px;
   }
 
   .asm-nav {
@@ -3011,15 +2917,6 @@
 
   .asm-hero-copy {
     max-width: 760px;
-  }
-
-  .asm-hero-visual {
-    width: min(100%, 560px);
-    margin-inline: auto;
-  }
-
-  .asm-field-console {
-    margin-inline: auto;
   }
 
   .asm-section-head {
@@ -3105,8 +3002,8 @@
   }
 
   .asm-topbar {
-    min-height: 62px;
-    gap: 12px;
+    --asm-topbar-h: 62px;
+    column-gap: 12px;
   }
 
   .asm-brand {
@@ -3132,6 +3029,32 @@
   .asm-theme-toggle {
     width: 32px;
     height: 32px;
+  }
+
+  .asm-topbar-actions {
+    gap: 10px;
+  }
+
+  .asm-camera-toggle {
+    min-height: 32px;
+    padding-inline: 8px;
+  }
+
+  .asm-camera-toggle-label {
+    display: none;
+  }
+
+  .asm-topbar-cta-full {
+    display: none;
+  }
+
+  .asm-topbar-cta-short {
+    display: inline;
+  }
+
+  .asm-camera-error {
+    max-width: none;
+    justify-self: stretch;
   }
 
   .asm-hero {
@@ -3173,30 +3096,6 @@
     padding-left: 0;
     border-left: 0;
     margin-top: 12px;
-  }
-
-  .asm-field-console-guide {
-    margin-top: 20px;
-    font-size: 0.8rem;
-  }
-
-  .asm-field-tags {
-    margin-top: 28px;
-  }
-
-  .asm-field-tags span {
-    min-height: 38px;
-    font-size: 0.5rem;
-  }
-
-  .asm-sensor-bar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .asm-sensor-toggle {
-    align-self: flex-end;
   }
 
   .asm-section {
