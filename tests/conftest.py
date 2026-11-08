@@ -1,12 +1,12 @@
 """Shared pytest fixtures for Assembly.
 
-from datetime import date
 All fixtures are offline by construction: providers are MockProvider
 instances (no network), the database is in-memory SQLite, and the
 default mock plan sets needs_research=False so no search HTTP occurs.
 """
 
 import sys
+from datetime import date
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
