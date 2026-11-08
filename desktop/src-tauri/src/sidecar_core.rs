@@ -108,6 +108,7 @@ pub fn pick_free_port() -> Result<u16, Error> {
 
 /// Probe whether 127.0.0.1:port is accepting connections (used to detect a
 /// stale backend process from a previous crashed run).
+#[allow(dead_code)]
 pub fn is_port_in_use(port: u16) -> bool {
     TcpStream::connect(("127.0.0.1", port)).is_ok()
 }
@@ -121,6 +122,7 @@ const ALLOWED_PROVIDERS: &[&str] = &[
 
 const MAX_PROVIDER_LEN: usize = 64;
 const MAX_SECRET_LEN: usize = 4096;
+#[allow(dead_code)]
 const MIN_SECRET_LEN: usize = 1;
 
 /// Provider identifier charset: lowercase letters, digits, dashes, dots.
@@ -187,6 +189,7 @@ pub fn validate_window_label(label: &str) -> Result<&str, Error> {
 pub const MAIN_WINDOW_LABEL: &str = "main";
 
 /// Check a free loopback port is genuinely available by actually binding it.
+#[allow(dead_code)]
 pub fn assert_port_free(port: u16) -> Result<(), Error> {
     match TcpListener::bind(("127.0.0.1", port)) {
         Ok(_) => Ok(()),
