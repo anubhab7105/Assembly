@@ -6,7 +6,7 @@
  * carries the same wording. Do not duplicate the text elsewhere.
  */
 
-export const PRIVACY_NOTICE_VERSION = 5;
+export const PRIVACY_NOTICE_VERSION = 6;
 
 export const PRIVACY_ACK_KEY = "privacy_notice_ack";
 
@@ -20,7 +20,7 @@ export interface EnabledProviderNote {
 
 /** Web-mode dialog paragraphs (a)–(g), in order. */
 export const WEB_PRIVACY_PARAGRAPHS: string[] = [
-  "Assembly web mode sends your question, all saved model-provider keys (not only keys for selected models) and model choices to the hosted Assembly backend over HTTPS (localhost is used for local development). Preflight requests include all saved model-provider keys, independent of model selection; a key-test request includes only the provider key being tested; every run request includes all saved model-provider keys and any saved Tavily key, even when search is not used. When research runs, Assembly may also send your full question as a search query to Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, even without a Tavily key; the recipients depend on the search fallback path. Submitted keys are not persisted by the Assembly application.",
+  "Assembly web mode sends your question, all saved model-provider keys (not only keys for selected models) and model choices to the hosted Assembly backend over HTTPS (localhost is used for local development). Preflight requests include all saved model-provider keys, independent of model selection; a key-test request includes only the provider key being tested; every run request includes all saved model-provider keys and any saved Tavily key, even when search is not used. When research runs, Assembly may send your full question as a search query to Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, depending on the search fallback path. Tavily receives it only when available and selected by that path; the other listed services do not require a Tavily key. Submitted keys are not persisted by the Assembly application.",
   "Saved web API keys stay in this browser across refreshes. They are stored as readable values (not encrypted at rest) in IndexedDB with a localStorage fallback. You can remove them in Settings, but if browser storage fails during removal, a key may remain saved. Clearing browser/site data removes them. Browser storage is not an OS-protected credential vault; same-origin JavaScript, including code injected through an XSS vulnerability, can read saved keys.",
   "The Assembly application processes active request/run data in memory and does not write submitted web keys, questions or answers to its application database or disk. Its application logs record operational metadata (run id, tier, timings, counts and search-query lengths), not raw request bodies, search-query text or key values. Hosting providers may process network traffic and keep their own operational logs under their policies.",
   "Your run history and settings stay in this browser (IndexedDB, with the documented localStorage fallback). The hosted application does not persist web run content or submitted API keys.",
@@ -31,7 +31,7 @@ export const WEB_PRIVACY_PARAGRAPHS: string[] = [
 /** Desktop-mode dialog paragraphs (shorter, no server wording). */
 export const DESKTOP_PRIVACY_PARAGRAPHS: string[] = [
   "Desktop mode uses an Assembly backend running locally on your PC. Its requests do not pass through the hosted Assembly web backend.",
-  "When research runs, Assembly may also send your full question as a search query to Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, even without a Tavily key; the recipients depend on the search fallback path.",
+  "When research runs, Assembly may send your full question as a search query to Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, depending on the search fallback path. Tavily receives it only when available and selected by that path; the other listed services do not require a Tavily key.",
   "Desktop run history is stored locally in SQLite. UI settings and the current Settings key vault use the embedded WebView browser storage. Saved keys are readable values, not encrypted at rest; same-origin JavaScript, including injected code in an XSS incident, can read them.",
   "Each model provider handles your inputs under its own policy:",
   "Avoid sending sensitive or confidential information.",
