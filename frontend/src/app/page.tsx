@@ -50,7 +50,7 @@ const faqs = [
   },
   {
     question: "Where are my API keys and investigation history stored?",
-    answer: "In web mode, saved keys and local history stay in your browser. Keys are sent to the Assembly backend over HTTPS for capacity preflight, key tests and runs; the backend then uses them to contact your selected providers. Browser-stored keys are not encrypted at rest and can be read by same-origin JavaScript. Read the privacy notice for the full details before your first run.",
+    answer: "In web mode, saved keys and local history stay in your browser. All saved model-provider keys are sent to the Assembly backend over HTTPS for capacity preflight and key tests, regardless of model selection; every run also sends those keys and any saved Tavily key, even when search is not used. The backend uses them transiently to contact providers. Browser-stored keys are not encrypted at rest and can be read by same-origin JavaScript. Read the privacy notice for the full details before your first run.",
   },
   {
     question: "Can I control how long an investigation runs?",
