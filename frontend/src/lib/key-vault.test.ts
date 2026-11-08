@@ -192,6 +192,21 @@ describe("KeyVault persistence (P0)", () => {
     await expect(vault.setKey("tavily", CANARY_B)).rejects.toBeInstanceOf(KeyStorageError);
   });
 
+  it("does not seed the cache from localStorage when initial IndexedDB loading fails", async () => {
+    const fallback = mockLocalStorage();
+    fallback.set("assembly:keys_v1", JSON.stringify({ groq: CANARY_B }));
+    vi.mocked(get).mockRejectedValue(new Error("IndexedDB read failed"));
+
+    const vault = new KeyVault();
+    await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError);
+
+    // Public reads remain fail-soft, but only with the in-memory cache (empty
+    // for a fresh vault), not the stale localStorage mirror.
+    expect(await vault.getKey("groq")).toBeNull();
+    expect(await vault.allKeys()).toEqual({});
+    expect(JSON.parse(fallback.get("assembly:keys_v1") ?? "{}")).toEqual({ groq: CANARY_B });
+  });
+
   it("does not use the localStorage mirror after an established IndexedDB read fails", async () => {
     const fallback = mockLocalStorage();
     const vault = new KeyVault();
