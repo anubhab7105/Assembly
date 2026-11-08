@@ -165,6 +165,7 @@ async def _execute_run(
     stage_holder = {"stage": "run_init", "events": 0}
 
     async def on_progress(event: dict) -> None:
+        """Track the lifecycle stage and queue each orchestrator progress event."""
         # Track the last lifecycle stage for failure diagnostics (envelope
         # `state` when present, else the event name). Names only, no content.
         if isinstance(event, dict):
