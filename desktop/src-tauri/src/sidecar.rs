@@ -416,11 +416,12 @@ impl SidecarManager {
     // ────────────────────────────────────────────────────────
 
     #[cfg(windows)]
-    fn assign_to_job_object(&self, _child: &tauri_plugin_shell::process::CommandChild) {
+    fn assign_to_job_object(&self, pid: u32) {
+        use std::os::raw::c_void;
         use windows_sys::Win32::Foundation::CloseHandle;
         use windows_sys::Win32::System::Threading::{
             AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-            SetInformationJobObject,
+            PROCESS_ALL_ACCESS, SetInformationJobObject,
         };
         use windows_sys::core::PCWSTR;
 
@@ -457,7 +458,7 @@ impl SidecarManager {
             let ok = SetInformationJobObject(
                 job,
                 2, // JobObjectBasicLimitInformation = 2
-                &mut info as *mut _ as *mut _,
+                &mut info as *mut _ as *mut c_void,
                 std::mem::size_of_val(&info) as u32,
             );
             if ok == 0 {
@@ -465,20 +466,49 @@ impl SidecarManager {
                 let _ = CloseHandle(job);
                 return;
             }
-            // Assign the child process (PyInstaller bootloader + its tree) to
-            // the job. CommandChild doesn't expose the raw handle publicly, so
-            // we rely on job-object kill-on-close applied at the next process
-            // creation via the job's active-process limit being 0 (all
-            // descendants). In practice, assigning the bootloader PID is done
-            // below once we obtain it; here we store the job handle for later.
-            let _ = job;
-            let _ = CloseHandle(job);
+            // Open the bootloader process (PyInstaller spawns a real python
+            // child; assigning only the parent leaves the real process alive)
+            // and assign it to the job. Kill-on-job-close then covers the
+            // whole tree.
+            let proc = windows_sys::Win32::System::Threading::OpenProcess(
+                PROCESS_ALL_ACCESS,
+                0,
+                pid,
+            );
+            if proc.is_invalid() {
+                warn!("failed to open sidecar process {pid} for job assignment");
+                let _ = CloseHandle(job);
+                return;
+            }
+            let assigned = AssignProcessToJobObject(job, proc) != 0;
+            let _ = CloseHandle(proc);
+            if !assigned {
+                warn!("failed to assign sidecar process {pid} to job object");
+                let _ = CloseHandle(job);
+                return;
+            }
+            *self.job.lock().unwrap() = Some(job as usize);
+            info!("sidecar process {pid} assigned to Windows job object");
         }
     }
 
     #[cfg(not(windows))]
-    fn assign_to_job_object(&self, _child: &tauri_plugin_shell::process::CommandChild) {
+    fn assign_to_job_object(&self, _pid: u32) {
         // No-op on non-Windows.
+    }
+
+    /// Close the Job Object handle. With JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    /// this kills every process assigned to the job (backend + tree).
+    async fn close_job(&self) {
+        if let Some(handle) = self.job.lock().unwrap().take() {
+            #[cfg(windows)]
+            {
+                use windows_sys::Win32::Foundation::CloseHandle;
+                unsafe {
+                    let _ = CloseHandle(handle as *mut _);
+                }
+            }
+        }
     }
 
     // ────────────────────────────────────────────────────────
