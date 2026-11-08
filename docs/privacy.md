@@ -35,7 +35,7 @@ Each selected model provider handles your inputs under its own policy:
 
 Avoid sending sensitive or confidential information.
 
-The current Settings flow stores keys as readable values in the WebView browser profile (IndexedDB with a localStorage fallback; not encrypted at rest). Preflight, key tests and runs send them to the local backend over loopback, and that backend makes provider requests. The repository has a Windows Credential Manager adapter, but the current Settings save flow does not use it as the primary key store.
+The current Settings flow stores keys as readable values in the WebView browser profile (IndexedDB with a localStorage fallback; not encrypted at rest). Preflight and key-test requests send all saved model-provider keys to the local backend over loopback, independently of model selection. Every run request also sends all saved model-provider keys and any saved Tavily key, even when search is not used; the local backend makes provider requests. The repository has a Windows Credential Manager adapter, but the current Settings save flow does not use it as the primary key store.
 
 ## Acknowledgment storage
 
