@@ -5,8 +5,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream as TokioTcpStream;
 use tokio::sync::Mutex;
+use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 
 use crate::errors::Error;
@@ -341,11 +343,8 @@ impl SidecarManager {
             .strip_prefix("http://")
             .unwrap_or(base_url);
         let deadline = Duration::from_millis(HEALTH_PROBE_TIMEOUT_MS);
-        match TokioTcpStream::connect(host_port)
-            .timeout(deadline)
-            .await
-        {
-            Ok(mut stream) => {
+        match timeout(deadline, TokioTcpStream::connect(host_port)).await {
+            Ok(Ok(mut stream)) => {
                 let req = format!(
                     "GET /health HTTP/1.1\r\nHost: {host_port}\r\nConnection: close\r\n\r\n"
                 );
@@ -375,9 +374,9 @@ impl SidecarManager {
             .strip_prefix("http://")
             .unwrap_or(base_url);
         let deadline = Duration::from_millis(HEALTH_PROBE_TIMEOUT_MS);
-        let stream = match TokioTcpStream::connect(host_port).timeout(deadline).await {
-            Ok(s) => s,
-            Err(_) => return Ok(()),
+        let stream = match timeout(deadline, TokioTcpStream::connect(host_port)).await {
+            Ok(Ok(s)) => s,
+            _ => return Ok(()),
         };
         let _ = stream.set_nodelay(true);
         let body_bytes = serde_json::to_vec(body).unwrap_or_default();
