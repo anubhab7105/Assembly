@@ -161,7 +161,6 @@ impl SidecarManager {
         let child_clone = self.child.clone();
         let state_clone = self.state.clone();
         let restart_count = self.restart_count.clone();
-        let notify = tokio::sync::Notify::new();
         let app_h = self.app_handle.clone();
         tauri::async_runtime::spawn(async move {
             while let Some(ev) = rx.recv().await {
