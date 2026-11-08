@@ -199,7 +199,6 @@ impl SidecarManager {
                                 "auto-restarting backend (attempt {attempts}/{MAX_AUTO_RESTARTS} after crash)"
                             );
                             tokio::time::sleep(Duration::from_millis(RESTART_BACKOFF_MS)).await;
-                            notify.notify_waiters();
                         } else {
                             drop(rc);
                             *state_clone.lock().unwrap() = SidecarState::Failed {
@@ -224,7 +223,6 @@ impl SidecarManager {
                 }
             }
         });
-        let _ = notify;
 
         // Readiness poll.
         let deadline = Instant::now() + Duration::from_millis(READINESS_TOTAL_MS);
