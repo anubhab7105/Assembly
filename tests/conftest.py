@@ -265,3 +265,31 @@ def clear_rate_limits() -> None:
     _rate_limit_history.clear()
     rl._global_executions = 0
     rl._ip_executions.clear()
+
+
+@pytest.fixture
+def isolated_web_database(monkeypatch, tmp_path):
+    """Redirect accidental web-mode SQLite initialization into tmp_path."""
+    from src.core.config import settings
+    from src.database import base as database_base
+    import src.providers.quota as quota_module
+
+    monkeypatch.setattr(settings, "app_mode", "web")
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "debug", False)
+    monkeypatch.chdir(tmp_path)
+
+    database_path = tmp_path / "unexpected-web-database.db"
+    monkeypatch.setattr(
+        type(settings),
+        "effective_database_url",
+        property(lambda _self: f"sqlite:///{database_path}"),
+    )
+
+    # database.base eagerly initializes its module-level engine at import time
+    # outside web mode. Clear it so this test verifies the web request path.
+    monkeypatch.setattr(database_base, "_engine", None)
+    monkeypatch.setattr(database_base, "SessionLocal", None)
+    monkeypatch.setattr(database_base, "engine", None)
+    monkeypatch.setattr(quota_module, "_limiter", None)
+    return database_path
