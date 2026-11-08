@@ -53,6 +53,7 @@ async def test_legacy_tavily_search_does_not_log_query_text(
     monkeypatch,
     caplog,
 ) -> None:
+    """Ensure the legacy Tavily wrapper records no raw user query in logs."""
     monkeypatch.setattr(settings, "tavily_api_key", "tvly-test-key")
     respx.post("https://api.tavily.com/search").mock(
         return_value=httpx.Response(200, json={"results": []})
