@@ -76,6 +76,7 @@ pub struct SidecarManager {
     app_handle: Mutex<Option<tauri::AppHandle>>,
     restart_count: Mutex<u32>,
     log_tail: Mutex<String>,
+    token: Mutex<Option<String>>,
 }
 
 impl SidecarManager {
@@ -86,6 +87,7 @@ impl SidecarManager {
             app_handle: Mutex::new(None),
             restart_count: Mutex::new(0),
             log_tail: Mutex::new(String::new()),
+            token: Mutex::new(None),
         }
     }
 
@@ -117,6 +119,7 @@ impl SidecarManager {
 
         let port = pick_free_port().map_err(|e| Error::SidecarStartFailed(e.to_string()))?;
         let token = generate_auth_token();
+        *self.token.lock().unwrap() = Some(token.clone());
 
         {
             let mut st = self.state.lock().unwrap();
