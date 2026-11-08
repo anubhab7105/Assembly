@@ -281,14 +281,21 @@ def isolated_web_database(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
     database_path = tmp_path / "unexpected-web-database.db"
-    monkeypatch.setattr(
-        type(settings),
-        "effective_database_url",
-        property(lambda _self: f"sqlite:///{database_path}"),
-    )
+    import sqlalchemy
+
+    real_create_engine = sqlalchemy.create_engine
+
+    def _isolated_create_engine(url, *args, **kwargs):
+        """Redirect any accidental SQLite engine creation to the test directory."""
+        if isinstance(url, str) and url.startswith("sqlite:"):
+            url = f"sqlite:///{database_path}"
+        return real_create_engine(url, *args, **kwargs)
+
+    monkeypatch.setattr(sqlalchemy, "create_engine", _isolated_create_engine)
 
     # database.base eagerly initializes its module-level engine at import time
     # outside web mode. Clear it so this test verifies the web request path.
+    # Keep settings.effective_database_url intact: web mode must still raise.
     monkeypatch.setattr(database_base, "_engine", None)
     monkeypatch.setattr(database_base, "SessionLocal", None)
     monkeypatch.setattr(database_base, "engine", None)
