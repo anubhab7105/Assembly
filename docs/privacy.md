@@ -14,7 +14,7 @@ The Assembly application processes active request/run data in memory and does no
 
 Your run history and settings stay in this browser (IndexedDB, with the documented localStorage fallback). The hosted application does not persist web run content or submitted API keys.
 
-Each model provider handles your inputs under its own policy:
+Each selected model provider handles your inputs under its own policy:
 
 - gemini: Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information.
 - all other providers: Check this provider's terms for how free-tier inputs are handled.
@@ -28,7 +28,7 @@ Desktop mode uses an Assembly backend running locally on your PC. Its requests d
 
 Desktop run history is stored locally in SQLite. UI settings and the current Settings key vault use the embedded WebView browser storage. Saved keys are readable values, not encrypted at rest; same-origin JavaScript, including injected code in an XSS incident, can read them.
 
-Each model provider handles your inputs under its own policy:
+Each selected model provider handles your inputs under its own policy:
 
 - gemini: Free-tier requests may be used by Google to improve its products. Avoid sending sensitive or confidential information.
 - all other providers: Check this provider's terms for how free-tier inputs are handled.
@@ -50,7 +50,7 @@ acknowledgment record never contains keys, questions or answers.
 
 The descriptions above explain the user-facing privacy notice. Implementation details:
 
-- In hosted web mode, saved provider keys are readable IndexedDB records with a localStorage fallback; they are not encrypted at rest or protected by an OS credential vault. Same-origin JavaScript (including injected script in an XSS incident) can read them. Users can remove keys in Settings or clear site/browser data. Preflight, key-test and run requests send relevant keys to the Assembly backend over HTTPS; request handlers use them transiently and do not write them to the Assembly application database or disk. Application logging is metadata-focused and the key-masking filter scrubs key-like values. Hosting platforms can still handle network traffic and keep separate operational logs under their own policies. History/settings/usage remain client-owned; storage failure must not be reported as a successful save or deletion.
+- In hosted web mode, saved provider keys are readable IndexedDB records with a localStorage fallback; they are not encrypted at rest or protected by an OS credential vault. Same-origin JavaScript (including injected script in an XSS incident) can read them. Users can remove keys in Settings or clear site/browser data. Preflight and key-test requests send all saved model-provider keys to the Assembly backend over HTTPS, independently of model selection; every run request sends all saved model-provider keys and any saved Tavily key, even when search is not used. Request handlers use submitted keys transiently and do not write them to the Assembly application database or disk. Application logging is metadata-focused and the key-masking filter scrubs key-like values. Hosting platforms can still handle network traffic and keep separate operational logs under their own policies. History/settings/usage remain client-owned; storage failure must not be reported as a successful save or deletion.
 - Browser storage is not cross-device backup. Export history JSON from Settings before clearing site data or moving to another browser profile. Import accepts the versioned Assembly export envelope; malformed rows are skipped and unsupported payload shapes are rejected.
 - In Windows desktop mode, execution records are kept in the app's local SQLite database. The current Settings UI still saves provider keys to the embedded WebView's IndexedDB/localStorage vault and sends them to the local backend over loopback for tests/runs. A Windows Credential Manager adapter exists in `src/core/keystore.py`, but the current Settings save/test path does not use it as the primary store; do not describe keys entered through Settings as Credential Manager-only. The local SQLite execution records are separate from the browser key vault.
 - Automated keyring tests use an in-memory fake and prove that canary keys do not appear in database rows, logs, or API responses. They do not prove a packaged Windows build or a real Windows Credential Manager installation works; those require a Windows smoke test.
