@@ -119,6 +119,7 @@ class TavilySearchProvider(SearchProvider):
         return bool(key) and not key.startswith("tvly-your")
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search Tavily and normalize its result payloads."""
         if not query or not query.strip():
             return []
         if not self.is_available:
@@ -175,6 +176,7 @@ class WikipediaSearchProvider(SearchProvider):
     provider_name: str = "wikipedia"
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search Wikipedia and convert matching pages into shared search results."""
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
@@ -234,6 +236,7 @@ class ArxivSearchProvider(SearchProvider):
     provider_name: str = "arxiv"
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search arXiv and parse matching paper metadata from its feed."""
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
@@ -297,6 +300,7 @@ class SemanticScholarSearchProvider(SearchProvider):
     provider_name: str = "semantic_scholar"
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search Semantic Scholar and normalize matching paper records."""
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
