@@ -79,6 +79,12 @@ pub struct SidecarManager {
     restart_count: Mutex<u32>,
     log_tail: Mutex<String>,
     token: Mutex<Option<String>>,
+    // Raw Windows Job Object handle (stored as usize so the struct layout is
+    // platform-agnostic; only used on Windows). Closing the last handle to a
+    // job with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE kills every process assigned
+    // to it — the backend and its entire process tree — even if the shell
+    // crashes.
+    job: Mutex<Option<usize>>,
 }
 
 impl SidecarManager {
@@ -90,6 +96,7 @@ impl SidecarManager {
             restart_count: Mutex::new(0),
             log_tail: Mutex::new(String::new()),
             token: Mutex::new(None),
+            job: Mutex::new(None),
         }
     }
 
@@ -149,8 +156,11 @@ impl SidecarManager {
             Error::SidecarStartFailed(e.to_string())
         })?;
 
+        // Assign the child (PyInstaller bootloader + its process tree) to a
+        // Windows Job Object so no orphan survives a shell crash.
+        let pid = child.pid();
         #[cfg(windows)]
-        self.assign_to_job_object(&child);
+        self.assign_to_job_object(pid);
 
         {
             let mut c = self.child.lock().unwrap();
@@ -319,6 +329,11 @@ impl SidecarManager {
     }
 
     async fn force_kill(&self) {
+        // Close the Job Object handle first: with
+        // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE this kills the backend and its
+        // entire process tree (PyInstaller bootloader + real python child),
+        // leaving no orphans even if the shell crashes.
+        self.close_job().await;
         let child = {
             let mut c = self.child.lock().unwrap();
             c.take()
