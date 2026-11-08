@@ -16,6 +16,9 @@ mod keyring;
 mod sidecar_core;
 
 #[cfg(all(windows, feature = "desktop"))]
+mod commands;
+
+#[cfg(all(windows, feature = "desktop"))]
 mod sidecar;
 
 #[cfg(not(all(windows, feature = "desktop")))]
@@ -33,10 +36,14 @@ use std::sync::Arc;
 #[cfg(all(windows, feature = "desktop"))]
 use tauri::Manager;
 
-/// Entrypoint. Builds the Tauri app with the sidecar manager, keyring store
-/// and validated IPC commands, then runs the event loop.
+// Entrypoint: builds the Tauri app with the sidecar manager, keyring store
+// and validated IPC commands, then runs the event loop.
 #[cfg(all(windows, feature = "desktop"))]
 pub fn run() {
+    use crate::commands::{
+        backend_status, backend_restart, credential_delete, credential_exists, credential_list,
+        credential_save,
+    };
     use crate::keyring::KeyringStore;
     use crate::sidecar::SidecarManager;
 
@@ -66,11 +73,11 @@ pub fn run() {
                 if let Err(e) = mgr.start_backend(app_handle.clone()).await {
                     eprintln!("sidecar startup failed: {e}");
                 }
-                // Remember the app handle so supervision can emit events later.
                 mgr.set_app_handle(app_handle);
             });
-            // Shutdown hook: on main-window close, shut down the backend
-            // sidecar gracefully, then force-kill after a short grace period.
+            // Shutdown hook: on main-window close/destroy, shut down the
+            // backend sidecar gracefully, then force-kill after a grace
+            // period so no orphan backend process remains.
             let mgr_close = manager.clone();
             if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
                 let mgr_destroy = mgr_close.clone();
@@ -93,7 +100,6 @@ pub fn run() {
             backend_status,
             backend_restart,
             credential_save,
-            credential_get,
             credential_exists,
             credential_delete,
             credential_list,
@@ -102,8 +108,8 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// No-op entrypoint on non-Windows / non-desktop builds so the crate compiles
-/// and its pure modules can be tested on any host.
+// No-op entrypoint on non-Windows / non-desktop builds so the crate compiles
+// and its pure modules can be tested on any host.
 #[cfg(not(all(windows, feature = "desktop")))]
 pub fn run() {
     // The Tauri desktop shell only targets Windows. On other hosts this is a
