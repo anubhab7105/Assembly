@@ -7,6 +7,12 @@ import { Badge } from "@/components/ui/badge"
 import { globalVault } from "@/lib/key-vault"
 import { env } from "@/lib/env"
 import { ApiClient, type Catalog } from "@/lib/api-client"
+import {
+  desktopCredentialSave,
+  desktopCredentialDelete,
+  desktopCredentialList,
+  desktopCredentialExists,
+} from "@/lib/desktop-credentials"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
   isKeyFormatOk,
@@ -44,6 +50,8 @@ export function KeysManager() {
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
   const [tavilyInput, setTavilyInput] = useState("")
+  const [tavilySaved, setTavilySaved] = useState(false)
+  const [desktopProviders, setDesktopProviders] = useState<string[]>([])
   const [needsUnlock, setNeedsUnlock] = useState(false)
   const [unlockError, setUnlockError] = useState<string | null>(null)
 
