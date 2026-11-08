@@ -344,10 +344,28 @@ if __name__ == "__main__":
     import uvicorn
 
     if settings.app_mode == "desktop":
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-        s.close()
+        # The desktop shell (Tauri sidecar) picks a free loopback port and
+        # passes it here via ASSEMBLY_PORT so the two processes agree on the
+        # address without guessing. Fall back to binding 127.0.0.1:0 when the
+        # var is absent (e.g. running the backend standalone for testing).
+        env_port = os.environ.get("ASSEMBLY_PORT")
+        port: int
+        if env_port:
+            port = int(env_port)
+            probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                probe.bind(("127.0.0.1", port))
+            except OSError:
+                # Port not free: fall back to an ephemeral one so startup
+                # never dies on a stale port.
+                probe.bind(("127.0.0.1", 0))
+                port = probe.getsockname()[1]
+            probe.close()
+        else:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+            s.close()
 
         print(f"ASSEMBLY_PORT={port}")
         print(f"ASSEMBLY_TOKEN={settings.desktop_token}")
