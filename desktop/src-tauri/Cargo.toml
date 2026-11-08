@@ -16,15 +16,18 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 # tauri-build generates the Tauri context (tauri.conf.json embedding) needed
-# by `tauri::generate_context!()`. Kept as a normal build-dependency so the
-# build script works in both default and --no-default-features builds.
-tauri-build = { version = "2.12", features = [] }
+# by `tauri::generate_context!()`. `tauri` is also a build-dependency so its
+# build script emits `cargo:dev=true` (sets DEP_TAURI_DEV), which tauri-build
+# requires.
+tauri-build = { version = "2", features = [] }
+tauri = { version = "2", optional = true }
 
 [features]
 # Default builds the full Tauri desktop app (Windows). Use
 # `--no-default-features` to compile/test the pure logic on any host.
 default = ["desktop"]
 desktop = [
+  "dep:tauri-build",
   "dep:tauri",
   "dep:tauri-plugin-shell",
   "dep:tauri-plugin-opener",
