@@ -41,7 +41,7 @@ describe("privacy-notice", () => {
     expect(webNotice).toContain("Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
     expect(webNotice).toContain("Tavily receives it only when available and selected by that path");
     expect(webNotice).toContain("the other listed services do not require a Tavily key");
-    expect(webNotice).toContain("even without a Tavily key");
+    expect(webNotice).toContain("the other listed services do not require a Tavily key");
     expect(webNotice).toContain("search fallback path");
     expect(webNotice).toContain("not encrypted at rest");
     expect(webNotice).toContain("same-origin JavaScript");
@@ -56,8 +56,9 @@ describe("privacy-notice", () => {
     expect(desktopNotice).toContain("a key-test request sends only the provider key being tested");
     expect(desktopNotice).toContain("any saved Tavily key");
     expect(desktopNotice).toContain("even when search is not used");
-    expect(desktopNotice).toContain("Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
-    expect(desktopNotice).toContain("even without a Tavily key");
+    expect(desktopNotice).toContain("Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(desktopNotice).toContain("Tavily receives it only when available and selected by that path");
+    expect(desktopNotice).toContain("the other listed services do not require a Tavily key");
     expect(desktopNotice).toContain("XSS incident");
     expect(desktopNotice).toContain("Windows Credential Manager adapter");
     expect(desktopNotice).toContain("does not use it as the primary key store");
@@ -104,7 +105,9 @@ describe("privacy-notice", () => {
     expect(publicPolicy).toContain("only the provider key being tested");
     expect(publicPolicy).toContain("any saved Tavily key");
     expect(publicPolicy).toContain("even when search is not used");
-    expect(publicPolicy).toContain("Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(publicPolicy).toContain("Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(publicPolicy).toContain("Tavily receives it only when available and selected by that path");
+    expect(publicPolicy).toContain("the other listed services do not require a Tavily key");
     expect(publicPolicy).toContain("search fallback path");
     expect(publicPolicy).toContain("Hosting providers may process network traffic");
     expect(publicPolicy).toContain("WebView browser profile");
