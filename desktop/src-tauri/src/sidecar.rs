@@ -414,12 +414,11 @@ impl SidecarManager {
     fn assign_to_job_object(&self, pid: u32) {
         use std::os::raw::c_void;
         use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
-        use windows_sys::Win32::System::Threading::{
+        use windows_sys::Win32::System::JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicLimitInformation,
-            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, OpenProcess, PROCESS_ALL_ACCESS,
-            SetInformationJobObject,
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, SetInformationJobObject,
         };
-        use windows_sys::core::PCWSTR;
+        use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_ALL_ACCESS};
 
         #[repr(C)]
         struct JobLimit {
@@ -435,7 +434,7 @@ impl SidecarManager {
         }
 
         unsafe {
-            let job = CreateJobObjectW(std::ptr::null(), PCWSTR::null());
+            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
             if job == INVALID_HANDLE_VALUE {
                 warn!("failed to create Windows job object for sidecar");
                 return;
