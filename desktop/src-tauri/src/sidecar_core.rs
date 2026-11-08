@@ -194,6 +194,29 @@ pub fn assert_port_free(port: u16) -> Result<(), Error> {
     }
 }
 
+/// Generate a per-launch random auth token (hex) without pulling in the
+/// `rand` crate: current time + thread id, hex-encoded. Good enough as a
+/// short-lived local authorization token.
+pub fn generate_auth_token() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tid = std::thread::current().id().as_u64().unwrap_or(0);
+    let mut mixed = now.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(tid);
+    let mut out = String::with_capacity(16);
+    for _ in 0..8 {
+        let nibble = (mixed & 0xF) as u8;
+        out.push(if nibble < 10 {
+            b'0' + nibble
+        } else {
+            b'a' + nibble - 10
+        } as char);
+        mixed >>= 4;
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
