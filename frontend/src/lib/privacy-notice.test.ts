@@ -41,7 +41,6 @@ describe("privacy-notice", () => {
     expect(webNotice).toContain("Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
     expect(webNotice).toContain("Tavily receives it only when available and selected by that path");
     expect(webNotice).toContain("the other listed services do not require a Tavily key");
-    expect(webNotice).toContain("the other listed services do not require a Tavily key");
     expect(webNotice).toContain("search fallback path");
     expect(webNotice).toContain("not encrypted at rest");
     expect(webNotice).toContain("same-origin JavaScript");
