@@ -254,7 +254,7 @@ def test_router_skips_provider_with_unfilled_limits(tmp_path, monkeypatch) -> No
     spec = config.providers["groq"].model_copy(
         update={
             "quota_source": "https://test.invalid/limits",
-            "quota_last_verified": date(2026, 10, 24),
+            "quota_last_verified": date.today(),
         }
     )
     with pytest.raises(LimitsNotFilledError, match="LIMITS NOT FILLED"):
