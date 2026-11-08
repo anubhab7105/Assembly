@@ -27,10 +27,11 @@ describe("privacy-notice", () => {
   });
 
   it("discloses persistent web-key retention and request-scoped backend handling", () => {
-    expect(PRIVACY_NOTICE_VERSION).toBe(3);
+    expect(PRIVACY_NOTICE_VERSION).toBe(4);
     const webNotice = WEB_PRIVACY_PARAGRAPHS.join(" ");
     expect(webNotice).toContain("across refreshes");
-    expect(webNotice).toContain("until you remove them in Settings");
+    expect(webNotice).toContain("You can remove them in Settings");
+    expect(webNotice).toContain("if browser storage fails during removal, a key may remain saved");
     expect(webNotice).toContain("not persisted by the Assembly application");
     expect(webNotice).toContain("all saved model-provider keys");
     expect(webNotice).toContain("not only keys for selected models");
@@ -44,6 +45,7 @@ describe("privacy-notice", () => {
     expect(webNotice).not.toContain("Windows Credential Manager");
     const desktopNotice = DESKTOP_PRIVACY_PARAGRAPHS.join(" ");
     expect(desktopNotice).toContain("WebView browser profile");
+    expect(desktopNotice).toContain("If browser storage fails during removal, a key may remain saved");
     expect(desktopNotice).toContain("over loopback");
     expect(desktopNotice).toContain("all saved model-provider keys");
     expect(desktopNotice).toContain("a key-test request sends only the provider key being tested");
@@ -97,5 +99,6 @@ describe("privacy-notice", () => {
     expect(publicPolicy).toContain("even when search is not used");
     expect(publicPolicy).toContain("Hosting providers may process network traffic");
     expect(publicPolicy).toContain("WebView browser profile");
+    expect(publicPolicy).toContain("If browser storage fails during removal, a key may remain saved");
   });
 });
