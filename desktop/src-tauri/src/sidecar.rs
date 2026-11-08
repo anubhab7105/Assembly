@@ -285,22 +285,20 @@ impl SidecarManager {
             return Ok(());
         }
         *st = SidecarState::Stopping;
-        drop(st);
-
-        let (base_url, token) = {
-            // snapshot current token/url if ready
-            let st = self.state.lock().unwrap();
-            let base_url = match *st {
-                SidecarState::Ready { ref base_url } => base_url.clone(),
-                _ => String::new(),
-            };
-            (base_url, String::new()) // token not retained; read below
+        let (base_url, token) = match *st {
+            SidecarState::Ready { ref base_url } => (base_url.clone(), self.token.lock().unwrap().clone()),
+            _ => (String::new(), self.token.lock().unwrap().clone()),
         };
         drop(st);
 
+        // Clear the stored token once we begin shutdown.
+        *self.token.lock().unwrap() = None;
+
         // Try graceful shutdown via the backend's /shutdown endpoint.
         if !base_url.is_empty() {
-            let _ = Self::post_json(&base_url, "/shutdown", &serde_json::json!({}), None).await;
+            if let Some(token) = token.as_deref() {
+                let _ = Self::post_json(&base_url, "/shutdown", &serde_json::json!({}), Some(token)).await;
+            }
         }
 
         // Grace period, then force kill.
