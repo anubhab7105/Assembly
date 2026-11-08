@@ -97,9 +97,13 @@ export class KeyVault {
         return
       }
     } catch {
-      // Keep IndexedDB authoritative when its API exists but a read fails.
-      // The mirror is a fallback only when the primary is genuinely absent.
+      // Do not hydrate a mirror after an IndexedDB failure. The established
+      // primary must remain authoritative for mutations.
+      if (this.primaryStoreAvailable) return
     }
+    // A successful empty IndexedDB read is authoritative too; consult the
+    // mirror only when IndexedDB is genuinely unavailable.
+    if (this.primaryStoreAvailable) return
     const fb = lsGet()
     if (fb) this.cache = fb
   }
@@ -109,14 +113,16 @@ export class KeyVault {
       const v = await get<unknown>(KEYS_STORE_KEY)
       this.primaryStoreAvailable = true
       if (v !== undefined) return isKeysRecord(v) ? { ...v } : { ...this.cache }
-    } catch (error) {
+      // A successful empty primary read is authoritative; never resurrect a
+      // cached or mirrored value when IndexedDB is present.
+      return {}
+    } catch {
       // Once IndexedDB is the primary store, a failed read is not an empty
       // record. Mutations must stop rather than overwrite stale data or
       // report a removal that only changed a fallback copy.
       if (this.primaryStoreAvailable) throw new KeyStorageError()
       // localStorage is a fallback only when IndexedDB is genuinely absent.
     }
-    if (this.primaryStoreAvailable) return { ...this.cache }
     return lsGet() ?? { ...this.cache }
   }
 
