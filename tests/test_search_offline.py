@@ -17,6 +17,7 @@ async def test_search_without_key_returns_empty_offline(monkeypatch) -> None:
 
 @respx.mock
 async def test_tavily_search_parses_results(monkeypatch) -> None:
+    """Parse a successful Tavily response into the legacy result shape."""
     monkeypatch.setattr(settings, "tavily_api_key", "tvly-test-key")
     engine = SearchEngine()
     assert engine.has_tavily is True
