@@ -1,5 +1,6 @@
 """Shared pytest fixtures for Assembly.
 
+from datetime import date
 All fixtures are offline by construction: providers are MockProvider
 instances (no network), the database is in-memory SQLite, and the
 default mock plan sets needs_research=False so no search HTTP occurs.
@@ -179,7 +180,7 @@ def make_models_yaml(
             # Synthetic offline catalogs use a fixed, explicit source/date.
             # Tests for stale or missing evidence override these fields.
             "quota_source": "https://test.invalid/quota-fixture",
-            "quota_last_verified": "2026-10-24",
+            "quota_last_verified": date.today().isoformat(),
             "models": rendered,
         }
     path = Path(tmp_path) / filename
