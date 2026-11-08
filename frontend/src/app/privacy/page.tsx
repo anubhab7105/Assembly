@@ -27,7 +27,7 @@ export default function PrivacyPage() {
           <h2 className="text-xl font-semibold">The short version</h2>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
             <li>No accounts. No login. No tracking. No cookies set by Assembly.</li>
-            <li>Saved web API keys stay in your browser (IndexedDB with a localStorage fallback). They are readable values, not encrypted at rest or protected by the operating system.</li>
+            <li>Saved web API keys stay in your browser (IndexedDB with a localStorage fallback). They are readable values, not encrypted at rest or protected by the operating system. If browser storage fails during removal, a key may remain saved; clearing browser/site data removes the browser copy.</li>
             <li>For hosted web capacity preflight, the browser sends all saved model-provider keys to the Assembly backend over HTTPS, regardless of model selection. A key-test request sends only the provider key being tested. Every run request sends all saved model-provider keys and any saved Tavily key, even when search is not used. The Assembly application uses submitted keys transiently and does not persist them to its application database or disk.</li>
             <li>The Assembly backend makes outbound requests to your selected providers. Hosting providers may process network traffic and keep their own operational logs under their policies.</li>
           </ul>
@@ -39,7 +39,7 @@ export default function PrivacyPage() {
             <p>
               <strong className="text-foreground">Saved in your browser:</strong> provider API keys, run
               history (questions, answers, sources, scores), settings, usage counters, and your privacy
-              notice acknowledgment. Keys are stored as readable values in IndexedDB with a localStorage fallback; they are not encrypted at rest or stored in an OS-protected credential vault. Same-origin JavaScript, including code injected through an XSS vulnerability, can read them while they are available to the app. Remove keys in Settings or clear browser site data to delete the browser copy.
+              notice acknowledgment. Keys are stored as readable values in IndexedDB with a localStorage fallback; they are not encrypted at rest or stored in an OS-protected credential vault. Same-origin JavaScript, including code injected through an XSS vulnerability, can read them while they are available to the app. Remove keys in Settings or clear browser site data to delete the browser copy. If browser storage fails during removal, a key may remain saved.
             </p>
             <p>
               <strong className="text-foreground">On the hosted Assembly backend, transiently:</strong> capacity preflight sends all saved model-provider keys to the backend over HTTPS, independently of the selected models; a key-test request sends only the provider key being tested; every run sends all saved model-provider keys, any saved Tavily key, the question and model choices in an HTTPS request body, even when search is not used. The backend uses submitted keys for that request/run and does not write them to the Assembly application database or disk. Application logs record operational metadata such as timings, counts and search-query lengths, not raw request bodies, search-query text or key values; key-like values are also scrubbed by the logging filter. This describes the Assembly application, not the independent retention practices of hosting providers.
@@ -76,6 +76,8 @@ export default function PrivacyPage() {
               the hosted Assembly web backend. The current Settings flow stores keys in the embedded WebView
               browser profile (IndexedDB with a localStorage fallback) as readable values, not encrypted at
               rest. Same-origin JavaScript, including code injected through an XSS vulnerability, can read them.
+              If browser storage fails during removal, a key may remain saved; clearing WebView site data removes
+              the browser copy.
             </p>
             <p>
               Preflight sends all saved model-provider keys from the WebView to the local backend over loopback,
