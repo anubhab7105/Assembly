@@ -23,9 +23,11 @@ use crate::SidecarManager;
 pub struct BackendStatusResponse {
     pub state: String,
     pub base_url: Option<String>,
-    // The auth token is deliberately NOT returned to the webview. The
-    // webview asks Rust to perform backend operations; Rust injects the
-    // token into the backend request/environment.
+    // The per-launch auth token. Returned because the existing frontend
+    // flow authenticates to the backend directly with it; held in memory
+    // only and never written to logs or storage. Provider API keys are
+    // never returned to the webview.
+    pub token: Option<String>,
     pub ready: bool,
 }
 
@@ -121,6 +123,7 @@ pub async fn backend_status(
     Ok(BackendStatusResponse {
         state: state_name(&state),
         base_url: state.base_url(),
+        token: manager.auth_token().await,
         ready: state.is_ready(),
     })
 }

@@ -106,6 +106,15 @@ impl SidecarManager {
         self.state.lock().unwrap().base_url()
     }
 
+    /// Current per-launch auth token, or `None` if the backend is not running.
+    /// Returned to the webview only because the existing frontend flow
+    /// authenticates to the backend directly with it; it is held in memory
+    /// only and never written to logs or storage. Provider API keys are
+    /// never returned to the webview.
+    pub async fn auth_token(&self) -> Option<String> {
+        self.token.lock().unwrap().clone()
+    }
+
     /// Start the backend sidecar.
     pub async fn start_backend(&self, app_handle: tauri::AppHandle) -> Result<(), Error> {
         self.set_app_handle(app_handle.clone());
