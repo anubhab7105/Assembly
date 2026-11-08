@@ -42,7 +42,7 @@ def _mock_filtered_router(monkeypatch):
     monkeypatch.setattr(context_mod, "_filtered_router", _fake_filtered_router)
 
 
-def test_web_mode_creates_no_database_file(web_mode, isolated_web_database) -> None:
+def test_web_mode_creates_no_database_file(web_mode, isolated_web_database, tmp_path) -> None:
     """Verify web-mode database setup remains a no-op."""
     from src.core.config import settings
     from src.database.base import init_db
