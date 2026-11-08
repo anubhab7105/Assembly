@@ -100,6 +100,7 @@ def test_catalog_returns_providers_models_families(web_mode, monkeypatch, tmp_pa
 
 
 def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog, tmp_path) -> None:
+    """Run SSE and application logs exclude provider and search key canaries."""
     from src.main import app
 
     _mock_filtered_router(monkeypatch)
