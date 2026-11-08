@@ -28,7 +28,7 @@ export default function PrivacyPage() {
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
             <li>No accounts. No login. No tracking. No cookies set by Assembly.</li>
             <li>Saved web API keys stay in your browser (IndexedDB with a localStorage fallback). They are readable values, not encrypted at rest or protected by the operating system.</li>
-            <li>For hosted web capacity preflight and key tests, the browser sends all saved model-provider keys to the Assembly backend over HTTPS, regardless of model selection. Every run request also sends all saved model-provider keys and any saved Tavily key, even when search is not used. The Assembly application uses submitted keys transiently and does not persist them to its application database or disk.</li>
+            <li>For hosted web capacity preflight, the browser sends all saved model-provider keys to the Assembly backend over HTTPS, regardless of model selection. A key-test request sends only the provider key being tested. Every run request sends all saved model-provider keys and any saved Tavily key, even when search is not used. The Assembly application uses submitted keys transiently and does not persist them to its application database or disk.</li>
             <li>The Assembly backend makes outbound requests to your selected providers. Hosting providers may process network traffic and keep their own operational logs under their policies.</li>
           </ul>
         </section>
@@ -42,7 +42,7 @@ export default function PrivacyPage() {
               notice acknowledgment. Keys are stored as readable values in IndexedDB with a localStorage fallback; they are not encrypted at rest or stored in an OS-protected credential vault. Same-origin JavaScript, including code injected through an XSS vulnerability, can read them while they are available to the app. Remove keys in Settings or clear browser site data to delete the browser copy.
             </p>
             <p>
-              <strong className="text-foreground">On the hosted Assembly backend, transiently:</strong> capacity preflight and key-test requests send all saved model-provider keys to the backend over HTTPS, independently of the selected models; every run sends all saved model-provider keys, any saved Tavily key, the question and model choices in an HTTPS request body, even when search is not used. The backend uses submitted keys for that request/run and does not write them to the Assembly application database or disk. Application logs record operational metadata such as timings, counts and search-query lengths, not raw request bodies, search-query text or key values; key-like values are also scrubbed by the logging filter. This describes the Assembly application, not the independent retention practices of hosting providers.
+              <strong className="text-foreground">On the hosted Assembly backend, transiently:</strong> capacity preflight sends all saved model-provider keys to the backend over HTTPS, independently of the selected models; a key-test request sends only the provider key being tested; every run sends all saved model-provider keys, any saved Tavily key, the question and model choices in an HTTPS request body, even when search is not used. The backend uses submitted keys for that request/run and does not write them to the Assembly application database or disk. Application logs record operational metadata such as timings, counts and search-query lengths, not raw request bodies, search-query text or key values; key-like values are also scrubbed by the logging filter. This describes the Assembly application, not the independent retention practices of hosting providers.
             </p>
             <p>
               <strong className="text-foreground">Application logs and limits:</strong> Assembly records operational metadata such as run identifiers, time budgets, timings and token counts. The rate limiter uses the client IP address to enforce per-IP limits; those rate-limit records are held in application memory and expire. Hosting platforms such as Vercel and Render operate their own infrastructure and logging under their respective policies.
@@ -78,8 +78,9 @@ export default function PrivacyPage() {
               rest. Same-origin JavaScript, including code injected through an XSS vulnerability, can read them.
             </p>
             <p>
-              Preflight, key tests and runs send all saved model-provider keys from the WebView to the local backend over
-              loopback, independently of model selection. Every run request also includes a saved Tavily key,
+              Preflight sends all saved model-provider keys from the WebView to the local backend over loopback,
+              independently of model selection; a key-test request sends only the provider key being tested.
+              Every run request sends all saved model-provider keys and any saved Tavily key,
               even when search is not used; the local backend authenticates to selected providers and uses Tavily
               only when a search request is made. The repository contains a Windows
               Credential Manager keyring adapter, but the current Settings save flow does not use it as the
