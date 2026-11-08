@@ -61,6 +61,7 @@ def test_schema_accepts_absent_key_fields(tmp_path) -> None:
 
 
 def test_recommended_order_prefers_capacity() -> None:
+    """Rank synthetic providers using fresh quota evidence and capacity limits."""
     cfg = ModelsConfig.model_validate(
         {
             "providers": {
