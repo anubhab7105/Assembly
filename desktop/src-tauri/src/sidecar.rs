@@ -422,7 +422,7 @@ impl SidecarManager {
         use windows_sys::core::PCWSTR;
 
         #[repr(C)]
-        struct JobObjectBasicLimitInformation {
+        struct JobLimit {
             per_process_user_time_limit: i64,
             per_job_user_time_limit: i64,
             limit_flags: u32,
@@ -440,7 +440,7 @@ impl SidecarManager {
                 warn!("failed to create Windows job object for sidecar");
                 return;
             }
-            let mut info = JobObjectBasicLimitInformation {
+            let mut info = JobLimit {
                 per_process_user_time_limit: 0,
                 per_job_user_time_limit: 0,
                 limit_flags: JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE as u32,
