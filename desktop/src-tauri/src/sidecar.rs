@@ -1,7 +1,5 @@
-use std::collections::VecDeque;
 use std::io::{Read, Write};
-use std::net::TcpStream;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -9,16 +7,14 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream as TokioTcpStream;
 use tokio::sync::Mutex;
 use tokio::time::timeout;
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 
 use crate::errors::Error;
-use crate::keyring::CredentialStore;
 use crate::sidecar_core::{
-    assert_port_free, generate_auth_token, pick_free_port, resolve_sidecar_path, validate_secret,
-    wrap_secret, APP_MODE_ENV, BACKEND_PORT_ENV, BACKEND_TOKEN_ENV, MAIN_WINDOW_LABEL,
-    READINESS_POLL_INTERVAL_MS, READINESS_TOTAL_MS, SIDECAR_DEV_PATH_ENV,
+    generate_auth_token, pick_free_port, resolve_sidecar_path, APP_MODE_ENV, BACKEND_PORT_ENV,
+    BACKEND_TOKEN_ENV, MAIN_WINDOW_LABEL, READINESS_POLL_INTERVAL_MS, READINESS_TOTAL_MS,
+    SIDECAR_DEV_PATH_ENV,
 };
-use crate::Error as AppError;
 
 // ────────────────────────────────────────────────────────────
 // Events
