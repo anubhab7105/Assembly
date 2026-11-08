@@ -47,7 +47,10 @@ impl std::fmt::Display for Error {
             Error::SidecarStartFailed(m) => write!(f, "failed to start backend sidecar: {m}"),
             Error::PortUnavailable => write!(f, "no free loopback port available"),
             Error::ReadinessTimeout(tail) => {
-                write!(f, "backend did not become ready in time. stderr tail: {tail}")
+                write!(
+                    f,
+                    "backend did not become ready in time. stderr tail: {tail}"
+                )
             }
             Error::ProcessCrashed { exit_code } => match exit_code {
                 Some(code) => write!(f, "backend process crashed with exit code {code}"),

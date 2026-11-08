@@ -6,7 +6,7 @@ use tauri::State;
 use crate::errors::{Error, Secret};
 use crate::keyring::CredentialState;
 use crate::sidecar::{
-    EVENT_BACKEND_READY, EVENT_BACKEND_CRASHED, EVENT_BACKEND_FAILED, EVENT_BACKEND_STOPPED,
+    EVENT_BACKEND_CRASHED, EVENT_BACKEND_FAILED, EVENT_BACKEND_READY, EVENT_BACKEND_STOPPED,
     MAIN_WINDOW_LABEL,
 };
 use crate::sidecar_core::{
@@ -163,10 +163,7 @@ pub async fn credential_exists(
     require_main_window(&window)?;
     validate_provider(&provider)?;
     let exists = store.exists(&provider)?;
-    Ok(CredentialExistsResponse {
-        provider,
-        exists,
-    })
+    Ok(CredentialExistsResponse { provider, exists })
 }
 
 /// Delete a provider credential from the OS keyring.

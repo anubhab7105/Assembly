@@ -37,9 +37,7 @@ impl SidecarState {
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
-            SidecarState::Stopped
-                | SidecarState::Failed { .. }
-                | SidecarState::Crashed { .. }
+            SidecarState::Stopped | SidecarState::Failed { .. } | SidecarState::Crashed { .. }
         )
     }
     pub fn is_ready(&self) -> bool {
@@ -116,7 +114,12 @@ pub fn is_port_in_use(port: u16) -> bool {
 /// Provider allow-list: only these provider IDs may be stored in the keyring
 /// or sent to the backend. Matches `src/providers/config.py` provider ids.
 const ALLOWED_PROVIDERS: &[&str] = &[
-    "gemini", "groq", "cerebras", "openrouter", "huggingface", "mistral",
+    "gemini",
+    "groq",
+    "cerebras",
+    "openrouter",
+    "huggingface",
+    "mistral",
     "nvidia",
 ];
 
@@ -129,8 +132,7 @@ const MIN_SECRET_LEN: usize = 1;
 fn provider_chars_ok(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= MAX_PROVIDER_LEN
-        && s
-            .chars()
+        && s.chars()
             .all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-' | '.'))
 }
 
@@ -247,9 +249,7 @@ mod tests {
         assert!(failed.is_terminal());
         assert!(!failed.is_ready());
 
-        let crashed = SidecarState::Crashed {
-            exit_code: Some(1),
-        };
+        let crashed = SidecarState::Crashed { exit_code: Some(1) };
         assert!(crashed.is_terminal());
 
         let crashed_none = SidecarState::Crashed { exit_code: None };
@@ -294,8 +294,7 @@ mod tests {
     fn resolve_sidecar_uses_dev_override_in_debug() {
         // Non-debug path: bundled required.
         assert!(resolve_sidecar_path(None, false).is_err());
-        assert!(resolve_sidecar_path(Some(Path::new("/no/such/backend.exe")), false)
-            .is_err());
+        assert!(resolve_sidecar_path(Some(Path::new("/no/such/backend.exe")), false).is_err());
         // Debug dev override: env var wins.
         std::env::set_var(SIDECAR_DEV_PATH_ENV, "/tmp/assembly_backend.exe");
         let r = resolve_sidecar_path(None, true);

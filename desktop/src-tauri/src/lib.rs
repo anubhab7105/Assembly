@@ -41,7 +41,7 @@ use tauri::Manager;
 #[cfg(all(windows, feature = "desktop"))]
 pub fn run() {
     use crate::commands::{
-        backend_status, backend_restart, credential_delete, credential_exists, credential_list,
+        backend_restart, backend_status, credential_delete, credential_exists, credential_list,
         credential_save,
     };
     use crate::keyring::KeyringStore;
@@ -52,15 +52,13 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(
-            tauri_plugin_single_instance::init(|_app, _args, _cwd| {
-                // Single-instance guard: a second app copy focuses the main
-                // window instead of spawning a competing sidecar.
-                if let Some(window) = _app.get_webview_window(MAIN_WINDOW_LABEL) {
-                    let _ = window.set_focus();
-                }
-            }),
-        )
+        .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {
+            // Single-instance guard: a second app copy focuses the main
+            // window instead of spawning a competing sidecar.
+            if let Some(window) = _app.get_webview_window(MAIN_WINDOW_LABEL) {
+                let _ = window.set_focus();
+            }
+        }))
         .manage(manager.clone())
         .manage(CredentialState::new(KeyringStore::new()))
         .setup(move |app| {

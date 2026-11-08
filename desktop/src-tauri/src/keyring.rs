@@ -40,7 +40,9 @@ pub struct CredentialState {
 
 impl CredentialState {
     pub fn new(store: impl CredentialStore + 'static) -> Self {
-        Self { store: Box::new(store) }
+        Self {
+            store: Box::new(store),
+        }
     }
 
     pub fn save(&self, provider: &str, secret: &Secret) -> Result<(), Error> {
@@ -223,8 +225,13 @@ mod windows_impl {
             // Credential Manager has no generic "enumerate by service" API,
             // so we probe the known provider catalog and report those present.
             let providers = [
-                "gemini", "groq", "cerebras", "openrouter", "huggingface",
-                "mistral", "nvidia",
+                "gemini",
+                "groq",
+                "cerebras",
+                "openrouter",
+                "huggingface",
+                "mistral",
+                "nvidia",
             ];
             let mut found = Vec::new();
             for p in providers {

@@ -132,16 +132,11 @@ impl SidecarManager {
 
         let mut cmd = tauri_plugin_shell::process::Command::sidecar(exe_path.clone())
             .map_err(|e| Error::SidecarStartFailed(e.to_string()))?;
-        cmd.args([
-            "--port",
-            &port.to_string(),
-            "--token",
-            &token,
-        ])
-        .env_clear()
-        .env(BACKEND_PORT_ENV, port.to_string())
-        .env(BACKEND_TOKEN_ENV, &token)
-        .env(APP_MODE_ENV, "desktop");
+        cmd.args(["--port", &port.to_string(), "--token", &token])
+            .env_clear()
+            .env(BACKEND_PORT_ENV, port.to_string())
+            .env(BACKEND_TOKEN_ENV, &token)
+            .env(APP_MODE_ENV, "desktop");
 
         info!("spawning backend sidecar on 127.0.0.1:{port}");
         let (mut rx, mut child) = cmd.spawn().map_err(|e| {
@@ -179,10 +174,8 @@ impl SidecarManager {
                         drop(c);
 
                         let mut st = state_clone.lock().unwrap();
-                        let deliberate = matches!(
-                            *st,
-                            SidecarState::Stopping | SidecarState::Stopped
-                        );
+                        let deliberate =
+                            matches!(*st, SidecarState::Stopping | SidecarState::Stopped);
                         if deliberate {
                             *st = SidecarState::Stopped;
                             drop(st);
@@ -241,7 +234,9 @@ impl SidecarManager {
         while Instant::now() < deadline {
             if matches!(*self.state.lock().unwrap(), SidecarState::Stopping) {
                 let _ = self.stop_backend().await;
-                return Err(Error::ShutdownFailed("shutdown requested during startup".into()));
+                return Err(Error::ShutdownFailed(
+                    "shutdown requested during startup".into(),
+                ));
             }
             match Self::probe_health(&base_url, &token).await {
                 Ok(true) => {
@@ -265,7 +260,8 @@ impl SidecarManager {
             if remaining.is_zero() {
                 break;
             }
-            tokio::time::sleep(remaining.min(Duration::from_millis(READINESS_POLL_INTERVAL_MS))).await;
+            tokio::time::sleep(remaining.min(Duration::from_millis(READINESS_POLL_INTERVAL_MS)))
+                .await;
         }
 
         let _ = self.stop_backend().await;
@@ -293,7 +289,9 @@ impl SidecarManager {
         }
         *st = SidecarState::Stopping;
         let (base_url, token) = match *st {
-            SidecarState::Ready { ref base_url } => (base_url.clone(), self.token.lock().unwrap().clone()),
+            SidecarState::Ready { ref base_url } => {
+                (base_url.clone(), self.token.lock().unwrap().clone())
+            }
             _ => (String::new(), self.token.lock().unwrap().clone()),
         };
         drop(st);
@@ -304,7 +302,9 @@ impl SidecarManager {
         // Try graceful shutdown via the backend's /shutdown endpoint.
         if !base_url.is_empty() {
             if let Some(token) = token.as_deref() {
-                let _ = Self::post_json(&base_url, "/shutdown", &serde_json::json!({}), Some(token)).await;
+                let _ =
+                    Self::post_json(&base_url, "/shutdown", &serde_json::json!({}), Some(token))
+                        .await;
             }
         }
 
@@ -349,9 +349,7 @@ impl SidecarManager {
     // ────────────────────────────────────────────────────────
 
     async fn probe_health(base_url: &str, token: &str) -> Result<bool, Error> {
-        let host_port = base_url
-            .strip_prefix("http://")
-            .unwrap_or(base_url);
+        let host_port = base_url.strip_prefix("http://").unwrap_or(base_url);
         let deadline = Duration::from_millis(HEALTH_PROBE_TIMEOUT_MS);
         match timeout(deadline, TokioTcpStream::connect(host_port)).await {
             Ok(Ok(mut stream)) => {
@@ -380,9 +378,7 @@ impl SidecarManager {
         // Best-effort graceful shutdown; errors are ignored here because the
         // force-kill path always runs afterwards. Minimal raw HTTP to avoid a
         // reqwest dependency.
-        let host_port = base_url
-            .strip_prefix("http://")
-            .unwrap_or(base_url);
+        let host_port = base_url.strip_prefix("http://").unwrap_or(base_url);
         let deadline = Duration::from_millis(HEALTH_PROBE_TIMEOUT_MS);
         let stream = match timeout(deadline, TokioTcpStream::connect(host_port)).await {
             Ok(Ok(s)) => s,
@@ -416,7 +412,7 @@ impl SidecarManager {
         use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
         use windows_sys::Win32::System::JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicLimitInformation,
-            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, SetInformationJobObject,
+            SetInformationJobObject, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
         };
         use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_ALL_ACCESS};
 
@@ -449,7 +445,7 @@ impl SidecarManager {
                 affinity: 0,
                 priority_class: 0,
                 scheduling_class: 0,
-            }
+            };
             let ok = SetInformationJobObject(
                 job,
                 JobObjectBasicLimitInformation,
@@ -525,7 +521,13 @@ impl SidecarManager {
 
     fn redact_secret_line(text: &str) -> &str {
         // Never log the auth token or provider keys.
-        for marker in ["ASSEMBLY_TOKEN=", "DESKTOP_TOKEN=", "SECRET", "API_KEY", "key="] {
+        for marker in [
+            "ASSEMBLY_TOKEN=",
+            "DESKTOP_TOKEN=",
+            "SECRET",
+            "API_KEY",
+            "key=",
+        ] {
             if text.contains(marker) {
                 return "[redacted]";
             }
