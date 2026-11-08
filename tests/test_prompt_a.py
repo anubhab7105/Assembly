@@ -168,7 +168,7 @@ def test_search_keys_absent_from_422(web_mode, caplog) -> None:
 def test_search_keys_flow_to_tavily_without_logging(
     web_mode, monkeypatch, caplog
 ) -> None:
-    import src.api.run as run_mod
+    import src.api.request_context as request_context_mod
     from src.main import app
     from src.providers.mock_provider import MockProvider
     from src.research import providers as search_providers_mod
@@ -191,7 +191,7 @@ def test_search_keys_flow_to_tavily_without_logging(
             [MockProvider(provider_name="mock-a"), MockProvider(provider_name="mock-b")]
         )
 
-    monkeypatch.setattr(run_mod, "_filtered_router", _fake)
+    monkeypatch.setattr(request_context_mod, "_filtered_router", _fake)
     monkeypatch.setattr(search_providers_mod.TavilySearchProvider, "__init__", _spy)
     monkeypatch.setattr(search_providers_mod.TavilySearchProvider, "search", _no_http)
     client = TestClient(app)
