@@ -192,6 +192,33 @@ describe("KeyVault persistence (P0)", () => {
     await expect(vault.setKey("tavily", CANARY_B)).rejects.toBeInstanceOf(KeyStorageError);
   });
 
+  it("does not use the localStorage mirror after an established IndexedDB read fails", async () => {
+    const fallback = mockLocalStorage();
+    const vault = new KeyVault();
+    await vault.setKey("groq", CANARY_A);
+    fallback.set("assembly:keys_v1", JSON.stringify({ groq: CANARY_B }));
+
+    // A read failure must reject the mutation; it must not act on the mirror.
+    vi.mocked(get).mockRejectedValue(new Error("IndexedDB read failed"));
+
+    await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError);
+    expect(store.get(KEYS_STORE_KEY)).toEqual({ groq: CANARY_A });
+    expect(JSON.parse(fallback.get("assembly:keys_v1") ?? "{}")).toEqual({ groq: CANARY_B });
+
+    // Reads keep their existing cache-based fallback behavior.
+    expect(await vault.getKey("groq")).toBe(CANARY_A);
+    expect(await vault.allKeys()).toEqual({ groq: CANARY_A });
+  });
+
+  it("does not use the cache after an established IndexedDB read fails during mutation", async () => {
+    const vault = new KeyVault();
+    await vault.setKey("groq", CANARY_A);
+    vi.mocked(get).mockRejectedValue(new Error("IndexedDB read failed"));
+
+    await expect(vault.setKey("tavily", CANARY_B)).rejects.toBeInstanceOf(KeyStorageError);
+    expect(store.get(KEYS_STORE_KEY)).toEqual({ groq: CANARY_A });
+  });
+
   it("does not report removal as successful when an established IndexedDB store rejects a write", async () => {
     const fallback = mockLocalStorage();
     const vault = new KeyVault();
