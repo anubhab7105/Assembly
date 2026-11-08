@@ -218,6 +218,7 @@ def test_cancel_on_disconnect(web_mode, monkeypatch) -> None:
         entry = run_mod._RunEntry(run_id="run-test", created_at=run_mod._now())
 
         async def _work() -> None:
+            """Simulate a cancellable run task and publish its terminal event."""
             try:
                 await asyncio.sleep(30.0)
             except asyncio.CancelledError:
@@ -349,6 +350,7 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
             self.router = None
 
         async def execute(self, **kwargs):
+            """Capture transient request keys, then simulate a provider failure."""
             # Record exactly what the handler passed to the run, then fail
             # with a secret-shaped payload to test safe diagnostic behavior.
             assert kwargs["provider_keys"] == {"groq": fake_key}
