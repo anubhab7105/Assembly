@@ -188,6 +188,7 @@ def test_search_keys_flow_to_tavily_without_logging(
         raise AssertionError("must not reach the network in this test")
 
     def _fake(provider_keys, allowed, pins):
+        """Provide offline mock agents while exercising real search-key wiring."""
         return MockRouter(
             [MockProvider(provider_name="mock-a"), MockProvider(provider_name="mock-b")]
         )
