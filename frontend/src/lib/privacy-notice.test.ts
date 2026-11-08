@@ -32,7 +32,10 @@ describe("privacy-notice", () => {
     expect(webNotice).toContain("across refreshes");
     expect(webNotice).toContain("until you remove them in Settings");
     expect(webNotice).toContain("not persisted by the Assembly application");
-    expect(webNotice).toContain("preflight, key-test or run requests");
+    expect(webNotice).toContain("all saved model-provider keys");
+    expect(webNotice).toContain("not only keys for selected models");
+    expect(webNotice).toContain("any saved Tavily key");
+    expect(webNotice).toContain("even when search is not used");
     expect(webNotice).toContain("not encrypted at rest");
     expect(webNotice).toContain("same-origin JavaScript");
     expect(webNotice).toContain("XSS vulnerability");
@@ -41,6 +44,9 @@ describe("privacy-notice", () => {
     const desktopNotice = DESKTOP_PRIVACY_PARAGRAPHS.join(" ");
     expect(desktopNotice).toContain("WebView browser profile");
     expect(desktopNotice).toContain("over loopback");
+    expect(desktopNotice).toContain("all saved model-provider keys");
+    expect(desktopNotice).toContain("any saved Tavily key");
+    expect(desktopNotice).toContain("even when search is not used");
     expect(desktopNotice).toContain("XSS incident");
     expect(desktopNotice).toContain("Windows Credential Manager adapter");
     expect(desktopNotice).toContain("does not use it as the primary key store");
@@ -83,6 +89,9 @@ describe("privacy-notice", () => {
     expect(publicPolicy).toContain("not encrypted at rest");
     expect(publicPolicy).toContain("same-origin JavaScript");
     expect(publicPolicy).toContain("hosted Assembly backend over HTTPS");
+    expect(publicPolicy).toContain("all saved model-provider keys");
+    expect(publicPolicy).toContain("any saved Tavily key");
+    expect(publicPolicy).toContain("even when search is not used");
     expect(publicPolicy).toContain("Hosting providers may process network traffic");
     expect(publicPolicy).toContain("WebView browser profile");
   });
