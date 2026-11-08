@@ -11,7 +11,6 @@ import {
   desktopCredentialSave,
   desktopCredentialDelete,
   desktopCredentialList,
-  desktopCredentialExists,
 } from "@/lib/desktop-credentials"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
@@ -283,7 +282,6 @@ export function KeysManager() {
     setNeedsUnlock(false)
     setUnlockError(null)
     setSavedKeys({})
-    setDesktopProviders([])
     setInputs({})
     setStatuses({})
     setDetails({})
