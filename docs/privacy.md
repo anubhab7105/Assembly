@@ -4,9 +4,9 @@
 > (`WEB_PRIVACY_PARAGRAPHS` / `DESKTOP_PRIVACY_PARAGRAPHS`). The paragraphs
 > below match the blocking first-run dialog exactly.
 
-## Web mode consent text (blocking dialog, version 5)
+## Web mode consent text (blocking dialog, version 6)
 
-Assembly web mode sends your question, all saved model-provider keys (not only keys for selected models) and model choices to the hosted Assembly backend over HTTPS (localhost is used for local development). Preflight requests include all saved model-provider keys, independent of model selection; a key-test request includes only the provider key being tested; every run request includes all saved model-provider keys and any saved Tavily key, even when search is not used. When research runs, Assembly may also send your full question as a search query to Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, even without a Tavily key; the recipients depend on the search fallback path. Submitted keys are not persisted by the Assembly application.
+Assembly web mode sends your question, all saved model-provider keys (not only keys for selected models) and model choices to the hosted Assembly backend over HTTPS (localhost is used for local development). Preflight requests include all saved model-provider keys, independent of model selection; a key-test request includes only the provider key being tested; every run request includes all saved model-provider keys and any saved Tavily key, even when search is not used. When research runs, Assembly may send your full question as a search query to Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, depending on the search fallback path. Tavily receives it only when available and selected by that path; the other listed services do not require a Tavily key. Submitted keys are not persisted by the Assembly application.
 
 Saved web API keys stay in this browser across refreshes. They are stored as readable values (not encrypted at rest) in IndexedDB with a localStorage fallback. You can remove them in Settings, but if browser storage fails during removal, a key may remain saved. Clearing browser/site data removes them. Browser storage is not an OS-protected credential vault; same-origin JavaScript, including code injected through an XSS vulnerability, can read saved keys.
 
@@ -26,7 +26,7 @@ Avoid sending sensitive or confidential information.
 
 Desktop mode uses an Assembly backend running locally on your PC. Its requests do not pass through the hosted Assembly web backend.
 
-When research runs, Assembly may also send your full question as a search query to Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, even without a Tavily key; the recipients depend on the search fallback path.
+When research runs, Assembly may send your full question as a search query to Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, depending on the search fallback path. Tavily receives it only when available and selected by that path; the other listed services do not require a Tavily key.
 
 Desktop run history is stored locally in SQLite. UI settings and the current Settings key vault use the embedded WebView browser storage. Saved keys are readable values, not encrypted at rest; same-origin JavaScript, including injected code in an XSS incident, can read them.
 
