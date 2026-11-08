@@ -70,7 +70,7 @@ impl CredentialState {
 
 /// In-memory credential store. Holds `Secret` values (redacting `Debug`)
 /// purely for unit testing; not used in production desktop builds.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct InMemoryStore {
     inner: RwLock<HashMap<String, Secret>>,
 }
