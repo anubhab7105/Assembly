@@ -170,8 +170,15 @@ def test_unpinned_routing_keeps_router_choice() -> None:
     assert decision.model == "openai/gpt-oss-20b"
 
 
-def test_preflight_uses_request_keys(monkeypatch, caplog) -> None:
-    """Preflight receives request keys without echoing or logging their values."""
+def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:
+    """Preflight receives request keys without echoing, logging, or persisting them."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "app_mode", "web")
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "debug", False)
+    monkeypatch.chdir(tmp_path)
+
     from types import SimpleNamespace
 
     import src.api.preflight as preflight_mod
@@ -228,6 +235,7 @@ def test_preflight_uses_request_keys(monkeypatch, caplog) -> None:
     assert CANARY_PROV not in caplog.text
     assert CANARY_SEARCH not in caplog.text
     assert CANARY_Q not in caplog.text
+    assert list(tmp_path.rglob("*.db")) == []
 
 
 def test_preflight_canary_never_in_422(caplog) -> None:
