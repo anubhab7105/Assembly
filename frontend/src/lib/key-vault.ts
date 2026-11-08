@@ -75,9 +75,9 @@ export class KeyVault {
   private cache: Record<string, string> = {}
   private loadOnce: Promise<void> | null = null
   private writeChain: Promise<void> = Promise.resolve()
-  // Once IndexedDB has been observed, it remains the canonical store. If a
-  // later write fails, a localStorage mirror could claim success while the
-  // old IndexedDB value remains and reappears when IndexedDB recovers.
+  // If IndexedDB is present or has been used, it remains the canonical store.
+  // A later failed write must not be hidden by a localStorage mirror, or the
+  // old IndexedDB value could reappear when the primary store recovers.
   private primaryStoreAvailable: boolean = typeof indexedDB !== "undefined"
 
   private ensureLoaded(): Promise<void> {
