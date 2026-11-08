@@ -15,10 +15,10 @@ name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-# tauri-build is only required when the "desktop" feature (tauri integration)
-# is enabled. Kept optional so `cargo check --no-default-features` compiles
-# the pure, platform-agnostic logic on any host (e.g. Linux CI without dbus).
-tauri-build = { version = "2", features = [], optional = true }
+# tauri-build generates the Tauri context (tauri.conf.json embedding) needed
+# by `tauri::generate_context!()`. Kept as a normal build-dependency so the
+# build script works in both default and --no-default-features builds.
+tauri-build = { version = "2", features = [] }
 
 [features]
 # Default builds the full Tauri desktop app (Windows). Use
@@ -31,7 +31,6 @@ desktop = [
   "dep:tauri-plugin-single-instance",
   "dep:keyring",
   "dep:windows-sys",
-  "dep:tauri-build",
 ]
 
 [dependencies]
