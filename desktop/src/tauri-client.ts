@@ -108,18 +108,18 @@ export interface BackendReadyPayload { base_url: string }
 export interface BackendCrashedPayload { exit_code: number | null }
 export interface BackendFailedPayload { reason: string }
 
-type Unsubscribe = () => Promise<void>
+export type Unsubscribe = () => Promise<void>
 
 export function onBackendReady(handler: (p: BackendReadyPayload) => void): Promise<Unsubscribe> {
-  return listen<EVENT_BACKEND_READY_PAYLOAD>(EVENT_BACKEND_READY, (event) => handler(event.payload))
+  return listen(EVENT_BACKEND_READY, (event) => handler(event.payload as BackendReadyPayload))
 }
 
 export function onBackendCrashed(handler: (p: BackendCrashedPayload) => void): Promise<Unsubscribe> {
-  return listen(EVENT_BACKEND_CRASHED, (event) => handler(event.payload))
+  return listen(EVENT_BACKEND_CRASHED, (event) => handler(event.payload as BackendCrashedPayload))
 }
 
 export function onBackendFailed(handler: (p: BackendFailedPayload) => void): Promise<Unsubscribe> {
-  return listen(EVENT_BACKEND_FAILED, (event) => handler(event.payload))
+  return listen(EVENT_BACKEND_FAILED, (event) => handler(event.payload as BackendFailedPayload))
 }
 
 export function onBackendStopped(handler: () => void): Promise<Unsubscribe> {
@@ -137,5 +137,3 @@ export function isTauri(): boolean {
     !!(window as unknown as Record<string, unknown>)["__TAURI__"]
   )
 }
-
-type EVENT_BACKEND_READY_PAYLOAD = BackendReadyPayload
