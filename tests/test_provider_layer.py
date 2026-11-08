@@ -239,7 +239,6 @@ def test_provider_limits_issue_is_none_when_filled_or_disabled(tmp_path) -> None
 
 
 def test_router_skips_provider_with_unfilled_limits(tmp_path, monkeypatch) -> None:
-    """Verify providers with incomplete quota metadata are excluded from routing."""
     from src.providers.config import LimitsNotFilledError, validate_provider_limits
 
     providers = _custom_providers()
@@ -255,7 +254,7 @@ def test_router_skips_provider_with_unfilled_limits(tmp_path, monkeypatch) -> No
     spec = config.providers["groq"].model_copy(
         update={
             "quota_source": "https://test.invalid/limits",
-            "quota_last_verified": date.today(),
+            "quota_last_verified": date(2026, 10, 24),
         }
     )
     with pytest.raises(LimitsNotFilledError, match="LIMITS NOT FILLED"):
