@@ -56,8 +56,9 @@ keyring = { version = "2", optional = true }
 
 # Windows Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) so the backend
 # and its process tree die even if the Tauri shell crashes. Windows only.
+# Win32_Security is required by CreateJobObjectW.
 windows-sys = { version = "0.52", optional = true,
-  features = ["Win32_Foundation", "Win32_System_Threading"] }
+  features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

@@ -413,10 +413,11 @@ impl SidecarManager {
     #[cfg(windows)]
     fn assign_to_job_object(&self, pid: u32) {
         use std::os::raw::c_void;
-        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
         use windows_sys::Win32::System::Threading::{
-            AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-            PROCESS_ALL_ACCESS, SetInformationJobObject,
+            AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicLimitInformation,
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, OpenProcess, PROCESS_ALL_ACCESS,
+            SetInformationJobObject,
         };
         use windows_sys::core::PCWSTR;
 
@@ -434,15 +435,15 @@ impl SidecarManager {
         }
 
         unsafe {
-            let job = CreateJobObjectW(None, PCWSTR::null());
-            if job.is_invalid() {
+            let job = CreateJobObjectW(std::ptr::null(), PCWSTR::null());
+            if job == INVALID_HANDLE_VALUE {
                 warn!("failed to create Windows job object for sidecar");
                 return;
             }
             let mut info = JobObjectBasicLimitInformation {
                 per_process_user_time_limit: 0,
                 per_job_user_time_limit: 0,
-                limit_flags: JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                limit_flags: JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE as u32,
                 minimum_working_set_size: 0,
                 maximum_working_set_size: 0,
                 active_process_limit: 0,
@@ -452,8 +453,8 @@ impl SidecarManager {
             }
             let ok = SetInformationJobObject(
                 job,
-                2, // JobObjectBasicLimitInformation = 2
-                &mut info as *mut _ as *mut c_void,
+                JobObjectBasicLimitInformation,
+                &mut info as *mut _ as *const c_void,
                 std::mem::size_of_val(&info) as u32,
             );
             if ok == 0 {
@@ -465,12 +466,8 @@ impl SidecarManager {
             // child; assigning only the parent leaves the real process alive)
             // and assign it to the job. Kill-on-job-close then covers the
             // whole tree.
-            let proc = windows_sys::Win32::System::Threading::OpenProcess(
-                PROCESS_ALL_ACCESS,
-                0,
-                pid,
-            );
-            if proc.is_invalid() {
+            let proc = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
+            if proc == INVALID_HANDLE_VALUE {
                 warn!("failed to open sidecar process {pid} for job assignment");
                 let _ = CloseHandle(job);
                 return;
