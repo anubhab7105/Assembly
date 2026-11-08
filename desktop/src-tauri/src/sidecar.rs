@@ -497,7 +497,8 @@ impl SidecarManager {
             {
                 use windows_sys::Win32::Foundation::CloseHandle;
                 unsafe {
-                    let _ = CloseHandle(handle as *mut _);
+                    // HANDLE is `isize` on this windows-sys version.
+                    let _ = CloseHandle(handle as isize);
                 }
             }
         }
