@@ -121,6 +121,7 @@ const ALLOWED_PROVIDERS: &[&str] = &[
     "huggingface",
     "mistral",
     "nvidia",
+    "tavily",
 ];
 
 const MAX_PROVIDER_LEN: usize = 64;

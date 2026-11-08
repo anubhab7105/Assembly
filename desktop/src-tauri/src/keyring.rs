@@ -232,6 +232,7 @@ mod windows_impl {
                 "huggingface",
                 "mistral",
                 "nvidia",
+                "tavily",
             ];
             let mut found = Vec::new();
             for p in providers {
