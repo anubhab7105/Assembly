@@ -170,7 +170,7 @@ def test_unpinned_routing_keeps_router_choice() -> None:
     assert decision.model == "openai/gpt-oss-20b"
 
 
-def test_preflight_uses_request_keys(monkeypatch) -> None:
+def test_preflight_uses_request_keys(monkeypatch, caplog) -> None:
     from types import SimpleNamespace
 
     import src.api.preflight as preflight_mod
@@ -206,23 +206,27 @@ def test_preflight_uses_request_keys(monkeypatch) -> None:
 
     monkeypatch.setattr(preflight_mod, "build_request_context", _fake)
     client = TestClient(app)
-    res = client.post(
-        "/api/preflight",
-        json={
-            "question": CANARY_Q,
-            "time_budget_minutes": 5,
-            "provider_keys": {"groq": CANARY_PROV},
-            "search_keys": {"tavily": CANARY_SEARCH},
-            "model_selection": {"selected": [], "pins": {}},
-            "usage_snapshot": [],
-        },
-    )
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        res = client.post(
+            "/api/preflight",
+            json={
+                "question": CANARY_Q,
+                "time_budget_minutes": 5,
+                "provider_keys": {"groq": CANARY_PROV},
+                "search_keys": {"tavily": CANARY_SEARCH},
+                "model_selection": {"selected": [], "pins": {}},
+                "usage_snapshot": [],
+            },
+        )
     assert res.status_code == 200, res.text
     assert res.json()["feasible"] is True
     assert seen.get("provider_keys") == {"groq": CANARY_PROV}
     assert seen.get("search_keys") == {"tavily": CANARY_SEARCH}
     assert CANARY_PROV not in res.text
     assert CANARY_SEARCH not in res.text
+    assert CANARY_PROV not in caplog.text
+    assert CANARY_SEARCH not in caplog.text
+    assert CANARY_Q not in caplog.text
 
 
 def test_preflight_canary_never_in_422(caplog) -> None:
