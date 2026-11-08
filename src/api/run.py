@@ -346,9 +346,20 @@ async def start_run(req: RunRequest, request: Request):
     # the diversity verdict here and the router used below cannot diverge.
     from src.providers.router import PinViolationError
 
+    # In desktop mode the provider keys live in the OS keyring and are never
+    # sent to the webview. Merge the stored keys into the request so the run
+    # can proceed without the frontend ever handling provider secrets.
+    # Request-provided keys take precedence (allows a per-request override).
+    provider_keys = dict(req.provider_keys or {})
+    if settings.app_mode == "desktop":
+        from src.core.keystore import get_keystore, reveal
+
+        for provider, key in get_keystore().get_keys().items():
+            provider_keys.setdefault(provider, reveal(key))
+
     try:
         ctx = build_request_context(
-            dict(req.provider_keys or {}),
+            provider_keys,
             dict(req.search_keys) if req.search_keys is not None else None,
             list(req.model_selection.selected or []),
             dict(req.model_selection.pins or {}),
@@ -461,7 +472,7 @@ async def start_run(req: RunRequest, request: Request):
             run_id,
             question,
             req.time_budget_minutes,
-            dict(req.provider_keys or {}),
+            provider_keys,
             allowed,
             pins,
             [u.model_dump() for u in (req.usage_snapshot or [])],
