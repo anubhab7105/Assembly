@@ -171,6 +171,7 @@ def test_unpinned_routing_keeps_router_choice() -> None:
 
 
 def test_preflight_uses_request_keys(monkeypatch, caplog) -> None:
+    """Preflight receives request keys without echoing or logging their values."""
     from types import SimpleNamespace
 
     import src.api.preflight as preflight_mod
