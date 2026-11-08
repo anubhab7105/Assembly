@@ -7,10 +7,10 @@ use crate::errors::{Error, Secret};
 use crate::keyring::CredentialState;
 use crate::sidecar::{
     EVENT_BACKEND_CRASHED, EVENT_BACKEND_FAILED, EVENT_BACKEND_READY, EVENT_BACKEND_STOPPED,
-    MAIN_WINDOW_LABEL,
 };
 use crate::sidecar_core::{
     validate_provider, validate_secret, validate_window_label, wrap_secret, SidecarState,
+    MAIN_WINDOW_LABEL,
 };
 use crate::SidecarManager;
 
