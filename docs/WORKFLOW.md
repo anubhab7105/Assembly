@@ -218,7 +218,7 @@ The current Settings save path does not use the Windows Credential Manager adapt
 **Hosted website** (`POST /api/run`, SSE, stateless)
 ```text
 Browser vault stores readable keys in IndexedDB with a localStorage fallback
-Preflight, key-test and run requests send selected keys to the hosted backend over HTTPS
+Preflight and key-test requests send all saved model-provider keys to the hosted backend over HTTPS, independently of model selection; every run request sends those keys and any saved Tavily key, even when search is not used
 Backend uses the keys transiently for that request/run; the Assembly application does not persist them to its database or disk
 Search-provider logs record query lengths, not the raw query text; application logs avoid raw request bodies and key values are masked
 A disconnect cancels the run; there is no re-attach and no web history on the server
