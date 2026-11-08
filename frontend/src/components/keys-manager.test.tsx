@@ -103,7 +103,7 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
       "across refreshes",
     );
     expect(screen.getByText(/sent to the hosted Assembly backend over HTTPS.*preflight, key tests and runs/i)).toBeDefined();
-    expect(screen.getByText(/sent to the hosted Assembly backend over HTTPS.*runs that use search/i)).toBeDefined();
+    expect(screen.getByText(/saved Tavily key is sent to the hosted Assembly backend over HTTPS.*every run request, even when search is not used/i)).toBeDefined();
     expect(screen.queryByTestId("memory-only-banner")).toBeNull();
     expect(screen.queryByTestId("unlock-prompt")).toBeNull();
   });
