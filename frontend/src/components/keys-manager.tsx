@@ -533,8 +533,8 @@ export function KeysManager() {
             <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
               <Shield className="size-3 shrink-0" />
               {desktopMode
-                ? "Stored in this WebView browser profile; sent to the local Assembly backend over loopback with runs that use search."
-                : "Stored in this browser; sent to the hosted Assembly backend over HTTPS (localhost is used for local development) with runs that use search."}
+                ? "Stored in this WebView browser profile; a saved Tavily key is sent to the local Assembly backend over loopback with every run request, even when search is not used."
+                : "Stored in this browser; a saved Tavily key is sent to the hosted Assembly backend over HTTPS (localhost is used for local development) with every run request, even when search is not used."}
             </p>
           </div>
         </CardContent>
