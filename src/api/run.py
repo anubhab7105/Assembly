@@ -408,7 +408,7 @@ async def start_run(req: RunRequest, request: Request):
                     content={"detail": "Tier not feasible with current quota."},
                 )
     except Exception as exc:  # noqa: BLE001 — capacity advisory, fail open
-        logger.debug(f"Run     │ capacity check skipped: {exc}")
+        logger.debug("Run     │ capacity check skipped (type=%s)", type(exc).__name__)
 
     async with _runs_lock:
         active = sum(1 for e in _runs.values() if not e.done)
