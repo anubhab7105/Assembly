@@ -7,6 +7,7 @@ classifier, and a key-leak scan.
 """
 
 import json
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -166,6 +167,7 @@ async def test_empty_response_uses_fallback() -> None:
 
 
 async def test_invalid_schema_retries_then_falls_back() -> None:
+    """Retry one invalid model schema, then use the heuristic plan."""
     bad = {
         "problem_type": "general",
         "complexity": "extreme",
@@ -179,6 +181,21 @@ async def test_invalid_schema_retries_then_falls_back() -> None:
     assert len(provider.calls) == 2
     assert plan.fallback_used is True
     assert len(plan.team_composition) == 2
+
+
+async def test_validation_canary_is_not_logged_or_returned(caplog: Any) -> None:
+    """Keep invalid planner payload details out of logs and fallback text."""
+    canary = "CANARY-PLANNER-VALIDATION-4E2A9D"
+    invalid_plan = {**VALID_PLAN, "complexity": canary}
+    planner, provider, _ = _planner(invalid_plan)
+
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        plan = await planner.plan("A benign question for classification.", 5)
+
+    assert len(provider.calls) == 2
+    assert "Classification failed (type=ValueError)" in caplog.text
+    assert canary not in caplog.text
+    assert canary not in plan.reasoning
 
 
 async def test_empty_roles_list_is_invalid() -> None:
