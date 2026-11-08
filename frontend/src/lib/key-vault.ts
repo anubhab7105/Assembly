@@ -4,7 +4,7 @@ import { get, set, del } from "idb-keyval"
  * KeyVault: one canonical browser-side store for provider credentials.
  *
  * Every `setKey` writes through to persistent storage (IndexedDB via
- * idb-keyval, with a localStorage mirror used only when IndexedDB throws),
+ * idb-keyval, with a localStorage fallback when IndexedDB is unavailable),
  * so a plain Save survives a normal page refresh with no extra step.
  * Reads load from the same store before serving, so initialization can
  * never overwrite saved values with empty defaults.
@@ -75,6 +75,10 @@ export class KeyVault {
   private cache: Record<string, string> = {}
   private loadOnce: Promise<void> | null = null
   private writeChain: Promise<void> = Promise.resolve()
+  // Once IndexedDB has been observed, it remains the canonical store. If a
+  // later write fails, a localStorage mirror could claim success while the
+  // old IndexedDB value remains and reappears when IndexedDB recovers.
+  private primaryStoreAvailable: boolean = typeof indexedDB !== "undefined"
 
   private ensureLoaded(): Promise<void> {
     if (!this.loadOnce) this.loadOnce = this.loadFromStores()
@@ -87,12 +91,14 @@ export class KeyVault {
     // deliberate clear cannot resurrect stale fallback copies).
     try {
       const v = await get<unknown>(KEYS_STORE_KEY)
+      this.primaryStoreAvailable = true
       if (v !== undefined) {
         if (isKeysRecord(v)) this.cache = { ...v }
         return
       }
     } catch {
-      // IndexedDB unavailable: fall through to the mirror.
+      // Keep IndexedDB authoritative when its API exists but a read fails.
+      // The mirror is a fallback only when the primary is genuinely absent.
     }
     const fb = lsGet()
     if (fb) this.cache = fb
@@ -101,6 +107,7 @@ export class KeyVault {
   private async readCanonical(): Promise<Record<string, string>> {
     try {
       const v = await get<unknown>(KEYS_STORE_KEY)
+      this.primaryStoreAvailable = true
       if (v !== undefined) return isKeysRecord(v) ? { ...v } : { ...this.cache }
     } catch {
       // Fall through to the mirror.
@@ -112,6 +119,7 @@ export class KeyVault {
     const snapshot = { ...next }
     try {
       await set(KEYS_STORE_KEY, snapshot)
+      this.primaryStoreAvailable = true
       // Primary healthy: drop any stale fallback copy (best effort).
       try {
         if (typeof window !== "undefined") window.localStorage.removeItem(LS_FALLBACK_KEY)
@@ -120,7 +128,9 @@ export class KeyVault {
       }
       return
     } catch {
-      // IndexedDB failed: mirror to localStorage so the save still survives.
+      // Never mask a failed write to an established IndexedDB store with a
+      // localStorage write: the old primary value would still win on reload.
+      if (this.primaryStoreAvailable) throw new KeyStorageError()
     }
     try {
       if (typeof window === "undefined") throw new Error("no window")
