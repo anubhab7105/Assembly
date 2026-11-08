@@ -411,6 +411,7 @@ async def test_router_empty_query_spends_no_budget() -> None:
 async def test_router_cache_dedupes_identical_queries(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """Verify equivalent normalized queries reuse the completed search result cache."""
     query = "PRIVATE-CACHE-QUERY-CANARY-7f9c"
     stub = _StubProvider("tavily", results=[_result()])
     router = SearchRouter(providers=[stub], max_searches=10)
