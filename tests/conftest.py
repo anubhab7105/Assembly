@@ -212,6 +212,7 @@ def _block_network(monkeypatch) -> None:
         raise RuntimeError(f"Network access is blocked in tests (tried {host})")
 
     def _blocked_dns(host, *args: object, **kwargs: object) -> object:
+        """Reject non-loopback DNS lookups while allowing local test servers."""
         if host in ("127.0.0.1", "::1", "localhost"):
             return socket._real_getaddrinfo(host, *args, **kwargs)
         raise RuntimeError(f"DNS is blocked in tests (tried {host})")
