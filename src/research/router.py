@@ -195,13 +195,13 @@ class SearchRouter:
                 results = await provider.search(query, max_results=limit)
             except SearchQuotaExhausted as e:
                 attempted = True
-                logger.warning(f"Search  │ Quota out, falling back ({e})")
+                logger.warning("Search  │ Quota exhausted for %s; falling back", provider.provider_name)
                 continue
             except SearchProviderError as e:
                 attempted = True
                 logger.warning(
                     f"Search  │ {provider.provider_name} failed "
-                    f"({type(e).__name__}: {e}); falling back"
+                    f"({type(e).__name__}); falling back"
                 )
                 continue
             except Exception as e:  # noqa: BLE001 — total failure returns [], never raises
