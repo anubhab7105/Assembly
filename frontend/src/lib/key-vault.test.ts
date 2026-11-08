@@ -193,17 +193,17 @@ describe("KeyVault persistence (P0)", () => {
   });
 
   it("does not report removal as successful when an established IndexedDB store rejects a write", async () => {
-    const fallback = mockLocalStorage()
-    const vault = new KeyVault()
-    await vault.setKey("groq", CANARY_A)
+    const fallback = mockLocalStorage();
+    const vault = new KeyVault();
+    await vault.setKey("groq", CANARY_A);
 
     // The primary still contains the old key, while its next write fails.
-    vi.mocked(set).mockRejectedValue(new Error("IndexedDB write failed"))
+    vi.mocked(set).mockRejectedValue(new Error("IndexedDB write failed"));
 
-    await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError)
-    expect(store.get(KEYS_STORE_KEY)).toEqual({ groq: CANARY_A })
-    expect(fallback.get("assembly:keys_v1")).toBeUndefined()
-    expect(await new KeyVault().getKey("groq")).toBe(CANARY_A)
+    await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError);
+    expect(store.get(KEYS_STORE_KEY)).toEqual({ groq: CANARY_A });
+    expect(fallback.get("assembly:keys_v1")).toBeUndefined();
+    expect(await new KeyVault().getKey("groq")).toBe(CANARY_A);
   })
 
   it("does not report removal as successful when both persistent stores reject writes", async () => {
