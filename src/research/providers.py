@@ -381,6 +381,7 @@ class DuckDuckGoSearchProvider(SearchProvider):
     IS_UNOFFICIAL: bool = True
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search the unofficial DuckDuckGo fallback and normalize topic results."""
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
