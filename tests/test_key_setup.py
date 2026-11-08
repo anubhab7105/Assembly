@@ -61,6 +61,7 @@ def test_schema_accepts_absent_key_fields(tmp_path) -> None:
 
 
 def test_recommended_order_prefers_capacity() -> None:
+    """Verify provider recommendations rank usable capacity ahead of unavailable options."""
     cfg = ModelsConfig.model_validate(
         {
             "providers": {
