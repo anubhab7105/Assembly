@@ -109,9 +109,14 @@ export class KeyVault {
       const v = await get<unknown>(KEYS_STORE_KEY)
       this.primaryStoreAvailable = true
       if (v !== undefined) return isKeysRecord(v) ? { ...v } : { ...this.cache }
-    } catch {
-      // Fall through to the mirror.
+    } catch (error) {
+      // Once IndexedDB is the primary store, a failed read is not an empty
+      // record. Mutations must stop rather than overwrite stale data or
+      // report a removal that only changed a fallback copy.
+      if (this.primaryStoreAvailable) throw new KeyStorageError()
+      // localStorage is a fallback only when IndexedDB is genuinely absent.
     }
+    if (this.primaryStoreAvailable) return { ...this.cache }
     return lsGet() ?? { ...this.cache }
   }
 
