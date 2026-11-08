@@ -168,6 +168,7 @@ def test_search_keys_absent_from_422(web_mode, caplog) -> None:
 def test_search_keys_flow_to_tavily_without_logging(
     web_mode, monkeypatch, caplog
 ) -> None:
+    """Verify request-scoped search keys reach Tavily without appearing in logs."""
     import src.api.request_context as request_context_mod
     from src.main import app
     from src.providers.mock_provider import MockProvider
