@@ -6,7 +6,7 @@
 
 ## Web mode consent text (blocking dialog, version 3)
 
-Assembly web mode sends your question, API keys and model choices to the hosted Assembly backend over HTTPS (localhost is used for local development). Submitted API keys are used for preflight, key-test or run requests and are not persisted by the Assembly application.
+Assembly web mode sends your question, all saved model-provider keys (not only keys for selected models) and model choices to the hosted Assembly backend over HTTPS (localhost is used for local development). Preflight and key-test requests include all saved model-provider keys; every run request includes all saved model-provider keys and any saved Tavily key, even when search is not used. Submitted keys are not persisted by the Assembly application.
 
 Saved web API keys stay in this browser across refreshes. They are stored as readable values (not encrypted at rest) in IndexedDB with a localStorage fallback until you remove them in Settings or clear browser/site data. Browser storage is not an OS-protected credential vault; same-origin JavaScript, including code injected through an XSS vulnerability, can read saved keys.
 
