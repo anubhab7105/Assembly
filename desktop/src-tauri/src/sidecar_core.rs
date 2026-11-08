@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn pick_free_port_returns_loopback() {
         let port = pick_free_port().expect("a free port must exist");
-        assert!(port > 0 && port < 65536);
+        assert!(port > 0);
         // The port must be free immediately after release.
         assert!(assert_port_free(port).is_ok());
     }
