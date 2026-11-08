@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 CANARY_KEY = "sk-CANARY-STATLESS-9f8e7d6c5b4a"
+CANARY_SEARCH_KEY = "tvly-CANARY-STATLESS-6d3a1b"
 CANARY_QUESTION = "Canary question ZULU-UNIQUE-42: why do hummingbirds hum?"
 
 
@@ -98,7 +99,7 @@ def test_catalog_returns_providers_models_families(web_mode, monkeypatch, tmp_pa
     assert any(ids)
 
 
-def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog) -> None:
+def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog, tmp_path) -> None:
     from src.main import app
 
     _mock_filtered_router(monkeypatch)
@@ -110,6 +111,7 @@ def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog) -> None
             "question": CANARY_QUESTION,
             "time_budget_minutes": 3,
             "provider_keys": {"groq": CANARY_KEY},
+            "search_keys": {"tavily": CANARY_SEARCH_KEY},
             "model_selection": {"selected": [], "pins": {}},
             "usage_snapshot": [],
         },
@@ -127,8 +129,11 @@ def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog) -> None
     assert events[-1].get("usage") != []
     blob = json.dumps(events)
     assert CANARY_KEY not in blob
+    assert CANARY_SEARCH_KEY not in blob
     assert CANARY_KEY not in caplog.text
+    assert CANARY_SEARCH_KEY not in caplog.text
     assert CANARY_QUESTION not in caplog.text
+    assert list(tmp_path.rglob('*.db')) == []
 
 
 def test_canary_question_never_in_422(web_mode) -> None:
@@ -334,6 +339,8 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
     from src.providers.quota import get_limiter
 
     fake_key = "TEST-ONLY-WEB-KEY-CLEANUP-CANARY"
+    fake_search_key = "TEST-ONLY-TAVILY-KEY-CLEANUP-CANARY"
+    search_keys = {"tavily": fake_search_key}
     entry = run_mod._RunEntry(run_id="run-cleanup-canary", created_at=run_mod._now())
     limiter = get_limiter()
     token = limiter.set_usage_snapshot(
@@ -362,7 +369,7 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
             {},
             [{"provider": "groq", "model": "m", "count": 2, "tokens": 100}],
             entry,
-            search_keys={"tavily": "TEST-ONLY-SEARCH-KEY-CANARY"},
+            search_keys=search_keys,
             router_override=object(),
         )
 
@@ -380,8 +387,11 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
     assert finished["status"] == "failed"
     assert finished["error_code"] == "runtime_error"
     assert fake_key not in rendered
+    assert fake_search_key not in rendered
     assert fake_key not in caplog.text
+    assert fake_search_key not in caplog.text
     assert "upstream error unexpectedly included" not in caplog.text
+    assert search_keys == {}
     # The run cleans up only its nested snapshot; this caller resets its own.
     limiter.reset_usage_snapshot(token)
     assert limiter._snapshot.get() == {}
