@@ -22,7 +22,7 @@ mod sidecar;
 mod stub;
 
 pub use errors::Error;
-pub use keyring::{service_name, CredentialStore};
+pub use keyring::{service_name, CredentialState, CredentialStore};
 pub use sidecar_core::{
     validate_provider, validate_secret, validate_window_label, APP_MODE_ENV, BACKEND_PORT_ENV,
     BACKEND_TOKEN_ENV, MAIN_WINDOW_LABEL, READINESS_TOTAL_MS, SIDECAR_DEV_PATH_ENV,
@@ -41,7 +41,6 @@ pub fn run() {
     use crate::sidecar::SidecarManager;
 
     let manager = Arc::new(SidecarManager::new());
-    let manager_clone = manager.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -55,40 +54,39 @@ pub fn run() {
                 }
             }),
         )
-        .manage(manager_clone)
-        .manage(crate::keyring::CredentialState::new(KeyringStore::new()))
+        .manage(manager.clone())
+        .manage(CredentialState::new(KeyringStore::new()))
         .setup(move |app| {
-            let handle = app.handle().clone();
+            let app_handle = app.handle().clone();
             let mgr = manager.clone();
             // Start the backend sidecar as part of app launch (no developer
             // process required). Failure is surfaced via state/events, not a
             // crash of the shell.
-            let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = mgr.start_backend(app_handle).await {
-                    tracing::error!("sidecar startup failed: {e}");
+                if let Err(e) = mgr.start_backend(app_handle.clone()).await {
+                    eprintln!("sidecar startup failed: {e}");
                 }
+                // Remember the app handle so supervision can emit events later.
+                mgr.set_app_handle(app_handle);
             });
             // Shutdown hook: on main-window close, shut down the backend
-            // sidecar gracefully, then force-kill after a short grace.
-            let mgr2 = manager.clone();
+            // sidecar gracefully, then force-kill after a short grace period.
+            let mgr_close = manager.clone();
             if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-                let mgr3 = mgr2.clone();
+                let mgr_destroy = mgr_close.clone();
                 window.on_window_event(move |_window, event| {
                     use tauri::WindowEvent;
                     match event {
                         WindowEvent::CloseRequested { .. } => {
-                            let _ = mgr3.stop_backend(graceful);
-                            // Allow the close to proceed.
+                            let _ = mgr_close.stop_backend();
                         }
                         WindowEvent::Destroyed { .. } => {
-                            let _ = mgr3.stop_backend(force);
+                            let _ = mgr_destroy.stop_backend();
                         }
                         _ => {}
                     }
                 });
             }
-            let _ = handle;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -102,9 +100,6 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-
-    fn graceful() {}
-    fn force() {}
 }
 
 /// No-op entrypoint on non-Windows / non-desktop builds so the crate compiles
