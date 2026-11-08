@@ -27,11 +27,23 @@ describe("privacy-notice", () => {
   });
 
   it("discloses persistent web-key retention and request-scoped backend handling", () => {
-    expect(PRIVACY_NOTICE_VERSION).toBe(2);
+    expect(PRIVACY_NOTICE_VERSION).toBe(3);
     const webNotice = WEB_PRIVACY_PARAGRAPHS.join(" ");
     expect(webNotice).toContain("across refreshes");
     expect(webNotice).toContain("until you remove them in Settings");
-    expect(webNotice).toContain("does not persist them");
+    expect(webNotice).toContain("not persisted by the Assembly application");
+    expect(webNotice).toContain("preflight, key-test or run requests");
+    expect(webNotice).toContain("not encrypted at rest");
+    expect(webNotice).toContain("same-origin JavaScript");
+    expect(webNotice).toContain("XSS vulnerability");
+    expect(webNotice).toContain("Hosting providers may process network traffic");
+    expect(webNotice).not.toContain("Windows Credential Manager");
+    const desktopNotice = DESKTOP_PRIVACY_PARAGRAPHS.join(" ");
+    expect(desktopNotice).toContain("WebView browser profile");
+    expect(desktopNotice).toContain("over loopback");
+    expect(desktopNotice).toContain("XSS incident");
+    expect(desktopNotice).toContain("Windows Credential Manager adapter");
+    expect(desktopNotice).toContain("does not use it as the primary key store");
     expect(webNotice).toContain("HTTPS");
   });
 
@@ -67,5 +79,11 @@ describe("privacy-notice", () => {
       if (p === "Each model provider handles your inputs under its own policy:") continue;
       expect(doc).toContain(p);
     }
+    const publicPolicy = fs.readFileSync(path.resolve(__dirname, "../app/privacy/page.tsx"), "utf-8");
+    expect(publicPolicy).toContain("not encrypted at rest");
+    expect(publicPolicy).toContain("same-origin JavaScript");
+    expect(publicPolicy).toContain("hosted Assembly backend over HTTPS");
+    expect(publicPolicy).toContain("Hosting providers may process network traffic");
+    expect(publicPolicy).toContain("WebView browser profile");
   });
 });

@@ -23,7 +23,7 @@
 | Event bus | In-memory asyncio pub/sub (already built) | Redis adds nothing until you run several workers |
 | Frontend | Next.js + TypeScript + Tailwind CSS | Planned in your PRD; one UI for web and desktop |
 | Windows app | **Tauri 2 shell + bundled Python backend (sidecar)**; Electron as fallback | Small installer, keys stay on the machine (section 4) |
-| Key storage | Windows Credential Manager via the `keyring` library (desktop); persistent IndexedDB with localStorage fallback for web | Desktop keys use the OS key store; saved web keys survive refreshes until removed in Settings or site/browser data is cleared |
+| Key storage | Current Settings flow: IndexedDB with localStorage fallback in both web and embedded desktop WebView; a Windows Credential Manager adapter is present but not wired as the primary Settings save path | Browser values are readable, not encrypted at rest; web requests go to the hosted backend over HTTPS and desktop requests go to the local backend over loopback |
 | Search | A free search source with fallback (section 6) | Research is a core feature |
 | Auth | None — no accounts, no login in any mode (D8). The desktop shell uses a per-launch local token (`X-Assembly-Token`, `src/main.py`) only to stop other local programs calling the backend. | Nothing to log into; nothing to leak |
 | Testing | pytest, a log-scan test for keys, a benchmark harness | Proves both safety and your hypothesis |
@@ -146,8 +146,10 @@ Tauri window (static Next.js UI)
 Bundled FastAPI backend (PyInstaller exe, started by Tauri)
         │
         ├── SQLite file in the user's app-data folder
-        ├── Keys read from Windows Credential Manager (keyring)
-        └── HTTPS calls straight to Gemini / Groq / Cerebras / OpenRouter / Mistral
+        ├── Current Settings keys in embedded WebView IndexedDB/localStorage
+        ├── Loopback request passes keys to the local backend (not the hosted web backend)
+        ├── Windows Credential Manager adapter exists but is not the current Settings primary store
+        └── HTTPS calls to Gemini / Groq / Cerebras / OpenRouter / Mistral
 ```
 
 Notes: bind the backend to `127.0.0.1` only; use a random port and a per-launch token so other local programs cannot call it; WebView2 ships with Windows 11 and the installer can bootstrap it on Windows 10.
@@ -162,9 +164,9 @@ You are a security student; make this a visible feature.
 
 | Rule | Implementation |
 |---|---|
-| Desktop keys never leave the machine except to the provider | Orchestrator runs locally; keys read from Credential Manager just before each call |
+| Desktop keys do not traverse the hosted Assembly backend | Current Settings stores them in the WebView vault and sends them to the local backend over loopback; that backend calls the provider |
 | No plain-text key files | Use `keyring` (Windows Credential Manager); never `.env` for user keys |
-| Web key retention vs. backend handling | Browser-saved keys persist in IndexedDB with localStorage fallback until the user removes them or clears site/browser data. Submitted keys travel over HTTPS for provider-test/run requests; the backend uses them transiently and does not persist or log key values. |
+| Web key retention vs. backend handling | Browser keys persist in IndexedDB/localStorage as readable values (not encrypted at rest); same-origin JavaScript can read them. Submitted keys travel over HTTPS for preflight, key-test and run requests; the Assembly application uses them transiently and does not write them to its database or disk. Hosting providers may have separate operational logs. |
 | Never in logs, errors or database | A logging filter masks anything that looks like a key; stored execution records contain provider and model names only |
 | Prove it | A pytest that runs a full execution with a fake key string and scans logs, DB and responses for that string |
 | Do not leak through URLs | Keys only in headers or body |

@@ -175,7 +175,7 @@ class SearchRouter:
         cache_key = (key_query, limit, normalized_pt)
         cached = self._cache.get(cache_key)
         if cached is not None:
-            logger.info(f"Search  │ Cache hit: {query[:80]}...")
+            logger.info("Search  │ Cache hit (query_chars=%d)", len(query))
             return list(cached)
 
         if not self._budget_allows():

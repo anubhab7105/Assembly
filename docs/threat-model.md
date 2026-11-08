@@ -11,7 +11,7 @@
 
 | Asset | Description | Sensitivity |
 |---|---|---|
-| **User AI provider keys** | BYOK keys (Gemini, Groq, Cerebras, OpenRouter, HuggingFace, Tavily). Web: in-memory per-request; desktop: Windows Credential Manager. | **Critical** |
+| **User AI provider keys** | Hosted web: readable IndexedDB/localStorage values at rest, sent to the backend over HTTPS per request. Desktop Settings: readable embedded-WebView browser values sent to the local backend over loopback. A Windows Credential Manager adapter exists but is not the current Settings primary store. | **Critical** |
 | **JWT secret key** | Signs all user sessions in web mode. Compromise = full user impersonation. | **Critical** |
 | **Desktop token** | secrets.token_hex(32) generated at sidecar startup. Authorizes all local HTTP calls. | **High** |
 | **Conversation history** | Web: browser IndexedDB. Desktop: local SQLite. Web runs are not persisted by the backend. | **High** |

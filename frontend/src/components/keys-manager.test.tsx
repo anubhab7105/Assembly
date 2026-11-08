@@ -100,8 +100,10 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
     // Persistent vault: saving restores after refresh; the legacy unlock
     // prompt appears only for pre-fix encrypted blobs.
     expect((await screen.findByTestId("persisted-banner")).textContent).toContain(
-      "restored after refresh",
+      "across refreshes",
     );
+    expect(screen.getByText(/sent to the hosted Assembly backend over HTTPS.*preflight, key tests and runs/i)).toBeDefined();
+    expect(screen.getByText(/sent to the hosted Assembly backend over HTTPS.*runs that use search/i)).toBeDefined();
     expect(screen.queryByTestId("memory-only-banner")).toBeNull();
     expect(screen.queryByTestId("unlock-prompt")).toBeNull();
   });

@@ -32,8 +32,22 @@ describe("PrivacyDialog", () => {
     expect(screen.getByTestId("provider-note-groq").textContent).toContain("Check this provider")
   })
 
-  it("desktop mode omits server wording", () => {
+  it("web mode explains HTTPS transit, readable browser storage and hosting logs", () => {
+    render(<PrivacyDialog mode="web" providers={[]} onAcknowledge={() => {}} />)
+    expect(document.body.textContent).toContain("hosted Assembly backend over HTTPS")
+    expect(document.body.textContent).toContain("not encrypted at rest")
+    expect(document.body.textContent).toContain("same-origin JavaScript")
+    expect(document.body.textContent).toContain("Hosting providers may process network traffic")
+    expect(document.body.textContent).not.toContain("Windows Credential Manager")
+  })
+
+  it("desktop mode describes local WebView storage and loopback requests", () => {
     render(<PrivacyDialog mode="desktop" providers={[]} onAcknowledge={() => {}} />)
-    expect(document.body.textContent).not.toContain("stores nothing on the server")
+    expect(document.body.textContent).toContain("WebView browser profile")
+    expect(document.body.textContent).toContain("over loopback")
+    expect(document.body.textContent).toContain("not encrypted at rest")
+    expect(document.body.textContent).toContain("XSS incident")
+    expect(document.body.textContent).toContain("Windows Credential Manager adapter")
+    expect(document.body.textContent).not.toContain("hosted Assembly backend over HTTPS")
   })
 })

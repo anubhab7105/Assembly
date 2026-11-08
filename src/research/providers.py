@@ -124,7 +124,7 @@ class TavilySearchProvider(SearchProvider):
         if not self.is_available:
             raise SearchProviderError("tavily: API key not configured")
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ Tavily search: {query[:80]}...")
+        logger.info("Search  │ Tavily request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.post(
@@ -178,7 +178,7 @@ class WikipediaSearchProvider(SearchProvider):
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ Wikipedia search: {query[:80]}...")
+        logger.info("Search  │ Wikipedia request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.get(
@@ -237,7 +237,7 @@ class ArxivSearchProvider(SearchProvider):
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ arXiv search: {query[:80]}...")
+        logger.info("Search  │ arXiv request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.get(
@@ -300,7 +300,7 @@ class SemanticScholarSearchProvider(SearchProvider):
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ Semantic Scholar search: {query[:80]}...")
+        logger.info("Search  │ Semantic Scholar request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.get(
@@ -380,7 +380,7 @@ class DuckDuckGoSearchProvider(SearchProvider):
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ DuckDuckGo (unofficial) search: {query[:80]}...")
+        logger.info("Search  │ DuckDuckGo (unofficial) request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.get(

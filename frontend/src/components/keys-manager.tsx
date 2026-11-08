@@ -34,6 +34,7 @@ function maskKey(key: string): string {
 
 export function KeysManager() {
   const { toast } = useToast()
+  const desktopMode = env.NEXT_PUBLIC_APP_MODE === "desktop"
 
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [inputs, setInputs] = useState<Record<string, string>>({})
@@ -349,7 +350,7 @@ export function KeysManager() {
           </div>
         ) : (
           <p data-testid="persisted-banner" className="text-xs text-muted-foreground">
-            Saved keys stay in this browser across refreshes until you remove them here or clear all keys. Clearing browser/site data also removes them. Browser storage is not an OS-protected credential vault.
+            Saved keys stay in this browser across refreshes until you remove them here or clear all keys. Clearing browser/site data also removes them. They are not encrypted at rest or protected by the OS; same-origin JavaScript, including code injected through an XSS vulnerability, can read them.
           </p>
         )}
         <Button variant="destructive" size="sm" onClick={handleClearAll} disabled={Object.keys(savedKeys).length === 0}>
@@ -469,7 +470,9 @@ export function KeysManager() {
                   )}
                   <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
                     <Shield className="size-3 shrink-0" />
-                    Keys never leave this device except to authenticate with the provider.
+                    {desktopMode
+                      ? "Stored in this WebView browser profile; sent to the local Assembly backend over loopback for preflight, key tests and runs, then used to authenticate with the provider."
+                      : "Stored in this browser; sent to the hosted Assembly backend over HTTPS (localhost is used for local development) for preflight, key tests and runs, then used to authenticate with the provider."}
                   </p>
                 </div>
               </CardContent>
@@ -529,7 +532,9 @@ export function KeysManager() {
             />
             <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
               <Shield className="size-3 shrink-0" />
-              Stored with your other keys; sent only with your runs.
+              {desktopMode
+                ? "Stored in this WebView browser profile; sent to the local Assembly backend over loopback with runs that use search."
+                : "Stored in this browser; sent to the hosted Assembly backend over HTTPS (localhost is used for local development) with runs that use search."}
             </p>
           </div>
         </CardContent>

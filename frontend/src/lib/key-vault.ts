@@ -9,9 +9,10 @@ import { get, set, del } from "idb-keyval"
  * Reads load from the same store before serving, so initialization can
  * never overwrite saved values with empty defaults.
  *
- * Keys travel to the backend only transiently inside `/api/run` and
- * `/api/keys/test` HTTPS bodies; they are never written to the server,
- * URLs, or logs from here.
+ * Keys travel to the backend only in request bodies for preflight, key-test,
+ * and run calls. Hosted web requests use HTTPS; desktop requests go to the
+ * local backend over loopback. The Assembly application does not persist
+ * these submitted values or put them in URLs or application logs.
  */
 
 export const KEYS_STORE_KEY = "assembly_keys_v1"

@@ -253,7 +253,7 @@ class GeminiProvider(AIProvider):
 
         except Exception as e:
             structured = classify_exception(self.provider_name, e)
-            logger.error(f"Gemini  │ Error: {structured}")
+            logger.error("Gemini  │ Request failed (type=%s)", type(structured).__name__)
             raise structured from e
 
     def is_available(self) -> bool:

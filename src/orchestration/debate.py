@@ -125,7 +125,7 @@ class DebateManager:
         updated_outputs = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error(f"Debate  │ Agent {agents[i].agent_id} failed: {result}")
+                logger.error("Debate  │ Agent %s failed (type=%s)", agents[i].agent_id, type(result).__name__)
                 # Keep the agent's previous output, marked as failed
                 prev = output_map.get(agents[i].agent_id)
                 if prev:

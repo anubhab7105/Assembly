@@ -253,7 +253,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     """Ensure stack traces and config values are never leaked."""
     if isinstance(exc, (StarletteHTTPException, WebSocketException)):
         raise exc
-    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    logger.error("Unhandled exception (type=%s)", type(exc).__name__)
     return JSONResponse(status_code=500, content={"detail": "Internal server error."})
 
 

@@ -260,7 +260,7 @@ class AgentManager:
         outputs = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error(f"AgentMgr │ {agents[i].agent_id} failed: {result}")
+                logger.error("AgentMgr │ %s failed (type=%s)", agents[i].agent_id, type(result).__name__)
                 # Create a low-confidence fallback output
                 outputs.append(
                     AgentOutput(

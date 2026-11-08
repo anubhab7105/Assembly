@@ -17,7 +17,7 @@
 
 - Backend (`src/`): FastAPI + asyncio + httpx + Pydantic; SQLAlchemy/SQLite for local and future desktop persistence; web mode has no database and uses an in-memory run registry. Entry: `src/main.py`, app `src.main:app`.
 - Frontend (`frontend/`): Next.js + TypeScript + Tailwind is the target; current code is a vanilla-JS SPA served statically.
-- Desktop (`desktop/`): Tauri 2 shell + bundled Python backend sidecar (PyInstaller); keys in Windows Credential Manager via `keyring`; Electron only as fallback.
+- Desktop (`desktop/`): Tauri 2 shell + bundled Python backend sidecar (PyInstaller). Current Settings keys are stored in the embedded WebView browser vault and sent to the local backend over loopback; a Windows Credential Manager `keyring` adapter exists but is not yet the primary Settings save path. Electron only as fallback.
 - Benchmark (`bench/`): `questions.jsonl`, `run_single.py`, `run_assembly.py` (`run_vote.py` optional), `grade.py` → results CSV/slide.
 - `scripts/`: one-off ops/dev helpers. Pipeline: Capacity check → Planner → Team → Independent solve → Publish → Consensus (→ adversarial if too agreeable) → Debate/research → Synthesis (`src/orchestration/`, see `docs/WORKFLOW.md`).
 - Run: `uvicorn src.main:app --reload`; `GET /health` → `{"status":"healthy"...}`; `cp .env.example .env` (never commit `.env`/`assembly.db`); fewer than 3 live provider keys makes `ModelRouter` raise `RuntimeError`.
