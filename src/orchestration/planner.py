@@ -330,9 +330,13 @@ Respond with JSON only:
 
         except Exception as e:  # noqa: BLE001 — planning must fall back, never crash
             logger.error(
-                f"Planner │ Classification failed ({e}); using heuristic fallback"
+                "Planner │ Classification failed (type=%s); using heuristic fallback",
+                type(e).__name__,
             )
-            plan = self._heuristic_plan(question, time_budget_minutes, str(e))
+            # Keep validation payloads out of both logs and user-visible fallback text.
+            plan = self._heuristic_plan(
+                question, time_budget_minutes, "classification failed"
+            )
             plan.capacity = self._read_capacity(time_budget_minutes)
             return plan
 
