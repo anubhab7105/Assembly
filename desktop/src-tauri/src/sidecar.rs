@@ -162,6 +162,7 @@ impl SidecarManager {
         let state_clone = self.state.clone();
         let restart_count = self.restart_count.clone();
         let app_h = self.app_handle.clone();
+        let log_tail = self.log_tail.clone();
         tauri::async_runtime::spawn(async move {
             while let Some(ev) = rx.recv().await {
                 match ev {
@@ -212,10 +213,12 @@ impl SidecarManager {
                         }
                     }
                     tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                        Self::capture_log_line(&line, false);
+                        let entry = Self::capture_log_line(&line);
+                        append_log_line(&log_tail, entry);
                     }
                     tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
-                        Self::capture_log_line(&line, true);
+                        let entry = Self::capture_log_line(&line);
+                        append_log_line(&log_tail, entry);
                     }
                     tauri_plugin_shell::process::CommandEvent::Error(msg) => {
                         warn!("backend sidecar error: {msg}");
@@ -500,20 +503,21 @@ impl SidecarManager {
     // Logging / redaction
     // ────────────────────────────────────────────────────────
 
-    fn capture_log_line(line: &[u8], _stdout: bool) {
+    /// Redact a single log line and truncate it to a bounded length. Secrets
+    /// (auth token, provider keys) are replaced with a marker so they can
+    /// never leak into the captured tail or diagnostics.
+    fn capture_log_line(line: &[u8]) -> String {
         let text = String::from_utf8_lossy(line);
         let text = text.trim_end();
         if text.is_empty() {
-            return;
+            return String::new();
         }
-        let redacted = redact_secret_line(text);
-        let truncated = if redacted.len() > LINE_CAP_BYTES {
+        let redacted = redact_secret_line(&text);
+        if redacted.len() > LINE_CAP_BYTES {
             format!("{}&...truncated", &redacted[..LINE_CAP_BYTES])
         } else {
             redacted.to_string()
-        };
-        // Append to bounded tail (best effort; tail is read under lock).
-        // Note: this is a static-ish helper; the tail lives on the manager.
+        }
     }
 
     fn redact_secret_line(text: &str) -> &str {
@@ -530,6 +534,27 @@ impl SidecarManager {
             }
         }
         text
+    }
+
+    /// Append a redacted line to the bounded log tail, dropping the oldest
+    /// bytes when the cap is exceeded.
+    fn append_log_line(log_tail: &Mutex<String>, entry: String) {
+        if entry.is_empty() {
+            return;
+        }
+        let mut tail = log_tail.lock().unwrap();
+        if !tail.is_empty() {
+            tail.push('\n');
+        }
+        tail.push_str(&entry);
+        while tail.len() > LOG_TAIL_BYTES {
+            if let Some(idx) = tail[..tail.len().min(LOG_TAIL_BYTES)].find('\n') {
+                tail.drain(..=idx);
+            } else {
+                tail.truncate(LOG_TAIL_BYTES);
+                break;
+            }
+        }
     }
 
     // ────────────────────────────────────────────────────────
