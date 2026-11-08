@@ -27,7 +27,7 @@ describe("privacy-notice", () => {
   });
 
   it("discloses persistent web-key retention and request-scoped backend handling", () => {
-    expect(PRIVACY_NOTICE_VERSION).toBe(4);
+    expect(PRIVACY_NOTICE_VERSION).toBe(5);
     const webNotice = WEB_PRIVACY_PARAGRAPHS.join(" ");
     expect(webNotice).toContain("across refreshes");
     expect(webNotice).toContain("You can remove them in Settings");
@@ -38,6 +38,9 @@ describe("privacy-notice", () => {
     expect(webNotice).toContain("a key-test request includes only the provider key being tested");
     expect(webNotice).toContain("any saved Tavily key");
     expect(webNotice).toContain("even when search is not used");
+    expect(webNotice).toContain("Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(webNotice).toContain("even without a Tavily key");
+    expect(webNotice).toContain("search fallback path");
     expect(webNotice).toContain("not encrypted at rest");
     expect(webNotice).toContain("same-origin JavaScript");
     expect(webNotice).toContain("XSS vulnerability");
@@ -51,6 +54,8 @@ describe("privacy-notice", () => {
     expect(desktopNotice).toContain("a key-test request sends only the provider key being tested");
     expect(desktopNotice).toContain("any saved Tavily key");
     expect(desktopNotice).toContain("even when search is not used");
+    expect(desktopNotice).toContain("Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(desktopNotice).toContain("even without a Tavily key");
     expect(desktopNotice).toContain("XSS incident");
     expect(desktopNotice).toContain("Windows Credential Manager adapter");
     expect(desktopNotice).toContain("does not use it as the primary key store");
@@ -97,6 +102,8 @@ describe("privacy-notice", () => {
     expect(publicPolicy).toContain("only the provider key being tested");
     expect(publicPolicy).toContain("any saved Tavily key");
     expect(publicPolicy).toContain("even when search is not used");
+    expect(publicPolicy).toContain("Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(publicPolicy).toContain("search fallback path");
     expect(publicPolicy).toContain("Hosting providers may process network traffic");
     expect(publicPolicy).toContain("WebView browser profile");
     expect(publicPolicy).toContain("If browser storage fails during removal, a key may remain saved");
