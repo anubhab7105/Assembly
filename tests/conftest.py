@@ -6,7 +6,6 @@ default mock plan sets needs_research=False so no search HTTP occurs.
 """
 
 import sys
-from datetime import date
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -108,7 +107,6 @@ class MockRouter:
         time_budget_minutes: int = 5,
         allowed_families: list[str] | None = None,
     ) -> MockTeamRouting:
-        """Route requested agent roles through the available mock providers."""
         if allowed_families is not None and "mock" not in allowed_families:
             from src.providers.router import PinViolationError
 
@@ -178,11 +176,10 @@ def make_models_yaml(
             "base": base,
             "url": url,
             "enabled": flag,
-            # Synthetic offline catalogs model a fresh verification snapshot.
-            # Staleness tests explicitly move this date back; do not pin the
-            # shared fixture to a calendar date that will expire in CI.
+            # Synthetic offline catalogs use a fixed, explicit source/date.
+            # Tests for stale or missing evidence override these fields.
             "quota_source": "https://test.invalid/quota-fixture",
-            "quota_last_verified": date.today().isoformat(),
+            "quota_last_verified": "2026-10-24",
             "models": rendered,
         }
     path = Path(tmp_path) / filename
@@ -212,7 +209,6 @@ def _block_network(monkeypatch) -> None:
         raise RuntimeError(f"Network access is blocked in tests (tried {host})")
 
     def _blocked_dns(host, *args: object, **kwargs: object) -> object:
-        """Reject non-loopback DNS lookups while allowing local test servers."""
         if host in ("127.0.0.1", "::1", "localhost"):
             return socket._real_getaddrinfo(host, *args, **kwargs)
         raise RuntimeError(f"DNS is blocked in tests (tried {host})")
@@ -267,38 +263,3 @@ def clear_rate_limits() -> None:
     _rate_limit_history.clear()
     rl._global_executions = 0
     rl._ip_executions.clear()
-
-
-@pytest.fixture
-def isolated_web_database(monkeypatch, tmp_path):
-    """Redirect accidental web-mode SQLite initialization into tmp_path."""
-    from src.core.config import settings
-    from src.database import base as database_base
-    import src.providers.quota as quota_module
-
-    monkeypatch.setattr(settings, "app_mode", "web")
-    monkeypatch.setattr(settings, "app_env", "development")
-    monkeypatch.setattr(settings, "debug", False)
-    monkeypatch.chdir(tmp_path)
-
-    database_path = tmp_path / "unexpected-web-database.db"
-    import sqlalchemy
-
-    real_create_engine = sqlalchemy.create_engine
-
-    def _isolated_create_engine(url, *args, **kwargs):
-        """Redirect any accidental SQLite engine creation to the test directory."""
-        if isinstance(url, str) and url.startswith("sqlite:"):
-            url = f"sqlite:///{database_path}"
-        return real_create_engine(url, *args, **kwargs)
-
-    monkeypatch.setattr(sqlalchemy, "create_engine", _isolated_create_engine)
-
-    # database.base eagerly initializes its module-level engine at import time
-    # outside web mode. Clear it so this test verifies the web request path.
-    # Keep settings.effective_database_url intact: web mode must still raise.
-    monkeypatch.setattr(database_base, "_engine", None)
-    monkeypatch.setattr(database_base, "SessionLocal", None)
-    monkeypatch.setattr(database_base, "engine", None)
-    monkeypatch.setattr(quota_module, "_limiter", None)
-    return database_path
