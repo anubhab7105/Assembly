@@ -22,7 +22,7 @@ const LEGACY_ENCRYPTED_KEY = "assembly_keys_encrypted_v2"
 const LEGACY_BLOBS = [LEGACY_ENCRYPTED_KEY, "assembly_keys_encrypted", "assembly_master_key"]
 
 export class KeyStorageError extends Error {
-  constructor(message = "Couldn't save keys on this device (storage unavailable or full). Nothing was saved.") {
+  constructor(message = "Couldn't update saved keys on this device (storage unavailable or full). The change was not confirmed.") {
     super(message)
     this.name = "KeyStorageError"
   }
