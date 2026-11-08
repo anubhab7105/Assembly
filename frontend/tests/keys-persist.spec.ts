@@ -68,11 +68,32 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page.getByTestId("readiness-chip")).toContainText("2 families ready", { timeout: 10000 })
   })
 
-  test("3. reload with pre-existing saved values does not overwrite them", async ({ page }) => {
-    await page.addInitScript((seed: string) => {
-      window.localStorage.setItem("assembly:keys_v1", seed)
-    }, JSON.stringify({ groq: CANARY_GROQ }))
+  test("3. reload with pre-existing IndexedDB values does not overwrite them", async ({ page }) => {
+    // Load the app once so idb-keyval creates its canonical database/store.
     await page.goto("/settings")
+    await page.evaluate(async (seed: Record<string, string>) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("keyval-store")
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains("keyval")) {
+            request.result.createObjectStore("keyval")
+          }
+        }
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction("keyval", "readwrite")
+        transaction.objectStore("keyval").put(seed, "assembly_keys_v1")
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = () => reject(transaction.error)
+        transaction.onabort = () => reject(transaction.error)
+      })
+      db.close()
+    }, { groq: CANARY_GROQ })
+
+    await page.reload()
     await expect(page.getByTestId("readiness-chip")).toContainText("gpt-oss", { timeout: 10000 })
     // A second reload with no interaction must keep the seeded value.
     await page.reload()
