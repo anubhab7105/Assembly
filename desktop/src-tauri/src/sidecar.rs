@@ -363,13 +363,37 @@ impl SidecarManager {
     }
 
     async fn post_json(
-        _base_url: &str,
-        _path: &str,
-        _body: &serde_json::Value,
-        _token: Option<&str>,
+        base_url: &str,
+        path: &str,
+        body: &serde_json::Value,
+        token: Option<&str>,
     ) -> Result<(), Error> {
         // Best-effort graceful shutdown; errors are ignored here because the
-        // force-kill path always runs afterwards.
+        // force-kill path always runs afterwards. Minimal raw HTTP to avoid a
+        // reqwest dependency.
+        let host_port = base_url
+            .strip_prefix("http://")
+            .unwrap_or(base_url);
+        let deadline = Duration::from_millis(HEALTH_PROBE_TIMEOUT_MS);
+        let stream = match TokioTcpStream::connect(host_port).timeout(deadline).await {
+            Ok(s) => s,
+            Err(_) => return Ok(()),
+        };
+        let _ = stream.set_nodelay(true);
+        let body_bytes = serde_json::to_vec(body).unwrap_or_default();
+        let auth = match token {
+            Some(t) => format!("Authorization: Bearer {t}\r\n"),
+            None => String::new(),
+        };
+        let req = format!(
+            "POST {path} HTTP/1.1\r\nHost: {host_port}\r\nContent-Type: application/json\r\n{auth}Content-Length: {}\r\nConnection: close\r\n\r\n",
+            body_bytes.len()
+        );
+        let mut stream = stream;
+        let _ = stream.write_all(req.as_bytes()).await;
+        let _ = stream.write_all(&body_bytes).await;
+        let mut buf = [0u8; 256];
+        let _ = stream.read(&mut buf).await;
         Ok(())
     }
 
