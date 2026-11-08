@@ -20,37 +20,30 @@ CANARY_QUESTION = "Canary question ZULU-UNIQUE-42: why do hummingbirds hum?"
 
 
 @pytest.fixture()
-def web_mode(monkeypatch, tmp_path):
+def web_mode(isolated_web_database):
+    """Run stateless web checks with an isolated guard database path."""
     from src.core.config import settings
 
-    monkeypatch.setattr(settings, "app_mode", "web")
-    monkeypatch.setattr(settings, "app_env", "development")
-    monkeypatch.setattr(settings, "debug", False)
-    monkeypatch.chdir(tmp_path)
     yield settings
 
 
 def _mock_filtered_router(monkeypatch):
-    import src.api.run as run_mod
-    from src.api.request_context import RequestContext
+    """Use mock providers while retaining the real request-context builder."""
+    import src.api.request_context as context_mod
     from src.providers.mock_provider import MockProvider
     from tests.conftest import MockRouter
 
-    def _fake(provider_keys, search_keys, selected, pins, usage_snapshot):
-        return RequestContext(
-            router=MockRouter(
-                [MockProvider(provider_name="mock-a"), MockProvider(provider_name="mock-b")]
-            ),
-            allowed=set(),
-            pins={},
-            quota_snapshot=[],
-            has_search_key=False,
+    def _fake_filtered_router(provider_keys, allowed, pins):
+        """Return offline providers without bypassing quota/context setup."""
+        return MockRouter(
+            [MockProvider(provider_name="mock-a"), MockProvider(provider_name="mock-b")]
         )
 
-    monkeypatch.setattr(run_mod, "build_request_context", _fake)
+    monkeypatch.setattr(context_mod, "_filtered_router", _fake_filtered_router)
 
 
-def test_web_mode_creates_no_database_file(web_mode, tmp_path, monkeypatch) -> None:
+def test_web_mode_creates_no_database_file(web_mode, isolated_web_database) -> None:
+    """Verify web-mode database setup remains a no-op."""
     from src.core.config import settings
     from src.database.base import init_db
 
@@ -59,6 +52,7 @@ def test_web_mode_creates_no_database_file(web_mode, tmp_path, monkeypatch) -> N
     init_db()  # no-op, must not raise or write
     assert list(tmp_path.glob("*.db")) == []
     assert list(tmp_path.glob("assembly.db")) == []
+    assert not isolated_web_database.exists()
 
     from src.main import app
 
@@ -99,8 +93,8 @@ def test_catalog_returns_providers_models_families(web_mode, monkeypatch, tmp_pa
     assert any(ids)
 
 
-def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog, tmp_path) -> None:
-    """Run SSE and application logs exclude provider and search key canaries."""
+def test_stateless_run_end_to_end_no_leak(web_mode, isolated_web_database, monkeypatch, caplog, tmp_path) -> None:
+    """Run SSE with the real request-context builder and exclude secret canaries."""
     from src.main import app
 
     _mock_filtered_router(monkeypatch)
@@ -134,7 +128,8 @@ def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog, tmp_pat
     assert CANARY_KEY not in caplog.text
     assert CANARY_SEARCH_KEY not in caplog.text
     assert CANARY_QUESTION not in caplog.text
-    assert list(tmp_path.rglob('*.db')) == []
+    assert list(tmp_path.rglob("*.db")) == []
+    assert not isolated_web_database.exists()
 
 
 def test_canary_question_never_in_422(web_mode) -> None:
