@@ -412,6 +412,7 @@ async def _run_execution(
     logger.info(f"Exec    │ Starting background execution {execution_id[:8]}...")
 
     async def on_progress(event: dict):
+        """Forward execution updates to the event stream and persist the safe event metadata."""
         state = event.get("state") or (event.get("data") or {}).get("state")
         if state:
             _persist_state(execution_id, state)
