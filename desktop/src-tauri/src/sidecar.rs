@@ -442,7 +442,7 @@ impl SidecarManager {
             let mut info = JobLimit {
                 per_process_user_time_limit: 0,
                 per_job_user_time_limit: 0,
-                limit_flags: JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE as u32,
+                limit_flags: JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
                 minimum_working_set_size: 0,
                 maximum_working_set_size: 0,
                 active_process_limit: 0,
