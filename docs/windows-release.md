@@ -67,5 +67,6 @@ Use this checklist to verify a release build on a clean Windows VM:
 - [ ] **Run Execution**: Start a conversation that triggers a multi-agent execution (ensure it takes ~3 minutes to complete). Verify that the agents can communicate, debate, and resolve the final consensus.
 - [ ] **Restart**: Close the application window completely. Reopen it from the Start Menu to ensure the backend starts up correctly a second time.
 - [ ] **History Persists**: After restarting, verify that the previous conversation and its 3-minute execution result are fully loaded from the local database.
+- [ ] **Remove test keys**: Before uninstalling, open Settings and remove the disposable API keys created for this test.
 - [ ] **Uninstall**: Close the application. Go to "Add or Remove Programs" and uninstall the application. Verify the installation folder is removed.
-- [ ] *(Optional cleanup)*: Remove test keys from Settings and clear the WebView site data. Inspect Windows Credential Manager separately only when testing code paths that explicitly use the keyring adapter. Delete `%LOCALAPPDATA%\Assembly` to wipe local history.
+- [ ] *(Optional post-uninstall cleanup)*: Clear WebView site data separately if the WebView profile remains after uninstall. Inspect Windows Credential Manager separately only when testing code paths that explicitly use the keyring adapter. Delete `%LOCALAPPDATA%\Assembly` to wipe local history.
