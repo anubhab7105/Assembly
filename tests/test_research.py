@@ -53,6 +53,7 @@ class _StubProvider(SearchProvider):
         self.calls: list[str] = []
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Record a query, then return scripted results or raise the configured error."""
         self.calls.append(query)
         if self._error is not None:
             raise self._error
@@ -389,6 +390,7 @@ async def test_router_budget_controller_blocks_without_calling() -> None:
     budget.state.searches_used = budget.state.max_searches
 
     async def _fail(_query: str, _max_results: int = 5) -> list[SearchResult]:
+        """Fail if the provider is called after the search budget is exhausted."""
         raise AssertionError("provider must not be called on exhausted budget")
 
     stub = _StubProvider("tavily", results=[_result()])
