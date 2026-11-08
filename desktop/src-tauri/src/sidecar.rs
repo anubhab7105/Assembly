@@ -11,8 +11,7 @@ use tracing::{info, warn};
 use crate::errors::Error;
 use crate::sidecar_core::{
     generate_auth_token, pick_free_port, resolve_sidecar_path, APP_MODE_ENV, BACKEND_PORT_ENV,
-    BACKEND_TOKEN_ENV, MAIN_WINDOW_LABEL, READINESS_POLL_INTERVAL_MS, READINESS_TOTAL_MS,
-    SIDECAR_DEV_PATH_ENV,
+    BACKEND_TOKEN_ENV, READINESS_POLL_INTERVAL_MS, READINESS_TOTAL_MS, SIDECAR_DEV_PATH_ENV,
 };
 
 // ────────────────────────────────────────────────────────────
