@@ -27,7 +27,7 @@ describe("privacy-notice", () => {
   });
 
   it("discloses persistent web-key retention and request-scoped backend handling", () => {
-    expect(PRIVACY_NOTICE_VERSION).toBe(5);
+    expect(PRIVACY_NOTICE_VERSION).toBe(6);
     const webNotice = WEB_PRIVACY_PARAGRAPHS.join(" ");
     expect(webNotice).toContain("across refreshes");
     expect(webNotice).toContain("You can remove them in Settings");
@@ -38,7 +38,9 @@ describe("privacy-notice", () => {
     expect(webNotice).toContain("a key-test request includes only the provider key being tested");
     expect(webNotice).toContain("any saved Tavily key");
     expect(webNotice).toContain("even when search is not used");
-    expect(webNotice).toContain("Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(webNotice).toContain("Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(webNotice).toContain("Tavily receives it only when available and selected by that path");
+    expect(webNotice).toContain("the other listed services do not require a Tavily key");
     expect(webNotice).toContain("even without a Tavily key");
     expect(webNotice).toContain("search fallback path");
     expect(webNotice).toContain("not encrypted at rest");
