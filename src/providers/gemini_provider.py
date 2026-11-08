@@ -160,6 +160,7 @@ class GeminiProvider(AIProvider):
         temperature: float,
         max_tokens: int,
     ) -> ProviderResponse:
+        """Build and send the Gemini request, then normalize the provider response."""
         try:
             # Convert ChatMessage format to Gemini's format
             # Gemini uses 'user' and 'model' roles, and system goes into system_instruction
