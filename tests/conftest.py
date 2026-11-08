@@ -108,6 +108,7 @@ class MockRouter:
         time_budget_minutes: int = 5,
         allowed_families: list[str] | None = None,
     ) -> MockTeamRouting:
+        """Route requested agent roles through the available mock providers."""
         if allowed_families is not None and "mock" not in allowed_families:
             from src.providers.router import PinViolationError
 
