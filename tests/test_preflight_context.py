@@ -171,7 +171,7 @@ def test_unpinned_routing_keeps_router_choice() -> None:
 
 
 def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:
-    """Preflight receives request keys without echoing, logging, or persisting them."""
+    """Verify preflight receives request keys without echoing or persisting them."""
     from src.core.config import settings
 
     monkeypatch.setattr(settings, "app_mode", "web")
@@ -236,6 +236,31 @@ def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:
     assert CANARY_SEARCH not in caplog.text
     assert CANARY_Q not in caplog.text
     assert list(tmp_path.rglob("*.db")) == []
+
+
+def test_preflight_real_context_builder_is_stateless(
+    isolated_web_database, caplog
+) -> None:
+    """Exercise real router/quota initialization without creating a database."""
+    from src.main import app
+
+    client = TestClient(app)
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        response = client.post(
+            "/api/preflight",
+            json={
+                "question": "Can the real context builder remain stateless?",
+                "time_budget_minutes": 5,
+                "provider_keys": {},
+                "search_keys": {},
+                "model_selection": {"selected": [], "pins": {}},
+                "usage_snapshot": [],
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    assert "feasible" in response.json()
+    assert not isolated_web_database.exists()
 
 
 def test_preflight_canary_never_in_422(caplog) -> None:
