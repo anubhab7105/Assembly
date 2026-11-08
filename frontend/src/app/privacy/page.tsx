@@ -62,7 +62,7 @@ export default function PrivacyPage() {
               Each run sends your question to the selected model providers (for example Gemini, Groq,
               OpenRouter or Hugging Face). If you saved a Tavily key, that key is included in every run
               request to the Assembly backend; Tavily receives a search request only when research actually
-              uses it. When research runs, Assembly may also send your full question as a search query to Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, even without a Tavily key; the recipients depend on the search fallback path. Those providers process inputs under their own policies. Free tiers may reuse inputs to improve their products (Google states this for Gemini
+              uses it. When research runs, Assembly may send your full question as a search query to Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, depending on the search fallback path. Tavily receives it only when available and selected by that path; the other listed services do not require a Tavily key. Those providers process inputs under their own policies. Free tiers may reuse inputs to improve their products (Google states this for Gemini
               free-tier requests). Avoid sending sensitive or confidential information.
             </p>
           </div>
