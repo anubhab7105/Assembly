@@ -188,6 +188,7 @@ def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:
     seen: dict = {}
 
     def _fake(*args, **kwargs):
+        """Capture request keys and return a deterministic preflight context."""
         seen["provider_keys"] = args[0] if args else kwargs.get("provider_keys")
         seen["search_keys"] = args[1] if len(args) > 1 else kwargs.get("search_keys")
         return RequestContext(
