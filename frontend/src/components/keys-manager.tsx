@@ -65,12 +65,23 @@ export function KeysManager() {
       // Load first: read the canonical store before rendering anything that
       // could write. A legacy encrypted blob with an empty canonical store
       // shows the one-time migration prompt instead of keys.
+      // Desktop mode reads provider names from the OS keyring instead of
+      // browser storage (names only, never values).
       try {
-        const keys = await globalVault.allKeys()
-        if (Object.keys(keys).length > 0) {
-          setSavedKeys(keys)
-        } else if (await globalVault.hasLegacyEncrypted().catch(() => false)) {
-          setNeedsUnlock(true)
+        if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+          const { providers } = await desktopCredentialList()
+          setDesktopProviders(providers)
+          // Mark each stored provider as present (values stay in the keyring).
+          setSavedKeys(
+            Object.fromEntries(providers.map((p) => [p, "stored"])),
+          )
+        } else {
+          const keys = await globalVault.allKeys()
+          if (Object.keys(keys).length > 0) {
+            setSavedKeys(keys)
+          } else if (await globalVault.hasLegacyEncrypted().catch(() => false)) {
+            setNeedsUnlock(true)
+          }
         }
       } catch {
         setSavedKeys({})
