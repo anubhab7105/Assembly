@@ -304,6 +304,31 @@ async def test_router_unexpected_error_falls_back() -> None:
     assert await broken.search("q") == []
 
 
+async def test_router_never_logs_provider_exception_text(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Provider exceptions may contain credentials or query text; log types only."""
+    query = "PRIVATE-ROUTER-QUERY-CANARY-61f2"
+    secret = "tvly-ROUTER-SECRET-CANARY-38ab"
+    errors = [
+        SearchQuotaExhausted("tavily", f"quota response contained {secret} {query}"),
+        SearchProviderError(f"provider payload contained {secret} {query}"),
+        RuntimeError(f"unexpected provider payload contained {secret} {query}"),
+    ]
+
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        for index, error in enumerate(errors):
+            router = SearchRouter(
+                providers=[_StubProvider(f"provider-{index}", error=error)]
+            )
+            assert await router.search(query) == []
+
+    assert query not in caplog.text
+    assert secret not in caplog.text
+    assert "provider payload contained" not in caplog.text
+    assert "quota response contained" not in caplog.text
+
+
 async def test_orchestrator_total_search_failure_reports_nothing() -> None:
     """needs_research + every provider down → nothing-event, honest finish."""
     from src.orchestration.orchestrator import Orchestrator
