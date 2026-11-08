@@ -48,7 +48,9 @@ tauri-plugin-shell = { version = "2", optional = true }
 tauri-plugin-single-instance = { version = "2", optional = true }
 
 # Windows Credential Manager (OS keyring) for desktop secrets.
-keyring = { version = "2", optional = true, features = ["windows-native"] }
+# The Windows backend is selected automatically by the `keyring` crate on
+# x86_64-pc-windows-msvc; no feature flag is needed.
+keyring = { version = "2", optional = true }
 
 # Windows Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) so the backend
 # and its process tree die even if the Tauri shell crashes. Windows only.
