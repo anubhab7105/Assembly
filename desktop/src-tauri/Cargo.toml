@@ -19,7 +19,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # by `tauri::generate_context!()`. `tauri` is also a build-dependency so its
 # build script emits `cargo:dev=true` (sets DEP_TAURI_DEV), which tauri-build
 # requires.
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", optional = true }
 tauri = { version = "2", optional = true }
 
 [features]
