@@ -34,6 +34,7 @@ describe("privacy-notice", () => {
     expect(webNotice).toContain("not persisted by the Assembly application");
     expect(webNotice).toContain("all saved model-provider keys");
     expect(webNotice).toContain("not only keys for selected models");
+    expect(webNotice).toContain("a key-test request includes only the provider key being tested");
     expect(webNotice).toContain("any saved Tavily key");
     expect(webNotice).toContain("even when search is not used");
     expect(webNotice).toContain("not encrypted at rest");
@@ -45,6 +46,7 @@ describe("privacy-notice", () => {
     expect(desktopNotice).toContain("WebView browser profile");
     expect(desktopNotice).toContain("over loopback");
     expect(desktopNotice).toContain("all saved model-provider keys");
+    expect(desktopNotice).toContain("a key-test request sends only the provider key being tested");
     expect(desktopNotice).toContain("any saved Tavily key");
     expect(desktopNotice).toContain("even when search is not used");
     expect(desktopNotice).toContain("XSS incident");
@@ -90,6 +92,7 @@ describe("privacy-notice", () => {
     expect(publicPolicy).toContain("same-origin JavaScript");
     expect(publicPolicy).toContain("hosted Assembly backend over HTTPS");
     expect(publicPolicy).toContain("all saved model-provider keys");
+    expect(publicPolicy).toContain("only the provider key being tested");
     expect(publicPolicy).toContain("any saved Tavily key");
     expect(publicPolicy).toContain("even when search is not used");
     expect(publicPolicy).toContain("Hosting providers may process network traffic");
