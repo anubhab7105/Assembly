@@ -152,12 +152,27 @@ export function KeysManager() {
   }
 
   const handleSaveAndTest = async (providerId: string) => {
-    const rawKey = cleanPastedKey(inputs[providerId] || savedKeys[providerId] || "")
+    // Desktop holds provider secrets in the OS keyring and never reveals
+    // them to the webview, so saving/testing requires the user to (re)type
+    // the key each time. Web mode reuses any stored value.
+    const rawKey = cleanPastedKey(
+      env.NEXT_PUBLIC_APP_MODE === "desktop"
+        ? inputs[providerId] || ""
+        : inputs[providerId] || savedKeys[providerId] || "",
+    )
     if (!rawKey) return
     // Soft prefix hint never blocks saving (FR-30): validation is advisory only.
     void isKeyFormatOk(providerId, rawKey)
     try {
-      await globalVault.setKey(providerId, rawKey)
+      if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+        await desktopCredentialSave(providerId, rawKey)
+        setDesktopProviders((prev) =>
+          prev.includes(providerId) ? prev : [...prev, providerId],
+        )
+        setSavedKeys((prev) => ({ ...prev, [providerId]: "stored" }))
+      } else {
+        await globalVault.setKey(providerId, rawKey)
+      }
     } catch (e) {
       // Honest failure: storage refused the write, so the UI must not claim
       // the key was saved.
@@ -172,7 +187,9 @@ export function KeysManager() {
       delete next[providerId]
       return next
     })
-    setSavedKeys((prev) => ({ ...prev, [providerId]: rawKey }))
+    if (env.NEXT_PUBLIC_APP_MODE !== "desktop") {
+      setSavedKeys((prev) => ({ ...prev, [providerId]: rawKey }))
+    }
     setInputs((prev) => ({ ...prev, [providerId]: "" }))
     setStatuses((prev) => ({ ...prev, [providerId]: "testing" }))
     try {
