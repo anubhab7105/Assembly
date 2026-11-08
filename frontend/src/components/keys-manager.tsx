@@ -50,7 +50,6 @@ export function KeysManager() {
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
   const [tavilyInput, setTavilyInput] = useState("")
-  const [tavilySaved, setTavilySaved] = useState(false)
   const [desktopProviders, setDesktopProviders] = useState<string[]>([])
   const [needsUnlock, setNeedsUnlock] = useState(false)
   const [unlockError, setUnlockError] = useState<string | null>(null)
