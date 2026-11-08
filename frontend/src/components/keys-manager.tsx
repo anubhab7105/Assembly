@@ -350,7 +350,7 @@ export function KeysManager() {
           </div>
         ) : (
           <p data-testid="persisted-banner" className="text-xs text-muted-foreground">
-            Saved keys stay in this browser across refreshes until you remove them here or clear all keys. Clearing browser/site data also removes them. They are not encrypted at rest or protected by the OS; same-origin JavaScript, including code injected through an XSS vulnerability, can read them.
+            Saved keys stay in this browser across refreshes. You can remove them here or clear all keys; clearing browser/site data also removes them. If browser storage fails during removal, a key may remain saved and Settings will show an error. They are not encrypted at rest or protected by the OS; same-origin JavaScript, including code injected through an XSS vulnerability, can read them.
           </p>
         )}
         <Button variant="destructive" size="sm" onClick={handleClearAll} disabled={Object.keys(savedKeys).length === 0}>
