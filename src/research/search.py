@@ -49,7 +49,7 @@ class SearchEngine:
         max_results: int = 5,
     ) -> list[dict[str, str]]:
         """Search using Tavily API."""
-        logger.info(f"Search  │ Tavily search: {query[:80]}...")
+        logger.info("Search  │ Tavily request (query_chars=%d)", len(query))
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -77,5 +77,5 @@ class SearchEngine:
             return results
 
         except Exception as e:
-            logger.error(f"Search  │ Tavily error: {e}")
+            logger.error("Search  │ Tavily request failed (%s)", type(e).__name__)
             return []

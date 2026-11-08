@@ -160,6 +160,7 @@ class GeminiProvider(AIProvider):
         temperature: float,
         max_tokens: int,
     ) -> ProviderResponse:
+        """Build and send the Gemini request, then normalize the provider response."""
         try:
             # Convert ChatMessage format to Gemini's format
             # Gemini uses 'user' and 'model' roles, and system goes into system_instruction
@@ -253,7 +254,7 @@ class GeminiProvider(AIProvider):
 
         except Exception as e:
             structured = classify_exception(self.provider_name, e)
-            logger.error(f"Gemini  │ Error: {structured}")
+            logger.error("Gemini  │ Request failed (type=%s)", type(structured).__name__)
             raise structured from e
 
     def is_available(self) -> bool:

@@ -255,6 +255,18 @@ def db_session() -> Session:
         Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture()
+def isolated_web_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Run web-mode tests from a temporary directory and return the forbidden DB path."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "app_mode", "web")
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "debug", False)
+    monkeypatch.chdir(tmp_path)
+    return tmp_path / "assembly.db"
+
+
 @pytest.fixture(autouse=True)
 def clear_rate_limits() -> None:
     """Reset the global rate limit history between tests."""

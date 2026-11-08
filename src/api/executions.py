@@ -412,6 +412,7 @@ async def _run_execution(
     logger.info(f"Exec    │ Starting background execution {execution_id[:8]}...")
 
     async def on_progress(event: dict):
+        """Forward execution updates to the event stream and persist the safe event metadata."""
         state = event.get("state") or (event.get("data") or {}).get("state")
         if state:
             _persist_state(execution_id, state)
@@ -490,7 +491,7 @@ async def _run_execution(
         logger.info(f"Exec    │ Background execution {execution_id[:8]}... cancelled")
         _persist_state(execution_id, "cancelled", finished=True)
     except Exception as e:
-        logger.error(f"Exec    │ Background execution failed: {e}")
+        logger.error("Exec    │ Background execution failed (type=%s)", type(e).__name__)
         db = SessionLocal()
         try:
             execution = db.query(Execution).filter(Execution.id == execution_id).first()

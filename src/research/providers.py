@@ -119,12 +119,13 @@ class TavilySearchProvider(SearchProvider):
         return bool(key) and not key.startswith("tvly-your")
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search Tavily and normalize its result payloads."""
         if not query or not query.strip():
             return []
         if not self.is_available:
             raise SearchProviderError("tavily: API key not configured")
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ Tavily search: {query[:80]}...")
+        logger.info("Search  │ Tavily request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.post(
@@ -175,10 +176,11 @@ class WikipediaSearchProvider(SearchProvider):
     provider_name: str = "wikipedia"
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search Wikipedia and convert matching pages into shared search results."""
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ Wikipedia search: {query[:80]}...")
+        logger.info("Search  │ Wikipedia request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.get(
@@ -234,10 +236,11 @@ class ArxivSearchProvider(SearchProvider):
     provider_name: str = "arxiv"
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search arXiv and parse matching paper metadata from its feed."""
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ arXiv search: {query[:80]}...")
+        logger.info("Search  │ arXiv request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.get(
@@ -297,10 +300,11 @@ class SemanticScholarSearchProvider(SearchProvider):
     provider_name: str = "semantic_scholar"
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search Semantic Scholar and normalize matching paper records."""
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ Semantic Scholar search: {query[:80]}...")
+        logger.info("Search  │ Semantic Scholar request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.get(
@@ -377,10 +381,11 @@ class DuckDuckGoSearchProvider(SearchProvider):
     IS_UNOFFICIAL: bool = True
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Search the unofficial DuckDuckGo fallback and normalize topic results."""
         if not query or not query.strip():
             return []
         limit = _clamp_max_results(max_results)
-        logger.info(f"Search  │ DuckDuckGo (unofficial) search: {query[:80]}...")
+        logger.info("Search  │ DuckDuckGo (unofficial) request (query_chars=%d)", len(query))
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.get(

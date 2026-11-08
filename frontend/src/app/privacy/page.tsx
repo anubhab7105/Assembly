@@ -4,7 +4,7 @@ import Link from "next/link"
 export const metadata: Metadata = {
   title: "Privacy policy",
   description:
-    "What Assembly collects, where it stays, and who to contact. No accounts, no tracking, nothing stored on our server.",
+    "How Assembly stores API keys, processes requests, and shares data with AI providers and hosting services.",
   alternates: { canonical: "/privacy" },
 }
 
@@ -13,7 +13,7 @@ export default function PrivacyPage() {
     <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
       <h1 className="text-4xl font-bold tracking-tight">Privacy policy</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Last updated: 12 October 2026. Contact:{" "}
+        Last updated: 8 November 2026. Contact:{" "}
         <a
           href="mailto:anubhab7105@gmail.com"
           className="font-medium text-foreground underline decoration-brand/50 underline-offset-4 hover:text-brand"
@@ -27,9 +27,9 @@ export default function PrivacyPage() {
           <h2 className="text-xl font-semibold">The short version</h2>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
             <li>No accounts. No login. No tracking. No cookies set by Assembly.</li>
-            <li>Your API keys, questions and run history stay in your browser (IndexedDB, with a localStorage fallback).</li>
-            <li>Our server keeps a run in memory only while it executes, then drops it. Server logs hold metadata only.</li>
-            <li>Your question and keys are sent to the model providers you chose. Their policies apply to those inputs.</li>
+            <li>Saved web API keys stay in your browser (IndexedDB with a localStorage fallback). They are readable values, not encrypted at rest or protected by the operating system. If browser storage fails during removal, a key may remain saved; clearing browser/site data removes the browser copy.</li>
+            <li>For hosted web capacity preflight, the browser sends all saved model-provider keys to the Assembly backend over HTTPS, regardless of model selection. A key-test request sends only the provider key being tested. Every run request sends all saved model-provider keys and any saved Tavily key, even when search is not used. The Assembly application uses submitted keys transiently and does not persist them to its application database or disk.</li>
+            <li>The Assembly backend makes outbound requests to your selected providers. Hosting providers may process network traffic and keep their own operational logs under their policies.</li>
           </ul>
         </section>
 
@@ -37,20 +37,15 @@ export default function PrivacyPage() {
           <h2 className="text-xl font-semibold">Data we handle</h2>
           <div className="mt-3 space-y-3 text-sm text-muted-foreground">
             <p>
-              <strong className="text-foreground">In your browser only:</strong> provider API keys, run
+              <strong className="text-foreground">Saved in your browser:</strong> provider API keys, run
               history (questions, answers, sources, scores), settings, usage counters, and your privacy
-              notice acknowledgment. Delete them anytime from History (delete) and Settings (remove keys).
-              Clearing browser site data removes everything.
+              notice acknowledgment. Keys are stored as readable values in IndexedDB with a localStorage fallback; they are not encrypted at rest or stored in an OS-protected credential vault. Same-origin JavaScript, including code injected through an XSS vulnerability, can read them while they are available to the app. Remove keys in Settings or clear browser site data to delete the browser copy. If browser storage fails during removal, a key may remain saved.
             </p>
             <p>
-              <strong className="text-foreground">On our server, transiently:</strong> your question, model
-              choices and API keys travel inside encrypted HTTPS request bodies for one run. Keys are never
-              written to disk, URLs, or logs. Key-shaped text is scrubbed from logs automatically.
+              <strong className="text-foreground">On the hosted Assembly backend, transiently:</strong> capacity preflight sends all saved model-provider keys to the backend over HTTPS, independently of the selected models; a key-test request sends only the provider key being tested; every run sends all saved model-provider keys, any saved Tavily key, the question and model choices in an HTTPS request body, even when search is not used. The backend uses submitted keys for that request/run and does not write them to the Assembly application database or disk. Application logs record operational metadata such as timings, counts and search-query lengths, not raw request bodies, search-query text or key values; key-like values are also scrubbed by the logging filter. This describes the Assembly application, not the independent retention practices of hosting providers.
             </p>
             <p>
-              <strong className="text-foreground">Server logs and limits:</strong> run id, time budget,
-              timings, token counts, and the client IP address used only to enforce per-IP rate limits.
-              Rate-limit records live in server memory and expire automatically.
+              <strong className="text-foreground">Application logs and limits:</strong> Assembly records operational metadata such as run identifiers, time budgets, timings and token counts. The rate limiter uses the client IP address to enforce per-IP limits; those rate-limit records are held in application memory and expire. Hosting platforms such as Vercel and Render operate their own infrastructure and logging under their respective policies.
             </p>
             <p>
               <strong className="text-foreground">What we never collect:</strong> names, emails, passwords,
@@ -64,15 +59,35 @@ export default function PrivacyPage() {
           <h2 className="text-xl font-semibold">Third parties who see your inputs</h2>
           <div className="mt-3 space-y-3 text-sm text-muted-foreground">
             <p>
-              Each run sends your question to the model providers holding your keys (for example Gemini,
-              Groq, OpenRouter, Hugging Face) and, when research is on, to search sources (for example
-              Wikipedia, arXiv, Tavily if you added a key). Those providers process inputs under their own
-              policies. Free tiers may reuse inputs to improve their products (Google states this for Gemini
+              Each run sends your question to the selected model providers (for example Gemini, Groq,
+              OpenRouter or Hugging Face). If you saved a Tavily key, that key is included in every run
+              request to the Assembly backend; Tavily receives a search request only when research actually
+              uses it. When research runs, Assembly may send your full question as a search query to Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, depending on the search fallback path. Tavily receives it only when available and selected by that path; the other listed services do not require a Tavily key. Those providers process inputs under their own policies. Free tiers may reuse inputs to improve their products (Google states this for Gemini
               free-tier requests). Avoid sending sensitive or confidential information.
             </p>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">Windows desktop mode</h2>
+          <div className="mt-3 space-y-3 text-sm text-muted-foreground">
             <p>
-              Hosting platforms (Vercel for the site, Render for the API) necessarily handle network traffic
-              and keep their own operational logs, including IP addresses, under their policies.
+              Desktop mode runs an Assembly backend locally on your PC and does not route its requests through
+              the hosted Assembly web backend. The current Settings flow stores keys in the embedded WebView
+              browser profile (IndexedDB with a localStorage fallback) as readable values, not encrypted at
+              rest. Same-origin JavaScript, including code injected through an XSS vulnerability, can read them.
+              If browser storage fails during removal, a key may remain saved; clearing WebView site data removes
+              the browser copy.
+            </p>
+            <p>
+              Preflight sends all saved model-provider keys from the WebView to the local backend over loopback,
+              independently of model selection; a key-test request sends only the provider key being tested.
+              Every run request sends all saved model-provider keys and any saved Tavily key,
+              even when search is not used; the local backend authenticates to selected providers and uses Tavily
+              only when a search request is made. The repository contains a Windows
+              Credential Manager keyring adapter, but the current Settings save flow does not use it as the
+              primary key store. Desktop execution history is stored locally in SQLite; the database is not
+              intended to hold provider key values.
             </p>
           </div>
         </section>

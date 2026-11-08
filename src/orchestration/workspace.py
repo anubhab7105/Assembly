@@ -77,7 +77,7 @@ class SharedWorkspace:
             try:
                 await callback(event)
             except Exception as e:
-                logger.error(f"Workspace │ Listener error: {e}")
+                logger.error("Workspace │ Listener failed (type=%s)", type(e).__name__)
 
     def subscribe(self, execution_id: str, callback: Callable):
         """Subscribe to events for a specific execution."""

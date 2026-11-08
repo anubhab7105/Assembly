@@ -63,21 +63,23 @@ where it is enforced, and what it cannot do.
 
 ## Bring Your Own Key (BYOK) & Web Mode Data Flow
 
-In `web` mode, Assembly strictly enforces a BYOK policy. This ensures that users can only spend their own keys and the system never logs, stores, or leaks user API keys.
+In `web` mode, Assembly enforces BYOK: requests use keys supplied by the user, not hosted server-side provider credentials. The Assembly application is designed not to persist submitted key values in its database or disk and to keep request bodies/key values out of application logs. This does not describe separate hosting-provider traffic logs.
 
-1. **Key Input & Transit**: 
-   - Keys are submitted via the frontend as part of the execution request or key-test payload.
-   - The frontend transmits keys securely over HTTPS/WSS.
-2. **Ephemeral Storage (`RequestKeyStore`)**:
+1. **Key Input & Transit**:
+   - The browser sends submitted keys in request bodies for preflight, key testing and runs.
+   - The hosted web frontend sends these requests over HTTPS (local development may use localhost).
+2. **Browser storage and ephemeral backend handling (`RequestKeyStore`)**:
+   - Before transit, saved web keys are stored as readable values in IndexedDB with a localStorage fallback; they are not encrypted at rest or protected by an OS credential vault.
+   - Same-origin JavaScript, including injected code in an XSS incident, can read saved browser keys. Encryption-at-rest implementation is tracked separately in issue #82.
    - In `web` mode, the backend uses `RequestKeyStore` (an ephemeral key store). 
-   - Keys are injected into memory solely for the lifecycle of the single request or execution.
+   - Submitted keys are wrapped for request processing and used in memory for the preflight, key-test request lifecycle or active execution.
    - Keys are **never** written to `.env`, `assembly.db`, or any filesystem path.
 3. **Provider Initialization & Wipe**:
    - The `Orchestrator` consumes the keys from memory to instantiate model providers.
-   - After the execution finishes (successfully, fails, or is cancelled), the keys are wiped from memory.
+   - The run handler drops its request key references in its cleanup path after completion, failure or cancellation. This is application-level reference cleanup, not a claim of guaranteed secure memory erasure.
 4. **Leak Prevention**:
-   - **Logging**: The `SensitiveDataFilter` (part of the logging config) redacts keys before they reach `stdout` or logs.
+   - **Logging**: The key-masking filter scrubs key-like values; request handlers log operational metadata rather than raw request bodies or keys.
    - **Error Handling**: The global exception handler explicitly masks stack traces in 500 errors to prevent keys bound to locals from leaking. Validation errors (422) return generic responses instead of reflecting offending values.
    - **Persistence**: Database schemas (e.g., `AgentRun`) store provider and model names but deliberately exclude keys.
-5. **No Server-Side Keys**:
+5. **No Hosted Provider Keys**:
    - If `APP_MODE=web`, environment-level keys are ignored. It is structurally impossible for a user to trigger an execution using the operator's keys.

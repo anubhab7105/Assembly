@@ -165,6 +165,7 @@ async def _execute_run(
     stage_holder = {"stage": "run_init", "events": 0}
 
     async def on_progress(event: dict) -> None:
+        """Track the lifecycle stage and queue each orchestrator progress event."""
         # Track the last lifecycle stage for failure diagnostics (envelope
         # `state` when present, else the event name). Names only, no content.
         if isinstance(event, dict):
@@ -408,7 +409,7 @@ async def start_run(req: RunRequest, request: Request):
                     content={"detail": "Tier not feasible with current quota."},
                 )
     except Exception as exc:  # noqa: BLE001 — capacity advisory, fail open
-        logger.debug(f"Run     │ capacity check skipped: {exc}")
+        logger.debug("Run     │ capacity check skipped (type=%s)", type(exc).__name__)
 
     async with _runs_lock:
         active = sum(1 for e in _runs.values() if not e.done)
