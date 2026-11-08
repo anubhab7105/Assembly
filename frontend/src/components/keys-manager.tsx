@@ -69,7 +69,6 @@ export function KeysManager() {
       try {
         if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
           const { providers } = await desktopCredentialList()
-          setDesktopProviders(providers)
           // Mark each stored provider as present (values stay in the keyring).
           setSavedKeys(
             Object.fromEntries(providers.map((p) => [p, "stored"])),
@@ -140,9 +139,6 @@ export function KeysManager() {
     try {
       if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
         await desktopCredentialSave("tavily", rawKey)
-        setDesktopProviders((prev) =>
-          prev.includes("tavily") ? prev : [...prev, "tavily"],
-        )
         setSavedKeys((prev) => ({ ...prev, tavily: "stored" }))
       } else {
         await globalVault.setKey("tavily", rawKey)
@@ -175,9 +171,6 @@ export function KeysManager() {
     try {
       if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
         await desktopCredentialSave(providerId, rawKey)
-        setDesktopProviders((prev) =>
-          prev.includes(providerId) ? prev : [...prev, providerId],
-        )
         setSavedKeys((prev) => ({ ...prev, [providerId]: "stored" }))
       } else {
         await globalVault.setKey(providerId, rawKey)
@@ -229,7 +222,6 @@ export function KeysManager() {
     try {
       if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
         await desktopCredentialDelete(providerId)
-        setDesktopProviders((prev) => prev.filter((p) => p !== providerId))
       } else {
         await globalVault.removeKey(providerId)
       }
