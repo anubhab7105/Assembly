@@ -133,11 +133,22 @@ export function KeysManager() {
   const tavilySaved = !!savedKeys["tavily"]
 
   const handleSaveTavily = async () => {
-    const rawKey = cleanPastedKey(tavilyInput || savedKeys["tavily"] || "")
+    const rawKey = cleanPastedKey(
+      env.NEXT_PUBLIC_APP_MODE === "desktop" ? tavilyInput || "" : tavilyInput || savedKeys["tavily"] || "",
+    )
     if (!rawKey) return
     // No server-side probe exists for search keys: store only.
     try {
-      await globalVault.setKey("tavily", rawKey)
+      if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+        await desktopCredentialSave("tavily", rawKey)
+        setDesktopProviders((prev) =>
+          prev.includes("tavily") ? prev : [...prev, "tavily"],
+        )
+        setSavedKeys((prev) => ({ ...prev, tavily: "stored" }))
+      } else {
+        await globalVault.setKey("tavily", rawKey)
+        setSavedKeys((prev) => ({ ...prev, tavily: rawKey }))
+      }
     } catch (e) {
       toast({
         title: "Couldn't save search key",
@@ -146,9 +157,8 @@ export function KeysManager() {
       })
       return
     }
-    setSavedKeys((prev) => ({ ...prev, tavily: rawKey }))
     setTavilyInput("")
-    toast({ title: "Search key saved", description: "Tavily key stored with your other keys.", variant: "success" })
+    toast({ title: "Search key saved", description: "Search key stored with your other keys.", variant: "success" })
   }
 
   const handleSaveAndTest = async (providerId: string) => {
@@ -218,11 +228,16 @@ export function KeysManager() {
 
   const handleRemove = async (providerId: string) => {
     try {
-      await globalVault.removeKey(providerId)
+      if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+        await desktopCredentialDelete(providerId)
+        setDesktopProviders((prev) => prev.filter((p) => p !== providerId))
+      } else {
+        await globalVault.removeKey(providerId)
+      }
     } catch {
       toast({
         title: "Unable to remove key",
-        description: "Browser storage rejected the deletion, so this key may still be saved. Try again or clear browser/site data.",
+        description: "Storage rejected the deletion, so this key may still be saved. Try again.",
         variant: "danger",
       })
       return
@@ -277,6 +292,7 @@ export function KeysManager() {
     setNeedsUnlock(false)
     setUnlockError(null)
     setSavedKeys({})
+    setDesktopProviders([])
     setInputs({})
     setStatuses({})
     setDetails({})
