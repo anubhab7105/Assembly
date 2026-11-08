@@ -33,6 +33,37 @@ pub fn service_name() -> String {
     "Assembly".to_string()
 }
 
+/// Holds a `CredentialStore` for registration as Tauri `State`.
+pub struct CredentialState {
+    store: Box<dyn CredentialStore>,
+}
+
+impl CredentialState {
+    pub fn new(store: impl CredentialStore + 'static) -> Self {
+        Self { store: Box::new(store) }
+    }
+
+    pub fn save(&self, provider: &str, secret: &Secret) -> Result<(), Error> {
+        self.store.save(provider, secret)
+    }
+
+    pub fn get(&self, provider: &str) -> Result<Option<Secret>, Error> {
+        self.store.get(provider)
+    }
+
+    pub fn exists(&self, provider: &str) -> Result<bool, Error> {
+        self.store.exists(provider)
+    }
+
+    pub fn delete(&self, provider: &str) -> Result<(), Error> {
+        self.store.delete(provider)
+    }
+
+    pub fn list(&self) -> Result<Vec<String>, Error> {
+        self.store.list()
+    }
+}
+
 // ────────────────────────────────────────────────────────────
 // In-memory implementation (tests, any host)
 // ────────────────────────────────────────────────────────────
@@ -53,8 +84,10 @@ impl InMemoryStore {
 impl CredentialStore for InMemoryStore {
     fn save(&self, provider: &str, secret: &Secret) -> Result<(), Error> {
         validate_provider(provider)?;
-        let _ = secret; // validated at the call site
-        self.inner.write().unwrap().insert(provider.to_string(), secret.clone());
+        self.inner
+            .write()
+            .unwrap()
+            .insert(provider.to_string(), secret.clone());
         Ok(())
     }
 
@@ -166,8 +199,7 @@ mod windows_impl {
                 Ok(Some(value)) if !value.is_empty() => {
                     Ok(Some(crate::sidecar_core::wrap_secret(&value)))
                 }
-                Ok(None) | Ok(Some(_)) => Ok(None),
-                Err(e) => Err(Error::KeyringUnavailable(e.to_string())),
+                _ => Ok(None),
             }
         }
 
