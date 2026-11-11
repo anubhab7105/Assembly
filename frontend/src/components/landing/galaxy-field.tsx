@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, type RefObject } from "react"
 
+type StarTone = "core" | "violet" | "mint" | "white" | "blue" | "deep"
+type SpeckTone = "violet" | "mint" | "white"
+
 type Star = {
   /** Position on the disk, in polar coordinates. */
   angle: number
@@ -9,7 +12,7 @@ type Star = {
   /** Vertical thickness of the disk. */
   height: number
   size: number
-  color: string
+  tone: StarTone
   phase: number
   brightness: number
   flare: boolean
@@ -22,7 +25,36 @@ type Speck = {
   size: number
   alpha: number
   phase: number
-  color: string
+  tone: SpeckTone
+}
+
+/**
+ * Bright stars on the dark hero, deep ink stars on the light hero. The light
+ * palette keeps the same hues but pushes them dark enough to read on a pale
+ * background.
+ */
+const STAR_COLORS: Record<"dark" | "light", Record<StarTone, string>> = {
+  dark: {
+    core: "#ffe6bd",
+    violet: "#c3a6ff",
+    mint: "#9fe4cf",
+    white: "#e8f1ff",
+    blue: "#c2d8ff",
+    deep: "#94b9ff",
+  },
+  light: {
+    core: "#b26a00",
+    violet: "#6d4aff",
+    mint: "#0b8f70",
+    white: "#173a7a",
+    blue: "#2a5fb8",
+    deep: "#4f7fd6",
+  },
+}
+
+const SPECK_COLORS: Record<"dark" | "light", Record<SpeckTone, string>> = {
+  dark: { violet: "#b8a6ff", mint: "#9fe4cf", white: "#dbe8ff" },
+  light: { violet: "#7c5cff", mint: "#0f9b7a", white: "#6f86ad" },
 }
 
 const ARMS = 2
@@ -74,13 +106,13 @@ function buildStars(count: number): Star[] {
     const height = gaussian(rand) * (0.012 + bulge * 0.075)
     const roll = rand()
 
-    let color = "#c2d8ff"
-    if (radial < 0.15 && roll < 0.62) color = "#ffe6bd"
-    else if (roll < 0.06) color = "#c3a6ff"
-    else if (roll < 0.11) color = "#9fe4cf"
-    else if (roll < 0.48) color = "#e8f1ff"
-    else if (roll < 0.78) color = "#c2d8ff"
-    else color = "#94b9ff"
+    let tone: StarTone = "blue"
+    if (radial < 0.15 && roll < 0.62) tone = "core"
+    else if (roll < 0.06) tone = "violet"
+    else if (roll < 0.11) tone = "mint"
+    else if (roll < 0.48) tone = "white"
+    else if (roll < 0.78) tone = "blue"
+    else tone = "deep"
 
     const sizeRoll = rand()
     stars.push({
@@ -88,7 +120,7 @@ function buildStars(count: number): Star[] {
       radius,
       height,
       size: 0.5 + sizeRoll * sizeRoll * 2,
-      color,
+      tone,
       phase: rand() * Math.PI * 2,
       brightness: inArm ? 0.5 + rand() * 0.5 : 0.18 + rand() * 0.22,
       flare: index % 137 === 0,
@@ -110,7 +142,7 @@ function buildSpecks(count: number): Speck[] {
       size: 0.5 + rand() * 1.3,
       alpha: 0.18 + rand() * 0.55,
       phase: rand() * Math.PI * 2,
-      color: roll < 0.1 ? "#b8a6ff" : roll < 0.18 ? "#9fe4cf" : "#dbe8ff",
+      tone: roll < 0.1 ? "violet" : roll < 0.18 ? "mint" : "white",
     })
   }
 
@@ -146,6 +178,7 @@ export function GalaxyField({
     let visible = true
     let elapsed = 0
     let last = performance.now()
+    let dark = document.documentElement.classList.contains("dark")
 
     const draw = (time: number) => {
       const cx = width * 0.52
@@ -156,14 +189,16 @@ export function GalaxyField({
       const cosZ = Math.cos(Z_ROT)
       const sinZ = Math.sin(Z_ROT)
       const fov = 2.7
+      const starColors = dark ? STAR_COLORS.dark : STAR_COLORS.light
+      const speckColors = dark ? SPECK_COLORS.dark : SPECK_COLORS.light
 
       context.clearRect(0, 0, width, height)
 
       // Sparse background stars, independent of the disk.
       for (const speck of specks) {
         const twinkle = 0.68 + Math.sin(time * 0.9 + speck.phase) * 0.32
-        context.globalAlpha = speck.alpha * twinkle
-        context.fillStyle = speck.color
+        context.globalAlpha = speck.alpha * twinkle * (dark ? 1 : 0.55)
+        context.fillStyle = speckColors[speck.tone]
         context.fillRect(speck.x * width, speck.y * height, speck.size, speck.size)
       }
 
@@ -173,10 +208,17 @@ export function GalaxyField({
       context.translate(cx, cy)
       context.scale(1, 0.44)
       const halo = context.createRadialGradient(0, 0, radius * 0.04, 0, 0, radius * 1.02)
-      halo.addColorStop(0, "rgba(255, 233, 196, 0.4)")
-      halo.addColorStop(0.16, "rgba(172, 160, 255, 0.24)")
-      halo.addColorStop(0.5, "rgba(82, 105, 230, 0.13)")
-      halo.addColorStop(1, "rgba(10, 14, 40, 0)")
+      if (dark) {
+        halo.addColorStop(0, "rgba(255, 233, 196, 0.4)")
+        halo.addColorStop(0.16, "rgba(172, 160, 255, 0.24)")
+        halo.addColorStop(0.5, "rgba(82, 105, 230, 0.13)")
+        halo.addColorStop(1, "rgba(10, 14, 40, 0)")
+      } else {
+        halo.addColorStop(0, "rgba(255, 214, 160, 0.3)")
+        halo.addColorStop(0.16, "rgba(124, 92, 255, 0.12)")
+        halo.addColorStop(0.5, "rgba(37, 99, 235, 0.07)")
+        halo.addColorStop(1, "rgba(238, 243, 252, 0)")
+      }
       context.globalAlpha = 1
       context.fillStyle = halo
       context.beginPath()
@@ -186,10 +228,17 @@ export function GalaxyField({
 
       // Warm bulge.
       const core = context.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.17)
-      core.addColorStop(0, "rgba(255, 250, 236, 1)")
-      core.addColorStop(0.22, "rgba(255, 226, 175, 0.72)")
-      core.addColorStop(0.58, "rgba(196, 170, 255, 0.2)")
-      core.addColorStop(1, "rgba(120, 140, 255, 0)")
+      if (dark) {
+        core.addColorStop(0, "rgba(255, 250, 236, 1)")
+        core.addColorStop(0.22, "rgba(255, 226, 175, 0.72)")
+        core.addColorStop(0.58, "rgba(196, 170, 255, 0.2)")
+        core.addColorStop(1, "rgba(120, 140, 255, 0)")
+      } else {
+        core.addColorStop(0, "rgba(255, 240, 214, 0.95)")
+        core.addColorStop(0.22, "rgba(236, 168, 74, 0.55)")
+        core.addColorStop(0.58, "rgba(124, 92, 255, 0.14)")
+        core.addColorStop(1, "rgba(37, 99, 235, 0)")
+      }
       context.fillStyle = core
       context.beginPath()
       context.arc(cx, cy, radius * 0.17, 0, Math.PI * 2)
@@ -214,23 +263,27 @@ export function GalaxyField({
 
         const depth = Math.min(1, Math.max(0, (1 - z1) * 0.5))
         const twinkle = 0.78 + Math.sin(time * 1.25 + star.phase) * 0.22
-        const alpha = star.brightness * (0.34 + depth * 1) * twinkle
+        const alphaBase = dark ? 0.34 : 0.55
+        const alphaDepth = dark ? 1 : 0.65
+        const alpha = star.brightness * (alphaBase + depth * alphaDepth) * twinkle
         const size = Math.max(0.5, star.size * (0.8 + perspective * 0.45))
 
         context.globalAlpha = Math.min(1, alpha)
-        context.fillStyle = star.color
+        context.fillStyle = starColors[star.tone]
         context.fillRect(sx - size / 2, sy - size / 2, size, size)
 
         if (size > 1.45) {
           const glow = size * 2.6
-          context.globalAlpha = Math.min(0.32, alpha * 0.2)
+          context.globalAlpha = dark
+            ? Math.min(0.32, alpha * 0.2)
+            : Math.min(0.12, alpha * 0.08)
           context.fillRect(sx - glow / 2, sy - glow / 2, glow, glow)
         }
 
         if (star.flare) {
           const flare = size * 5
-          context.globalAlpha = Math.min(0.55, alpha * 0.55)
-          context.strokeStyle = star.color
+          context.globalAlpha = Math.min(dark ? 0.55 : 0.4, alpha * 0.55)
+          context.strokeStyle = starColors[star.tone]
           context.lineWidth = 0.7
           context.beginPath()
           context.moveTo(sx - flare, sy)
@@ -243,7 +296,7 @@ export function GalaxyField({
 
       // The nucleus itself, on top of the disk.
       context.globalAlpha = 0.92
-      context.fillStyle = "#fff6df"
+      context.fillStyle = dark ? "#fff6df" : "#b26a00"
       context.beginPath()
       context.arc(cx, cy, Math.max(1.6, radius * 0.014), 0, Math.PI * 2)
       context.fill()
@@ -298,6 +351,17 @@ export function GalaxyField({
       else start()
     }
 
+    const onThemeChange = () => {
+      const next = document.documentElement.classList.contains("dark")
+      if (next === dark) return
+      dark = next
+      if (reduced) draw(elapsed)
+    }
+
+    const themeObserver = new MutationObserver(onThemeChange)
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+    window.addEventListener("assembly:theme-change", onThemeChange)
+
     resize()
 
     const resizeObserver = new ResizeObserver(resize)
@@ -322,8 +386,10 @@ export function GalaxyField({
       stop()
       resizeObserver.disconnect()
       intersectionObserver.disconnect()
+      themeObserver.disconnect()
       motionQuery?.removeEventListener?.("change", onMotionPreference)
       document.removeEventListener("visibilitychange", onVisibility)
+      window.removeEventListener("assembly:theme-change", onThemeChange)
     }
   }, [heroRef])
 

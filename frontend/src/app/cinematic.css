@@ -473,22 +473,157 @@ html.comfort-reduce-3d .cin-hero-field {
 
 /* Landing ------------------------------------------------------------------ */
 html:has(.cin-landing) {
-  background: #05070f;
-  color-scheme: dark;
+  background: var(--background);
 }
 
 body:has(.cin-landing) {
-  background: #05070f;
+  background: var(--background);
 }
 
 .cin-landing {
+  /* Light defaults; `.dark .cin-landing` overrides these below. */
+  --landing-bg: #eef3fc;
+  --landing-ink: #0b1730;
+  --landing-muted: #5a6f8f;
+  --landing-nav: #4c6285;
+  --landing-nav-hover: #0b1730;
+  --landing-line: rgba(21, 51, 102, 0.14);
+  --landing-badge-border: rgba(37, 99, 235, 0.34);
+  --landing-badge-bg: rgba(255, 255, 255, 0.72);
+  --landing-badge-ink: #1d4ed8;
+  --landing-badge-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.06),
+    0 10px 30px -18px rgba(37, 99, 235, 0.35);
+  --landing-accent: #2563eb;
+  --landing-accent-glow: rgba(37, 99, 235, 0.14);
+  --landing-outline-border: rgba(15, 23, 42, 0.16);
+  --landing-outline-bg: rgba(255, 255, 255, 0.68);
+  --landing-outline-ink: #0b1730;
+  --landing-outline-hover-border: rgba(15, 23, 42, 0.3);
+  --landing-outline-hover-bg: rgba(255, 255, 255, 0.96);
+  --landing-outline-icon: #2563eb;
+  --landing-primary-border: rgba(255, 255, 255, 0.4);
+  --landing-primary-bg: linear-gradient(180deg, #3f8bf7 0%, #2563eb 100%);
+  --landing-primary-ink: #ffffff;
+  --landing-primary-shadow:
+    0 14px 30px -14px rgba(37, 99, 235, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  --landing-primary-hover-bg: #3f8bf7;
+  --landing-primary-hover-shadow:
+    0 18px 38px -16px rgba(37, 99, 235, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  --landing-stat-ink: #0b1730;
+  --landing-stat-muted: #5e708c;
+  --landing-card-border: rgba(37, 99, 235, 0.18);
+  --landing-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(242, 247, 255, 0.95));
+  --landing-card-shadow:
+    0 30px 70px -34px rgba(30, 58, 138, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --landing-card-ink: #0b1730;
+  --landing-card-muted: #5e708c;
+  --landing-progress-track: rgba(37, 99, 235, 0.14);
+  --landing-progress-bg: linear-gradient(90deg, #7fb2ff, #2563eb);
+  --landing-progress-glow: rgba(37, 99, 235, 0.45);
+  --landing-agreement: #2563eb;
+  --landing-ring: rgba(37, 99, 235, 0.26);
+  --landing-ring-1: rgba(37, 99, 235, 0.42);
+  --landing-ring-2: rgba(37, 99, 235, 0.28);
+  --landing-ring-3: rgba(37, 99, 235, 0.18);
+  --landing-ring-glow: rgba(37, 99, 235, 0.08);
+  --landing-node-blue: #2563eb;
+  --landing-node-blue-halo: rgba(37, 99, 235, 0.16);
+  --landing-node-violet: #7c5cff;
+  --landing-node-violet-halo: rgba(124, 92, 255, 0.16);
+  --landing-node-mint: #0f9b7a;
+  --landing-node-mint-halo: rgba(15, 155, 122, 0.16);
+  --landing-footnote: #64789a;
+  --landing-field-opacity: 0.9;
+  --landing-field-filter: saturate(1.05);
+  --landing-glow-violet: rgba(124, 92, 255, 0.2);
+  --landing-glow-blue: rgba(37, 99, 235, 0.12);
+  --landing-glow-bottom: rgba(37, 99, 235, 0.08);
+  --landing-bg-top: #f7faff;
+  --landing-bg-mid: #eef3fc;
+  --landing-bg-bottom: #e9f0fb;
+  --landing-speck-1: rgba(37, 99, 235, 0.32);
+  --landing-speck-2: rgba(124, 92, 255, 0.22);
+  --landing-speck-opacity: 0.5;
+
   position: relative;
   min-height: 100dvh;
   overflow: clip;
   isolation: isolate;
-  background: #05070f;
-  color: var(--foreground);
-  color-scheme: dark;
+  background: var(--landing-bg);
+  color: var(--landing-ink);
+}
+
+.dark .cin-landing {
+  --landing-bg: #05070f;
+  --landing-ink: #eef4ff;
+  --landing-muted: #9db0cd;
+  --landing-nav: #9db0cd;
+  --landing-nav-hover: #eef4ff;
+  --landing-line: rgba(160, 190, 255, 0.16);
+  --landing-badge-border: rgba(100, 166, 255, 0.55);
+  --landing-badge-bg: rgba(12, 27, 56, 0.55);
+  --landing-badge-ink: #8ec2ff;
+  --landing-badge-shadow:
+    0 0 0 1px rgba(100, 166, 255, 0.08),
+    0 10px 30px -18px rgba(60, 120, 255, 0.6);
+  --landing-accent: #5b9dff;
+  --landing-accent-glow: rgba(91, 157, 255, 0.18);
+  --landing-outline-border: rgba(190, 210, 255, 0.22);
+  --landing-outline-bg: rgba(12, 22, 42, 0.55);
+  --landing-outline-ink: #eef4ff;
+  --landing-outline-hover-border: rgba(190, 210, 255, 0.38);
+  --landing-outline-hover-bg: rgba(20, 34, 62, 0.78);
+  --landing-outline-icon: #8ec2ff;
+  --landing-primary-border: rgba(255, 255, 255, 0.22);
+  --landing-primary-bg: linear-gradient(180deg, #7db6ff 0%, #5b9dff 100%);
+  --landing-primary-ink: #06142c;
+  --landing-primary-shadow:
+    0 14px 30px -14px rgba(91, 157, 255, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  --landing-primary-hover-bg: #7db6ff;
+  --landing-primary-hover-shadow:
+    0 18px 38px -16px rgba(91, 157, 255, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  --landing-stat-ink: #eef4ff;
+  --landing-stat-muted: #8fa3c4;
+  --landing-card-border: rgba(120, 165, 255, 0.24);
+  --landing-card-bg: linear-gradient(180deg, rgba(15, 26, 48, 0.93), rgba(9, 18, 35, 0.9));
+  --landing-card-shadow:
+    0 30px 70px -30px rgba(0, 0, 0, 0.82),
+    inset 0 1px 0 rgba(190, 214, 255, 0.06);
+  --landing-card-ink: #eef4ff;
+  --landing-card-muted: #8fa3c4;
+  --landing-progress-track: rgba(200, 220, 255, 0.13);
+  --landing-progress-bg: linear-gradient(90deg, #8ec2ff, #4f95ff);
+  --landing-progress-glow: rgba(91, 157, 255, 0.7);
+  --landing-agreement: #6aa9ff;
+  --landing-ring: rgba(120, 165, 255, 0.28);
+  --landing-ring-1: rgba(140, 180, 255, 0.5);
+  --landing-ring-2: rgba(150, 175, 255, 0.3);
+  --landing-ring-3: rgba(150, 175, 255, 0.2);
+  --landing-ring-glow: rgba(91, 157, 255, 0.08);
+  --landing-node-blue: #6aa9ff;
+  --landing-node-blue-halo: rgba(106, 169, 255, 0.12);
+  --landing-node-violet: #a98cff;
+  --landing-node-violet-halo: rgba(169, 140, 255, 0.14);
+  --landing-node-mint: #5ee0bd;
+  --landing-node-mint-halo: rgba(94, 224, 189, 0.12);
+  --landing-footnote: #7f93b3;
+  --landing-field-opacity: 1;
+  --landing-field-filter: saturate(1.08);
+  --landing-glow-violet: rgba(91, 60, 255, 0.42);
+  --landing-glow-blue: rgba(38, 82, 190, 0.24);
+  --landing-glow-bottom: rgba(18, 44, 110, 0.28);
+  --landing-bg-top: #070b18;
+  --landing-bg-mid: #05070f;
+  --landing-bg-bottom: #04060d;
+  --landing-speck-1: rgba(205, 222, 255, 0.85);
+  --landing-speck-2: rgba(150, 180, 255, 0.55);
+  --landing-speck-opacity: 0.34;
 }
 
 .cin-landing::before {
@@ -499,10 +634,10 @@ body:has(.cin-landing) {
   z-index: -2;
   pointer-events: none;
   background:
-    radial-gradient(46% 52% at 76% 36%, rgba(91, 60, 255, 0.42), transparent 70%),
-    radial-gradient(38% 42% at 16% 8%, rgba(38, 82, 190, 0.24), transparent 72%),
-    radial-gradient(60% 60% at 50% 108%, rgba(18, 44, 110, 0.28), transparent 70%),
-    linear-gradient(180deg, #070b18 0%, #05070f 60%, #04060d 100%);
+    radial-gradient(46% 52% at 76% 36%, var(--landing-glow-violet), transparent 70%),
+    radial-gradient(38% 42% at 16% 8%, var(--landing-glow-blue), transparent 72%),
+    radial-gradient(60% 60% at 50% 108%, var(--landing-glow-bottom), transparent 70%),
+    linear-gradient(180deg, var(--landing-bg-top) 0%, var(--landing-bg-mid) 60%, var(--landing-bg-bottom) 100%);
 }
 
 .cin-landing::after {
@@ -512,10 +647,10 @@ body:has(.cin-landing) {
   height: 112vh;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.34;
+  opacity: var(--landing-speck-opacity);
   background-image:
-    radial-gradient(circle, rgba(205, 222, 255, 0.85) 0 0.55px, transparent 0.85px),
-    radial-gradient(circle, rgba(150, 180, 255, 0.55) 0 0.45px, transparent 0.75px);
+    radial-gradient(circle, var(--landing-speck-1) 0 0.55px, transparent 0.85px),
+    radial-gradient(circle, var(--landing-speck-2) 0 0.45px, transparent 0.75px);
   background-size:
     53px 53px,
     89px 89px;
@@ -545,7 +680,7 @@ body:has(.cin-landing) {
 }
 
 .cin-landing-nav a {
-  color: #9db0cd;
+  color: var(--landing-nav);
   font-size: 0.94rem;
   font-weight: 500;
   text-decoration: none;
@@ -553,7 +688,7 @@ body:has(.cin-landing) {
 }
 
 .cin-landing-nav a:hover {
-  color: #eef4ff;
+  color: var(--landing-nav-hover);
 }
 
 .cin-landing .cin-topbar-actions {
@@ -561,20 +696,30 @@ body:has(.cin-landing) {
   gap: 10px;
 }
 
+.cin-landing-theme {
+  border-color: var(--landing-line);
+  background: var(--landing-outline-bg);
+  color: var(--landing-outline-ink);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.cin-landing-theme:hover {
+  border-color: var(--landing-outline-hover-border);
+  background: var(--landing-outline-hover-bg);
+  color: var(--landing-outline-ink);
+}
+
 .cin-landing .cin-btn-primary {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: linear-gradient(180deg, #7db6ff 0%, #5b9dff 100%);
-  color: #06142c;
-  box-shadow:
-    0 14px 30px -14px rgba(91, 157, 255, 0.8),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  border-color: var(--landing-primary-border);
+  background: var(--landing-primary-bg);
+  color: var(--landing-primary-ink);
+  box-shadow: var(--landing-primary-shadow);
 }
 
 .cin-landing .cin-btn-primary:hover {
-  background: #7db6ff;
-  box-shadow:
-    0 18px 38px -16px rgba(91, 157, 255, 0.9),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  background: var(--landing-primary-hover-bg);
+  box-shadow: var(--landing-primary-hover-shadow);
 }
 
 .cin-hero {
@@ -604,15 +749,13 @@ body:has(.cin-landing) {
   margin-bottom: clamp(18px, 2.8vh, 30px);
   padding: 7px 16px;
   border-radius: 999px;
-  border: 1px solid rgba(100, 166, 255, 0.55);
-  background: rgba(12, 27, 56, 0.55);
-  color: #8ec2ff;
+  border: 1px solid var(--landing-badge-border);
+  background: var(--landing-badge-bg);
+  color: var(--landing-badge-ink);
   font-size: clamp(0.78rem, 0.9vw, 0.86rem);
   font-weight: 600;
   letter-spacing: 0.01em;
-  box-shadow:
-    0 0 0 1px rgba(100, 166, 255, 0.08),
-    0 10px 30px -18px rgba(60, 120, 255, 0.6);
+  box-shadow: var(--landing-badge-shadow);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
@@ -623,7 +766,7 @@ body:has(.cin-landing) {
 
 .cin-hero-title {
   margin: 0;
-  color: #eef4ff;
+  color: var(--landing-ink);
   font-size: clamp(2.85rem, 4.65vw, 4.35rem);
   font-weight: 800;
   line-height: 0.99;
@@ -632,14 +775,14 @@ body:has(.cin-landing) {
 
 .cin-hero-title .accent {
   display: block;
-  color: #5b9dff;
-  text-shadow: 0 0 44px rgba(91, 157, 255, 0.18);
+  color: var(--landing-accent);
+  text-shadow: 0 0 44px var(--landing-accent-glow);
 }
 
 .cin-hero-desc {
   max-width: 580px;
   margin-top: clamp(20px, 3vh, 28px);
-  color: #9db0cd;
+  color: var(--landing-muted);
   font-size: clamp(1rem, 1.1vw, 1.1rem);
   line-height: 1.65;
 }
@@ -652,20 +795,20 @@ body:has(.cin-landing) {
 }
 
 .cin-landing .cin-btn-outline {
-  border-color: rgba(190, 210, 255, 0.22);
-  background: rgba(12, 22, 42, 0.55);
-  color: #eef4ff;
+  border-color: var(--landing-outline-border);
+  background: var(--landing-outline-bg);
+  color: var(--landing-outline-ink);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
 
 .cin-landing .cin-btn-outline:hover {
-  border-color: rgba(190, 210, 255, 0.38);
-  background: rgba(20, 34, 62, 0.78);
+  border-color: var(--landing-outline-hover-border);
+  background: var(--landing-outline-hover-bg);
 }
 
 .cin-hero-actions .cin-btn-outline svg {
-  color: #8ec2ff;
+  color: var(--landing-outline-icon);
 }
 
 .cin-hero-stats {
@@ -675,7 +818,7 @@ body:has(.cin-landing) {
   gap: 0;
   margin-top: clamp(30px, 4.4vh, 46px);
   padding-top: 20px;
-  border-top: 1px solid rgba(160, 190, 255, 0.16);
+  border-top: 1px solid var(--landing-line);
 }
 
 .cin-hero-stat {
@@ -685,12 +828,12 @@ body:has(.cin-landing) {
 
 .cin-hero-stat + .cin-hero-stat {
   padding-left: clamp(12px, 1.8vw, 28px);
-  border-left: 1px solid rgba(160, 190, 255, 0.16);
+  border-left: 1px solid var(--landing-line);
 }
 
 .cin-hero-stat strong {
   display: block;
-  color: #eef4ff;
+  color: var(--landing-stat-ink);
   font-size: clamp(1.05rem, 1.5vw, 1.22rem);
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -699,7 +842,7 @@ body:has(.cin-landing) {
 .cin-hero-stat span {
   display: block;
   margin-top: 5px;
-  color: #8fa3c4;
+  color: var(--landing-stat-muted);
   font-size: 0.82rem;
 }
 
@@ -721,8 +864,8 @@ body:has(.cin-landing) {
   z-index: 0 !important;
   width: 100% !important;
   height: 100% !important;
-  opacity: 1;
-  filter: saturate(1.08);
+  opacity: var(--landing-field-opacity);
+  filter: var(--landing-field-filter);
   mask-image: radial-gradient(ellipse 82% 78% at 52% 50%, #000 58%, transparent 100%);
   -webkit-mask-image: radial-gradient(ellipse 82% 78% at 52% 50%, #000 58%, transparent 100%);
 }
@@ -744,29 +887,29 @@ body:has(.cin-landing) {
   left: 50%;
   top: 50%;
   border-radius: 50%;
-  border: 1px dashed rgba(120, 165, 255, 0.28);
+  border: 1px dashed var(--landing-ring);
   transform: translate(-50%, -50%);
 }
 
 .cin-orbit-art .cin-ring:nth-child(1) {
   width: 48%;
   aspect-ratio: 1;
-  border-color: rgba(140, 180, 255, 0.5);
-  box-shadow: 0 0 30px rgba(91, 157, 255, 0.08);
+  border-color: var(--landing-ring-1);
+  box-shadow: 0 0 30px var(--landing-ring-glow);
   animation: cin-spin 108s linear infinite;
 }
 
 .cin-orbit-art .cin-ring:nth-child(2) {
   width: 70%;
   aspect-ratio: 1;
-  border-color: rgba(150, 175, 255, 0.3);
+  border-color: var(--landing-ring-2);
   animation: cin-spin 138s linear infinite reverse;
 }
 
 .cin-orbit-art .cin-ring:nth-child(3) {
   width: 92%;
   aspect-ratio: 1;
-  border-color: rgba(150, 175, 255, 0.2);
+  border-color: var(--landing-ring-3);
   animation: cin-spin 176s linear infinite;
 }
 
@@ -775,25 +918,25 @@ body:has(.cin-landing) {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #6aa9ff;
+  background: var(--landing-node-blue);
   transform: scaleY(2.2);
   box-shadow:
-    0 0 0 7px rgba(106, 169, 255, 0.12),
-    0 0 26px rgba(106, 169, 255, 0.85);
+    0 0 0 7px var(--landing-node-blue-halo),
+    0 0 26px color-mix(in srgb, var(--landing-node-blue) 75%, transparent);
 }
 
 .cin-orbit-node.is-violet {
-  background: #a98cff;
+  background: var(--landing-node-violet);
   box-shadow:
-    0 0 0 8px rgba(169, 140, 255, 0.14),
-    0 0 28px rgba(169, 140, 255, 0.8);
+    0 0 0 8px var(--landing-node-violet-halo),
+    0 0 28px color-mix(in srgb, var(--landing-node-violet) 75%, transparent);
 }
 
 .cin-orbit-node.is-mint {
-  background: #5ee0bd;
+  background: var(--landing-node-mint);
   box-shadow:
-    0 0 0 8px rgba(94, 224, 189, 0.12),
-    0 0 26px rgba(94, 224, 189, 0.7);
+    0 0 0 8px var(--landing-node-mint-halo),
+    0 0 26px color-mix(in srgb, var(--landing-node-mint) 70%, transparent);
 }
 
 .cin-orbit-node:nth-of-type(1) {
@@ -825,11 +968,9 @@ body:has(.cin-landing) {
 }
 
 .cin-landing .cin-float-window {
-  border-color: rgba(120, 165, 255, 0.24);
-  background: linear-gradient(180deg, rgba(15, 26, 48, 0.93), rgba(9, 18, 35, 0.9));
-  box-shadow:
-    0 30px 70px -30px rgba(0, 0, 0, 0.82),
-    inset 0 1px 0 rgba(190, 214, 255, 0.06);
+  border-color: var(--landing-card-border);
+  background: var(--landing-card-bg);
+  box-shadow: var(--landing-card-shadow);
 }
 
 .cin-float-window.is-live {
@@ -860,7 +1001,7 @@ body:has(.cin-landing) {
 
 .cin-live-title {
   margin: 0;
-  color: #eef4ff;
+  color: var(--landing-card-ink);
   font-size: 1.12rem;
   font-weight: 700;
   letter-spacing: -0.025em;
@@ -871,15 +1012,15 @@ body:has(.cin-landing) {
   height: 8px;
   margin-top: 16px;
   border-radius: 999px;
-  background: rgba(200, 220, 255, 0.13);
+  background: var(--landing-progress-track);
 }
 
 .cin-progress > i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #8ec2ff, #4f95ff);
-  box-shadow: 0 0 18px rgba(91, 157, 255, 0.7);
+  background: var(--landing-progress-bg);
+  box-shadow: 0 0 18px var(--landing-progress-glow);
 }
 
 .cin-progress-meta {
@@ -888,7 +1029,7 @@ body:has(.cin-landing) {
   justify-content: space-between;
   gap: 12px;
   margin-top: 9px;
-  color: #8fa3c4;
+  color: var(--landing-card-muted);
   font-size: 0.8rem;
 }
 
@@ -900,7 +1041,7 @@ body:has(.cin-landing) {
 }
 
 .cin-agreement-value strong {
-  color: #6aa9ff;
+  color: var(--landing-agreement);
   font-size: clamp(2.6rem, 3.8vw, 3.3rem);
   font-weight: 800;
   line-height: 0.95;
@@ -908,14 +1049,14 @@ body:has(.cin-landing) {
 }
 
 .cin-agreement-value span {
-  color: #9db0cd;
+  color: var(--landing-card-muted);
   font-size: 0.94rem;
   line-height: 1.35;
 }
 
 .cin-answer-window-text {
   margin: 0;
-  color: #eef4ff;
+  color: var(--landing-card-ink);
   font-size: 0.98rem;
   line-height: 1.55;
 }
@@ -924,7 +1065,7 @@ body:has(.cin-landing) {
   width: min(1360px, calc(100% - 64px));
   margin: 0 auto;
   padding: 0 0 24px;
-  color: #7f93b3;
+  color: var(--landing-footnote);
   font-size: 0.8rem;
 }
 
@@ -3924,6 +4065,31 @@ html.comfort-reduce-3d .cin-watch-float {
 }
 
 @media (max-width: 430px) {
+  .cin-landing-top {
+    gap: 10px;
+    padding: 4px 2px 4px 6px;
+  }
+
+  .cin-landing .cin-topbar-actions {
+    gap: 8px;
+  }
+
+  .cin-landing-theme {
+    width: 38px;
+    height: 38px;
+  }
+
+  .cin-landing .cin-btn-sm {
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: 0.8rem;
+  }
+
+  .cin-brand-word {
+    font-size: 0.74rem;
+    letter-spacing: 0.14em;
+  }
+
   .cin-hero-stage {
     height: 410px;
   }

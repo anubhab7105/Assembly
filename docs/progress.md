@@ -748,3 +748,12 @@
 - Rebuilt the landing CSS around a dark navy palette with elliptical orbit rings (`rotateX(64deg)`), glowing floating cards (Live run, Agreement, Answer) and layouts verified at 1920, 1440, 1280, 1024, 768 and 390.
 - Verification: `npx tsc --noEmit`, ESLint, `npm test` (15) and `npm run build` pass. Playwright confirmed the canvas changes between frames, the header has zero buttons, and no camera/hand-tracking nodes exist on the landing.
 - Note: the old `particle-sphere.tsx`, `use-motion-input.ts`, `cursor-3d.tsx` and `hand-tracker.ts` remain in the repo but are unused by the landing; removing them is a separate cleanup.
+
+## 2026-11-11 - Landing theme toggle and light hero
+
+- Added the existing `ThemeToggle` to the landing header and removed the forced `dark` class, so the landing follows the saved/system theme like the rest of the app.
+- Split the hero palette into light defaults on `.cin-landing` and dark overrides under `.dark .cin-landing`; converted the badge, headline, nav, buttons, stats, orbit rings, floating cards, progress bar and footnote.
+- Taught `GalaxyField` to draw deep blue/violet stars on the light hero and bright stars on the dark hero. It redraws when `assembly:theme-change` fires or the html class changes.
+- Tightened the header below 430px so the brand, theme toggle and Launch app fit at 390 and 360.
+- Updated the landing Playwright test to the rebuilt copy and the new header controls.
+- Verification: `npx tsc --noEmit`, ESLint, `npm test` (15) and `npm run build` pass. The three landing/theme Playwright tests pass against the dev server. Screenshots at 1440, 1024, 768, 390 and 360 in both themes look correct.

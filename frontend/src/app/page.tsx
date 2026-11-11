@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { BrandMark } from "@/components/cinematic/brand-mark"
 import { FloatingWindows } from "@/components/cinematic/floating-windows"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const DOCS_URL = "https://github.com/arkap1502/Assembly#readme"
 
@@ -106,7 +107,7 @@ export default function LandingPage() {
   }, [])
 
   return (
-    <div ref={rootRef} className="cin-landing dark">
+    <div ref={rootRef} className="cin-landing">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
@@ -130,6 +131,7 @@ export default function LandingPage() {
         </nav>
 
         <div className="cin-topbar-actions">
+          <ThemeToggle className="cin-icon-button cin-landing-theme" />
           <Link href="/chat" className="cin-btn cin-btn-sm cin-btn-primary" aria-label="Launch the Assembly app">
             Launch app
             <ArrowUpRight className="size-4" aria-hidden />
