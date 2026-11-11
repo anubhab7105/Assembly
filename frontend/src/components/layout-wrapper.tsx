@@ -213,54 +213,89 @@ function MobileMenu({
 
 function AppSidebar({ pathname }: { pathname: string }) {
   const router = useRouter()
+  const [records, setRecords] = useState<HistoryRecord[]>([])
+
+  useEffect(() => {
+    let active = true
+    const load = () => {
+      storage
+        .listHistory()
+        .then((items) => {
+          if (active) setRecords(items.slice(0, 12))
+        })
+        .catch(() => {
+          if (active) setRecords([])
+        })
+    }
+    load()
+    window.addEventListener("focus", load)
+    return () => {
+      active = false
+      window.removeEventListener("focus", load)
+    }
+  }, [pathname])
 
   return (
-    <aside className="cin-sidebar">
-      <div className="cin-sidebar-head">
-        <Link href="/" className="cin-brand cin-sidebar-brand" aria-label="Assembly home">
+    <aside className="mn-sidebar">
+      <div className="mn-sidebar-top">
+        <Link href="/" className="mn-brand" aria-label="Assembly home">
           <BrandMark />
-          <span className="cin-brand-word">Assembly</span>
+          <span>Assembly</span>
         </Link>
 
-        <button
-          type="button"
-          className="cin-btn cin-btn-primary cin-sidebar-new"
-          onClick={() => router.push("/chat")}
-        >
-          <Plus className="size-4" aria-hidden />
-          New Investigation
+        <button type="button" className="mn-new-chat" onClick={() => router.push("/chat")}>
+          <SquarePen className="size-4" aria-hidden />
+          New chat
         </button>
       </div>
 
-      <nav className="cin-sidebar-nav" aria-label="Primary">
+      <nav className="mn-nav" aria-label="Primary">
         {NAV_ITEMS.map((item) => {
           const active = isNavActive(pathname, item.href)
           return (
             <Link
               key={item.href}
               href={item.href}
-              className="cin-side-link"
+              className="mn-nav-link"
               data-active={active}
               aria-current={active ? "page" : undefined}
             >
-              <item.icon className="cin-side-link-icon" aria-hidden />
+              <item.icon aria-hidden />
               <span>{item.label}</span>
             </Link>
           )
         })}
-        <a href={DOCS_URL} target="_blank" rel="noreferrer" className="cin-side-link">
-          <BookOpen className="cin-side-link-icon" aria-hidden />
+        <a href={DOCS_URL} target="_blank" rel="noreferrer" className="mn-nav-link">
+          <BookOpen aria-hidden />
           <span>Docs</span>
-          <ArrowUpRight className="cin-side-link-trailing" aria-hidden />
+          <ArrowUpRight className="ml-auto size-3.5 opacity-60" aria-hidden />
         </a>
       </nav>
 
-      <div className="cin-sidebar-footer">
-        <p className="cin-sidebar-note">
+      <div className="mn-recents">
+        <span className="mn-recents-label">Recents</span>
+        {records.length === 0 ? (
+          <p className="mn-recents-empty">Your runs will show up here.</p>
+        ) : (
+          records.map((record) => (
+            <Link
+              key={record.id}
+              href={`/executions?id=${record.id}`}
+              className="mn-recent"
+              title={record.question}
+            >
+              <span className="mn-recent-title">{record.question}</span>
+            </Link>
+          ))
+        )}
+      </div>
+
+      <div className="mn-sidebar-foot">
+        <p className="mn-key-note">
           <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
           Keys stay on this device
         </p>
-        <div className="cin-sidebar-footer-row">
+        <div className="mn-foot-row">
           <span>Appearance</span>
           <ThemeToggle className="cin-icon-button" />
         </div>
@@ -271,7 +306,6 @@ function AppSidebar({ pathname }: { pathname: string }) {
 
 function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/"
-  const router = useRouter()
   const isOffline = useOfflineStatus()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const menuTriggerRef = React.useRef<HTMLButtonElement>(null)
@@ -306,17 +340,6 @@ function AppChrome({ children }: { children: React.ReactNode }) {
             <span className="cin-topbar-meta hidden lg:inline">{meta.label}</span>
 
             <div className="cin-topbar-actions">
-              <span className="cin-topbar-count">
-                {meta.number} / 08
-              </span>
-              <button
-                type="button"
-                className="cin-btn cin-btn-sm cin-btn-primary cin-topbar-new hidden sm:inline-flex"
-                onClick={() => router.push("/chat")}
-              >
-                <Plus className="size-4" aria-hidden />
-                New Investigation
-              </button>
               <ThemeToggle className="cin-icon-button cin-topbar-theme" />
               <button
                 ref={menuTriggerRef}

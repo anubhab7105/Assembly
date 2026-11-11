@@ -1,3 +1,11 @@
+## 2026-11-11 — Minimal chat-style workspace
+
+- Reworked `frontend/src/app/chat/page.tsx` into a quiet, chat-like workspace: one centered prompt ("What's on your mind today?"), a single rounded composer with attach, model picker, 3/5/10/15 minute budget pills and a circular send button. Removed the "New investigation" window chrome, the "Run check" side panel, the budget card grid, the example card grid and the duplicate quick-history panel.
+- Kept the run logic untouched: privacy acknowledgement, attachment validation, diversity gate (including the `Run anyway` confirm), preflight, SSE streaming, history save and navigation all behave as before. Provider/readiness state is now a one-line status under the composer, with a compact retry alert when the backend is unreachable.
+- Simplified the app shell in `frontend/src/components/layout-wrapper.tsx`: sidebar is now brand + "New chat" + nav + recent runs (from IndexedDB history) + appearance row, and the desktop top bar is hidden. Mobile keeps the top bar, bottom nav and menu dialog.
+- Added `frontend/src/app/minimal.css` (imported last in the root layout) for the new styles.
+- Verification: `npx tsc --noEmit` and `npx eslint` pass on the touched files; the running dev server serves `/chat` with the new markup and renders the composer at mobile width. Visual check of the desktop sidebar/composer was not performed; the preview was left running for review.
+
 ## 2026-10-26 — Typed chat status states (Issue #53)
 
 - Root cause: `frontend/src/app/chat/page.tsx` derived `statusIsError` from string matching (any status not equal to `"Checking capacity…"` or `"Running team… (streaming)"` was treated as an error), so file-readiness, privacy, informational, and success messages were rendered as `role="alert"` / `text-danger` / `bg-danger-subtle` — announced as errors to screen readers.

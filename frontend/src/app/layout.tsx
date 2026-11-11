@@ -4,6 +4,7 @@ import Script from "next/script"
 import "./globals.css"
 import "./chat-design.css"
 import "./cinematic.css"
+import "./minimal.css"
 
 const inter = Inter({
   variable: "--font-sans",

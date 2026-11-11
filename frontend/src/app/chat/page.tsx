@@ -12,7 +12,6 @@ import {
   PRIVACY_NOTICE_VERSION,
 } from "@/lib/privacy-notice"
 import { PrivacyDialog } from "@/components/privacy-dialog"
-import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
 import { makeChatStatus, type ChatStatus } from "@/lib/chat-status"
@@ -20,17 +19,11 @@ import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { TrafficDots } from "@/components/cinematic/window-card"
-import { HistoryQuick } from "@/components/cinematic/history-quick"
 import {
-  ArrowRight,
-  Check,
+  ArrowUp,
   FileText,
   Paperclip,
-  Settings,
   SlidersHorizontal,
-  Sparkles,
-  Users,
   X,
 } from "lucide-react"
 
@@ -84,7 +77,6 @@ export default function Home() {
   const [catalogTick, setCatalogTick] = useState(0)
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
-  const [hasSearchKey, setHasSearchKey] = useState(false)
   const [confirmedGateSignature, setConfirmedGateSignature] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -134,7 +126,6 @@ export default function Home() {
       globalVault.allKeys().then((k) => {
         const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
         setEnabledIds(modelProviderIds)
-        setHasSearchKey(Boolean(k.tavily))
       }).catch(() => {})
     }
     refreshKeys()
@@ -497,335 +488,206 @@ export default function Home() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [loading])
 
-  const readinessOk = gate.level === "OK"
-  const readinessValue = Math.min(3, gate.families_count)
-  const readinessText = readinessOk
-    ? "Keys, models and quota are fine"
-    : catalogLoading
-      ? "Checking keys and provider quota…"
-      : catalogFailed
-        ? "Provider status is unavailable"
-        : gate.reasons[0] ?? "Add provider keys to start"
-  const searchText = hasSearchKey ? "Web search connected" : "Web search not set up (optional)"
-
   return (
-    <div className="cin-page cin-workspace-page">
-      <main id="main-content" tabIndex={-1} className="cin-main cin-shell cin-page-inner">
-        <header className="cin-page-head">
-          <div className="cin-page-head-copy">
-            <span className="cin-kicker">01 — Ask</span>
-            <h1 className="cin-title">What do you want to know?</h1>
-            <p className="cin-lede">
-              One hard question. A temporary team from different model families works it separately, challenges
-              the weak spots, and leaves you one sourced answer.
-            </p>
-          </div>
-          <div className="cin-page-head-aside">
-            <span className="cin-page-number">02 / 08</span>
-            <div className="flex flex-wrap justify-end gap-2">
-              <span className="cin-chip">
-                <Users className="size-3.5" aria-hidden />
-                Independent passes
-              </span>
-              <span className="cin-chip">
-                <Sparkles className="size-3.5" aria-hidden />
-                One answer
-              </span>
-            </div>
-          </div>
-        </header>
+    <div className="mn-chat">
+      <main id="main-content" tabIndex={-1} className="mn-chat-main">
+        <div className="mn-chat-center">
+          <h1 className="mn-hello">What&apos;s on your mind today?</h1>
 
-        {!catalogLoading && !catalogFailed && gate.families_count === 0 && (
-          <div className="cin-run-banner mb-5" role="status">
-            <span>
-              <strong>Add provider keys to start.</strong> Two model families are the minimum; three are
-              recommended. Saved keys stay in this browser.
-            </span>
-            <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="ml-auto shrink-0">
-              <Settings className="mr-1.5 size-3.5" />
-              Add keys
-            </Button>
-          </div>
-        )}
-
-        <div
-          data-testid="diversity-chip"
-          data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
-          className="mb-5 flex flex-wrap items-center gap-3 text-sm text-muted-foreground"
-          aria-live="polite"
-        >
-          {catalogLoading ? (
-            <span className="cin-chip">Checking provider keys…</span>
-          ) : catalogFailed ? (
-            <span className="cin-chip cin-chip-warning">Provider status unavailable — retry the connection above.</span>
-          ) : (
-            <>
-              <span className={`cin-chip ${readinessOk ? "cin-chip-success" : "cin-chip-warning"}`}>
-                {gateChipText(gate)}
-              </span>
-              {gate.level !== "OK" && gate.families_count > 0 && (
-                <span className="text-xs">{gate.reasons[0]}</span>
-              )}
-              {gate.level === "DEGRADED" && !degradedConfirmed && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  data-testid="degraded-confirm"
-                  onClick={() => setConfirmedGateSignature(gateSignature)}
-                >
-                  Run anyway
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-
-        {catalogFailed && (
-          <div className="mb-5">
-            <ServerStatusBanner url={env.apiUrl} onRetry={() => setCatalogTick((t) => t + 1)} />
-          </div>
-        )}
-
-        <div className="cin-workspace-grid">
-          <div className="min-w-0">
-            {attachments.length > 0 && (
-              <div className="cin-attachments" aria-label="Selected attachments">
-                {attachments.map((attachment) => (
-                  <div key={attachment.id} className="cin-attachment">
-                    <FileText className="size-3.5 shrink-0 text-brand" aria-hidden />
-                    <b title={attachment.filename}>{attachment.filename}</b>
-                    <span>{attachment.filename.toLowerCase().endsWith(".env.example") ? "ENV.EXAMPLE" : (attachment.filename.split(".").pop() || "TEXT").toUpperCase()}</span>
-                    <span>{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${attachment.filename}`}
-                      disabled={loading}
-                      onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
-                    >
-                      <X className="size-3.5" aria-hidden />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <section className="cin-window cin-composer" aria-labelledby="question-label">
-              <div className="cin-window-bar">
-                <TrafficDots />
-                <span className="cin-window-title">New investigation</span>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {question.length.toString().padStart(4, "0")} / 2000
-                </span>
-              </div>
-              <div className="cin-window-body">
-                <div className="cin-composer-label">
-                  <span id="question-label">Your question</span>
-                  <span className="hidden sm:inline">Plain text · Markdown · source files</span>
-                </div>
-                <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
-                <textarea
-                  id="research-question"
-                  ref={textareaRef}
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  placeholder="Should our startup adopt a multi-region database now, or wait until we reach 100k users?"
-                  aria-describedby="question-status"
-                  className="cin-question-input"
-                  rows={4}
-                  maxLength={2000}
-                  required
-                />
-
-                <div className="cin-suggestion-pop" aria-hidden="true">
-                  <div className="cin-window-bar">
-                    <TrafficDots />
-                    <span className="cin-window-title">Suggestion</span>
-                  </div>
-                  <div className="cin-window-body">
-                    <p>Add your expected user count for a sharper answer.</p>
-                  </div>
-                </div>
-
-                <div className="cin-composer-tools">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    aria-label="Choose investigation attachments"
-                    accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
-                    className="sr-only"
+          {attachments.length > 0 && (
+            <div className="mn-attachments" aria-label="Selected attachments">
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="mn-attachment">
+                  <FileText className="size-3.5 shrink-0 text-brand" aria-hidden />
+                  <b title={attachment.filename}>{attachment.filename}</b>
+                  <span>{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${attachment.filename}`}
                     disabled={loading}
-                    onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
-                  />
-                  <button
-                    type="button"
-                    className="cin-tool"
-                    disabled={loading || attachments.length >= MAX_ATTACHMENTS}
-                    onClick={() => fileInputRef.current?.click()}
-                    aria-label="Attach files"
+                    onClick={() =>
+                      setAttachments((current) => current.filter((item) => item.id !== attachment.id))
+                    }
                   >
-                    <Paperclip aria-hidden />
-                    File
+                    <X className="size-3.5" aria-hidden />
                   </button>
-                  <button
-                    type="button"
-                    className="cin-tool"
-                    onClick={() => setShowModelSettings(true)}
-                    aria-haspopup="dialog"
-                    aria-label="Open model and role settings"
-                  >
-                    <SlidersHorizontal aria-hidden />
-                    Models{selection.selected.length > 0 ? ` · ${selection.selected.length}` : " · Auto"}
-                  </button>
-                  <span className="cin-tool-hint">
-                    Attach up to {MAX_ATTACHMENTS} files · 384 KiB total
-                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form
+            className="mn-composer"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void handleLaunch()
+            }}
+          >
+            <label htmlFor="research-question" className="sr-only">
+              Ask a question (max 2000 characters)
+            </label>
+            <textarea
+              id="research-question"
+              ref={textareaRef}
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault()
+                  void handleLaunch()
+                }
+              }}
+              placeholder="Ask Assembly"
+              aria-describedby="question-status"
+              className="mn-input"
+              rows={1}
+              maxLength={2000}
+              required
+            />
+
+            <div className="mn-composer-tools">
+              <div className="mn-tools-left">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  aria-label="Choose investigation attachments"
+                  accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
+                  className="sr-only"
+                  disabled={loading}
+                  onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
+                />
+                <button
+                  type="button"
+                  className="mn-icon-btn"
+                  disabled={loading || attachments.length >= MAX_ATTACHMENTS}
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach files"
+                  title={`Attach up to ${MAX_ATTACHMENTS} files`}
+                >
+                  <Paperclip className="size-[18px]" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className="mn-pill"
+                  onClick={() => setShowModelSettings(true)}
+                  aria-haspopup="dialog"
+                  aria-label="Open model and role settings"
+                >
+                  <SlidersHorizontal className="size-3.5" aria-hidden />
+                  {selection.selected.length > 0 ? `${selection.selected.length} models` : "Models · Auto"}
+                </button>
+                <div className="mn-budget" role="group" aria-label="Time budget">
+                  {TIME_BUDGETS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className="mn-budget-opt"
+                      onClick={() => setMinutes(value)}
+                      aria-pressed={minutes === value}
+                      aria-label={`${value} minutes, ${BUDGET_COPY[value]}`}
+                      title={BUDGET_COPY[value]}
+                    >
+                      {value}m
+                    </button>
+                  ))}
                 </div>
               </div>
-            </section>
 
-            {status && (
-              <div className="cin-status-slot" id="question-status">
-                <ChatStatusMessage status={status} />
-              </div>
+              <button
+                type="submit"
+                className="mn-send"
+                disabled={loading || missingQuestion || catalogLoading || catalogFailed || gate.level === "BLOCKED"}
+                aria-label={loading ? "Running" : "Start run"}
+                aria-describedby={runHint ? "run-hint" : undefined}
+              >
+                {loading ? (
+                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <ArrowUp className="size-[18px]" aria-hidden />
+                )}
+              </button>
+            </div>
+          </form>
+
+          {status && (
+            <div className="mn-status" id="question-status">
+              <ChatStatusMessage status={status} />
+            </div>
+          )}
+
+          <div
+            data-testid="diversity-chip"
+            data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
+            className="mn-meta"
+            aria-live="polite"
+          >
+            {catalogLoading ? (
+              <span>Checking provider keys…</span>
+            ) : catalogFailed ? (
+              <span className="mn-meta-warn">
+                Provider status unavailable ·{" "}
+                <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
+                  Retry
+                </button>
+              </span>
+            ) : (
+              <>
+                <span>{gateChipText(gate)}</span>
+                {gate.level === "DEGRADED" && !degradedConfirmed && (
+                  <button
+                    type="button"
+                    className="mn-link"
+                    data-testid="degraded-confirm"
+                    onClick={() => setConfirmedGateSignature(gateSignature)}
+                  >
+                    Run anyway
+                  </button>
+                )}
+                {gate.families_count === 0 && (
+                  <Link href="/settings" className="mn-link">
+                    Add provider keys
+                  </Link>
+                )}
+              </>
             )}
-
-            <section className="cin-budget-block" aria-labelledby="budget-title">
-              <div className="cin-budget-title">
-                <h2 id="budget-title">How long can we take?</h2>
-                <span className="cin-page-number">Hard cutoff</span>
-              </div>
-              <div className="cin-budget-row" role="group" aria-label="Time budget">
-                {TIME_BUDGETS.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setMinutes(value)}
-                    aria-pressed={minutes === value}
-                    aria-label={`${value} minutes`}
-                    className="cin-budget"
-                  >
-                    <span className="cin-budget-num">{value}</span>
-                    <span className="cin-budget-copy">
-                      <b>{value} min</b>
-                      <span>{BUDGET_COPY[value]}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="cin-examples" aria-label="Suggested questions">
-              <div className="cin-examples-head">
-                <span>Need a starting point?</span>
-                <span>{EXAMPLES.length.toString().padStart(2, "0")} prompts</span>
-              </div>
-              <div className="cin-example-grid">
-                {EXAMPLES.map((example, index) => (
-                  <button
-                    key={example.label}
-                    type="button"
-                    onClick={() => { setQuestion(example.question); textareaRef.current?.focus() }}
-                    className="cin-example"
-                    title={example.question}
-                  >
-                    <span className="cin-example-label">{String(index + 1).padStart(2, "0")} · {example.label}</span>
-                    <p>{example.question}</p>
-                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                  </button>
-                ))}
-              </div>
-            </section>
           </div>
 
-          <aside className="min-w-0" aria-label="Run configuration">
-            <div className="cin-window">
-              <div className="cin-window-bar">
-                <TrafficDots />
-                <span className="cin-window-title">Run check</span>
-              </div>
-              <div className="cin-readiness">
-                <div className="cin-readiness-ring" aria-hidden="true">
-                  <span
-                    className="cin-readiness-check"
-                    style={{ opacity: readinessValue === 0 ? 0.55 : 1 }}
-                  >
-                    <Check className="size-10" strokeWidth={2.4} />
-                  </span>
-                </div>
-                <p className="cin-readiness-status">{readinessText}</p>
-                <p className="cin-readiness-note">{searchText}</p>
-
-                <div className="cin-readiness-lines">
-                  <div className="cin-readiness-line">
-                    <span>Families ready</span>
-                    <b>{catalogLoading ? "…" : `${gate.families_count} / 3`}</b>
-                  </div>
-                  <div className="cin-readiness-line">
-                    <span>Providers</span>
-                    <b>{catalogLoading ? "…" : gate.providers_count}</b>
-                  </div>
-                  <div className="cin-readiness-line">
-                    <span>Budget</span>
-                    <b>{minutes} min</b>
-                  </div>
-                  <div className="cin-readiness-line">
-                    <span>Debate rounds</span>
-                    <b>Only if needed</b>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={handleLaunch}
-                  disabled={loading || missingQuestion || catalogLoading || catalogFailed || gate.level === "BLOCKED"}
-                  className="cin-btn cin-btn-primary cin-run-cta"
-                  aria-label={loading ? "Running" : "Run"}
-                  aria-describedby={runHint ? "run-hint" : undefined}
-                >
-                  <span>{loading ? "Running the team…" : `Start run · about ${minutes} min`}</span>
-                  {loading
-                    ? <span className="size-3.5 animate-spin rounded-full border border-current border-t-transparent" />
-                    : <ArrowRight className="size-4" aria-hidden />}
-                </Button>
-
-                {runHint && (
-                  <p className="cin-run-hint" id="run-hint">
-                    {runHint}
-                  </p>
-                )}
-
-                <p className="cin-run-hint">
-                  Not a sole source for medical, legal, financial or security-critical decisions. Your
-                  question is sent only to the providers you choose.
-                </p>
-              </div>
-            </div>
-
-            <div className="cin-window mt-4">
-              <div className="cin-window-bar">
-                <TrafficDots />
-                <span className="cin-window-title">What the team does</span>
-              </div>
-              <div className="px-5 py-2">
-                <div className="cin-estimate">
-                  <div className="cin-estimate-row"><span>Agents</span><b>4–5 temporary roles</b></div>
-                  <div className="cin-estimate-row"><span>Families</span><b>3+ independent</b></div>
-                  <div className="cin-estimate-row"><span>Evidence</span><b>Verified sources</b></div>
-                  <div className="cin-estimate-row"><span>Output</span><b>One cited answer</b></div>
-                </div>
-              </div>
-            </div>
-
-            <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
-              Keys stay in your browser.{" "}
-              <Link href="/settings" className="font-semibold text-brand hover:underline">
-                Review providers
-              </Link>
+          {runHint && (
+            <p className="mn-hint" id="run-hint">
+              {runHint}
             </p>
-          </aside>
-        </div>
+          )}
 
-        <HistoryQuick />
+          {catalogFailed && (
+            <div className="mn-alert" role="alert">
+              <span>
+                Can&apos;t reach the Assembly server at {env.apiUrl}. Check that the backend is running.
+              </span>
+              <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
+                Retry
+              </button>
+            </div>
+          )}
+
+          <div className="mn-suggestions" aria-label="Suggested questions">
+            <span>Try</span>
+            {EXAMPLES.map((example) => (
+              <button
+                key={example.label}
+                type="button"
+                className="mn-chip"
+                title={example.question}
+                onClick={() => {
+                  setQuestion(example.question)
+                  textareaRef.current?.focus()
+                }}
+              >
+                {example.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </main>
 
       <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
@@ -838,7 +700,9 @@ export default function Home() {
           </DialogHeader>
           <ModelPicker value={selection} onChange={setSelection} keyedProviderIds={enabledIds} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowModelSettings(false)}>Done</Button>
+            <Button variant="outline" onClick={() => setShowModelSettings(false)}>
+              Done
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
