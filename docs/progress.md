@@ -732,3 +732,19 @@
 - Added `frontend/scripts/field-smoke.mjs` (`npm run smoke:field`) for repeatable local QA with a synthetic skin-coloured camera stream: rest, pointer corners, one-hand sweep, two-hand open/closed, scrolled, 390x844 mobile and top-bar camera screenshots, with console/page errors reported.
 - Verification: ESLint, `tsc --noEmit`, `npm run build`, `npm test` (15), full Vitest (22 files / 144 tests) and Playwright (21) pass. The synthetic-camera Chromium run produced no console/page errors, the scrolled field measured `opacity: 0`, and the mobile viewport was reviewed.
 - Not verified: a physical webcam across lighting, backgrounds and skin tones. Finger-level gestures remain unavailable without a landmark model; openness and closed-hand states are still heuristics.
+
+## 2026-11-11 - Left sidebar navigation
+
+- Moved primary navigation into a persistent left sidebar on desktop: brand, New Investigation, Workspace, History, Models, Settings, Docs, plus an appearance toggle and the local-key note. Active links use the outlined blue pill from the previous bottom nav.
+- Kept the bottom pill nav and top-bar menu below 901px, and hid the duplicated top-bar brand, CTA and theme control on desktop.
+- Extended the single-column collapse for the workspace, settings and live-run grids to 901-1179px so the reduced content width stays readable.
+- Verification: tsc, ESLint, npm test (15) and npm run build pass; Playwright screenshots at 1440, 1280, 1024 and 390 in light/dark show no horizontal overflow.
+
+## 2026-11-11 - Dark galaxy landing, no camera or cursor motion
+
+- Rebuilt the landing hero to the dark reference: forced-dark wrapper, brand plus Product / How it works / Docs / GitHub plus Launch app in the header, badge, "Convene many minds. / Leave with one answer." headline, new copy, "Start an Assembly" and "Watch 1-min demo" CTAs, and the 3-15 min / 4+ roles / BYOK / Apache 2.0 stats.
+- Removed every landing interaction that depended on input devices: no camera toggle, hand tracking, pointer parallax, camera state or cursor hook is mounted. `page.tsx` no longer imports `useMotionInput`/`ThemeToggle`, and `floating-windows.tsx` no longer takes a `MotionField`.
+- Replaced the interactive particle sphere with `frontend/src/components/landing/galaxy-field.tsx`: a two-arm logarithmic spiral on a tilted disk with a warm bulge, blue/white/violet/mint stars, background specks, and a continuous ~108 s rotation. Rendering pauses when the hero is off-screen or the tab is hidden and draws a single static frame under reduced motion.
+- Rebuilt the landing CSS around a dark navy palette with elliptical orbit rings (`rotateX(64deg)`), glowing floating cards (Live run, Agreement, Answer) and layouts verified at 1920, 1440, 1280, 1024, 768 and 390.
+- Verification: `npx tsc --noEmit`, ESLint, `npm test` (15) and `npm run build` pass. Playwright confirmed the canvas changes between frames, the header has zero buttons, and no camera/hand-tracking nodes exist on the landing.
+- Note: the old `particle-sphere.tsx`, `use-motion-input.ts`, `cursor-3d.tsx` and `hand-tracker.ts` remain in the repo but are unused by the landing; removing them is a separate cleanup.

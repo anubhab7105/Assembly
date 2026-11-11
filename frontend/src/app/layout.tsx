@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google"
 import Script from "next/script"
 import "./globals.css"
 import "./chat-design.css"
+import "./cinematic.css"
 
 const inter = Inter({
   variable: "--font-sans",
@@ -63,9 +64,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <Script id="assembly-theme-bootstrap" strategy="beforeInteractive">
         {`(() => {
           let theme = null;
+          let comfort = {};
           try {
             const saved = window.localStorage.getItem("assembly:theme");
             if (saved === "light" || saved === "dark") theme = saved;
+            comfort = JSON.parse(window.localStorage.getItem("assembly:comfort") || "{}") || {};
           } catch {
             // Browser storage is optional; use the system preference below.
           }
@@ -76,7 +79,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               theme = "light";
             }
           }
-          document.documentElement.classList.toggle("dark", theme === "dark");
+          if (comfort.matchSystem) {
+            try {
+              theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            } catch {}
+          }
+          const root = document.documentElement;
+          root.classList.toggle("dark", theme === "dark");
+          root.classList.toggle("comfort-reduce-3d", comfort.reduce3d === true);
+          root.classList.toggle("comfort-large-text", comfort.largerText === true);
+          root.dataset.sourcesFirst = comfort.sourcesFirst === true ? "true" : "false";
         })();`}
       </Script>
         <LayoutWrapper>{children}</LayoutWrapper>

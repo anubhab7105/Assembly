@@ -1,18 +1,28 @@
 "use client"
 
-import React, { useState, useEffect, useSyncExternalStore, Suspense } from "react"
+import React, { Suspense, useEffect, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { ToastProvider, useToast } from "@/components/ui/toast"
+import { usePathname, useRouter } from "next/navigation"
+import { ToastProvider } from "@/components/ui/toast"
 import { storage, type HistoryRecord } from "@/lib/storage"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
-import {
-  Zap, Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload,
-  SquarePen, ArrowUpRight,
-} from "lucide-react"
+import { BrandMark } from "@/components/cinematic/brand-mark"
 import { ThemeToggle } from "@/components/theme-toggle"
+import {
+  ArrowRight,
+  ArrowUpRight,
+  BookOpen,
+  History,
+  Menu,
+  Plus,
+  Settings,
+  ShieldCheck,
+  SlidersHorizontal,
+  SquarePen,
+  WifiOff,
+  X,
+  type LucideIcon,
+} from "lucide-react"
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {}
@@ -40,278 +50,234 @@ function useOfflineStatus() {
   )
 }
 
-function SidebarContent({ onClose }: { onClose?: () => void }) {
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
+  { href: "/chat", label: "Workspace", icon: SquarePen },
+  { href: "/history", label: "History", icon: History },
+  { href: "/models", label: "Models", icon: SlidersHorizontal },
+  { href: "/settings", label: "Settings", icon: Settings },
+]
+
+const DOCS_URL = "https://github.com/arkap1502/Assembly#readme"
+
+function pageMeta(pathname: string): { number: string; label: string } {
+  if (pathname.startsWith("/chat")) return { number: "01", label: "Workspace" }
+  if (pathname.startsWith("/executions")) return { number: "02", label: "Live run" }
+  if (pathname.startsWith("/history")) return { number: "06", label: "History" }
+  if (pathname.startsWith("/models")) return { number: "07", label: "Models" }
+  if (pathname.startsWith("/settings")) return { number: "08", label: "Settings" }
+  if (pathname.startsWith("/styleguide")) return { number: "—", label: "Design system" }
+  return { number: "08", label: "Assembly" }
+}
+
+function isNavActive(pathname: string, href: string) {
+  if (href === "/chat") return pathname === "/chat" || pathname.startsWith("/executions")
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
+
+function MobileMenu({
+  open,
+  setOpen,
+  closeButtonRef,
+  pathname,
+}: {
+  open: boolean
+  setOpen: (open: boolean) => void
+  closeButtonRef: React.RefObject<HTMLButtonElement | null>
+  pathname: string
+}) {
   const router = useRouter()
-  const { toast } = useToast()
-
-  const [executions, setExecutions] = useState<HistoryRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState("")
-  const importInputRef = React.useRef<HTMLInputElement>(null)
-  const [importing, setImporting] = useState(false)
-
-  const loadExecutions = async () => {
-    setLoading(true)
-    try {
-      setExecutions(await storage.listHistory())
-    } catch (e) {
-      if (process.env.NODE_ENV !== "production") console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [records, setRecords] = useState<HistoryRecord[]>([])
 
   useEffect(() => {
-    let cancelled = false
+    if (!open) return
+    let active = true
     storage
       .listHistory()
       .then((items) => {
-        if (!cancelled) setExecutions(items)
+        if (active) setRecords(items.slice(0, 4))
       })
-      .catch((error: unknown) => {
-        if (!cancelled && process.env.NODE_ENV !== "production") console.error(error)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
+      .catch(() => {
+        if (active) setRecords([])
       })
     return () => {
-      cancelled = true
+      active = false
     }
-  }, [pathname])
-
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
-    e.preventDefault()
-    if (!confirm("Delete this execution?")) return
-    await storage.deleteHistory(id)
-    setExecutions((prev) => prev.filter((x) => x.id !== id))
-    toast({ title: "Deleted", description: "Execution removed from history." })
-    if (pathname === `/executions` && searchParams?.get("id") === id) {
-      router.push("/chat")
-      if (onClose) onClose()
-    }
-  }
-
-  const handleExport = async () => {
-    const text = await storage.exportJSON()
-    const blob = new Blob([text], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "assembly-history.json"
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const handleImport = async (file: File, input: HTMLInputElement) => {
-    if (importing) return
-    setImporting(true)
-    try {
-      const text = await file.text()
-      await storage.importJSON(text)
-      await loadExecutions()
-      toast({ title: "Import complete", description: "History and usage were imported successfully.", variant: "success" })
-    } catch (error) {
-      const message = error instanceof Error
-        ? error.message
-        : "Couldn't import this file. Check that it is a valid Assembly history export and try again."
-      toast({
-        title: "History import failed",
-        description: message,
-        variant: "danger",
-        duration: 7000,
-      })
-    } finally {
-      // File inputs do not fire change again when the same file is selected.
-      // Clearing it on both success and failure allows an immediate retry.
-      input.value = ""
-      setImporting(false)
-    }
-  }
-
-  const filtered = executions.filter((e) =>
-    e.question.toLowerCase().includes(search.toLowerCase()),
-  )
+  }, [open])
 
   return (
-    <div className="assembly-sidebar flex h-full flex-col">
-      <div className="assembly-sidebar-header">
-        <Link href="/" className="assembly-sidebar-brand flex items-center gap-2.5" onClick={onClose}>
-          <span className="asm-mark" aria-hidden="true">
-            <i /><i /><i /><i />
-          </span>
-          <span>Assembly</span>
-        </Link>
-        <Button variant="default" className="assembly-new-investigation w-full justify-start" onClick={() => { router.push("/chat"); if (onClose) onClose() }}>
-          <span className="flex items-center gap-2">
-            <Plus className="size-4" />
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent
+        showCloseButton={false}
+        aria-modal="true"
+        aria-describedby="mobile-menu-description"
+        className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 overflow-y-auto rounded-none border-0 border-r border-border bg-card p-0 sm:max-w-sm"
+      >
+        <DialogTitle className="sr-only">Navigation menu</DialogTitle>
+        <DialogDescription id="mobile-menu-description" className="sr-only">
+          Navigate between Assembly pages and manage your investigation history.
+        </DialogDescription>
+        <div id="mobile-menu" className="relative flex min-h-full flex-col p-5 pt-6">
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close menu"
+            className="absolute right-3 top-3 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-5" />
+          </button>
+
+          <Link href="/" className="cin-brand mb-6" onClick={() => setOpen(false)}>
+            <BrandMark />
+            <span className="cin-brand-word">Assembly</span>
+          </Link>
+
+          <button
+            type="button"
+            className="cin-btn cin-btn-primary mb-5 w-full"
+            onClick={() => {
+              router.push("/chat")
+              setOpen(false)
+            }}
+          >
+            <Plus className="size-4" aria-hidden />
             New Investigation
-          </span>
-          <ArrowUpRight className="size-3.5" aria-hidden />
-        </Button>
-      </div>
+          </button>
 
-      <nav className="asm-side-nav" aria-label="Workspace">
-        <Link href="/chat" className="asm-side-link" data-active={pathname === "/chat"} onClick={onClose}>
-          <SquarePen aria-hidden /> Run <span>↗</span>
-        </Link>
-        <Link href="/history" className="asm-side-link" data-active={pathname === "/history"} onClick={onClose}>
-          <History aria-hidden /> History <span>↗</span>
-        </Link>
-        <Link href="/settings" className="asm-side-link" data-active={pathname === "/settings"} onClick={onClose}>
-          <Settings aria-hidden /> Settings <span>↗</span>
-        </Link>
-        <a
-          href="https://github.com/arkap1502/Assembly#readme"
-          target="_blank"
-          rel="noreferrer"
-          className="asm-side-link"
-          onClick={onClose}
-        >
-          <Zap aria-hidden /> Docs <span>↗</span>
-        </a>
-      </nav>
-
-      <div className="assembly-sidebar-scroll flex-1 overflow-y-auto px-1 py-2 flex flex-col gap-1">
-        <div className="assembly-sidebar-section-label px-2 pb-2">
-          <History className="size-3" aria-hidden />
-          History (this device)
-          <span className="ml-auto opacity-60">{executions.length.toString().padStart(2, "0")}</span>
-        </div>
-
-        <div className="px-1 pb-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" aria-hidden />
-            <label htmlFor="history-search" className="sr-only">Search history</label>
-            <input
-              id="history-search"
-              type="text"
-              placeholder="Search runs"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="assembly-sidebar-search w-full border border-border bg-muted/30 py-2.5 pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
-            />
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="space-y-2 px-1">
-            <Skeleton className="h-11 w-full rounded-none" />
-            <Skeleton className="h-11 w-full rounded-none" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="mx-1 border border-dashed border-border px-4 py-10 text-center">
-            <MessageSquare className="mx-auto size-7 text-muted-foreground" aria-hidden />
-            <p className="mt-3 text-xs font-semibold text-foreground">
-              {search ? "No matching runs" : "No runs yet"}
-            </p>
-            <p className="mx-auto mt-1 max-w-56 text-[11px] leading-relaxed text-muted-foreground">
-              {search
-                ? "Try a different search term."
-                : "Your first cited answer is a few minutes away."}
-            </p>
-            {!search && (
-              <Button
-                variant="default"
-                size="sm"
-                className="mt-4 min-h-10 rounded-none"
-                onClick={() => { router.push("/chat"); if (onClose) onClose() }}
+          <nav aria-label="Workspace" className="grid gap-1">
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                data-active={isNavActive(pathname, item.href)}
+                className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                <Plus className="mr-2 size-4" />
-                Run my first question
-              </Button>
+                <item.icon className="size-4" aria-hidden />
+                {item.label}
+              </Link>
+            ))}
+            <a
+              href={DOCS_URL}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setOpen(false)}
+              className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <BookOpen className="size-4" aria-hidden />
+              Docs
+            </a>
+          </nav>
+
+          <div className="mt-6 border-t border-border pt-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-muted-foreground">History (this device)</span>
+              <ThemeToggle className="cin-icon-button" />
+            </div>
+            {records.length === 0 ? (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                No runs saved on this device yet.
+              </p>
+            ) : (
+              <div className="grid gap-1">
+                {records.map((record) => (
+                  <Link
+                    key={record.id}
+                    href={`/executions?id=${record.id}`}
+                    onClick={() => setOpen(false)}
+                    className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <span className="size-1.5 shrink-0 rounded-full bg-brand" aria-hidden />
+                    <span className="truncate">{record.question}</span>
+                  </Link>
+                ))}
+              </div>
             )}
           </div>
-        ) : (
-          filtered.map((ex) => {
-            const isActive = pathname === `/executions` && searchParams?.get("id") === ex.id
-            return (
-              <div
-                key={ex.id}
-                className={`assembly-history-row group relative text-sm transition-colors ${
-                  isActive ? "bg-brand/10" : "hover:bg-muted"
-                }`}
-              >
-                <Link
-                  href={`/executions?id=${ex.id}`}
-                  prefetch={false}
-                  onClick={onClose}
-                  className={`assembly-history-link flex items-start gap-2 px-2.5 py-2.5 pr-9 ${
-                    isActive ? "text-brand" : "text-foreground"
-                  }`}
-                >
-                  <span className="mt-1 block size-1.5 shrink-0 bg-current opacity-60" aria-hidden />
-                  <div className="min-w-0 flex-1 overflow-hidden">
-                    <p className="truncate text-[11px] font-medium leading-snug">{ex.question}</p>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-                        {new Date(ex.created_at).toLocaleDateString()}
-                      </span>
-                      <span className="bg-muted px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-muted-foreground">
-                        {ex.status}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-                <button
-                  type="button"
-                  onClick={(e) => handleDelete(e, ex.id)}
-                  aria-label={`Delete run: ${ex.question.slice(0, 60)}`}
-                  className="absolute right-0 top-1 p-2.5 text-muted-foreground hover:text-danger md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                  title="Delete execution"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </div>
-            )
-          })
-        )}
-      </div>
 
-      <div className="assembly-sidebar-footer p-4 border-t border-border mt-auto flex flex-col gap-2">
-        <div className="assembly-sidebar-utility-row flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" onClick={handleExport}>
-            <Download className="size-3.5 mr-1" /> Export
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1"
-            disabled={importing}
-            onClick={() => importInputRef.current?.click()}
-          >
-            <Upload className="size-3.5 mr-1" /> {importing ? "Importing…" : "Import"}
-          </Button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json"
-            aria-label="Import Assembly history JSON"
-            className="hidden"
-            onChange={(e) => {
-              const input = e.currentTarget
-              const file = input.files?.[0]
-              if (file) void handleImport(file, input)
-            }}
-          />
+          <div className="mt-auto pt-6">
+            <Link
+              href="/chat"
+              onClick={() => setOpen(false)}
+              className="cin-btn cin-btn-outline w-full"
+            >
+              Open workspace
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </div>
         </div>
-        <div className="assembly-sidebar-preferences flex items-center justify-end gap-2">
-          <ThemeToggle className="assembly-theme-toggle" />
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-export function LayoutWrapper({ children }: { children: React.ReactNode }) {
+function AppSidebar({ pathname }: { pathname: string }) {
+  const router = useRouter()
+
+  return (
+    <aside className="cin-sidebar">
+      <div className="cin-sidebar-head">
+        <Link href="/" className="cin-brand cin-sidebar-brand" aria-label="Assembly home">
+          <BrandMark />
+          <span className="cin-brand-word">Assembly</span>
+        </Link>
+
+        <button
+          type="button"
+          className="cin-btn cin-btn-primary cin-sidebar-new"
+          onClick={() => router.push("/chat")}
+        >
+          <Plus className="size-4" aria-hidden />
+          New Investigation
+        </button>
+      </div>
+
+      <nav className="cin-sidebar-nav" aria-label="Primary">
+        {NAV_ITEMS.map((item) => {
+          const active = isNavActive(pathname, item.href)
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="cin-side-link"
+              data-active={active}
+              aria-current={active ? "page" : undefined}
+            >
+              <item.icon className="cin-side-link-icon" aria-hidden />
+              <span>{item.label}</span>
+            </Link>
+          )
+        })}
+        <a href={DOCS_URL} target="_blank" rel="noreferrer" className="cin-side-link">
+          <BookOpen className="cin-side-link-icon" aria-hidden />
+          <span>Docs</span>
+          <ArrowUpRight className="cin-side-link-trailing" aria-hidden />
+        </a>
+      </nav>
+
+      <div className="cin-sidebar-footer">
+        <p className="cin-sidebar-note">
+          <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
+          Keys stay on this device
+        </p>
+        <div className="cin-sidebar-footer-row">
+          <span>Appearance</span>
+          <ThemeToggle className="cin-icon-button" />
+        </div>
+      </div>
+    </aside>
+  )
+}
+
+function AppChrome({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() || "/"
+  const router = useRouter()
   const isOffline = useOfflineStatus()
-  const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const menuTriggerRef = React.useRef<HTMLButtonElement>(null)
   const menuCloseRef = React.useRef<HTMLButtonElement>(null)
   const wasMenuOpen = React.useRef(false)
+  const meta = pageMeta(pathname)
 
   useEffect(() => {
     if (mobileMenuOpen) {
@@ -325,7 +291,89 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     }
   }, [mobileMenuOpen])
 
-  // The landing page renders its own nav; hide the app sidebar there.
+  return (
+    <>
+      <div className="cin-app-shell">
+        <AppSidebar pathname={pathname} />
+
+        <div className="cin-app-column">
+          <header className="cin-topbar is-floating">
+            <Link href="/" className="cin-brand cin-topbar-brand" aria-label="Assembly home">
+              <BrandMark />
+              <span className="cin-brand-word">Assembly</span>
+            </Link>
+
+            <span className="cin-topbar-meta hidden lg:inline">{meta.label}</span>
+
+            <div className="cin-topbar-actions">
+              <span className="cin-topbar-count">
+                {meta.number} / 08
+              </span>
+              <button
+                type="button"
+                className="cin-btn cin-btn-sm cin-btn-primary cin-topbar-new hidden sm:inline-flex"
+                onClick={() => router.push("/chat")}
+              >
+                <Plus className="size-4" aria-hidden />
+                New Investigation
+              </button>
+              <ThemeToggle className="cin-icon-button cin-topbar-theme" />
+              <button
+                ref={menuTriggerRef}
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Open menu"
+                aria-expanded={mobileMenuOpen}
+                aria-controls={mobileMenuOpen ? "mobile-menu" : undefined}
+                className="cin-icon-button cin-menu-trigger md:hidden"
+              >
+                <Menu className="size-5" aria-hidden />
+              </button>
+            </div>
+          </header>
+
+          {isOffline && (
+            <div className="mx-auto mt-3 flex w-[min(1240px,calc(100%-32px))] items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-center text-sm font-medium text-danger">
+              <WifiOff className="size-4" aria-hidden />
+              You are currently offline. Some features may not work.
+            </div>
+          )}
+
+          <div className="cin-app-body flex-1">{children}</div>
+        </div>
+      </div>
+
+      <nav className="cin-bottom-nav" aria-label="Primary">
+        {NAV_ITEMS.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="cin-nav-link"
+            data-active={isNavActive(pathname, item.href)}
+            aria-current={isNavActive(pathname, item.href) ? "page" : undefined}
+          >
+            {item.label}
+          </Link>
+        ))}
+        <a href={DOCS_URL} target="_blank" rel="noreferrer" className="cin-nav-link">
+          Docs
+        </a>
+      </nav>
+
+      <Suspense fallback={null}>
+        <MobileMenu
+          open={mobileMenuOpen}
+          setOpen={setMobileMenuOpen}
+          closeButtonRef={menuCloseRef}
+          pathname={pathname}
+        />
+      </Suspense>
+    </>
+  )
+}
+
+export function LayoutWrapper({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() || "/"
   const isLandingPage = pathname === "/"
 
   return (
@@ -336,76 +384,8 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       >
         Skip to content
       </a>
-      <div className="assembly-app-shell flex h-screen overflow-hidden bg-background">
-        {!isLandingPage && (
-          <aside className="assembly-sidebar-shell hidden md:block w-[264px] shrink-0 h-full relative z-20">
-            <Suspense fallback={<div className="p-4">Loading menu...</div>}>
-              <SidebarContent />
-            </Suspense>
-          </aside>
-        )}
-
-        <Dialog open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <DialogContent
-            showCloseButton={false}
-            aria-modal="true"
-            aria-describedby="mobile-menu-description"
-            className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 rounded-none border-r border-border bg-card p-0 sm:max-w-sm"
-          >
-            <DialogTitle className="sr-only">Navigation menu</DialogTitle>
-            <DialogDescription id="mobile-menu-description" className="sr-only">
-              Navigate between Assembly pages and manage your investigation history.
-            </DialogDescription>
-            <div id="mobile-menu" className="relative h-full min-h-0">
-              <Suspense fallback={<div className="p-4">Loading menu...</div>}>
-                <SidebarContent onClose={() => setMobileMenuOpen(false)} />
-              </Suspense>
-              <button
-                ref={menuCloseRef}
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                aria-label="Close menu"
-                className="absolute right-3 top-3 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-background/80 hover:bg-muted"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          {!isLandingPage && (
-            <header className="assembly-mobile-header md:hidden sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3">
-              <div className="flex items-center gap-2.5">
-                <span className="asm-mark !h-6 !w-6" aria-hidden="true">
-                  <i /><i /><i /><i />
-                </span>
-                <span className="text-xs font-bold uppercase tracking-[0.2em]">Assembly</span>
-              </div>
-              <button
-                ref={menuTriggerRef}
-                onClick={() => setMobileMenuOpen(true)}
-                aria-label="Open menu"
-                aria-expanded={mobileMenuOpen}
-                aria-controls={mobileMenuOpen ? "mobile-menu" : undefined}
-                className="p-3 -mr-1 min-h-11 min-w-11 rounded hover:bg-muted"
-              >
-                <Menu className="size-6" />
-              </button>
-            </header>
-          )}
-
-          {isOffline && (
-            <div className="bg-danger/90 text-white px-4 py-1.5 text-center text-sm font-medium flex items-center justify-center gap-2">
-              <WifiOff className="size-4" />
-              You are currently offline. Some features may not work.
-            </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
-            {children}
-          </div>
-        </div>
+      <div className="cin-app">
+        {isLandingPage ? children : <AppChrome>{children}</AppChrome>}
       </div>
     </ToastProvider>
   )

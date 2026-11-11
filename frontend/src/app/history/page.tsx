@@ -1,16 +1,46 @@
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { storage, type HistoryRecord } from "@/lib/storage"
 import { useToast } from "@/components/ui/toast"
-import { ArrowRight, Download, Search, Trash2, Upload, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  ArrowRight,
+  Download,
+  Search,
+  Trash2,
+  Upload,
+  X,
+  Clock,
+  Users,
+  FileText,
+} from "lucide-react"
 
 function formatDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return "—"
   return date.toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" })
+}
+
+function relativeDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "—"
+  const now = new Date()
+  const startOfDay = (input: Date) => new Date(input.getFullYear(), input.getMonth(), input.getDate()).getTime()
+  const days = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000)
+  if (days <= 0) return "Today"
+  if (days === 1) return "Yesterday"
+  if (days < 7) return `${days} days ago`
+  return formatDate(value)
+}
+
+function agentCount(record: HistoryRecord): number | null {
+  return record.verification?.agents ?? record.agentCount ?? null
+}
+
+function statusLabel(status: string) {
+  return status.replace(/_/g, " ")
 }
 
 export default function HistoryPage() {
@@ -21,7 +51,7 @@ export default function HistoryPage() {
   const [importing, setImporting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const load = React.useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
       setRecords(await storage.listHistory())
@@ -74,9 +104,17 @@ export default function HistoryPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this run from this device?")) return
-    await storage.deleteHistory(id)
-    setRecords((current) => current.filter((record) => record.id !== id))
-    toast({ title: "Deleted", description: "The run was removed from this device." })
+    try {
+      await storage.deleteHistory(id)
+      setRecords((current) => current.filter((record) => record.id !== id))
+      toast({ title: "Deleted", description: "The run was removed from this device." })
+    } catch {
+      toast({
+        title: "Could not delete the run",
+        description: "Browser storage rejected the deletion. Try again or clear site data.",
+        variant: "danger",
+      })
+    }
   }
 
   const handleExport = async () => {
@@ -110,156 +148,209 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="asm-page asm-history-page min-h-screen">
-      <header className="asm-page-head-wrap">
-        <div className="asm-history !py-0">
-          <div className="asm-page-head">
-            <div>
-              <span className="asm-index">[ 06 / History ]</span>
-              <h1 className="asm-page-title">Run history</h1>
+    <div className="cin-page cin-history-page">
+      <main id="main-content" tabIndex={-1} className="cin-main">
+        <div className="cin-shell cin-page-inner">
+          <header className="cin-page-head">
+            <div className="cin-page-head-copy">
+              <span className="cin-kicker">History</span>
+              <h1 className="cin-title">Past runs</h1>
+              <p className="cin-lede">
+                Every investigation stays on this device. Search it, reopen the full debate, or move it
+                to another browser with a JSON export.
+              </p>
             </div>
-            <p className="asm-page-head-note" aria-live="polite">
-              {records.length.toString().padStart(3, "0")} runs on this device · {completed} completed
-              {averageConsensus !== null
-                ? ` · ${Math.round(averageConsensus * 100)}% average agreement`
-                : ""}
-            </p>
-          </div>
-        </div>
-      </header>
+            <div className="cin-page-head-aside">
+              <span className="cin-page-number">06 / 08</span>
+              <div className="cin-history-actions">
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="sr-only"
+                  aria-label="Import Assembly history JSON"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0]
+                    if (file) void handleImport(file)
+                  }}
+                />
+                <button
+                  type="button"
+                  className="cin-btn cin-btn-sm cin-btn-outline"
+                  onClick={() => inputRef.current?.click()}
+                  disabled={importing}
+                >
+                  <Upload className="size-4" aria-hidden />
+                  {importing ? "Importing…" : "Import"}
+                </button>
+                <button
+                  type="button"
+                  className="cin-btn cin-btn-sm cin-btn-outline"
+                  onClick={() => void handleExport()}
+                  disabled={!records.length}
+                >
+                  <Download className="size-4" aria-hidden />
+                  Export
+                </button>
+              </div>
+            </div>
+          </header>
 
-      <main id="main-content" tabIndex={-1} className="asm-history">
-        <div className="asm-history-tools">
-          <div className="asm-search">
-            <Search className="size-3.5 shrink-0" aria-hidden />
-            <label htmlFor="history-search" className="sr-only">Search past runs</label>
-            <input
-              id="history-search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search past runs…"
-            />
-            {search && (
-              <button
-                type="button"
-                className="asm-search-clear"
-                aria-label="Clear search"
-                onClick={() => setSearch("")}
-              >
-                <X className="size-3.5" aria-hidden />
-              </button>
-            )}
+          <div className="cin-history-tools">
+            <div className="cin-search">
+              <Search className="size-4 shrink-0" aria-hidden />
+              <label htmlFor="history-search" className="sr-only">
+                Search past runs
+              </label>
+              <input
+                id="history-search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search past runs…"
+              />
+              {search && (
+                <button
+                  type="button"
+                  className="cin-search-clear"
+                  aria-label="Clear search"
+                  onClick={() => setSearch("")}
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
+              )}
+            </div>
+
+            <div className="cin-history-stats" aria-live="polite">
+              <span className="cin-chip">
+                {records.length.toString().padStart(2, "0")} run{records.length === 1 ? "" : "s"}
+              </span>
+              <span className="cin-chip cin-chip-success">{completed} completed</span>
+              {averageConsensus !== null && (
+                <span className="cin-chip cin-chip-brand">
+                  {Math.round(averageConsensus * 100)}% avg agreement
+                </span>
+              )}
+              {search && (
+                <span className="cin-chip">
+                  {filtered.length} match{filtered.length === 1 ? "" : "es"}
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="asm-history-actions">
-            <input
-              ref={inputRef}
-              type="file"
-              accept="application/json,.json"
-              className="sr-only"
-              aria-label="Import Assembly history JSON"
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0]
-                if (file) void handleImport(file)
-              }}
-            />
-            <button type="button" className="asm-btn asm-btn-outline" onClick={() => inputRef.current?.click()} disabled={importing}>
-              <Upload className="size-3.5" aria-hidden />
-              {importing ? "Importing" : "Import"}
-            </button>
-            <button type="button" className="asm-btn asm-btn-outline" onClick={() => void handleExport()} disabled={!records.length}>
-              <Download className="size-3.5" aria-hidden />
-              Export
-            </button>
-            <Link href="/chat" className="asm-btn asm-btn-primary" data-cursor-label="NEW RUN">
-              New run
-              <ArrowRight className="size-3.5" />
+          {loading ? (
+            <div aria-busy="true" aria-label="Loading local history">
+              <div className="cin-timeline">
+                {[0, 1, 2, 3].map((index) => (
+                  <div key={index} className="cin-timeline-row">
+                    <Skeleton className="cin-skeleton" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="cin-empty-state">
+              <span className="cin-kicker !mb-0">{search ? "No match" : "Empty"}</span>
+              <h2>{search ? "No matching runs" : "No runs on this device yet"}</h2>
+              <p>
+                {search
+                  ? "Try a different question, or clear the search to see every saved run."
+                  : "Your first investigation will appear here. History stays in this browser unless you export it."}
+              </p>
+              {search ? (
+                <button
+                  type="button"
+                  className="cin-btn cin-btn-outline mt-6"
+                  onClick={() => setSearch("")}
+                >
+                  Clear search
+                  <X className="size-4" aria-hidden />
+                </button>
+              ) : (
+                <Link href="/chat" className="cin-btn cin-btn-primary mt-6">
+                  Start an investigation
+                  <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="cin-timeline">
+              {filtered.map((record) => {
+                const agents = agentCount(record)
+                const consensus =
+                  typeof record.consensus === "number" ? Math.round(record.consensus * 100) : null
+                return (
+                  <div key={record.id} className="cin-timeline-row">
+                    <span className="cin-timeline-date">{relativeDate(record.created_at)}</span>
+                    <span className="cin-timeline-dot" aria-hidden />
+                    <article className="cin-run-card">
+                      <div className="cin-run-card-main">
+                        <h2>
+                          <Link href={`/executions?id=${record.id}`} className="before:absolute before:inset-0">
+                            {record.question}
+                          </Link>
+                        </h2>
+                        <div className="cin-run-card-meta">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Clock className="size-3.5" aria-hidden />
+                            {record.minutes} min
+                          </span>
+                          {agents !== null && (
+                            <span className="inline-flex items-center gap-1.5">
+                              <Users className="size-3.5" aria-hidden />
+                              {agents} agent{agents === 1 ? "" : "s"}
+                            </span>
+                          )}
+                          {record.verification?.sources_verified !== undefined && (
+                            <span className="inline-flex items-center gap-1.5">
+                              <FileText className="size-3.5" aria-hidden />
+                              {record.verification.sources_verified} sources
+                            </span>
+                          )}
+                          {record.status !== "completed" && (
+                            <span className="cin-chip cin-chip-warning !min-h-0 !py-0.5">
+                              {statusLabel(record.status)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="cin-run-card-actions">
+                        {consensus !== null && <span className="cin-agree-pill">{consensus}% agree</span>}
+                        <span className="cin-open-link" aria-hidden>
+                          Open
+                          <ArrowRight className="size-4" />
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void handleDelete(record.id)
+                          }}
+                          className="cin-row-action is-danger relative z-10"
+                          aria-label={`Delete run: ${record.question.slice(0, 60)}`}
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                        </button>
+                      </div>
+                    </article>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-5 text-xs text-muted-foreground">
+            <span>
+              {records.length} local run{records.length === 1 ? "" : "s"} · no account, no server-side
+              history
+            </span>
+            <Link href="/chat" className="cin-quiet-link">
+              New investigation
+              <ArrowRight className="ml-1.5 size-3.5" aria-hidden />
             </Link>
-          </div>
+          </footer>
         </div>
-
-        {loading ? (
-          <div className="border border-border px-6 py-10" aria-busy="true">
-            <p className="asm-label">Loading local history…</p>
-            <div className="mt-6 space-y-3">
-              {[0, 1, 2].map((index) => (
-                <Skeleton key={index} className="h-12 w-full rounded-none" />
-              ))}
-            </div>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="border border-dashed border-border px-6 py-20 text-center">
-            <span className="asm-index">[ Empty ]</span>
-            <h2 className="mt-4 text-2xl font-bold uppercase tracking-tight">
-              {search ? "No matching runs" : "No runs on this device yet"}
-            </h2>
-            <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
-              {search
-                ? "Try a different question or clear the search."
-                : "Your first investigation will appear here. History stays in this browser unless you export it."}
-            </p>
-            {search ? (
-              <button type="button" className="asm-btn asm-btn-outline mt-6" onClick={() => setSearch("")}>
-                Clear search
-                <X className="size-4" aria-hidden />
-              </button>
-            ) : (
-              <Link href="/chat" className="asm-btn asm-btn-primary mt-6">
-                Start an investigation
-                <ArrowRight className="size-4" />
-              </Link>
-            )}
-          </div>
-        ) : (
-          <table className="asm-table">
-            <thead>
-              <tr>
-                <th>Question</th>
-                <th>Date</th>
-                <th>Budget</th>
-                <th>Agreement</th>
-                <th>Status</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((record) => (
-                <tr key={record.id}>
-                  <td data-label="Question">
-                    <Link href={`/executions?id=${record.id}`} className="is-question hover:text-brand">
-                      {record.question}
-                    </Link>
-                  </td>
-                  <td data-label="Date">{formatDate(record.created_at)}</td>
-                  <td data-label="Budget" className="is-mono">{record.minutes} min</td>
-                  <td data-label="Agreement" className="is-score">
-                    {typeof record.consensus === "number" ? `${Math.round(record.consensus * 100)}%` : "—"}
-                  </td>
-                  <td data-label="Status" className="is-mono">{record.status.replace(/_/g, " ")}</td>
-                  <td className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Link
-                        href={`/executions?id=${record.id}`}
-                        className="asm-row-action"
-                        aria-label={`Open run: ${record.question.slice(0, 60)}`}
-                      >
-                        <ArrowRight className="size-4" />
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(record.id)}
-                        className="asm-row-action hover:!text-danger"
-                        aria-label={`Delete run: ${record.question.slice(0, 60)}`}
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
       </main>
     </div>
   )

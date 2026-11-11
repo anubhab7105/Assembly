@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type Catalog, type UsageEntry } from "@/lib/api-client"
 import { storage } from "@/lib/storage"
@@ -19,7 +20,19 @@ import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ArrowRight, FileText, LockKeyhole, Paperclip, Search, Settings, SlidersHorizontal, Users, X } from "lucide-react"
+import { TrafficDots } from "@/components/cinematic/window-card"
+import { HistoryQuick } from "@/components/cinematic/history-quick"
+import {
+  ArrowRight,
+  Check,
+  FileText,
+  Paperclip,
+  Settings,
+  SlidersHorizontal,
+  Sparkles,
+  Users,
+  X,
+} from "lucide-react"
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
@@ -28,7 +41,13 @@ const EXAMPLES = [
   { label: "EV battery chemistry", question: "Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?" },
 ]
 
-const TIME_BUDGETS = [3, 5, 10, 15]
+const TIME_BUDGETS = [3, 5, 10, 15] as const
+const BUDGET_COPY: Record<(typeof TIME_BUDGETS)[number], string> = {
+  3: "Quick",
+  5: "Balanced",
+  10: "Thorough",
+  15: "Deep dive",
+}
 const MAX_ATTACHMENTS = 5
 const MAX_FILE_BYTES = 256 * 1024
 const MAX_TOTAL_BYTES = 384 * 1024
@@ -65,6 +84,7 @@ export default function Home() {
   const [catalogTick, setCatalogTick] = useState(0)
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
+  const [hasSearchKey, setHasSearchKey] = useState(false)
   const [confirmedGateSignature, setConfirmedGateSignature] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -112,14 +132,12 @@ export default function Home() {
   useEffect(() => {
     const refreshKeys = () => {
       globalVault.allKeys().then((k) => {
-        // Tavily is an optional search credential, not a runnable model provider.
         const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
         setEnabledIds(modelProviderIds)
+        setHasSearchKey(Boolean(k.tavily))
       }).catch(() => {})
     }
     refreshKeys()
-    // The vault is persistent: re-read when the tab regains focus so the
-    // picker gate and the execution request always agree on readiness.
     window.addEventListener("focus", refreshKeys)
     document.addEventListener("visibilitychange", refreshKeys)
     storage
@@ -148,7 +166,6 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    setCatalogLoading(true)
     ApiClient.catalog()
       .then((c) => {
         setCatalog(c)
@@ -291,8 +308,6 @@ export default function Home() {
     }
     setLoading(true)
     setStatus(makeChatStatus("Checking capacity…", "progress"))
-    // Run state hoisted above try: the catch block persists a cancelled
-    // record on mid-stream failure, so it must see these bindings.
     let finalAnswer = ""
     let consensus: number | null = null
     let confidence: "High" | "Moderate" | "Low" | null = null
@@ -313,7 +328,6 @@ export default function Home() {
     const questionForRun = question.trim() || "Analyze the attached files and summarize their key contents, important claims, and uncertainties."
     try {
       const keys = await globalVault.allKeys()
-      // The Tavily search key travels separately; it is never a model key.
       const { tavily, ...providerKeys } = keys
       const searchKeys = tavily ? { tavily } : undefined
       const usage: UsageEntry[] = await storage.getUsage()
@@ -379,9 +393,6 @@ export default function Home() {
           }
         },
       )
-      // Explicit terminal handling: only a completed run with a non-empty
-      // final answer is presentable. Failed/incomplete runs keep their
-      // failure history but never navigate to the active-run screen.
       if (!isPresentableRun({ status: result.status, finalAnswer })) {
         const failedStatus = result.status === "completed" ? "failed" : result.status
         await storage.saveHistory({
@@ -442,10 +453,6 @@ export default function Home() {
       })
       router.push(`/executions?id=${runId}`)
     } catch (err) {
-      // Mid-stream failures (abort vs. broken stream) keep distinct states:
-      // a user abort is cancelled; a stream that dies without run.finished
-      // is a failure, never a silent empty run. Pre-stream rejections (no
-      // run started) only show the error.
       const message = err instanceof Error ? err.message : "Run failed"
       const aborted =
         (err instanceof DOMException && err.name === "AbortError") ||
@@ -481,8 +488,6 @@ export default function Home() {
     }
   }
 
-  // Warn before a refresh/tab-close kills a running team (the server
-  // cancels the run on disconnect; there is no resume for web runs).
   useEffect(() => {
     if (!loading) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -492,28 +497,51 @@ export default function Home() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [loading])
 
+  const readinessOk = gate.level === "OK"
+  const readinessValue = Math.min(3, gate.families_count)
+  const readinessText = readinessOk
+    ? "Keys, models and quota are fine"
+    : catalogLoading
+      ? "Checking keys and provider quota…"
+      : catalogFailed
+        ? "Provider status is unavailable"
+        : gate.reasons[0] ?? "Add provider keys to start"
+  const searchText = hasSearchKey ? "Web search connected" : "Web search not set up (optional)"
+
   return (
-    <div className="asm-page asm-workspace flex min-h-screen flex-col">
-      <main id="main-content" tabIndex={-1} className="asm-workspace-main flex flex-1 flex-col">
-        <div className="asm-workspace-head">
-          <div>
-            <span className="asm-index">[ 01 / New run ]</span>
-            <h1>Ask Assembly</h1>
+    <div className="cin-page cin-workspace-page">
+      <main id="main-content" tabIndex={-1} className="cin-main cin-shell cin-page-inner">
+        <header className="cin-page-head">
+          <div className="cin-page-head-copy">
+            <span className="cin-kicker">01 — Ask</span>
+            <h1 className="cin-title">What do you want to know?</h1>
+            <p className="cin-lede">
+              One hard question. A temporary team from different model families works it separately, challenges
+              the weak spots, and leaves you one sourced answer.
+            </p>
           </div>
-          <div className="asm-workspace-head-note">
-            <span><Users className="size-3" /> Independent passes</span>
-            <span><Search className="size-3" /> Cited sources</span>
-            <span><LockKeyhole className="size-3" /> Local history</span>
+          <div className="cin-page-head-aside">
+            <span className="cin-page-number">02 / 08</span>
+            <div className="flex flex-wrap justify-end gap-2">
+              <span className="cin-chip">
+                <Users className="size-3.5" aria-hidden />
+                Independent passes
+              </span>
+              <span className="cin-chip">
+                <Sparkles className="size-3.5" aria-hidden />
+                One answer
+              </span>
+            </div>
           </div>
-        </div>
+        </header>
 
         {!catalogLoading && !catalogFailed && gate.families_count === 0 && (
-          <div className="asm-alert mb-3">
-            <p>
+          <div className="cin-run-banner mb-5" role="status">
+            <span>
               <strong>Add provider keys to start.</strong> Two model families are the minimum; three are
               recommended. Saved keys stay in this browser.
-            </p>
-            <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0 rounded-none">
+            </span>
+            <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="ml-auto shrink-0">
               <Settings className="mr-1.5 size-3.5" />
               Add keys
             </Button>
@@ -523,24 +551,28 @@ export default function Home() {
         <div
           data-testid="diversity-chip"
           data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
-          className="asm-readiness mb-3"
+          className="mb-5 flex flex-wrap items-center gap-3 text-sm text-muted-foreground"
           aria-live="polite"
         >
           {catalogLoading ? (
-            <span><strong>Checking provider keys…</strong></span>
+            <span className="cin-chip">Checking provider keys…</span>
           ) : catalogFailed ? (
-            <span>
-              <strong>Provider status unavailable</strong>
-              <span> — retry the connection above.</span>
-            </span>
+            <span className="cin-chip cin-chip-warning">Provider status unavailable — retry the connection above.</span>
           ) : (
             <>
-              <span>
-                <strong>{gateChipText(gate)}</strong>
-                {gate.level !== "OK" && gate.families_count > 0 && <span> — {gate.reasons[0]}</span>}
+              <span className={`cin-chip ${readinessOk ? "cin-chip-success" : "cin-chip-warning"}`}>
+                {gateChipText(gate)}
               </span>
+              {gate.level !== "OK" && gate.families_count > 0 && (
+                <span className="text-xs">{gate.reasons[0]}</span>
+              )}
               {gate.level === "DEGRADED" && !degradedConfirmed && (
-                <Button variant="outline" size="sm" className="min-h-8 rounded-none" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-testid="degraded-confirm"
+                  onClick={() => setConfirmedGateSignature(gateSignature)}
+                >
                   Run anyway
                 </Button>
               )}
@@ -549,17 +581,17 @@ export default function Home() {
         </div>
 
         {catalogFailed && (
-          <div className="mb-3">
+          <div className="mb-5">
             <ServerStatusBanner url={env.apiUrl} onRetry={() => setCatalogTick((t) => t + 1)} />
           </div>
         )}
 
-        <div className="asm-compose-grid">
-          <div className="flex min-w-0 flex-col gap-3">
+        <div className="cin-workspace-grid">
+          <div className="min-w-0">
             {attachments.length > 0 && (
-              <div className="asm-attachment-row" aria-label="Selected attachments">
+              <div className="cin-attachments" aria-label="Selected attachments">
                 {attachments.map((attachment) => (
-                  <div key={attachment.id} className="asm-attachment">
+                  <div key={attachment.id} className="cin-attachment">
                     <FileText className="size-3.5 shrink-0 text-brand" aria-hidden />
                     <b title={attachment.filename}>{attachment.filename}</b>
                     <span>{attachment.filename.toLowerCase().endsWith(".env.example") ? "ENV.EXAMPLE" : (attachment.filename.split(".").pop() || "TEXT").toUpperCase()}</span>
@@ -577,152 +609,223 @@ export default function Home() {
               </div>
             )}
 
-            <section className="asm-panel asm-question-panel" aria-labelledby="question-label">
-              <div className="asm-panel-head">
-                <span className="asm-label" id="question-label">Question</span>
-                <small>{question.length.toString().padStart(4, "0")} / 2000</small>
+            <section className="cin-window cin-composer" aria-labelledby="question-label">
+              <div className="cin-window-bar">
+                <TrafficDots />
+                <span className="cin-window-title">New investigation</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {question.length.toString().padStart(4, "0")} / 2000
+                </span>
               </div>
-              <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
-              <textarea
-                id="research-question"
-                ref={textareaRef}
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Should we adopt a multi-region database now, or wait until we reach 100k users?"
-                aria-describedby="question-status"
-                className="asm-question-input"
-                rows={4}
-                maxLength={2000}
-                required
-              />
-              <div className="asm-question-tools">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  aria-label="Choose investigation attachments"
-                  accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
-                  className="sr-only"
-                  disabled={loading}
-                  onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
+              <div className="cin-window-body">
+                <div className="cin-composer-label">
+                  <span id="question-label">Your question</span>
+                  <span className="hidden sm:inline">Plain text · Markdown · source files</span>
+                </div>
+                <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
+                <textarea
+                  id="research-question"
+                  ref={textareaRef}
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="Should our startup adopt a multi-region database now, or wait until we reach 100k users?"
+                  aria-describedby="question-status"
+                  className="cin-question-input"
+                  rows={4}
+                  maxLength={2000}
+                  required
                 />
-                <button
-                  type="button"
-                  className="asm-tool-btn"
-                  disabled={loading || attachments.length >= MAX_ATTACHMENTS}
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label="Attach files"
-                >
-                  <Paperclip aria-hidden />
-                  Attach{attachments.length ? ` · ${attachments.length}` : ""}
-                </button>
-                <button
-                  type="button"
-                  className="asm-tool-btn"
-                  onClick={() => setShowModelSettings(true)}
-                  aria-haspopup="dialog"
-                  aria-label="Open model and role settings"
-                >
-                  <SlidersHorizontal aria-hidden />
-                  Models{selection.selected.length > 0 ? ` · ${selection.selected.length}` : " · Auto"}
-                </button>
-                <span className="asm-label ml-auto hidden sm:inline">Plain text · Markdown · source files</span>
+
+                <div className="cin-suggestion-pop" aria-hidden="true">
+                  <div className="cin-window-bar">
+                    <TrafficDots />
+                    <span className="cin-window-title">Suggestion</span>
+                  </div>
+                  <div className="cin-window-body">
+                    <p>Add your expected user count for a sharper answer.</p>
+                  </div>
+                </div>
+
+                <div className="cin-composer-tools">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    aria-label="Choose investigation attachments"
+                    accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
+                    className="sr-only"
+                    disabled={loading}
+                    onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
+                  />
+                  <button
+                    type="button"
+                    className="cin-tool"
+                    disabled={loading || attachments.length >= MAX_ATTACHMENTS}
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach files"
+                  >
+                    <Paperclip aria-hidden />
+                    File
+                  </button>
+                  <button
+                    type="button"
+                    className="cin-tool"
+                    onClick={() => setShowModelSettings(true)}
+                    aria-haspopup="dialog"
+                    aria-label="Open model and role settings"
+                  >
+                    <SlidersHorizontal aria-hidden />
+                    Models{selection.selected.length > 0 ? ` · ${selection.selected.length}` : " · Auto"}
+                  </button>
+                  <span className="cin-tool-hint">
+                    Attach up to {MAX_ATTACHMENTS} files · 384 KiB total
+                  </span>
+                </div>
               </div>
             </section>
 
             {status && (
-              <div className="asm-status-slot" id="question-status">
+              <div className="cin-status-slot" id="question-status">
                 <ChatStatusMessage status={status} />
               </div>
             )}
+
+            <section className="cin-budget-block" aria-labelledby="budget-title">
+              <div className="cin-budget-title">
+                <h2 id="budget-title">How long can we take?</h2>
+                <span className="cin-page-number">Hard cutoff</span>
+              </div>
+              <div className="cin-budget-row" role="group" aria-label="Time budget">
+                {TIME_BUDGETS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setMinutes(value)}
+                    aria-pressed={minutes === value}
+                    aria-label={`${value} minutes`}
+                    className="cin-budget"
+                  >
+                    <span className="cin-budget-num">{value}</span>
+                    <span className="cin-budget-copy">
+                      <b>{value} min</b>
+                      <span>{BUDGET_COPY[value]}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="cin-examples" aria-label="Suggested questions">
+              <div className="cin-examples-head">
+                <span>Need a starting point?</span>
+                <span>{EXAMPLES.length.toString().padStart(2, "0")} prompts</span>
+              </div>
+              <div className="cin-example-grid">
+                {EXAMPLES.map((example, index) => (
+                  <button
+                    key={example.label}
+                    type="button"
+                    onClick={() => { setQuestion(example.question); textareaRef.current?.focus() }}
+                    className="cin-example"
+                    title={example.question}
+                  >
+                    <span className="cin-example-label">{String(index + 1).padStart(2, "0")} · {example.label}</span>
+                    <p>{example.question}</p>
+                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  </button>
+                ))}
+              </div>
+            </section>
           </div>
 
-          <aside className="asm-setup-rail" aria-label="Run configuration">
-            <div className="asm-block">
-              <div className="asm-block-head">
-                <span className="asm-label">Time budget</span>
-                <span className="asm-label">Minutes</span>
+          <aside className="min-w-0" aria-label="Run configuration">
+            <div className="cin-window">
+              <div className="cin-window-bar">
+                <TrafficDots />
+                <span className="cin-window-title">Run check</span>
               </div>
-              <div className="asm-block-body">
-                <div className="asm-budget" role="group" aria-label="Time budget">
-                  {TIME_BUDGETS.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setMinutes(m)}
-                      aria-pressed={minutes === m}
-                      aria-label={`${m} minutes`}
-                      className="asm-budget-btn"
-                    >
-                      {m}
-                      <small>min</small>
-                    </button>
-                  ))}
+              <div className="cin-readiness">
+                <div className="cin-readiness-ring" aria-hidden="true">
+                  <span
+                    className="cin-readiness-check"
+                    style={{ opacity: readinessValue === 0 ? 0.55 : 1 }}
+                  >
+                    <Check className="size-10" strokeWidth={2.4} />
+                  </span>
+                </div>
+                <p className="cin-readiness-status">{readinessText}</p>
+                <p className="cin-readiness-note">{searchText}</p>
+
+                <div className="cin-readiness-lines">
+                  <div className="cin-readiness-line">
+                    <span>Families ready</span>
+                    <b>{catalogLoading ? "…" : `${gate.families_count} / 3`}</b>
+                  </div>
+                  <div className="cin-readiness-line">
+                    <span>Providers</span>
+                    <b>{catalogLoading ? "…" : gate.providers_count}</b>
+                  </div>
+                  <div className="cin-readiness-line">
+                    <span>Budget</span>
+                    <b>{minutes} min</b>
+                  </div>
+                  <div className="cin-readiness-line">
+                    <span>Debate rounds</span>
+                    <b>Only if needed</b>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleLaunch}
+                  disabled={loading || missingQuestion || catalogLoading || catalogFailed || gate.level === "BLOCKED"}
+                  className="cin-btn cin-btn-primary cin-run-cta"
+                  aria-label={loading ? "Running" : "Run"}
+                  aria-describedby={runHint ? "run-hint" : undefined}
+                >
+                  <span>{loading ? "Running the team…" : `Start run · about ${minutes} min`}</span>
+                  {loading
+                    ? <span className="size-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                    : <ArrowRight className="size-4" aria-hidden />}
+                </Button>
+
+                {runHint && (
+                  <p className="cin-run-hint" id="run-hint">
+                    {runHint}
+                  </p>
+                )}
+
+                <p className="cin-run-hint">
+                  Not a sole source for medical, legal, financial or security-critical decisions. Your
+                  question is sent only to the providers you choose.
+                </p>
+              </div>
+            </div>
+
+            <div className="cin-window mt-4">
+              <div className="cin-window-bar">
+                <TrafficDots />
+                <span className="cin-window-title">What the team does</span>
+              </div>
+              <div className="px-5 py-2">
+                <div className="cin-estimate">
+                  <div className="cin-estimate-row"><span>Agents</span><b>4–5 temporary roles</b></div>
+                  <div className="cin-estimate-row"><span>Families</span><b>3+ independent</b></div>
+                  <div className="cin-estimate-row"><span>Evidence</span><b>Verified sources</b></div>
+                  <div className="cin-estimate-row"><span>Output</span><b>One cited answer</b></div>
                 </div>
               </div>
             </div>
 
-            <div className="asm-block">
-              <div className="asm-block-head">
-                <span className="asm-label">Estimate</span>
-                <span className="asm-label">Auto</span>
-              </div>
-              <div className="asm-block-body asm-estimate !p-0">
-                <div className="asm-estimate-row"><span>Agents</span><b>4–5 temporary roles</b></div>
-                <div className="asm-estimate-row"><span>Models</span><b>3+ families</b></div>
-                <div className="asm-estimate-row"><span>Debate</span><b>Only if needed</b></div>
-                <div className="asm-estimate-row"><span>Output</span><b>One sourced answer</b></div>
-              </div>
-            </div>
-
-            <Button
-              size="default"
-              onClick={handleLaunch}
-              disabled={loading || missingQuestion || catalogLoading || catalogFailed || gate.level === "BLOCKED"}
-              className="asm-btn asm-btn-primary asm-run-btn"
-              aria-label={loading ? "Running" : "Run"}
-              aria-describedby={runHint ? "run-hint" : undefined}
-            >
-              <span>{loading ? "Running the team" : "Start investigation"}</span>
-              {loading
-                ? <span className="size-3.5 animate-spin rounded-full border border-current border-t-transparent" />
-                : <ArrowRight className="size-4" />}
-            </Button>
-
-            {runHint && (
-              <p className="asm-run-hint" id="run-hint">
-                {runHint}
-              </p>
-            )}
-
-            <p className="asm-legal-note">
-              Not a sole source for medical, legal, financial or security-critical decisions. Your question
-              is sent only to the providers you choose.
+            <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
+              Keys stay in your browser.{" "}
+              <Link href="/settings" className="font-semibold text-brand hover:underline">
+                Review providers
+              </Link>
             </p>
           </aside>
         </div>
 
-        <div className="asm-suggestions" aria-label="Suggested questions">
-          <div className="asm-suggestion-head">
-            <span className="asm-label">Need a starting point?</span>
-            <span className="asm-label">04 prompts</span>
-          </div>
-          <div className="asm-suggestion-grid">
-            {EXAMPLES.map((example, index) => (
-              <button
-                key={example.label}
-                type="button"
-                onClick={() => { setQuestion(example.question); textareaRef.current?.focus() }}
-                className="asm-suggestion"
-                title={example.question}
-              >
-                <span className="asm-label">[ 0{index + 1} ] {example.label}</span>
-                <p>{example.question}</p>
-                <ArrowRight className="size-3.5" aria-hidden />
-              </button>
-            ))}
-          </div>
-        </div>
+        <HistoryQuick />
       </main>
 
       <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
