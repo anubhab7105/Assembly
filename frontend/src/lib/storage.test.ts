@@ -225,4 +225,64 @@ describe("BrowserStorage lifecycle contracts", () => {
     }))
     expect((await store.getHistory("run-1"))?.attachments).toBeUndefined()
   })
+
+  it("preserves metadata for more than five attachments and files up to 10 MiB (50 MiB total)", async () => {
+    const store = new BrowserStorage()
+    const eightMiB = 8 * 1024 * 1024
+    const attachments = [
+      { filename: "empty.txt", media_type: "text/plain", size_bytes: 0 },
+      ...Array.from({ length: 6 }, (_, i) => ({
+        filename: `part-${i}.txt`,
+        media_type: "text/plain",
+        size_bytes: eightMiB,
+      })),
+    ]
+    await store.saveHistory({ ...baseRecord, id: "run-7-files", attachments })
+    const saved = await store.getHistory("run-7-files")
+    expect(saved?.attachments).toEqual(attachments)
+
+    // Drops attachment metadata arrays that exceed 10 MiB per file or 50 MiB total.
+    await store.saveHistory({
+      ...baseRecord,
+      id: "run-over-10",
+      attachments: [{ filename: "too-big.txt", media_type: "text/plain", size_bytes: 10 * 1024 * 1024 + 1 }],
+    })
+    expect((await store.getHistory("run-over-10"))?.attachments).toBeUndefined()
+
+    await store.saveHistory({
+      ...baseRecord,
+      id: "run-over-50",
+      attachments: Array.from({ length: 6 }, (_, i) => ({
+        filename: `nine-${i}.txt`,
+        media_type: "text/plain",
+        size_bytes: 9 * 1024 * 1024,
+      })),
+    })
+    expect((await store.getHistory("run-over-50"))?.attachments).toBeUndefined()
+  })
+
+  it("enforces the 5 MiB history import/export limit without harming existing history", async () => {
+    const store = new BrowserStorage()
+    await store.saveHistory(baseRecord)
+
+    // Multi-byte UTF-8 characters (> 5 MiB bytes even when string length < 5 MiB).
+    const utf8Over5MiBImport = JSON.stringify({
+      version: 1,
+      history: [{ ...baseRecord, id: "oversized", answer: "é".repeat(2_650_000) }],
+      usage: [],
+    })
+    await expect(store.importJSON(utf8Over5MiBImport)).rejects.toThrow(/5 MiB/)
+    expect(await store.listHistory()).toEqual([baseRecord])
+
+    // History export exceeding 5 MiB UTF-8 bytes fails safely without deleting saved records.
+    for (let i = 0; i < 6; i += 1) {
+      await store.saveHistory({
+        ...baseRecord,
+        id: `big-${i}`,
+        answer: "x".repeat(900_000),
+      })
+    }
+    await expect(store.exportJSON()).rejects.toThrow(/5 MiB/)
+    expect((await store.listHistory()).length).toBe(7)
+  })
 })

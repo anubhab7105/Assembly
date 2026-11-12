@@ -1,3 +1,9 @@
+import {
+  MAX_ATTACHMENT_FILE_BYTES,
+  MAX_ATTACHMENT_TOTAL_BYTES,
+} from "./attachments"
+import { MAX_HISTORY_FILE_SIZE } from "./history-file-limits"
+
 /**
  * StorageService: client-owned history, settings and daily usage.
  *
@@ -321,36 +327,49 @@ function normalizeHistory(value: unknown): HistoryRecord | null {
       ...(typeof item.resolved === "boolean" ? { resolved: item.resolved } : {}),
     }))
   }
-  if (
-    Array.isArray(value.attachments) &&
-    value.attachments.length <= 5 &&
-    value.attachments.every((item) =>
-      isRecord(item) &&
-      typeof item.filename === "string" &&
-      item.filename.length <= 120 &&
-      !item.filename.includes("/") &&
-      !item.filename.includes("\\") &&
-      !Array.from(item.filename).some((character) => {
-        const code = character.charCodeAt(0)
-        return code < 32 || code === 127
-      }) &&
-      item.filename !== "." &&
-      item.filename !== ".." &&
-      item.filename.trim().length > 0 &&
-      typeof item.media_type === "string" &&
-      item.media_type.length <= 100 &&
-      /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(item.media_type) &&
-      typeof item.size_bytes === "number" &&
-      Number.isFinite(item.size_bytes) &&
-      item.size_bytes >= 0 &&
-      item.size_bytes <= 256 * 1024
-    )
-  ) {
-    record.attachments = value.attachments.map((item) => ({
-      filename: item.filename as string,
-      media_type: item.media_type as string,
-      size_bytes: item.size_bytes as number,
-    }))
+  if (Array.isArray(value.attachments)) {
+    let totalAttachmentBytes = 0
+    const normalizedAttachments: NonNullable<HistoryRecord["attachments"]> = []
+    let validAttachments = true
+    for (const item of value.attachments) {
+      if (
+        !isRecord(item) ||
+        typeof item.filename !== "string" ||
+        item.filename.length > 120 ||
+        item.filename.includes("/") ||
+        item.filename.includes("\\") ||
+        Array.from(item.filename).some((character) => {
+          const code = character.charCodeAt(0)
+          return code < 32 || code === 127
+        }) ||
+        item.filename === "." ||
+        item.filename === ".." ||
+        item.filename.trim().length === 0 ||
+        typeof item.media_type !== "string" ||
+        item.media_type.length > 100 ||
+        !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(item.media_type) ||
+        typeof item.size_bytes !== "number" ||
+        !Number.isFinite(item.size_bytes) ||
+        item.size_bytes < 0 ||
+        item.size_bytes > MAX_ATTACHMENT_FILE_BYTES
+      ) {
+        validAttachments = false
+        break
+      }
+      totalAttachmentBytes += item.size_bytes
+      if (totalAttachmentBytes > MAX_ATTACHMENT_TOTAL_BYTES) {
+        validAttachments = false
+        break
+      }
+      normalizedAttachments.push({
+        filename: item.filename,
+        media_type: item.media_type,
+        size_bytes: item.size_bytes,
+      })
+    }
+    if (validAttachments) {
+      record.attachments = normalizedAttachments
+    }
   }
   return record
 }
@@ -469,27 +488,67 @@ class BaseStorage implements StorageService {
     await idbSet("usage", valid.slice(0, MAX_USAGE))
   }
 
+  /**
+   * Exports history and usage as JSON within the 5 MiB file-size limit.
+   */
   async exportJSON(): Promise<string> {
     const history = await this.listHistory()
     const usage = await this.getUsage()
-    return JSON.stringify({ version: 1, history, usage }, null, 2)
+
+    const json = JSON.stringify({ version: 1, history, usage }, null, 2)
+    const size = new TextEncoder().encode(json).byteLength
+
+    if (size > MAX_HISTORY_FILE_SIZE) {
+      throw new Error(
+        "History export is too large. Maximum allowed size is 5 MiB. No data was deleted."
+      )
+    }
+
+    return json
   }
 
+
+   /**
+   * Validates and imports history without partially updating existing storage.
+   * Rejects imports exceeding the 5 MiB limit before parsing or writing data.
+   */
   async importJSON(text: string): Promise<void> {
-    // Parse and validate everything before the first write. Parse errors,
-    // unsupported shapes and malformed records cannot partially update state.
+    const size = new TextEncoder().encode(text).byteLength
+
+    if (size > MAX_HISTORY_FILE_SIZE) {
+      throw new Error(
+        "History import is too large. Maximum allowed size is 5 MiB. No saved data was changed."
+      )
+    }
+
+    // Parse and validate everything before the first write.
     const data = parseImport(text)
+
     const currentHistory = (await idbGet<unknown>("history")) ?? []
     const currentUsage = (await idbGet<unknown>("usage")) ?? []
-    const history = Array.isArray(currentHistory) ? currentHistory.map(normalizeHistory).filter((item): item is HistoryRecord => item !== null) : []
-    const usage = Array.isArray(currentUsage) ? currentUsage.map(normalizeUsage).filter((item): item is UsageRecord => item !== null) : []
+
+    const history = Array.isArray(currentHistory)
+      ? currentHistory.map(normalizeHistory).filter((item): item is HistoryRecord => item !== null)
+      : []
+
+    const usage = Array.isArray(currentUsage)
+      ? currentUsage.map(normalizeUsage).filter((item): item is UsageRecord => item !== null)
+      : []
 
     const mergedHistory = new Map(history.map((item) => [item.id, item]))
-    for (const item of data.history) mergedHistory.set(item.id, item)
-    const mergedUsage = new Map(usage.map((item) => [`${item.provider}\u0000${item.model}`, item]))
+
+    for (const item of data.history) {
+      mergedHistory.set(item.id, item)
+    }
+
+    const mergedUsage = new Map(
+      usage.map((item) => [`${item.provider}\u0000${item.model}`, item])
+    )
+
     for (const item of data.usage) {
       const key = `${item.provider}\u0000${item.model}`
       const current = mergedUsage.get(key)
+
       mergedUsage.set(key, current ? {
         ...item,
         count: Math.max(current.count, item.count),
@@ -497,8 +556,7 @@ class BaseStorage implements StorageService {
       } : item)
     }
 
-    // Preserve unrelated local history/settings and make repeated imports
-    // idempotent. Both payloads are written as one logical transaction.
+    // Preserve unrelated local history and settings.
     await idbSetImportState(
       [...mergedHistory.values()].slice(0, MAX_HISTORY),
       [...mergedUsage.values()].slice(0, MAX_USAGE),

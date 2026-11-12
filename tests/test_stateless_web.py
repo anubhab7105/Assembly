@@ -412,8 +412,9 @@ def test_run_rejects_unsupported_attachment_without_echoing_content(web_mode, mo
 
 
 def test_run_rejects_oversized_attachment_before_creating_run(web_mode):
-    from src.main import app
     import src.api.run as run_mod
+    from src.main import app
+    from src.research.attachments import MAX_FILE_BYTES
 
     run_count = len(run_mod._runs)
     res = TestClient(app).post(
@@ -424,12 +425,110 @@ def test_run_rejects_oversized_attachment_before_creating_run(web_mode):
             "attachments": [{
                 "filename": "big.txt",
                 "media_type": "text/plain",
-                "content": "x" * (256 * 1024 + 1),
+                "content": "x" * (MAX_FILE_BYTES + 1),
             }],
         },
     )
-    assert res.status_code in (413, 422)
+    assert res.status_code == 422
+    assert "per-file limit" in res.json()["detail"].lower()
     assert len(run_mod._runs) == run_count
+
+
+def test_run_rejects_combined_over_50_mib_before_creating_run(web_mode):
+    import src.api.run as run_mod
+    from src.main import app
+
+    run_count = len(run_mod._runs)
+    nine_mib = "x" * (9 * 1024 * 1024)
+    attachments = [
+        {"filename": f"chunk-{i}.txt", "media_type": "text/plain", "content": nine_mib}
+        for i in range(6)
+    ]
+    res = TestClient(app).post(
+        "/api/run",
+        json={
+            "question": "Analyze combined attachments",
+            "time_budget_minutes": 3,
+            "attachments": attachments,
+        },
+    )
+    assert res.status_code == 422
+    assert "combined limit" in res.json()["detail"].lower()
+    assert len(run_mod._runs) == run_count
+
+
+def test_run_accepts_empty_and_more_than_five_attachments_within_50_mib(web_mode, monkeypatch):
+    import src.orchestration.orchestrator as orch_mod
+    from src.main import app
+    from src.orchestration.orchestrator import ExecutionResult
+
+    captured = {}
+
+    class StubOrch:
+        def __init__(self):
+            self.router = None
+
+        async def execute(self, **kwargs):
+            captured["attachment_context"] = kwargs["attachment_context"]
+            return ExecutionResult(
+                answer="Mock answer.",
+                sources=[],
+                consensus_score=0.8,
+                problem_type="general",
+                complexity="simple",
+                agent_count=1,
+                debate_rounds=0,
+                total_tokens=0,
+                status="completed",
+            )
+
+    _mock_filtered_router(monkeypatch)
+    monkeypatch.setattr(orch_mod, "Orchestrator", StubOrch)
+    attachments = [
+        {"filename": "empty.txt", "media_type": "text/plain", "content": ""},
+        *[
+            {
+                "filename": f"batch-{i}.txt",
+                "media_type": "text/plain",
+                "content": "a" * (8 * 1024 * 1024) if i < 6 else "small tail",
+            }
+            for i in range(6)
+        ],
+    ]
+    with TestClient(app).stream(
+        "POST",
+        "/api/run",
+        json={
+            "question": "Analyze seven files under 50 MiB",
+            "time_budget_minutes": 3,
+            "provider_keys": {"groq": CANARY_KEY},
+            "model_selection": {"selected": [], "pins": {}},
+            "usage_snapshot": [],
+            "attachments": attachments,
+        },
+    ) as res:
+        assert res.status_code == 200, res.text
+        for line in res.iter_lines():
+            if line.startswith("data: ") and '"run.finished"' in line:
+                break
+
+    assert "empty.txt" in captured["attachment_context"]
+    assert "batch-0.txt" in captured["attachment_context"]
+
+
+def test_run_rejects_excessive_request_body_over_max_run_body_bytes(web_mode, monkeypatch):
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "max_run_body_bytes", 128)
+    monkeypatch.setattr(settings, "max_body_bytes", 64)
+    res = TestClient(app).post(
+        "/api/run",
+        content=b"x" * 200,
+        headers={"content-type": "application/json", "content-length": "200"},
+    )
+    assert res.status_code == 413
+    assert res.json() == {"detail": "Request body too large."}
 
 
 def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(web_mode, monkeypatch, caplog):

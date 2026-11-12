@@ -1,7 +1,13 @@
-export const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024
+import { MAX_HISTORY_FILE_SIZE } from "./history-file-limits"
+
+export const MAX_IMPORT_FILE_SIZE = MAX_HISTORY_FILE_SIZE
 
 type ImportFile = Pick<File, "size" | "text">
 
+/**
+ * Imports a history file after checking its size.
+ * Oversized files are rejected before their contents are read.
+ */
 export async function importHistoryFile(
   file: ImportFile,
   importJSON: (text: string) => Promise<unknown>

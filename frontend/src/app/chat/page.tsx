@@ -13,6 +13,11 @@ import {
 import { PrivacyDialog } from "@/components/privacy-dialog"
 import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
+import {
+  SUPPORTED_ATTACHMENT_EXTENSIONS,
+  type DraftAttachment,
+  validateAttachmentBatch,
+} from "@/lib/attachments"
 import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
 import { makeChatStatus, type ChatStatus } from "@/lib/chat-status"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
@@ -29,28 +34,14 @@ const EXAMPLES = [
 ]
 
 const TIME_BUDGETS = [3, 5, 10, 15]
-const MAX_ATTACHMENTS = 5
-const MAX_FILE_BYTES = 256 * 1024
-const MAX_TOTAL_BYTES = 384 * 1024
-const SUPPORTED_EXTENSIONS = new Set([
-  "txt", "md", "csv", "json", "log", "py", "js", "jsx", "ts", "tsx",
-  "html", "css", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml",
-  "sql", "sh", "ps1", "bat", "env.example",
-])
-
-type DraftAttachment = {
-  id: string
-  filename: string
-  media_type: string
-  content: string
-  size: number
-}
 
 export default function Home() {
   const router = useRouter()
 
   const [question, setQuestion] = useState("")
   const [attachments, setAttachments] = useState<DraftAttachment[]>([])
+  const attachmentsRef = useRef<DraftAttachment[]>([])
+  const attachmentQueueRef = useRef<Promise<void>>(Promise.resolve())
   const [minutes, setMinutes] = useState(5)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
@@ -167,96 +158,44 @@ export default function Home() {
     setShowPrivacy(false)
   }
 
+  const handleRemoveAttachment = (id: string) => {
+    const next = attachmentsRef.current.filter((item) => item.id !== id)
+    attachmentsRef.current = next
+    setAttachments(next)
+  }
+
   const handleFilesSelected = async (files: FileList | null) => {
     if (!files?.length) return
     const picked = Array.from(files)
-    if (attachments.length + picked.length > MAX_ATTACHMENTS) {
-      setStatus(makeChatStatus(`Attach up to ${MAX_ATTACHMENTS} files per investigation.`, "info"))
-      if (fileInputRef.current) fileInputRef.current.value = ""
-      return
-    }
-    let total = attachments.reduce((sum, item) => sum + item.size, 0)
-    const accepted: DraftAttachment[] = []
-    for (const file of picked) {
-      const lower = file.name.toLowerCase()
-      const extension = lower.endsWith(".env.example")
-        ? "env.example"
-        : lower.includes(".") ? lower.split(".").pop() ?? "" : ""
-      if (!SUPPORTED_EXTENSIONS.has(extension)) {
+    const runBatch = async () => {
+      const result = await validateAttachmentBatch(attachmentsRef.current, picked)
+      if (result.accepted.length > 0) {
+        const next = [...attachmentsRef.current, ...result.accepted]
+        attachmentsRef.current = next
+        setAttachments(next)
+      }
+      if (result.accepted.length > 0 && result.errors.length > 0) {
         setStatus(
           makeChatStatus(
-            `${file.name}: unsupported type. Choose a text, Markdown, CSV, JSON, log, or source/configuration file.`,
+            `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. ${result.errors.join(" ")}`,
             "warning",
           ),
         )
-        continue
-      }
-      if (file.size <= 0) {
-        setStatus(makeChatStatus(`${file.name}: file is empty.`, "warning"))
-        continue
-      }
-      if (file.size > MAX_FILE_BYTES) {
+      } else if (result.errors.length > 0) {
+        setStatus(makeChatStatus(result.errors.join(" "), "warning"))
+      } else if (result.accepted.length > 0) {
         setStatus(
-          makeChatStatus(`${file.name}: file exceeds the 256 KiB per-file limit.`, "warning"),
+          makeChatStatus(
+            `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.`,
+            "info",
+          ),
         )
-        continue
       }
-      total += file.size
-      if (total > MAX_TOTAL_BYTES) {
-        total -= file.size
-        setStatus(makeChatStatus("Attachments exceed the 384 KiB combined limit.", "warning"))
-        continue
-      }
-      try {
-        const content = await file.text()
-        const hasUnsupportedControls = Array.from(content).some((character) => {
-          const code = character.charCodeAt(0)
-          return (code < 32 && ![9, 10, 12, 13].includes(code)) || code === 127
-        })
-        if (hasUnsupportedControls) {
-          total -= file.size
-          setStatus(
-            makeChatStatus(
-              `${file.name}: binary or unsupported control characters aren't supported.`,
-              "warning",
-            ),
-          )
-          continue
-        }
-        if (extension === "json") {
-          try { JSON.parse(content) } catch {
-            total -= file.size
-            setStatus(makeChatStatus(`${file.name}: invalid JSON.`, "warning"))
-            continue
-          }
-        }
-        if (!content.trim()) {
-          total -= file.size
-          setStatus(makeChatStatus(`${file.name}: file is empty.`, "warning"))
-          continue
-        }
-        accepted.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${accepted.length}`,
-          filename: file.name,
-          media_type: file.type || "text/plain",
-          content,
-          size: file.size,
-        })
-      } catch {
-        total -= file.size
-        setStatus(makeChatStatus(`${file.name}: couldn't read this file.`, "warning"))
-      }
+      if (fileInputRef.current) fileInputRef.current.value = ""
     }
-    if (accepted.length) {
-      setAttachments((current) => [...current, ...accepted])
-      setStatus(
-        makeChatStatus(
-          `${accepted.length} file${accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.`,
-          "info",
-        ),
-      )
-    }
-    if (fileInputRef.current) fileInputRef.current.value = ""
+    const nextQueue = attachmentQueueRef.current.then(runBatch, runBatch)
+    attachmentQueueRef.current = nextQueue
+    await nextQueue
   }
 
   const handleLaunch = async () => {
@@ -540,7 +479,7 @@ export default function Home() {
                     type="button"
                     aria-label={`Remove ${attachment.filename}`}
                     disabled={loading}
-                    onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                    onClick={() => handleRemoveAttachment(attachment.id)}
                     className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                   >
                     <X className="size-3.5" aria-hidden />
@@ -570,7 +509,7 @@ export default function Home() {
                   type="file"
                   multiple
                   aria-label="Choose investigation attachments"
-                  accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
+                  accept={[...SUPPORTED_ATTACHMENT_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
                   className="sr-only"
                   disabled={loading}
                   onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
@@ -580,7 +519,7 @@ export default function Home() {
                   variant="outline"
                   size="sm"
                   className="min-h-9"
-                  disabled={loading || attachments.length >= MAX_ATTACHMENTS}
+                  disabled={loading}
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Attach files"
                 >

@@ -176,7 +176,15 @@ async def limit_upload_size(request: Request, call_next):
                 status_code=400, content={"detail": "Invalid Content-Length."}
             )
         body_size = int(content_length)
-        if body_size > settings.max_body_bytes:
+        is_run_upload = (
+            request.method == "POST" and request.url.path.rstrip("/") == "/api/run"
+        )
+        body_limit = (
+            max(settings.max_body_bytes, settings.max_run_body_bytes)
+            if is_run_upload
+            else settings.max_body_bytes
+        )
+        if body_size > body_limit:
             try:
                 await count_invalid_request(client_ip(request))
             except HTTPException as exc:

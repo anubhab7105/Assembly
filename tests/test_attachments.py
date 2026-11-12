@@ -2,11 +2,10 @@
 import pytest
 
 from src.research.attachments import (
-    Attachment,
-    AttachmentValidationError,
-    MAX_ATTACHMENT_CONTEXT_CHARS,
     MAX_FILE_BYTES,
     MAX_TOTAL_BYTES,
+    Attachment,
+    AttachmentValidationError,
     build_attachment_context,
     safe_filename,
     validate_attachment,
@@ -24,6 +23,8 @@ from src.research.attachments import (
         ("rows.csv", b"id,name\n1,Ada\n", "text/csv"),
         ("run.log", b"INFO started\n", "text/plain"),
         ("main.py", b"print('hi')", "text/plain"),
+        ("sample.ts", b"export const x = 1;\n", "text/plain"),
+        (".env.example", b"API_KEY=\n", "text/plain"),
     ],
 )
 def test_supported_text_formats(filename, content, media_type):
@@ -40,9 +41,9 @@ def test_supported_text_formats(filename, content, media_type):
         ("payload.exe", b"hello", "text/plain", "unsupported file type"),
         ("report.pdf", b"%PDF fake", "application/pdf", "unsupported file type"),
         ("book.docx", b"zip bytes", "application/octet-stream", "unsupported file type"),
-        ("empty.txt", b"", "text/plain", "empty"),
-        ("big.txt", b"x" * (MAX_FILE_BYTES + 1), "text/plain", "per-file limit"),
+        (".env", b"SECRET=1", "text/plain", "unsupported file type"),
         ("bad.json", b"{invalid", "application/json", "invalid JSON"),
+        ("empty.json", b"", "application/json", "invalid JSON"),
         ("bad-encoding.txt", b"\xff\xfe\xfa", "text/plain", "UTF-8"),
         ("spoof.csv", b"\x00\x01\x02", "text/csv", "binary"),
     ],
@@ -50,6 +51,52 @@ def test_supported_text_formats(filename, content, media_type):
 def test_rejects_malformed_or_unsupported_content(filename, content, media_type, message):
     with pytest.raises(AttachmentValidationError, match=message):
         validate_attachment(filename=filename, content=content, media_type=media_type)
+
+
+def test_per_file_size_boundaries_including_empty_and_10_mib():
+    assert MAX_FILE_BYTES == 10 * 1024 * 1024
+
+    empty = validate_attachment(filename="empty.txt", content=b"", media_type="text/plain")
+    assert empty.size_bytes == 0
+    assert empty.content == ""
+
+    two_mib = validate_attachment(
+        filename="two.txt", content=b"a" * (2 * 1024 * 1024), media_type="text/plain"
+    )
+    assert two_mib.size_bytes == 2 * 1024 * 1024
+
+    eight_mib = validate_attachment(
+        filename="eight.txt", content=b"b" * (8 * 1024 * 1024), media_type="text/plain"
+    )
+    assert eight_mib.size_bytes == 8 * 1024 * 1024
+
+    exact_ten_mib = validate_attachment(
+        filename="exact.txt", content=b"c" * MAX_FILE_BYTES, media_type="text/plain"
+    )
+    assert exact_ten_mib.size_bytes == MAX_FILE_BYTES
+
+    with pytest.raises(AttachmentValidationError, match="per-file limit"):
+        validate_attachment(
+            filename="over_one_byte.txt",
+            content=b"x" * (MAX_FILE_BYTES + 1),
+            media_type="text/plain",
+        )
+
+    with pytest.raises(AttachmentValidationError, match="per-file limit"):
+        validate_attachment(
+            filename="over_half_mib.txt",
+            content=b"x" * (10 * 1024 * 1024 + 512 * 1024),
+            media_type="text/plain",
+        )
+
+
+def test_utf8_byte_size_calculation_rejects_oversized_multibyte_text():
+    # Each "é" is 1 Python character but 2 UTF-8 bytes; half of 10 MiB + 1 chars > 10 MiB.
+    text = "é" * (MAX_FILE_BYTES // 2 + 1)
+    assert len(text) < MAX_FILE_BYTES
+    assert len(text.encode("utf-8")) > MAX_FILE_BYTES
+    with pytest.raises(AttachmentValidationError, match="per-file limit"):
+        validate_attachments([{"filename": "utf8.txt", "media_type": "text/plain", "content": text}])
 
 
 @pytest.mark.parametrize(
@@ -74,17 +121,67 @@ def test_rejects_mismatched_binary_mime_type():
         )
 
 
-def test_attachments_respect_count_total_bytes_and_duplicate_names():
+def test_attachments_allow_more_than_five_files_and_enforce_50_mib_combined_and_unique_names():
     valid = {"filename": "a.txt", "media_type": "text/plain", "content": "a"}
-    with pytest.raises(AttachmentValidationError, match="up to 5"):
-        validate_attachments([valid] * 6)
 
-    files = [
-        {"filename": "a.txt", "media_type": "text/plain", "content": "x" * 400_000},
-        {"filename": "b.txt", "media_type": "text/plain", "content": "x" * 400_000},
+    # More than 5 files (7 empty files, and 6 x 8 MiB = 48 MiB) are accepted.
+    many_empty = [
+        {"filename": f"empty-{i}.txt", "media_type": "text/plain", "content": ""}
+        for i in range(7)
     ]
+    assert len(validate_attachments(many_empty)) == 7
+
+    eight_mib = "b" * (8 * 1024 * 1024)
+    six_by_eight = [
+        {"filename": f"chunk-{i}.txt", "media_type": "text/plain", "content": eight_mib}
+        for i in range(6)
+    ]
+    parsed_48 = validate_attachments(six_by_eight)
+    assert len(parsed_48) == 6
+    assert sum(item.size_bytes for item in parsed_48) == 48 * 1024 * 1024
+
+    # Combined size of exactly 50 MiB (5 x 10 MiB) is accepted.
+    ten_mib = "x" * MAX_FILE_BYTES
+    exact_fifty = [
+        {"filename": f"full-{i}.txt", "media_type": "text/plain", "content": ten_mib}
+        for i in range(5)
+    ]
+    parsed_50 = validate_attachments(exact_fifty)
+    assert len(parsed_50) == 5
+    assert sum(item.size_bytes for item in parsed_50) == MAX_TOTAL_BYTES
+
+    # Adding 1 byte over 50 MiB or 6 x 9 MiB = 54 MiB is rejected.
     with pytest.raises(AttachmentValidationError, match="combined limit"):
-        validate_attachments(files)
+        validate_attachments(exact_fifty + [{"filename": "extra.txt", "media_type": "text/plain", "content": "1"}])
+
+    nine_mib = "y" * (9 * 1024 * 1024)
+    with pytest.raises(AttachmentValidationError, match="combined limit"):
+        validate_attachments([
+            {"filename": f"nine-{i}.txt", "media_type": "text/plain", "content": nine_mib}
+            for i in range(6)
+        ])
+
+    # Incremental multi-batch checks preserve the 50 MiB investigation-wide cap and uniqueness.
+    parsed_batch = validate_attachments(
+        [{"filename": "next.txt", "media_type": "text/plain", "content": eight_mib}],
+        existing_bytes=42 * 1024 * 1024,
+        existing_filenames=["prior.txt"],
+    )
+    assert len(parsed_batch) == 1
+
+    with pytest.raises(AttachmentValidationError, match="combined limit"):
+        validate_attachments(
+            [{"filename": "next.txt", "media_type": "text/plain", "content": nine_mib}],
+            existing_bytes=42 * 1024 * 1024,
+            existing_filenames=["prior.txt"],
+        )
+
+    with pytest.raises(AttachmentValidationError, match="unique"):
+        validate_attachments(
+            [{"filename": "PRIOR.txt", "media_type": "text/plain", "content": "ok"}],
+            existing_bytes=10,
+            existing_filenames=["prior.txt"],
+        )
 
     with pytest.raises(AttachmentValidationError, match="unique"):
         validate_attachments([valid, {**valid, "filename": "A.TXT"}])
@@ -149,10 +246,8 @@ def test_preserves_prompt_delimiter_escaping_for_source_text():
     assert context.block.count("<<<END_UNTRUSTED_WEB_CONTENT>>>") == 1
 
 
-def test_total_attachment_limit_matches_serialized_api_budget():
-    from src.research.attachments import MAX_TOTAL_BYTES
-
-    assert MAX_TOTAL_BYTES <= 384 * 1024
+def test_total_attachment_limit_is_50_mib():
+    assert MAX_TOTAL_BYTES == 50 * 1024 * 1024
 
 
 def test_preserves_source_indentation_and_boundary_newlines():
@@ -175,15 +270,23 @@ def test_rejects_mime_spoof_for_supported_extension():
         )
 
 
-def test_rejects_aggregate_size_over_384_kib():
-    from src.research.attachments import MAX_TOTAL_BYTES
+def test_accepts_aggregate_size_over_384_kib():
+    files = [
+        {
+            "filename": "first.txt",
+            "media_type": "text/plain",
+            "content": "a" * 220_000,
+        },
+        {
+            "filename": "second.txt",
+            "media_type": "text/plain",
+            "content": "b" * 220_000,
+        },
+    ]
 
-    item = {"filename": "first.txt", "media_type": "text/plain", "content": "a" * 220_000}
-    other = {"filename": "second.txt", "media_type": "text/plain", "content": "b" * 220_000}
-    assert len(item["content"].encode()) < 256 * 1024
-    assert len(other["content"].encode()) < 256 * 1024
-    with pytest.raises(AttachmentValidationError, match="combined limit"):
-        validate_attachments([item, other])
+    result = validate_attachments(files)
+
+    assert len(result) == 2
 
 
 def test_preserves_indented_source_code_after_validation():

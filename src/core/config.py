@@ -42,6 +42,8 @@ class Settings(BaseSettings):
 
     # ── Abuse protection (no accounts) ───────────────────────────────
     max_body_bytes: int = 1024 * 1024
+    # /api/run carries inline UTF-8 attachments up to 50 MiB combined plus JSON escaping/metadata.
+    max_run_body_bytes: int = 105 * 1024 * 1024
     max_question_chars: int = 2000
     rate_limit_run_per_min_per_ip: int = 5
     rate_limit_preflight_per_min_per_ip: int = 10

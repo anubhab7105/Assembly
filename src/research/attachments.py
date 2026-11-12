@@ -10,6 +10,7 @@ import csv
 import io
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from src.research.sanitize import (
@@ -19,11 +20,11 @@ from src.research.sanitize import (
     scan_for_injection,
 )
 
-MAX_ATTACHMENTS = 5
-MAX_FILE_BYTES = 256 * 1024
-MAX_TOTAL_BYTES = 384 * 1024
+MAX_FILE_BYTES = 10 * 1024 * 1024
+MAX_TOTAL_BYTES = 50 * 1024 * 1024
 MAX_ATTACHMENT_CONTEXT_CHARS = 24_000
 MAX_FILENAME_CHARS = 120
+_UNSUPPORTED_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0e-\x1f\x7f]")
 
 # This is a text-format allowlist, not a content-type trust decision.
 SUPPORTED_EXTENSIONS = {
@@ -82,16 +83,22 @@ def _extension(filename: str) -> str:
     return "." + lower.rsplit(".", 1)[-1] if "." in lower else ""
 
 
+def _validate_extension(filename: str) -> str:
+    ext = _extension(filename)
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise AttachmentValidationError(
+            f"{filename}: unsupported file type. Use TXT, Markdown, CSV, JSON, "
+            "LOG, or supported source/configuration text files."
+        )
+    return ext
+
+
 def _normalize_text(filename: str, text: str) -> str:
-    if not text.strip():
-        raise AttachmentValidationError(f"{filename}: the file is empty.")
     # Reject unusual controls while allowing tabs and normal line endings.
-    for ch in text:
-        n = ord(ch)
-        if (n < 32 and ch not in "\t\n\r\f") or n == 127:
-            raise AttachmentValidationError(
-                f"{filename}: the content contains unsupported control characters."
-            )
+    if _UNSUPPORTED_CONTROL_RE.search(text):
+        raise AttachmentValidationError(
+            f"{filename}: the content contains unsupported control characters."
+        )
     # Keep indentation and boundary whitespace: it can be meaningful source code.
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
@@ -101,28 +108,26 @@ def validate_attachment(
 ) -> Attachment:
     """Validate one client-supplied text file by bytes, extension and MIME."""
     safe_name = safe_filename(filename)
-    ext = _extension(safe_name)
-    if ext not in SUPPORTED_EXTENSIONS:
-        raise AttachmentValidationError(
-            f"{safe_name}: unsupported file type. Use TXT, Markdown, CSV, JSON, "
-            "LOG, or supported source/configuration text files."
-        )
+    ext = _validate_extension(safe_name)
     if not isinstance(content, bytes):
         raise AttachmentValidationError(f"{safe_name}: file data must be bytes.")
-    if not content:
-        raise AttachmentValidationError(f"{safe_name}: the file is empty.")
+
     if len(content) > MAX_FILE_BYTES:
         raise AttachmentValidationError(
-            f"{safe_name}: file exceeds the {MAX_FILE_BYTES // 1024} KiB per-file limit."
+            f"{safe_name}: file exceeds the {MAX_FILE_BYTES // (1024 * 1024)} MiB per-file limit."
         )
     if b"\x00" in content[:4096]:
         raise AttachmentValidationError(f"{safe_name}: binary or encoded text is not supported.")
     declared = (media_type or "").split(";", 1)[0].strip().lower()
-    if declared and declared not in _TEXT_MIME_TYPES and declared != "application/octet-stream":
-        if not declared.startswith("text/"):
-            raise AttachmentValidationError(
-                f"{safe_name}: MIME type doesn't match a supported text document."
-            )
+    if (
+        declared
+        and declared not in _TEXT_MIME_TYPES
+        and declared != "application/octet-stream"
+        and not declared.startswith("text/")
+    ):
+        raise AttachmentValidationError(
+            f"{safe_name}: MIME type doesn't match a supported text document."
+        )
     # Never echo an arbitrary client MIME string into model-visible metadata.
     # Unknown text types are accepted by extension but rendered generically.
     try:
@@ -135,19 +140,14 @@ def validate_attachment(
             json.loads(text)
         elif ext == ".csv":
             reader = csv.reader(io.StringIO(text))
-            rows = 0
-            for _ in reader:
-                rows += 1
+            for rows, _ in enumerate(reader, start=1):
                 if rows > 20_000:
                     raise AttachmentValidationError(
                         f"{safe_name}: CSV contains too many rows (limit 20,000)."
                     )
     except json.JSONDecodeError as exc:
         raise AttachmentValidationError(f"{safe_name}: invalid JSON.") from exc
-    try:
-        normalized = _normalize_text(safe_name, text)
-    except AttachmentValidationError:
-        raise
+    normalized = _normalize_text(safe_name, text)
     return Attachment(
         filename=safe_name,
         media_type=declared if declared in _TEXT_MIME_TYPES else "text/plain",
@@ -155,17 +155,26 @@ def validate_attachment(
     )
 
 
-def validate_attachments(items: list[dict] | None) -> list[Attachment]:
-    """Validate a request's attachment objects and aggregate byte/count limits."""
+def validate_attachments(
+    items: list[dict] | None,
+    *,
+    existing_bytes: int = 0,
+    existing_filenames: Iterable[str] | None = None,
+) -> list[Attachment]:
+    """Validate investigation attachments and cumulative 50 MiB UTF-8 byte limits."""
+    if existing_bytes < 0:
+        raise AttachmentValidationError("Existing attachment total cannot be negative.")
+    if existing_bytes > MAX_TOTAL_BYTES:
+        raise AttachmentValidationError(
+            f"Attachments exceed the {MAX_TOTAL_BYTES // (1024 * 1024)} MiB combined limit."
+        )
     if not items:
         return []
-    if len(items) > MAX_ATTACHMENTS:
-        raise AttachmentValidationError(
-            f"Attach up to {MAX_ATTACHMENTS} files per investigation."
-        )
     parsed: list[Attachment] = []
-    total_bytes = 0
-    seen_names: set[str] = set()
+    total_bytes = existing_bytes
+    seen_names: set[str] = {
+        safe_filename(name).casefold() for name in (existing_filenames or ())
+    }
     for item in items:
         if not isinstance(item, dict):
             raise AttachmentValidationError("Each attachment must be an object.")
@@ -176,20 +185,26 @@ def validate_attachments(items: list[dict] | None) -> list[Attachment]:
             raise AttachmentValidationError("Each attachment needs a filename and text content.")
         # JSON API transmits the UTF-8 text as a string; no data URI/base64
         # means byte accounting is deterministic and avoids decode ambiguity.
-        content_bytes = encoded.encode("utf-8")
         safe_name = safe_filename(filename)
-        total_bytes += len(content_bytes)
-        if total_bytes > MAX_TOTAL_BYTES:
+        _validate_extension(safe_name)
+        content_bytes = encoded.encode("utf-8")
+        if len(content_bytes) > MAX_FILE_BYTES:
             raise AttachmentValidationError(
-                f"Attachments exceed the {MAX_TOTAL_BYTES // 1024} KiB combined limit."
+                f"{safe_name}: file exceeds the {MAX_FILE_BYTES // (1024 * 1024)} MiB per-file limit."
+            )
+        if total_bytes + len(content_bytes) > MAX_TOTAL_BYTES:
+            raise AttachmentValidationError(
+                f"Attachments exceed the {MAX_TOTAL_BYTES // (1024 * 1024)} MiB combined limit."
             )
         if safe_name.casefold() in seen_names:
             raise AttachmentValidationError("Attachment filenames must be unique in one investigation.")
-        seen_names.add(safe_name.casefold())
         parsed.append(validate_attachment(
-            filename=safe_name, content=content_bytes,
+            filename=safe_name,
+            content=content_bytes,
             media_type=media_type if isinstance(media_type, str) else None,
         ))
+        seen_names.add(safe_name.casefold())
+        total_bytes += len(content_bytes)
     return parsed
 
 
