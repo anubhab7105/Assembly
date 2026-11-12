@@ -1,3 +1,9 @@
+## 2026-11-12 — Fix stale synthetic quota dates in offline test fixtures
+
+- Root cause: offline test fixtures hardcoded `quota_last_verified` to `2026-10-24`, which exceeded `QUOTA_METADATA_MAX_AGE_DAYS` (14 days) once the system date reached `2026-11-12`, causing 42 tests across 8 test files to fail on `QUOTA METADATA STALE`.
+- Change: updated `make_models_yaml` in `tests/conftest.py`, `test_router_excludes_provider_with_stale_quota_metadata` in `tests/test_routing.py`, `test_recommended_order_prefers_capacity` in `tests/test_key_setup.py`, and `test_router_skips_provider_with_unfilled_limits` in `tests/test_provider_layer.py` to use `date.today()`. Production `models.yaml` and `src/providers/config.py` fail-closed validation were left untouched.
+- Verification: `pytest --tb=short -q` passed (`655 passed, 1 skipped, 1 warning`); `ruff check` passed on all 4 edited test files (`ruff format --check` passed on `tests/conftest.py`, `tests/test_routing.py`, `tests/test_key_setup.py`; `tests/test_provider_layer.py` had only pre-existing unrelated formatting differences). Live-key tests (`test_repo_router_uses_catalog_ids`) skipped because no live keys were exercised.
+
 ## 2026-10-26 — Typed chat status states (Issue #53)
 
 - Root cause: `frontend/src/app/chat/page.tsx` derived `statusIsError` from string matching (any status not equal to `"Checking capacity…"` or `"Running team… (streaming)"` was treated as an error), so file-readiness, privacy, informational, and success messages were rendered as `role="alert"` / `text-danger` / `bg-danger-subtle` — announced as errors to screen readers.

@@ -7,6 +7,7 @@ default mock plan sets needs_research=False so no search HTTP occurs.
 
 import sys
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -176,10 +177,10 @@ def make_models_yaml(
             "base": base,
             "url": url,
             "enabled": flag,
-            # Synthetic offline catalogs use a fixed, explicit source/date.
+            # Synthetic offline catalogs use today's date so tests stay current.
             # Tests for stale or missing evidence override these fields.
             "quota_source": "https://test.invalid/quota-fixture",
-            "quota_last_verified": "2026-10-24",
+            "quota_last_verified": date.today().isoformat(),
             "models": rendered,
         }
     path = Path(tmp_path) / filename

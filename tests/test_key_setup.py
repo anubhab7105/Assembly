@@ -1,5 +1,7 @@
 """FR-30: key setup instructions via catalog (offline)."""
 
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 from src.api.catalog import (
@@ -67,7 +69,7 @@ def test_recommended_order_prefers_capacity() -> None:
                     "url": "http://127.0.0.1:9/v1",
                     "enabled": True,
                     "quota_source": "https://test.invalid/limits",
-                    "quota_last_verified": "2026-10-24",
+                    "quota_last_verified": date.today().isoformat(),
                     "models": [
                         {
                             "id": "s-1",
@@ -88,7 +90,7 @@ def test_recommended_order_prefers_capacity() -> None:
                     "url": "http://127.0.0.1:9/v1",
                     "enabled": True,
                     "quota_source": "https://test.invalid/limits",
-                    "quota_last_verified": "2026-10-24",
+                    "quota_last_verified": date.today().isoformat(),
                     "models": [
                         {
                             "id": "b-1",
