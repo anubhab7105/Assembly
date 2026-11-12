@@ -50,4 +50,35 @@ describe("History import file size validation", () => {
     expect(file.text).not.toHaveBeenCalled()
     expect(importJSON).not.toHaveBeenCalled()
   })
+
+  it("allows a > 5 MiB valid Assembly version-1 backup while rejecting oversized external JSON", async () => {
+    const backupPayload = JSON.stringify({ version: 1, history: [], usage: [] }, null, 2)
+    const backupFile = {
+      size: 6 * 1024 * 1024,
+      slice: vi.fn().mockReturnValue({
+        text: vi.fn().mockResolvedValue(backupPayload.slice(0, 128)),
+      }),
+      text: vi.fn().mockResolvedValue(backupPayload),
+    }
+    const importJSON = vi.fn().mockResolvedValue(undefined)
+
+    await importHistoryFile(backupFile, importJSON)
+    expect(backupFile.text).toHaveBeenCalledOnce()
+    expect(importJSON).toHaveBeenCalledWith(backupPayload)
+
+    const externalFile = {
+      size: 6 * 1024 * 1024,
+      slice: vi.fn().mockReturnValue({
+        text: vi.fn().mockResolvedValue('{"external": true}'),
+      }),
+      text: vi.fn().mockResolvedValue('{"external": true}'),
+    }
+    const importExternal = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      importHistoryFile(externalFile, importExternal)
+    ).rejects.toThrow("This file is too large to import.")
+    expect(externalFile.text).not.toHaveBeenCalled()
+    expect(importExternal).not.toHaveBeenCalled()
+  })
 })

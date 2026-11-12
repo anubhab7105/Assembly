@@ -541,7 +541,6 @@ def test_run_rejects_excessive_request_body_over_max_run_body_bytes(web_mode, mo
 
 def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(web_mode, monkeypatch, caplog):
     """The uploaded text becomes prompt context, not response/log metadata."""
-    import src.api.run as run_mod
     import src.orchestration.orchestrator as orch_mod
     from src.main import app
     from src.orchestration.orchestrator import ExecutionResult
@@ -601,3 +600,89 @@ def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(web_mode, m
     assert source_marker not in caplog.text
     assert CANARY_KEY not in "\\n".join(lines)
     assert CANARY_KEY not in caplog.text
+
+
+def test_run_reports_attachment_truncation_and_bounds_pre_validation_cost(
+    web_mode, monkeypatch
+) -> None:
+    """SSE run.started reports truncation, and invalid attachments don't spend run quota."""
+    import src.orchestration.orchestrator as orch_mod
+    from src.core.config import settings
+    from src.core.rate_limit import _rate_limit_history
+    from src.main import app
+    from src.orchestration.orchestrator import ExecutionResult
+    from src.research.attachments import MAX_ATTACHMENT_CONTEXT_CHARS
+
+    _rate_limit_history.clear()
+
+    class StubOrch:
+        def __init__(self) -> None:
+            self.router = None
+
+        async def execute(self, **kwargs: object) -> ExecutionResult:
+            return ExecutionResult(
+                answer="Mock answer.",
+                sources=[],
+                consensus_score=0.8,
+                problem_type="general",
+                complexity="simple",
+                agent_count=1,
+                debate_rounds=0,
+                total_tokens=0,
+                status="completed",
+            )
+
+    _mock_filtered_router(monkeypatch)
+    monkeypatch.setattr(orch_mod, "Orchestrator", StubOrch)
+    client = TestClient(app)
+
+    # Rejected attachments must count against invalid/pre-validation limits, not run quota.
+    monkeypatch.setattr(settings, "rate_limit_invalid_per_min_per_ip", 2)
+    monkeypatch.setattr(settings, "rate_limit_run_per_min_per_ip", 5)
+    bad_payload = {
+        "question": "Check attachment",
+        "time_budget_minutes": 3,
+        "provider_keys": {"groq": CANARY_KEY},
+        "model_selection": {"selected": [], "pins": {}},
+        "usage_snapshot": [],
+        "attachments": [
+            {"filename": "bad.exe", "media_type": "text/plain", "content": "x"}
+        ],
+    }
+    first = client.post("/api/run", json=bad_payload)
+    assert first.status_code == 422
+    second = client.post("/api/run", json=bad_payload)
+    assert second.status_code == 422
+    # Third request hits pre-validation 429 before parse/validation, while run budget stays empty.
+    third = client.post("/api/run", json=bad_payload)
+    assert third.status_code == 429
+    assert not any(action == "run" for _, action in _rate_limit_history)
+
+    # Clear pre-validation & invalid counters; verify run budget was untouched (still 0 used)
+    # and run.started signals attachment_truncated when content exceeds 24k chars.
+    _rate_limit_history.clear()
+    with client.stream(
+        "POST",
+        "/api/run",
+        json={
+            "question": "Check truncation reporting",
+            "time_budget_minutes": 3,
+            "provider_keys": {"groq": CANARY_KEY},
+            "model_selection": {"selected": [], "pins": {}},
+            "usage_snapshot": [],
+            "attachments": [
+                {
+                    "filename": "long.txt",
+                    "media_type": "text/plain",
+                    "content": "a" * (MAX_ATTACHMENT_CONTEXT_CHARS + 500),
+                }
+            ],
+        },
+    ) as res:
+        assert res.status_code == 200, res.text
+        started_line = next(
+            line for line in res.iter_lines() if line.startswith("data: ") and '"run.started"' in line
+        )
+    started_event = json.loads(started_line.removeprefix("data: "))
+    assert started_event["attachment_truncated"] is True
+    assert started_event["attachment_included_count"] == 1

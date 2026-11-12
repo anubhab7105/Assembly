@@ -1,5 +1,7 @@
 export const MAX_ATTACHMENT_FILE_BYTES = 10 * 1024 * 1024
 export const MAX_ATTACHMENT_TOTAL_BYTES = 50 * 1024 * 1024
+export const MAX_ATTACHMENT_COUNT = 100
+export const MAX_ATTACHMENT_CONTEXT_CHARS = 24_000
 
 export const SUPPORTED_ATTACHMENT_EXTENSIONS = new Set([
   "txt", "md", "csv", "json", "log", "py", "js", "jsx", "ts", "tsx",
@@ -56,6 +58,7 @@ export async function validateAttachmentBatch(
   pickedFiles: ReadonlyArray<PickedAttachmentFile>,
 ): Promise<AttachmentBatchResult> {
   let totalBytes = calculateAttachmentsTotalBytes(existingAttachments)
+  let currentCount = existingAttachments.length
   const accepted: DraftAttachment[] = []
   const errors: string[] = []
   const pushError = (message: string) => {
@@ -66,6 +69,11 @@ export async function validateAttachmentBatch(
   const encoder = new TextEncoder()
 
   for (const file of pickedFiles) {
+    if (currentCount >= MAX_ATTACHMENT_COUNT) {
+      pushError(`Attachments exceed the ${MAX_ATTACHMENT_COUNT}-file per-investigation limit.`)
+      continue
+    }
+
     const extension = getAttachmentExtension(file.name)
     if (!SUPPORTED_ATTACHMENT_EXTENSIONS.has(extension)) {
       pushError(
@@ -119,6 +127,7 @@ export async function validateAttachmentBatch(
       }
 
       totalBytes += effectiveSize
+      currentCount += 1
       accepted.push({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${accepted.length}`,
         filename: file.name,

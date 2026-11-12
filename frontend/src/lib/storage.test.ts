@@ -261,20 +261,21 @@ describe("BrowserStorage lifecycle contracts", () => {
     expect((await store.getHistory("run-over-50"))?.attachments).toBeUndefined()
   })
 
-  it("enforces the 5 MiB history import/export limit without harming existing history", async () => {
+  it("enforces the 5 MiB limit on external imports while allowing export and restore of valid > 5 MiB Assembly v1 backups", async () => {
     const store = new BrowserStorage()
     await store.saveHistory(baseRecord)
 
-    // Multi-byte UTF-8 characters (> 5 MiB bytes even when string length < 5 MiB).
-    const utf8Over5MiBImport = JSON.stringify({
+    // External non-backup > 5 MiB (multi-byte UTF-8) is rejected before updating storage.
+    const utf8Over5MiBExternal = JSON.stringify({
       version: 1,
+      external_source: true,
       history: [{ ...baseRecord, id: "oversized", answer: "é".repeat(2_650_000) }],
       usage: [],
     })
-    await expect(store.importJSON(utf8Over5MiBImport)).rejects.toThrow(/5 MiB/)
+    await expect(store.importJSON(utf8Over5MiBExternal)).rejects.toThrow(/5 MiB/)
     expect(await store.listHistory()).toEqual([baseRecord])
 
-    // History export exceeding 5 MiB UTF-8 bytes fails safely without deleting saved records.
+    // Large valid histories (> 5 MiB UTF-8 bytes) still export cleanly and restore into storage.
     for (let i = 0; i < 6; i += 1) {
       await store.saveHistory({
         ...baseRecord,
@@ -282,7 +283,13 @@ describe("BrowserStorage lifecycle contracts", () => {
         answer: "x".repeat(900_000),
       })
     }
-    await expect(store.exportJSON()).rejects.toThrow(/5 MiB/)
+    const backup = await store.exportJSON()
+    expect(new TextEncoder().encode(backup).byteLength).toBeGreaterThan(5 * 1024 * 1024)
+
+    await store.clearHistory()
+    expect(await store.listHistory()).toEqual([])
+
+    await store.importJSON(backup)
     expect((await store.listHistory()).length).toBe(7)
   })
 })

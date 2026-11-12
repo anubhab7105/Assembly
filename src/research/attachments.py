@@ -22,6 +22,7 @@ from src.research.sanitize import (
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_TOTAL_BYTES = 50 * 1024 * 1024
+MAX_ATTACHMENT_COUNT = 100
 MAX_ATTACHMENT_CONTEXT_CHARS = 24_000
 MAX_FILENAME_CHARS = 120
 _UNSUPPORTED_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0e-\x1f\x7f]")
@@ -170,6 +171,10 @@ def validate_attachments(
         )
     if not items:
         return []
+    if len(items) > MAX_ATTACHMENT_COUNT:
+        raise AttachmentValidationError(
+            f"Attachments exceed the {MAX_ATTACHMENT_COUNT}-file per-investigation limit."
+        )
     parsed: list[Attachment] = []
     total_bytes = existing_bytes
     seen_names: set[str] = {

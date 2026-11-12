@@ -2,6 +2,7 @@
 import pytest
 
 from src.research.attachments import (
+    MAX_ATTACHMENT_COUNT,
     MAX_FILE_BYTES,
     MAX_TOTAL_BYTES,
     Attachment,
@@ -293,3 +294,12 @@ def test_preserves_indented_source_code_after_validation():
     source = "\ndef main():\n    return 1\n"
     parsed = validate_attachment(filename="sample.py", content=source.encode("utf-8"))
     assert parsed.content == source
+
+
+def test_rejects_excessive_attachment_count() -> None:
+    files = [
+        {"filename": f"empty-{i}.txt", "media_type": "text/plain", "content": ""}
+        for i in range(MAX_ATTACHMENT_COUNT + 1)
+    ]
+    with pytest.raises(AttachmentValidationError, match="per-investigation limit"):
+        validate_attachments(files)

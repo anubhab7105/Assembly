@@ -97,14 +97,28 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   }
 
   const handleExport = async () => {
-    const text = await storage.exportJSON()
-    const blob = new Blob([text], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "assembly-history.json"
-    a.click()
-    URL.revokeObjectURL(url)
+    try {
+      const text = await storage.exportJSON()
+      const blob = new Blob([text], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "assembly-history.json"
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Couldn't export history. Please try again."
+
+      toast({
+        title: "History export failed",
+        description: message,
+        variant: "danger",
+        duration: 7000,
+      })
+    }
   }
 
 const handleImport = async (file: File, input: HTMLInputElement) => {

@@ -327,6 +327,14 @@ async def start_run(req: RunRequest, request: Request):
         limited = await _count_invalid_or_429(ip)
         return limited if limited is not None else JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
+    if req.attachments:
+        await check_rate_limit(
+            f"ip:{ip}",
+            "attachment_validation",
+            settings.rate_limit_invalid_per_min_per_ip,
+            60,
+        )
+
     try:
         attachments = validate_attachments(
             [item.model_dump() for item in (req.attachments or [])]
@@ -446,6 +454,8 @@ async def start_run(req: RunRequest, request: Request):
             "event_type": "run.started",
             "run_id": run_id,
             "diversity": run_diversity,
+            "attachment_truncated": attachment_data.truncated,
+            "attachment_included_count": len(attachment_data.filenames),
         }
     )
 

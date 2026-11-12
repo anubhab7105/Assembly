@@ -14,6 +14,7 @@ import { PrivacyDialog } from "@/components/privacy-dialog"
 import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
+  MAX_ATTACHMENT_CONTEXT_CHARS,
   SUPPORTED_ATTACHMENT_EXTENSIONS,
   type DraftAttachment,
   validateAttachmentBatch,
@@ -174,10 +175,18 @@ export default function Home() {
         attachmentsRef.current = next
         setAttachments(next)
       }
+      const totalChars = attachmentsRef.current.reduce(
+        (sum, item) => sum + item.content.length,
+        0,
+      )
+      const truncationNotice =
+        totalChars > MAX_ATTACHMENT_CONTEXT_CHARS
+          ? ` Total text exceeds ${MAX_ATTACHMENT_CONTEXT_CHARS.toLocaleString()} characters, so extra content will be truncated before sending to models.`
+          : ""
       if (result.accepted.length > 0 && result.errors.length > 0) {
         setStatus(
           makeChatStatus(
-            `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. ${result.errors.join(" ")}`,
+            `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. ${result.errors.join(" ")}${truncationNotice}`,
             "warning",
           ),
         )
@@ -186,8 +195,8 @@ export default function Home() {
       } else if (result.accepted.length > 0) {
         setStatus(
           makeChatStatus(
-            `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.`,
-            "info",
+            `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.${truncationNotice}`,
+            truncationNotice ? "warning" : "info",
           ),
         )
       }

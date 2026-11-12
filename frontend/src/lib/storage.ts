@@ -2,7 +2,10 @@ import {
   MAX_ATTACHMENT_FILE_BYTES,
   MAX_ATTACHMENT_TOTAL_BYTES,
 } from "./attachments"
-import { MAX_HISTORY_FILE_SIZE } from "./history-file-limits"
+import {
+  MAX_BACKUP_IMPORT_BYTES,
+  MAX_HISTORY_FILE_SIZE,
+} from "./history-file-limits"
 
 /**
  * StorageService: client-owned history, settings and daily usage.
@@ -389,13 +392,20 @@ function normalizeUsage(value: unknown): UsageRecord | null {
   }
 }
 
-function parseImport(text: string): { history: HistoryRecord[]; usage: UsageRecord[] } {
-  let raw: unknown
-  try {
-    raw = JSON.parse(text)
-  } catch {
-    throw new Error("Import file isn't valid JSON. No saved data was changed.")
-  }
+function isAssemblyBackupEnvelope(raw: unknown): raw is {
+  version: 1
+  history: unknown[]
+  usage: unknown[]
+} {
+  if (!isRecord(raw) || raw.version !== 1) return false
+  if (!Array.isArray(raw.history) || !Array.isArray(raw.usage)) return false
+  if (raw.history.length > MAX_HISTORY || raw.usage.length > MAX_USAGE) return false
+  return Object.keys(raw).every(
+    (key) => key === "version" || key === "history" || key === "usage",
+  )
+}
+
+function validateImportPayload(raw: unknown): { history: HistoryRecord[]; usage: UsageRecord[] } {
   if (!isRecord(raw) || raw.version !== 1) {
     throw new Error("Unsupported history export. Choose an Assembly JSON export (version 1). No saved data was changed.")
   }
@@ -433,6 +443,16 @@ function parseImport(text: string): { history: HistoryRecord[]; usage: UsageReco
     history: [...historyById.values()].slice(0, MAX_HISTORY),
     usage: [...usageByKey.values()].slice(0, MAX_USAGE),
   }
+}
+
+function parseImport(text: string): { history: HistoryRecord[]; usage: UsageRecord[] } {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    throw new Error("Import file isn't valid JSON. No saved data was changed.")
+  }
+  return validateImportPayload(raw)
 }
 
 class BaseStorage implements StorageService {
@@ -489,40 +509,50 @@ class BaseStorage implements StorageService {
   }
 
   /**
-   * Exports history and usage as JSON within the 5 MiB file-size limit.
+   * Exports history and usage as JSON so saved histories remain backupable.
    */
   async exportJSON(): Promise<string> {
     const history = await this.listHistory()
     const usage = await this.getUsage()
 
-    const json = JSON.stringify({ version: 1, history, usage }, null, 2)
-    const size = new TextEncoder().encode(json).byteLength
-
-    if (size > MAX_HISTORY_FILE_SIZE) {
-      throw new Error(
-        "History export is too large. Maximum allowed size is 5 MiB. No data was deleted."
-      )
-    }
-
-    return json
+    return JSON.stringify({ version: 1, history, usage }, null, 2)
   }
 
 
    /**
    * Validates and imports history without partially updating existing storage.
-   * Rejects imports exceeding the 5 MiB limit before parsing or writing data.
+   * Rejects external imports over 5 MiB while allowing bounded valid version-1
+   * Assembly backups up to MAX_BACKUP_IMPORT_BYTES.
    */
   async importJSON(text: string): Promise<void> {
     const size = new TextEncoder().encode(text).byteLength
 
-    if (size > MAX_HISTORY_FILE_SIZE) {
+    if (size > MAX_BACKUP_IMPORT_BYTES) {
       throw new Error(
-        "History import is too large. Maximum allowed size is 5 MiB. No saved data was changed."
+        "History backup is too large. Maximum allowed backup size is 50 MiB. No saved data was changed."
       )
     }
 
-    // Parse and validate everything before the first write.
-    const data = parseImport(text)
+    let data: { history: HistoryRecord[]; usage: UsageRecord[] }
+    if (size > MAX_HISTORY_FILE_SIZE) {
+      let raw: unknown
+      try {
+        raw = JSON.parse(text)
+      } catch {
+        throw new Error(
+          "History import is too large. Maximum allowed size is 5 MiB. No saved data was changed."
+        )
+      }
+      if (!isAssemblyBackupEnvelope(raw)) {
+        throw new Error(
+          "History import is too large. Maximum allowed size is 5 MiB. No saved data was changed."
+        )
+      }
+      data = validateImportPayload(raw)
+    } else {
+      // Parse and validate everything before the first write.
+      data = parseImport(text)
+    }
 
     const currentHistory = (await idbGet<unknown>("history")) ?? []
     const currentUsage = (await idbGet<unknown>("usage")) ?? []
