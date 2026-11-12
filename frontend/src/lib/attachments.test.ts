@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
 import {
+  MAX_ATTACHMENT_CONTEXT_CHARS,
   MAX_ATTACHMENT_FILE_BYTES,
   MAX_ATTACHMENT_TOTAL_BYTES,
   calculateAttachmentsTotalBytes,
+  estimateAttachmentContextChars,
   validateAttachmentBatch,
   type DraftAttachment,
   type PickedAttachmentFile,
@@ -156,6 +158,26 @@ describe("Frontend attachment limits and batch validation", () => {
     expect(result.accepted.map((a) => a.filename)).toEqual(["ok.txt"])
     expect(result.totalBytes).toBe(2 * MiB)
     expect(result.errors).toEqual(["multibyte.txt: file exceeds the 10 MiB per-file limit."])
+  })
+
+  it("estimates formatted prompt chars including headers, wrappers, separators, and delimiter escaping", () => {
+    expect(estimateAttachmentContextChars([])).toBe(0)
+
+    // Raw text is under 24,000 chars, but per-file wrappers + separators push
+    // the formatted prompt context over MAX_ATTACHMENT_CONTEXT_CHARS.
+    const nearBudgetFiles: DraftAttachment[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `id-${i}`,
+      filename: `notes-${i}.txt`,
+      media_type: "text/plain",
+      content: "a".repeat(2350),
+      size: 2350,
+    }))
+    const rawLength = nearBudgetFiles.reduce((sum, f) => sum + f.content.length, 0)
+    expect(rawLength).toBe(23_500)
+    expect(rawLength).toBeLessThan(MAX_ATTACHMENT_CONTEXT_CHARS)
+    expect(estimateAttachmentContextChars(nearBudgetFiles)).toBeGreaterThan(
+      MAX_ATTACHMENT_CONTEXT_CHARS,
+    )
   })
 })
 

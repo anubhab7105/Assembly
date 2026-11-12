@@ -3,8 +3,12 @@ import {
   MAX_ATTACHMENT_TOTAL_BYTES,
 } from "./attachments"
 import {
+  isAssemblyBackupEnvelope,
   MAX_BACKUP_IMPORT_BYTES,
+  MAX_BACKUP_IMPORT_MIB,
+  MAX_HISTORY,
   MAX_HISTORY_FILE_SIZE,
+  MAX_USAGE,
 } from "./history-file-limits"
 
 /**
@@ -70,8 +74,6 @@ export interface StorageService {
 
 const DB_NAME = "assembly"
 const STORE = "kv"
-const MAX_HISTORY = 200
-const MAX_USAGE = 200
 
 export class StorageError extends Error {
   constructor(operation: string) {
@@ -392,19 +394,6 @@ function normalizeUsage(value: unknown): UsageRecord | null {
   }
 }
 
-function isAssemblyBackupEnvelope(raw: unknown): raw is {
-  version: 1
-  history: unknown[]
-  usage: unknown[]
-} {
-  if (!isRecord(raw) || raw.version !== 1) return false
-  if (!Array.isArray(raw.history) || !Array.isArray(raw.usage)) return false
-  if (raw.history.length > MAX_HISTORY || raw.usage.length > MAX_USAGE) return false
-  return Object.keys(raw).every(
-    (key) => key === "version" || key === "history" || key === "usage",
-  )
-}
-
 function validateImportPayload(raw: unknown): { history: HistoryRecord[]; usage: UsageRecord[] } {
   if (!isRecord(raw) || raw.version !== 1) {
     throw new Error("Unsupported history export. Choose an Assembly JSON export (version 1). No saved data was changed.")
@@ -529,7 +518,7 @@ class BaseStorage implements StorageService {
 
     if (size > MAX_BACKUP_IMPORT_BYTES) {
       throw new Error(
-        "History backup is too large. Maximum allowed backup size is 50 MiB. No saved data was changed."
+        `History backup is too large. Maximum allowed backup size is ${MAX_BACKUP_IMPORT_MIB} MiB. No saved data was changed.`
       )
     }
 

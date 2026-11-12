@@ -14,6 +14,7 @@ import { PrivacyDialog } from "@/components/privacy-dialog"
 import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
+  estimateAttachmentContextChars,
   MAX_ATTACHMENT_CONTEXT_CHARS,
   SUPPORTED_ATTACHMENT_EXTENSIONS,
   type DraftAttachment,
@@ -175,13 +176,12 @@ export default function Home() {
         attachmentsRef.current = next
         setAttachments(next)
       }
-      const totalChars = attachmentsRef.current.reduce(
-        (sum, item) => sum + item.content.length,
-        0,
+      const estimatedPromptChars = estimateAttachmentContextChars(
+        attachmentsRef.current,
       )
       const truncationNotice =
-        totalChars > MAX_ATTACHMENT_CONTEXT_CHARS
-          ? ` Total text exceeds ${MAX_ATTACHMENT_CONTEXT_CHARS.toLocaleString()} characters, so extra content will be truncated before sending to models.`
+        estimatedPromptChars > MAX_ATTACHMENT_CONTEXT_CHARS
+          ? ` Formatted attachment context exceeds ${MAX_ATTACHMENT_CONTEXT_CHARS.toLocaleString()} characters, so extra content will be truncated before sending to models.`
           : ""
       if (result.accepted.length > 0 && result.errors.length > 0) {
         setStatus(
