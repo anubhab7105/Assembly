@@ -37,9 +37,15 @@ Deploy the service, then verify its `/health` endpoint before connecting the fro
 2. Set **Root Directory** to `frontend`.
 3. Set the Framework Preset to Next.js.
 4. Configure:
-   - `NEXT_PUBLIC_API_URL`: the backend origin, with no trailing slash (for example, `https://your-backend.onrender.com`).
+   - `NEXT_PUBLIC_API_URL`: the backend origin, with no trailing slash (for example, `https://your-backend.onrender.com`). See the [frontend CSP instructions](csp.md) before deploying. If this origin differs from `https://assembly-backend.onrender.com`, update both the HTTPS and WSS entries in `connect-src` in `frontend/vercel.json` and the matching expected origins in `frontend/scripts/csp-policy.test.mjs` before deployment.
    - `NEXT_PUBLIC_APP_MODE`: `web`.
-5. Deploy and test a full run with browser-supplied provider keys.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:c8eff8699770c5562a8e850bd5f723f2fead8fe4ffaf727337e06e07f7622b96 -->
+
+5. Deploy the frontend and test a full run using browser-supplied provider keys.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## 4. Data handling
 

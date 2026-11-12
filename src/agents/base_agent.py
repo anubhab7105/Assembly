@@ -240,8 +240,9 @@ class BaseAgent:
             output = self._parse_and_validate(response.content, valid_ids=valid_ids)
         except AgentValidationError as first_error:
             logger.warning(
-                f"Agent   │ {self.agent_id} — validation failed ({first_error}); "
-                "retrying once with the error appended"
+                "Agent   │ %s — validation failed (type=%s); retrying once",
+                self.agent_id,
+                type(first_error).__name__,
             )
             retry_messages = [
                 *messages,
@@ -347,7 +348,9 @@ class BaseAgent:
                 candidate = fallback_for(current, error)
             except Exception as e:  # noqa: BLE001 — fallback routing must not kill the run
                 logger.warning(
-                    f"Agent   │ {self.agent_id} — fallback routing failed: {e}"
+                    "Agent   │ %s — fallback routing failed (type=%s)",
+                    self.agent_id,
+                    type(e).__name__,
                 )
                 return None
             if candidate is None:

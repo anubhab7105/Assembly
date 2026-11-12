@@ -27,11 +27,40 @@ describe("privacy-notice", () => {
   });
 
   it("discloses persistent web-key retention and request-scoped backend handling", () => {
-    expect(PRIVACY_NOTICE_VERSION).toBe(2);
+    expect(PRIVACY_NOTICE_VERSION).toBe(6);
     const webNotice = WEB_PRIVACY_PARAGRAPHS.join(" ");
     expect(webNotice).toContain("across refreshes");
-    expect(webNotice).toContain("until you remove them in Settings");
-    expect(webNotice).toContain("does not persist them");
+    expect(webNotice).toContain("You can remove them in Settings");
+    expect(webNotice).toContain("if browser storage fails during removal, a key may remain saved");
+    expect(webNotice).toContain("not persisted by the Assembly application");
+    expect(webNotice).toContain("all saved model-provider keys");
+    expect(webNotice).toContain("not only keys for selected models");
+    expect(webNotice).toContain("a key-test request includes only the provider key being tested");
+    expect(webNotice).toContain("any saved Tavily key");
+    expect(webNotice).toContain("even when search is not used");
+    expect(webNotice).toContain("Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(webNotice).toContain("Tavily receives it only when available and selected by that path");
+    expect(webNotice).toContain("the other listed services do not require a Tavily key");
+    expect(webNotice).toContain("search fallback path");
+    expect(webNotice).toContain("not encrypted at rest");
+    expect(webNotice).toContain("same-origin JavaScript");
+    expect(webNotice).toContain("XSS vulnerability");
+    expect(webNotice).toContain("Hosting providers may process network traffic");
+    expect(webNotice).not.toContain("Windows Credential Manager");
+    const desktopNotice = DESKTOP_PRIVACY_PARAGRAPHS.join(" ");
+    expect(desktopNotice).toContain("WebView browser profile");
+    expect(desktopNotice).toContain("If browser storage fails during removal, a key may remain saved");
+    expect(desktopNotice).toContain("over loopback");
+    expect(desktopNotice).toContain("all saved model-provider keys");
+    expect(desktopNotice).toContain("a key-test request sends only the provider key being tested");
+    expect(desktopNotice).toContain("any saved Tavily key");
+    expect(desktopNotice).toContain("even when search is not used");
+    expect(desktopNotice).toContain("Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(desktopNotice).toContain("Tavily receives it only when available and selected by that path");
+    expect(desktopNotice).toContain("the other listed services do not require a Tavily key");
+    expect(desktopNotice).toContain("XSS incident");
+    expect(desktopNotice).toContain("Windows Credential Manager adapter");
+    expect(desktopNotice).toContain("does not use it as the primary key store");
     expect(webNotice).toContain("HTTPS");
   });
 
@@ -67,5 +96,20 @@ describe("privacy-notice", () => {
       if (p === "Each model provider handles your inputs under its own policy:") continue;
       expect(doc).toContain(p);
     }
+    const publicPolicy = fs.readFileSync(path.resolve(__dirname, "../app/privacy/page.tsx"), "utf-8");
+    expect(publicPolicy).toContain("not encrypted at rest");
+    expect(publicPolicy).toContain("same-origin JavaScript");
+    expect(publicPolicy).toContain("hosted Assembly backend over HTTPS");
+    expect(publicPolicy).toContain("all saved model-provider keys");
+    expect(publicPolicy).toContain("only the provider key being tested");
+    expect(publicPolicy).toContain("any saved Tavily key");
+    expect(publicPolicy).toContain("even when search is not used");
+    expect(publicPolicy).toContain("Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo");
+    expect(publicPolicy).toContain("Tavily receives it only when available and selected by that path");
+    expect(publicPolicy).toContain("the other listed services do not require a Tavily key");
+    expect(publicPolicy).toContain("search fallback path");
+    expect(publicPolicy).toContain("Hosting providers may process network traffic");
+    expect(publicPolicy).toContain("WebView browser profile");
+    expect(publicPolicy).toContain("If browser storage fails during removal, a key may remain saved");
   });
 });

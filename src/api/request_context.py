@@ -93,7 +93,7 @@ def diversity_payload(router: object, allowed: set[str]) -> dict[str, object]:
         if 0 < len(fams) < 3:
             logger.info("Run     │ fewer than 3 families selected")
     except Exception as exc:  # noqa: BLE001 — warning only
-        logger.debug(f"Run     │ family gate skipped: {exc}")
+        logger.debug("Run     │ family gate skipped (type=%s)", type(exc).__name__)
     return payload
 
 

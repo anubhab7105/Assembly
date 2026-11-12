@@ -272,14 +272,14 @@ Respond with JSON only:
                     allowed_families=allowed_families
                 )
         except PinViolationError as exc:
-            logger.warning(f"Planner │ {exc} — using zero-call heuristic plan")
+            logger.warning("Planner │ Pinned planner route unavailable; using zero-call heuristic plan")
             plan = self._heuristic_plan(
                 question, time_budget_minutes, "planner family not in pins"
             )
             plan.capacity = self._read_capacity(time_budget_minutes)
             return plan
         except Exception as e:  # noqa: BLE001 — planning must fall back, never crash
-            logger.error(f"Planner │ Planner routing failed: {e}")
+            logger.error("Planner │ Planner routing failed (type=%s)", type(e).__name__)
             plan = self._heuristic_plan(
                 question, time_budget_minutes, "no planner model"
             )
@@ -307,7 +307,7 @@ Respond with JSON only:
                 schema, reasoning = self._parse_and_validate(response.content)
             except (ValueError, TypeError) as first_error:
                 logger.warning(
-                    f"Planner │ First plan invalid ({first_error}); retrying once"
+                    "Planner │ First plan failed validation (type=%s); retrying once", type(first_error).__name__
                 )
                 retry_response, retry_assignment = await self._retry_generate(
                     assignment, messages, first_error
@@ -330,9 +330,13 @@ Respond with JSON only:
 
         except Exception as e:  # noqa: BLE001 — planning must fall back, never crash
             logger.error(
-                f"Planner │ Classification failed ({e}); using heuristic fallback"
+                "Planner │ Classification failed (type=%s); using heuristic fallback",
+                type(e).__name__,
             )
-            plan = self._heuristic_plan(question, time_budget_minutes, str(e))
+            # Keep validation payloads out of both logs and user-visible fallback text.
+            plan = self._heuristic_plan(
+                question, time_budget_minutes, "classification failed"
+            )
             plan.capacity = self._read_capacity(time_budget_minutes)
             return plan
 
@@ -371,7 +375,7 @@ Respond with JSON only:
                             f"{retry_assignment.provider_name}/{retry_assignment.model}"
                         )
             except Exception as e:  # noqa: BLE001 — retry must proceed regardless
-                logger.warning(f"Planner │ Fallback routing failed: {e}")
+                logger.warning("Planner │ Fallback routing failed (type=%s)", type(e).__name__)
 
         retry_messages = [
             *messages,
@@ -589,7 +593,7 @@ Respond with JSON only:
             )
             return plan_capacity(keys, tier, suggestion)
         except Exception as e:  # noqa: BLE001 — capacity is advisory only
-            logger.warning(f"Planner │ Capacity trim skipped: {e}")
+            logger.warning("Planner │ Capacity trim skipped (type=%s)", type(e).__name__)
             return None
 
     def _read_capacity(self, time_budget_minutes: int) -> dict[str, object] | None:
@@ -606,7 +610,7 @@ Respond with JSON only:
             logger.info(f"Planner │ Quota capacity: {capacity}")
             return capacity
         except Exception as e:  # noqa: BLE001 — capacity is advisory only
-            logger.warning(f"Planner │ Capacity estimate unavailable: {e}")
+            logger.warning("Planner │ Capacity estimate unavailable (type=%s)", type(e).__name__)
             return None
 
     def read_capacity(self, time_budget_minutes: int) -> dict[str, object] | None:

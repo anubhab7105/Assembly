@@ -4,10 +4,12 @@ import React, { useEffect, useState } from "react";
 import {
   PRIVACY_ACK_KEY,
   WEB_PRIVACY_PARAGRAPHS,
+  DESKTOP_PRIVACY_PARAGRAPHS,
   providerNoteFor,
   type EnabledProviderNote,
 } from "@/lib/privacy-notice";
 import { storage } from "@/lib/storage";
+import { env } from "@/lib/env";
 import { Button } from "@/components/ui/button";
 
 export function PrivacySection({
@@ -16,6 +18,9 @@ export function PrivacySection({
   providers: EnabledProviderNote[];
 }) {
   const [ackAt, setAckAt] = useState<string | null>(null);
+  const paragraphs = env.NEXT_PUBLIC_APP_MODE === "desktop"
+    ? DESKTOP_PRIVACY_PARAGRAPHS
+    : WEB_PRIVACY_PARAGRAPHS;
 
   useEffect(() => {
     storage
@@ -41,7 +46,7 @@ export function PrivacySection({
     >
       <h3 className="text-sm font-semibold">Privacy</h3>
       <div className="space-y-2 text-sm text-muted-foreground">
-        {WEB_PRIVACY_PARAGRAPHS.map((p, i) =>
+        {paragraphs.map((p, i) =>
           p === "Each model provider handles your inputs under its own policy:" ? (
             <div key={i}>
               <p>{p}</p>

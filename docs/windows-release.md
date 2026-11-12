@@ -29,7 +29,7 @@ This command will:
 - **Data Directory**: The application data, including the `assembly.db` SQLite database (which stores conversation history and execution records), is located at:
   `%LOCALAPPDATA%\Assembly\Assembly\assembly.db`
   *(e.g., `C:\Users\<username>\AppData\Local\Assembly\Assembly\assembly.db`)*
-- **API Keys**: API keys are **never** stored in the database or on the filesystem. They are stored securely in the Windows Credential Manager via the `keyring` library.
+- **API Keys**: The backend contains a Windows Credential Manager adapter (`src/core/keystore.py`), but the current Settings save/test flow stores keys in the embedded WebView browser vault (IndexedDB with a localStorage fallback) and sends them to the local backend over loopback. Those browser values are not encrypted at rest. Do not claim Settings keys are in Windows Credential Manager until the UI save path is integrated with the adapter and verified on a clean Windows VM.
 - **Logs**:
   - The Python sidecar logs its output to standard output (`stdout`). 
   - If the backend fails to start, the splash screen will capture the logs and provide a "Show Logs" link for debugging.
@@ -40,7 +40,7 @@ This command will:
 When uninstalling the application via "Add or Remove Programs":
 - **Application Files**: The installed binaries and frontend assets in `C:\Program Files\tauri-app` will be removed.
 - **History & Data**: The `assembly.db` file in `%LOCALAPPDATA%\Assembly\Assembly\` is **retained** by default. Reinstalling the app will restore your history.
-- **API Keys**: Stored API keys remain in the Windows Credential Manager. You can manually remove them by opening the "Credential Manager" application in Windows and deleting the entries under "Windows Credentials".
+- **API Keys**: Keys saved through the current Settings UI are held in the WebView browser profile. Remove them in Settings or clear the WebView site data. Credential Manager entries should only be expected for keys explicitly written through the keyring integration.
 
 ## SmartScreen and Code Signing
 
@@ -63,9 +63,10 @@ Use this checklist to verify a release build on a clean Windows VM:
 
 - [ ] **Install**: Copy the generated `.msi` file to the VM. Run the installer. Acknowledge the SmartScreen prompt (More info -> Run anyway). Confirm the installation finishes successfully.
 - [ ] **Launch**: Open the application from the Start Menu. Verify the splash screen appears, connects to the backend, and loads the main frontend UI.
-- [ ] **Add Keys**: Enter valid API keys in the settings UI. Verify they save successfully (check Windows Credential Manager to ensure they were written securely).
+- [ ] **Add Keys**: Enter disposable test keys in Settings. Verify the current flow stores them in the WebView browser vault and sends key-test/run payloads only to the local backend over loopback. Do not expect Credential Manager entries until the Settings/keyring integration is completed.
 - [ ] **Run Execution**: Start a conversation that triggers a multi-agent execution (ensure it takes ~3 minutes to complete). Verify that the agents can communicate, debate, and resolve the final consensus.
 - [ ] **Restart**: Close the application window completely. Reopen it from the Start Menu to ensure the backend starts up correctly a second time.
 - [ ] **History Persists**: After restarting, verify that the previous conversation and its 3-minute execution result are fully loaded from the local database.
+- [ ] **Remove test keys**: Before uninstalling, open Settings and remove the disposable API keys created for this test.
 - [ ] **Uninstall**: Close the application. Go to "Add or Remove Programs" and uninstall the application. Verify the installation folder is removed.
-- [ ] *(Optional cleanup)*: Open Windows Credential Manager and verify that you can manually delete the stored API keys. Delete `%LOCALAPPDATA%\Assembly` to wipe the history.
+- [ ] *(Optional post-uninstall cleanup)*: Clear WebView site data separately if the WebView profile remains after uninstall. Inspect Windows Credential Manager separately only when testing code paths that explicitly use the keyring adapter. Delete `%LOCALAPPDATA%\Assembly` to wipe local history.

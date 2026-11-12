@@ -323,7 +323,7 @@ class Orchestrator:
                     event_type, payload, state=state_machine.state.value
                 )
             except Exception as e:  # noqa: BLE001 — observability must not break runs
-                logger.error(f"Exec    │ Dropping invalid progress event: {e}")
+                logger.error("Exec    │ Dropping invalid progress event (type=%s)", type(e).__name__)
                 return None
             await self._send_event(on_progress, event)
             return event
@@ -1197,7 +1197,7 @@ class Orchestrator:
         except Exception as e:  # noqa: BLE001 — execution must fail closed, never crash the worker
             # Server side keeps the full (masked) error; clients get a
             # generic message — exception text may carry provider details.
-            logger.error(f"═══ EXECUTION FAILED: {execution_id} — {e} ═══")
+            logger.error("═══ EXECUTION FAILED: %s (error_type=%s) ═══", execution_id, type(e).__name__)
             await emit_event(
                 ProgressEventType.EXECUTION_FAILED_PARTIAL,
                 {
@@ -1273,7 +1273,7 @@ class Orchestrator:
                 }
             return list(verdict.warnings), quota_payload
         except Exception as e:  # noqa: BLE001 — advisory only, never break the run
-            logger.warning(f"Capacity │ Advisory check skipped: {e}")
+            logger.warning("Capacity │ Advisory check skipped (type=%s)", type(e).__name__)
             return [], None
 
     async def _run_adversarial_round(
@@ -1331,7 +1331,7 @@ class Orchestrator:
                 quota_ok=not budget.is_token_limited(),
             )
         except Exception as e:  # noqa: BLE001 — a failed strike must not kill the run
-            logger.error(f"Orchestrator │ Adversarial round failed: {e}")
+            logger.error("Orchestrator │ Adversarial round failed (type=%s)", type(e).__name__)
             if agent_manager is not None:
                 from src.orchestration.agent_manager import RETRYABLE_ERRORS
                 from src.orchestration.circuit_breaker import cross_run_health
@@ -1359,4 +1359,4 @@ class Orchestrator:
             try:
                 await callback(event)
             except Exception as e:  # noqa: BLE001 — a broken callback must not kill the run
-                logger.error(f"Orchestrator │ Progress callback error: {e}")
+                logger.error("Orchestrator │ Progress callback failed (type=%s)", type(e).__name__)

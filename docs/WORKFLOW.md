@@ -208,16 +208,23 @@ Insight Mode is Optional and not built: there is no extra stream or toggle — t
 
 **Desktop**
 ```text
-Settings: user pastes key → Test call → store in Windows Credential Manager
-Execution: backend reads key just-in-time → calls provider directly → never logs it
+Settings: current UI saves readable keys in the embedded WebView's IndexedDB/localStorage vault
+Preflight, test and run requests send keys from the WebView to the local backend over loopback
+Local backend uses the submitted keys to authenticate with the selected provider
 ```
 
-**Website** (`POST /api/run`, SSE, stateless)
+The current Settings save path does not use the Windows Credential Manager adapter as its primary key store. WebView values are not encrypted at rest; same-origin JavaScript, including injected code in an XSS incident, can read them.
+
+**Hosted website** (`POST /api/run`, SSE, stateless)
 ```text
-Browser vault holds keys in memory (opt-in encrypted persistence only) → sends keys + model selection with the run request (HTTPS body)
-Backend keeps them in memory for that run only → calls provider → wipes them in the run's finally path
-A disconnect cancels the run; there is no re-attach and no history on the server
+Browser vault stores readable keys in IndexedDB with a localStorage fallback
+Preflight requests send all saved model-provider keys to the hosted backend over HTTPS, independently of model selection; key-test requests send only the provider key being tested; every run request sends all saved model-provider keys and any saved Tavily key, even when search is not used
+Backend uses the keys transiently for that request/run; the Assembly application does not persist them to its database or disk
+Search-provider logs record query lengths, not the raw query text; application logs avoid raw request bodies and key values are masked
+A disconnect cancels the run; there is no re-attach and no web history on the server
 ```
+
+Browser-stored keys are not encrypted at rest or protected by the operating system. Same-origin JavaScript, including injected code in an XSS incident, can read them. Hosting providers may process network traffic and keep their own operational logs under their policies.
 
 ## 10. Worked example (5-minute tier, medium question)
 
