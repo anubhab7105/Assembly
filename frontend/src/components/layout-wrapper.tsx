@@ -14,10 +14,7 @@ import {
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
-<<<<<<< HEAD
-=======
 const OFFLINE_MESSAGE = "You are currently offline. Some features may not work."
->>>>>>> upstream/main
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {}
