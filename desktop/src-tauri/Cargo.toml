@@ -1,7 +1,7 @@
 [package]
 name = "tauri-app"
 version = "0.1.0"
-description = "A Tauri App"
+description = "Assembly desktop shell (Tauri v2) + FastAPI backend sidecar"
 authors = ["you"]
 edition = "2021"
 
@@ -15,14 +15,50 @@ name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+# tauri-build generates the Tauri context (tauri.conf.json embedding) needed
+# by `tauri::generate_context!()`. `tauri` is also a build-dependency so its
+# build script emits `cargo:dev=true` (sets DEP_TAURI_DEV), which tauri-build
+# requires.
+tauri-build = { version = "2", optional = true }
+tauri = { version = "2", optional = true }
+
+[features]
+# Default builds the full Tauri desktop app (Windows). Use
+# `--no-default-features` to compile/test the pure logic on any host.
+default = ["desktop"]
+desktop = [
+  "dep:tauri-build",
+  "dep:tauri",
+  "dep:tauri-plugin-shell",
+  "dep:tauri-plugin-opener",
+  "dep:tauri-plugin-single-instance",
+  "dep:keyring",
+  "dep:windows-sys",
+]
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
+# ── Always available: pure logic, no Tauri/OS-keyring, testable on any host ──
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri-plugin-shell = "2"
+tokio = { version = "1", features = ["rt", "time", "macros", "io-util", "net"] }
+
+# ── Tauri desktop integration (Windows x86_64-pc-windows-msvc) ──
+# Gated behind #[cfg(all(windows, feature = "desktop"))] in source.
+tauri = { version = "2", optional = true }
+tauri-plugin-opener = { version = "2", optional = true }
+tauri-plugin-shell = { version = "2", optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
+
+# Windows Credential Manager (OS keyring) for desktop secrets.
+# The Windows backend is selected automatically by the `keyring` crate on
+# x86_64-pc-windows-msvc; no feature flag is needed.
+keyring = { version = "2", optional = true }
+
+# Windows Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) so the backend
+# and its process tree die even if the Tauri shell crashes. Windows only.
+# Win32_Security is required by CreateJobObjectW.
+windows-sys = { version = "0.52", optional = true,
+  features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading", "Win32_System_JobObjects"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
@@ -33,5 +69,4 @@ opt-level = 3
 panic = "abort"
 strip = true
 
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-single-instance = "2"
+

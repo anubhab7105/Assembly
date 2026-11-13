@@ -1,125 +1,159 @@
-import { Command } from '@tauri-apps/plugin-shell';
+/**
+ * Desktop boot client.
+ *
+ * The Tauri shell (Rust) now starts and supervises the backend sidecar; this
+ * script only waits for the readiness signal, exposes the backend base URL
+ * and auth token to the page (`window.ASSEMBLY_*`), and wires up runtime
+ * crash/shutdown events. It runs only on the boot page (`index.html`); the
+ * application page detects that the environment is already set and does not
+ * re-boot.
+ *
+ * This keeps the web build unaffected: `isTauri()` is false outside Tauri.
+ */
 
-async function startBackend() {
-  const statusEl = document.getElementById('status')!;
-  const errorEl = document.getElementById('error')!;
-  const loaderEl = document.getElementById('loader')!;
-  const logLinkEl = document.getElementById('log-link')!;
+import {
+  backendStatus,
+  backendRestart,
+  isTauri,
+  onBackendCrashed,
+  onBackendFailed,
+  onBackendReady,
+  onBackendStopped,
+} from "./tauri-client"
 
-  let fullLogs = '';
-  
-  logLinkEl.onclick = () => {
-    // Open logs or show them
-    alert("Backend Logs:\n\n" + fullLogs.substring(fullLogs.length - 1000));
-  };
+const BOOT_EL = "status"
+const POLL_INTERVAL_MS = 250
+const POLL_MAX_ATTEMPTS = 120 // ~30 s total readiness budget
 
-  statusEl.innerText = 'Starting backend sidecar...';
-
-  try {
-    const command = Command.sidecar('binaries/backend');
-    
-    let port = '';
-    let token = '';
-
-    command.on('close', data => {
-      console.log(`command finished with code ${data.code} and signal ${data.signal}`);
-      if (!port) {
-        loaderEl.style.display = 'none';
-        statusEl.style.display = 'none';
-        errorEl.style.display = 'block';
-        errorEl.innerText = `Backend exited prematurely (Code: ${data.code})`;
-        logLinkEl.style.display = 'block';
-      }
-    });
-
-    command.on('error', error => {
-      console.error(`command error: "${error}"`);
-      loaderEl.style.display = 'none';
-      statusEl.style.display = 'none';
-      errorEl.style.display = 'block';
-      errorEl.innerText = `Failed to start backend sidecar: ${error}`;
-      logLinkEl.style.display = 'block';
-    });
-
-    command.stdout.on('data', line => {
-      fullLogs += line + '\n';
-      console.log(`backend: ${line}`);
-      if (line.includes('ASSEMBLY_PORT=')) {
-        port = line.split('ASSEMBLY_PORT=')[1].trim();
-      }
-      if (line.includes('ASSEMBLY_TOKEN=')) {
-        token = line.split('ASSEMBLY_TOKEN=')[1].trim();
-      }
-    });
-
-    command.stderr.on('data', line => {
-      fullLogs += line + '\n';
-      console.error(`backend stderr: ${line}`);
-    });
-
-    await command.spawn();
-    
-    // Wait for port and token
-    statusEl.innerText = 'Waiting for configuration...';
-    let attempts = 0;
-    while ((!port || !token) && attempts < 100) {
-      await new Promise(r => setTimeout(r, 100));
-      attempts++;
-    }
-
-    if (!port || !token) {
-      throw new Error("Failed to get port or token from backend within 10 seconds.");
-    }
-
-    statusEl.innerText = `Backend running on port ${port}. Waiting for /health...`;
-
-    // Wait for health
-    attempts = 0;
-    let healthy = false;
-    while (attempts < 60 && !healthy) {
-      try {
-        const res = await fetch(`http://127.0.0.1:${port}/health`);
-        if (res.ok) {
-          healthy = true;
-          break;
-        }
-      } catch (e) {
-        // Ignore and retry
-      }
-      await new Promise(r => setTimeout(r, 500));
-      attempts++;
-    }
-
-    if (!healthy) {
-      throw new Error("Backend did not become healthy within 30 seconds.");
-    }
-
-    statusEl.innerText = 'Loading frontend...';
-    
-    // We want to navigate to the static frontend.
-    // Assuming the frontend files are copied into a directory we can access.
-    // If we use standard Tauri, we can navigate to the local URL.
-    
-    // Make sure we kill the backend on normal exit.
-    window.addEventListener('beforeunload', () => {
-      fetch(`http://127.0.0.1:${port}/shutdown`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        keepalive: true
-      }).catch(console.error);
-    });
-
-    window.location.href = `/frontend/index.html?port=${port}&token=${token}`;
-
-  } catch (err: any) {
-    loaderEl.style.display = 'none';
-    statusEl.style.display = 'none';
-    errorEl.style.display = 'block';
-    errorEl.innerText = err.toString();
-    logLinkEl.style.display = 'block';
-  }
+function el(id: string): HTMLElement | null {
+  return document.getElementById(id)
 }
 
-startBackend();
+function show(id: string, visible: boolean) {
+  const e = el(id)
+  if (e) e.style.display = visible ? "" : "none"
+}
+
+function setStatus(text: string) {
+  const e = el("status")
+  if (e) e.textContent = text
+}
+
+function setError(text: string) {
+  const e = el("error")
+  if (e) {
+    e.textContent = text
+    e.style.display = ""
+  }
+  show("loader", false)
+  show("status", false)
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+/** Poll `backend_status` until Ready, with a bounded timeout. */
+async function waitForReady(): Promise<{ baseUrl: string; token: string } | null> {
+  let attempts = 0
+  while (attempts < POLL_MAX_ATTEMPTS) {
+    try {
+      const st = await backendStatus()
+      if (st.ready && st.base_url && st.token) {
+        return { baseUrl: st.base_url, token: st.token }
+      }
+    } catch {
+      // Backend not up yet; keep polling.
+    }
+    attempts++
+    await sleep(POLL_INTERVAL_MS)
+  }
+  return null
+}
+
+function exposeEnv(baseUrl: string, token: string): void {
+  // Held in memory for this session only; never written to storage.
+  ;(window as unknown as Record<string, string>).ASSEMBLY_API_URL = baseUrl
+  ;(window as unknown as Record<string, string>).ASSEMBLY_TOKEN = token
+  ;(window as unknown as Record<string, string>).ASSEMBLY_APP_MODE = "desktop"
+}
+
+async function boot(): Promise<void> {
+  show("loader", true)
+  show("error", false)
+  show("status", true)
+  setStatus("Starting backend sidecar...")
+
+  const ready = await waitForReady()
+  if (!ready) {
+    setError(
+      "Backend did not become ready in time. Click Retry to attempt starting it again.",
+    )
+    return
+  }
+
+  exposeEnv(ready.baseUrl, ready.token)
+  setStatus("Backend ready. Loading application...")
+  await sleep(300)
+  // The application page reads window.ASSEMBLY_* (set above) and persists in
+  // the same tab, so no credentials travel in the URL.
+  window.location.href = "/frontend/index.html"
+}
+
+async function handleRetry(): Promise<void> {
+  const btn = el("retry")
+  if (btn) btn.style.display = "none"
+  try {
+    await backendRestart()
+  } catch {
+    // Ignore; the readiness poll below will surface the real state.
+  }
+  setStatus("Restarting backend sidecar...")
+  const ready = await waitForReady()
+  if (!ready) {
+    setError("Backend still did not become ready. Try again later.")
+    return
+  }
+  exposeEnv(ready.baseUrl, ready.token)
+  setStatus("Backend ready. Loading application...")
+  await sleep(300)
+  window.location.href = "/frontend/index.html"
+}
+
+// Only the boot page runs this logic. The application page (which also loads
+// main.ts) skips it and uses the already-exposed environment.
+if (!el(BOOT_EL)) {
+  // Application page: nothing to do; the boot page already exposed the
+  // environment and navigated here.
+  ;(window as unknown as Record<string, string>).ASSEMBLY_APP_MODE = "desktop"
+} else if (isTauri()) {
+  // Wire runtime events so a crash/shutdown mid-session is visible.
+  const retryBtn = el("retry")
+  onBackendReady(({ base_url }) => {
+    setStatus(`Backend ready on ${base_url}.`)
+  })
+  onBackendCrashed(({ exit_code }) => {
+    show("loader", false)
+    show("status", false)
+    setError(`Backend crashed (exit ${exit_code ?? "unknown"}).`)
+  })
+  onBackendFailed(({ reason }) => {
+    show("loader", false)
+    show("status", false)
+    setError(`Backend failed: ${reason}.`)
+  })
+  onBackendStopped(() => {
+    show("loader", false)
+    show("status", false)
+    setError("Backend stopped.")
+  })
+
+  if (retryBtn) {
+    retryBtn.onclick = () => void handleRetry()
+    retryBtn.style.display = "none"
+  }
+
+  void boot()
+} else {
+  // Not running under Tauri (web build): leave env to NEXT_PUBLIC_*.
+}

@@ -7,6 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { globalVault } from "@/lib/key-vault"
 import { env } from "@/lib/env"
 import { ApiClient, type Catalog } from "@/lib/api-client"
+import {
+  desktopCredentialSave,
+  desktopCredentialDelete,
+  desktopCredentialList,
+} from "@/lib/desktop-credentials"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
   isKeyFormatOk,
@@ -59,12 +64,22 @@ export function KeysManager() {
       // Load first: read the canonical store before rendering anything that
       // could write. A legacy encrypted blob with an empty canonical store
       // shows the one-time migration prompt instead of keys.
+      // Desktop mode reads provider names from the OS keyring instead of
+      // browser storage (names only, never values).
       try {
-        const keys = await globalVault.allKeys()
-        if (Object.keys(keys).length > 0) {
-          setSavedKeys(keys)
-        } else if (await globalVault.hasLegacyEncrypted().catch(() => false)) {
-          setNeedsUnlock(true)
+        if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+          const { providers } = await desktopCredentialList()
+          // Mark each stored provider as present (values stay in the keyring).
+          setSavedKeys(
+            Object.fromEntries(providers.map((p) => [p, "stored"])),
+          )
+        } else {
+          const keys = await globalVault.allKeys()
+          if (Object.keys(keys).length > 0) {
+            setSavedKeys(keys)
+          } else if (await globalVault.hasLegacyEncrypted().catch(() => false)) {
+            setNeedsUnlock(true)
+          }
         }
       } catch {
         setSavedKeys({})
@@ -116,11 +131,19 @@ export function KeysManager() {
   const tavilySaved = !!savedKeys["tavily"]
 
   const handleSaveTavily = async () => {
-    const rawKey = cleanPastedKey(tavilyInput || savedKeys["tavily"] || "")
+    const rawKey = cleanPastedKey(
+      env.NEXT_PUBLIC_APP_MODE === "desktop" ? tavilyInput || "" : tavilyInput || savedKeys["tavily"] || "",
+    )
     if (!rawKey) return
     // No server-side probe exists for search keys: store only.
     try {
-      await globalVault.setKey("tavily", rawKey)
+      if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+        await desktopCredentialSave("tavily", rawKey)
+        setSavedKeys((prev) => ({ ...prev, tavily: "stored" }))
+      } else {
+        await globalVault.setKey("tavily", rawKey)
+        setSavedKeys((prev) => ({ ...prev, tavily: rawKey }))
+      }
     } catch (e) {
       toast({
         title: "Couldn't save search key",
@@ -129,18 +152,29 @@ export function KeysManager() {
       })
       return
     }
-    setSavedKeys((prev) => ({ ...prev, tavily: rawKey }))
     setTavilyInput("")
-    toast({ title: "Search key saved", description: "Tavily key stored with your other keys.", variant: "success" })
+    toast({ title: "Search key saved", description: "Search key stored with your other keys.", variant: "success" })
   }
 
   const handleSaveAndTest = async (providerId: string) => {
-    const rawKey = cleanPastedKey(inputs[providerId] || savedKeys[providerId] || "")
+    // Desktop holds provider secrets in the OS keyring and never reveals
+    // them to the webview, so saving/testing requires the user to (re)type
+    // the key each time. Web mode reuses any stored value.
+    const rawKey = cleanPastedKey(
+      env.NEXT_PUBLIC_APP_MODE === "desktop"
+        ? inputs[providerId] || ""
+        : inputs[providerId] || savedKeys[providerId] || "",
+    )
     if (!rawKey) return
     // Soft prefix hint never blocks saving (FR-30): validation is advisory only.
     void isKeyFormatOk(providerId, rawKey)
     try {
-      await globalVault.setKey(providerId, rawKey)
+      if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+        await desktopCredentialSave(providerId, rawKey)
+        setSavedKeys((prev) => ({ ...prev, [providerId]: "stored" }))
+      } else {
+        await globalVault.setKey(providerId, rawKey)
+      }
     } catch (e) {
       // Honest failure: storage refused the write, so the UI must not claim
       // the key was saved.
@@ -155,7 +189,9 @@ export function KeysManager() {
       delete next[providerId]
       return next
     })
-    setSavedKeys((prev) => ({ ...prev, [providerId]: rawKey }))
+    if (env.NEXT_PUBLIC_APP_MODE !== "desktop") {
+      setSavedKeys((prev) => ({ ...prev, [providerId]: rawKey }))
+    }
     setInputs((prev) => ({ ...prev, [providerId]: "" }))
     setStatuses((prev) => ({ ...prev, [providerId]: "testing" }))
     try {
@@ -184,11 +220,15 @@ export function KeysManager() {
 
   const handleRemove = async (providerId: string) => {
     try {
-      await globalVault.removeKey(providerId)
+      if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+        await desktopCredentialDelete(providerId)
+      } else {
+        await globalVault.removeKey(providerId)
+      }
     } catch {
       toast({
         title: "Unable to remove key",
-        description: "Browser storage rejected the deletion, so this key may still be saved. Try again or clear browser/site data.",
+        description: "Storage rejected the deletion, so this key may still be saved. Try again.",
         variant: "danger",
       })
       return

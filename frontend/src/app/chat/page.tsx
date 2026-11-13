@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type Catalog, type UsageEntry } from "@/lib/api-client"
+import { desktopCredentialList } from "@/lib/desktop-credentials"
 import { storage } from "@/lib/storage"
 import { env } from "@/lib/env"
 import {
@@ -97,12 +98,22 @@ export default function Home() {
   const degradedConfirmed = confirmedGateSignature === gateSignature
 
   useEffect(() => {
-    const refreshKeys = () => {
-      globalVault.allKeys().then((k) => {
-        // Tavily is an optional search credential, not a runnable model provider.
-        const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
-        setEnabledIds(modelProviderIds)
-      }).catch(() => {})
+    const refreshKeys = async () => {
+      try {
+        if (env.NEXT_PUBLIC_APP_MODE === "desktop") {
+          // Desktop holds provider secrets in the OS keyring; only names are
+          // exposed to the webview (never values).
+          const { providers } = await desktopCredentialList()
+          const modelProviderIds = providers.filter((id) => id !== "tavily")
+          setEnabledIds(modelProviderIds)
+        } else {
+          const k = await globalVault.allKeys()
+          const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
+          setEnabledIds(modelProviderIds)
+        }
+      } catch {
+        // Keep enabledIds unchanged on failure; the backend stays authoritative.
+      }
     }
     refreshKeys()
     // The vault is persistent: re-read when the tab regains focus so the

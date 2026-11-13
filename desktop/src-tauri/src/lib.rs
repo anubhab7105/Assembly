@@ -1,21 +1,116 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+//! Assembly desktop shell (Tauri v2).
+//!
+//! Windows x86_64-pc-windows-msvc is the target platform. All Tauri /
+//! OS-keyring / Windows Job Object integration is gated behind
+//! `#[cfg(all(windows, feature = "desktop"))]`. The pure, host-agnostic logic
+//! (state machine, port picking, input validation, in-memory credential store)
+//! lives in `sidecar_core`, `keyring` and `errors` and compiles on any host.
+//!
+//! Non-Windows / non-desktop builds provide a no-op `run()` so `cargo
+//! check`/`cargo test --no-default-features` works on Linux CI without dbus.
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod errors;
+mod keyring;
+mod sidecar_core;
+
+#[cfg(all(windows, feature = "desktop"))]
+mod commands;
+
+#[cfg(all(windows, feature = "desktop"))]
+mod sidecar;
+
+#[cfg(not(all(windows, feature = "desktop")))]
+mod stub;
+
+pub use errors::Error;
+pub use keyring::{service_name, CredentialState, CredentialStore};
+pub use sidecar_core::{
+    validate_provider, validate_secret, validate_window_label, APP_MODE_ENV, BACKEND_PORT_ENV,
+    BACKEND_TOKEN_ENV, MAIN_WINDOW_LABEL, READINESS_TOTAL_MS, SIDECAR_DEV_PATH_ENV,
+};
+
+use std::sync::Arc;
+
+#[cfg(all(windows, feature = "desktop"))]
+use tauri::Manager;
+
+// Entrypoint: builds the Tauri app with the sidecar manager, keyring store
+// and validated IPC commands, then runs the event loop.
+#[cfg(all(windows, feature = "desktop"))]
 pub fn run() {
+    use crate::commands::{
+        backend_restart, backend_status, credential_delete, credential_exists, credential_list,
+        credential_save,
+    };
+    use crate::keyring::KeyringStore;
+    use crate::sidecar::SidecarManager;
+
+    let manager = Arc::new(SidecarManager::new());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            use tauri::Manager;
-            if let Some(window) = app.get_webview_window("main") {
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {
+            // Single-instance guard: a second app copy focuses the main
+            // window instead of spawning a competing sidecar.
+            if let Some(window) = _app.get_webview_window(MAIN_WINDOW_LABEL) {
                 let _ = window.set_focus();
             }
         }))
-        .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .manage(manager.clone())
+        .manage(CredentialState::new(KeyringStore::new()))
+        .setup(move |app| {
+            let app_handle = app.handle().clone();
+            let mgr = manager.clone();
+            // Start the backend sidecar as part of app launch (no developer
+            // process required). Failure is surfaced via state/events, not a
+            // crash of the shell.
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = mgr.start_backend(app_handle.clone()).await {
+                    eprintln!("sidecar startup failed: {e}");
+                }
+                mgr.set_app_handle(app_handle);
+            });
+            // Shutdown hook: on main-window close/destroy, shut down the
+            // backend sidecar gracefully, then force-kill after a grace
+            // period so no orphan backend process remains.
+            let mgr_close = manager.clone();
+            if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                let mgr_destroy = mgr_close.clone();
+                window.on_window_event(move |_window, event| {
+                    use tauri::WindowEvent;
+                    match event {
+                        WindowEvent::CloseRequested { .. } => {
+                            let _ = mgr_close.stop_backend();
+                        }
+                        WindowEvent::Destroyed { .. } => {
+                            let _ = mgr_destroy.stop_backend();
+                        }
+                        _ => {}
+                    }
+                });
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            backend_status,
+            backend_restart,
+            credential_save,
+            credential_exists,
+            credential_delete,
+            credential_list,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// No-op entrypoint on non-Windows / non-desktop builds so the crate compiles
+// and its pure modules can be tested on any host.
+#[cfg(not(all(windows, feature = "desktop")))]
+pub fn run() {
+    // The Tauri desktop shell only targets Windows. On other hosts this is a
+    // stub so `cargo check --no-default-features` and the pure-logic unit
+    // tests run in Linux CI.
 }

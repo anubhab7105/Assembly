@@ -87,3 +87,41 @@ jobs:
       run: |
         alembic upgrade head
         pytest
+
+  desktop-windows:
+    runs-on: windows-latest
+    # Validates the Tauri desktop shell (sidecar lifecycle, keyring, IPC) on
+    # the actual target platform (x86_64-pc-windows-msvc).
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Run Gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+    - name: Rust fmt check
+      run: cargo fmt --check
+      working-directory: ./desktop/src-tauri
+    - name: Rust clippy (deny warnings)
+      run: cargo clippy --D warnings
+      working-directory: ./desktop/src-tauri
+    - name: Rust tests
+      run: cargo test
+      working-directory: ./desktop/src-tauri
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: ./frontend/package-lock.json
+    - name: Install frontend dependencies
+      run: npm ci --legacy-peer-deps
+      working-directory: ./frontend
+    - name: Run frontend tests
+      run: npm test
+      working-directory: ./frontend
+
