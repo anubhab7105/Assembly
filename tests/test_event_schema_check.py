@@ -108,3 +108,38 @@ def test_generate_then_check_uses_lf_even_with_windows_text_defaults(
     assert main() == 0
     assert artifact.read_bytes() == generated
     assert artifact.stat().st_mtime_ns == modified
+
+
+def test_check_accepts_crlf_checkout_without_writing(tmp_path) -> None:
+    artifact = tmp_path / "schema with spaces.json"
+    generated = run_export("--out", str(artifact))
+    assert generated.returncode == 0, generated.stderr
+    artifact.write_bytes(artifact.read_bytes().replace(b"\n", b"\r\n"))
+    before = artifact.read_bytes()
+    modified = artifact.stat().st_mtime_ns
+    result = run_export("--check", "--out", str(artifact))
+    assert result.returncode == 0, result.stderr
+    assert "up to date" in result.stdout
+    assert artifact.read_bytes() == before
+    assert artifact.stat().st_mtime_ns == modified
+
+
+def test_check_rejects_crlf_schema_drift_without_writing(tmp_path) -> None:
+    import json
+
+    artifact = tmp_path / "event-schema.json"
+    generated = run_export("--out", str(artifact))
+    assert generated.returncode == 0, generated.stderr
+    bundle = json.loads(artifact.read_bytes())
+    bundle["event_types"].append("obsolete.event")
+    artifact.write_bytes(
+        (json.dumps(bundle, indent=2) + "\n").replace("\n", "\r\n").encode()
+    )
+    before = artifact.read_bytes()
+    modified = artifact.stat().st_mtime_ns
+    result = run_export("--check", "--out", str(artifact))
+    assert result.returncode == 1
+    assert "out of date" in result.stderr
+    assert "obsolete.event" in result.stderr
+    assert artifact.read_bytes() == before
+    assert artifact.stat().st_mtime_ns == modified
