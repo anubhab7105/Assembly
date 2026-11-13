@@ -170,7 +170,15 @@ def test_unpinned_routing_keeps_router_choice() -> None:
     assert decision.model == "openai/gpt-oss-20b"
 
 
-def test_preflight_uses_request_keys(monkeypatch) -> None:
+def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:
+    """Verify preflight receives request keys without echoing or persisting them."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "app_mode", "web")
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "debug", False)
+    monkeypatch.chdir(tmp_path)
+
     from types import SimpleNamespace
 
     import src.api.preflight as preflight_mod
@@ -180,6 +188,7 @@ def test_preflight_uses_request_keys(monkeypatch) -> None:
     seen: dict = {}
 
     def _fake(*args, **kwargs):
+        """Capture request keys and return a deterministic preflight context."""
         seen["provider_keys"] = args[0] if args else kwargs.get("provider_keys")
         seen["search_keys"] = args[1] if len(args) > 1 else kwargs.get("search_keys")
         return RequestContext(
@@ -206,23 +215,53 @@ def test_preflight_uses_request_keys(monkeypatch) -> None:
 
     monkeypatch.setattr(preflight_mod, "build_request_context", _fake)
     client = TestClient(app)
-    res = client.post(
-        "/api/preflight",
-        json={
-            "question": CANARY_Q,
-            "time_budget_minutes": 5,
-            "provider_keys": {"groq": CANARY_PROV},
-            "search_keys": {"tavily": CANARY_SEARCH},
-            "model_selection": {"selected": [], "pins": {}},
-            "usage_snapshot": [],
-        },
-    )
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        res = client.post(
+            "/api/preflight",
+            json={
+                "question": CANARY_Q,
+                "time_budget_minutes": 5,
+                "provider_keys": {"groq": CANARY_PROV},
+                "search_keys": {"tavily": CANARY_SEARCH},
+                "model_selection": {"selected": [], "pins": {}},
+                "usage_snapshot": [],
+            },
+        )
     assert res.status_code == 200, res.text
     assert res.json()["feasible"] is True
     assert seen.get("provider_keys") == {"groq": CANARY_PROV}
     assert seen.get("search_keys") == {"tavily": CANARY_SEARCH}
     assert CANARY_PROV not in res.text
     assert CANARY_SEARCH not in res.text
+    assert CANARY_PROV not in caplog.text
+    assert CANARY_SEARCH not in caplog.text
+    assert CANARY_Q not in caplog.text
+    assert list(tmp_path.rglob("*.db")) == []
+
+
+def test_preflight_real_context_builder_is_stateless(
+    isolated_web_database, caplog
+) -> None:
+    """Exercise real router/quota initialization without creating a database."""
+    from src.main import app
+
+    client = TestClient(app)
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        response = client.post(
+            "/api/preflight",
+            json={
+                "question": "Can the real context builder remain stateless?",
+                "time_budget_minutes": 5,
+                "provider_keys": {},
+                "search_keys": {},
+                "model_selection": {"selected": [], "pins": {}},
+                "usage_snapshot": [],
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    assert "feasible" in response.json()
+    assert not isolated_web_database.exists()
 
 
 def test_preflight_canary_never_in_422(caplog) -> None:

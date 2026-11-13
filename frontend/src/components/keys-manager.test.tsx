@@ -100,8 +100,10 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
     // Persistent vault: saved keys survive refresh; the legacy unlock
     // prompt appears only for pre-fix encrypted blobs.
     expect((await screen.findByTestId("persisted-banner")).textContent).toContain(
-      "Saved keys stay in this browser across refreshes",
+      "across refreshes",
     );
+    expect(screen.getAllByText(/sent to the hosted Assembly backend over HTTPS.*preflight, key tests and runs/i)).toHaveLength(2);
+    expect(screen.getByText(/saved Tavily key is sent to the hosted Assembly backend over HTTPS.*every run request, even when search is not used/i)).toBeDefined();
     expect(screen.queryByTestId("memory-only-banner")).toBeNull();
     expect(screen.queryByTestId("unlock-prompt")).toBeNull();
   });

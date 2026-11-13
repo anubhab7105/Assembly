@@ -37,10 +37,14 @@ jobs:
       run: npm run audit:high
     - name: Run npm audit gate regression tests
       run: npm run audit:test
+    - name: Verify Content Security Policy configuration
+      run: npm run security:csp:test
     - name: Lint
       run: npm run lint
     - name: Type Check
       run: npx tsc --noEmit
+    - name: Production Build
+      run: npm run build
     - name: Run confidence display regression tests
       run: npx vitest run --config vitest.config.mts src/components/final-answer.test.tsx src/components/execution-timing.test.tsx src/hooks/use-execution.test.ts src/lib/execution-timing.test.ts
     - name: Run privacy dialog tests
@@ -77,6 +81,8 @@ jobs:
       run: pip install -r requirements.txt -r requirements-dev.txt alembic pip-audit
     - name: Run Python dependency audit gate
       run: python scripts/audit_python.py
+    - name: Check committed execution event schema
+      run: python scripts/export_event_schema.py --check
     - name: Run SQLite migrations and tests
       run: |
         alembic upgrade head

@@ -15,41 +15,35 @@ import pytest
 from fastapi.testclient import TestClient
 
 CANARY_KEY = "sk-CANARY-STATLESS-9f8e7d6c5b4a"
+CANARY_SEARCH_KEY = "tvly-CANARY-STATLESS-6d3a1b"
 CANARY_QUESTION = "Canary question ZULU-UNIQUE-42: why do hummingbirds hum?"
 
 
 @pytest.fixture()
-def web_mode(monkeypatch, tmp_path):
+def web_mode(isolated_web_database):
+    """Run stateless web checks with an isolated guard database path."""
     from src.core.config import settings
 
-    monkeypatch.setattr(settings, "app_mode", "web")
-    monkeypatch.setattr(settings, "app_env", "development")
-    monkeypatch.setattr(settings, "debug", False)
-    monkeypatch.chdir(tmp_path)
     yield settings
 
 
 def _mock_filtered_router(monkeypatch):
-    import src.api.run as run_mod
-    from src.api.request_context import RequestContext
+    """Use mock providers while retaining the real request-context builder."""
+    import src.api.request_context as context_mod
     from src.providers.mock_provider import MockProvider
     from tests.conftest import MockRouter
 
-    def _fake(provider_keys, search_keys, selected, pins, usage_snapshot):
-        return RequestContext(
-            router=MockRouter(
-                [MockProvider(provider_name="mock-a"), MockProvider(provider_name="mock-b")]
-            ),
-            allowed=set(),
-            pins={},
-            quota_snapshot=[],
-            has_search_key=False,
+    def _fake_filtered_router(provider_keys, allowed, pins):
+        """Return offline providers without bypassing quota/context setup."""
+        return MockRouter(
+            [MockProvider(provider_name="mock-a"), MockProvider(provider_name="mock-b")]
         )
 
-    monkeypatch.setattr(run_mod, "build_request_context", _fake)
+    monkeypatch.setattr(context_mod, "_filtered_router", _fake_filtered_router)
 
 
-def test_web_mode_creates_no_database_file(web_mode, tmp_path, monkeypatch) -> None:
+def test_web_mode_creates_no_database_file(web_mode, isolated_web_database, tmp_path) -> None:
+    """Verify web-mode database setup remains a no-op."""
     from src.core.config import settings
     from src.database.base import init_db
 
@@ -58,6 +52,7 @@ def test_web_mode_creates_no_database_file(web_mode, tmp_path, monkeypatch) -> N
     init_db()  # no-op, must not raise or write
     assert list(tmp_path.glob("*.db")) == []
     assert list(tmp_path.glob("assembly.db")) == []
+    assert not isolated_web_database.exists()
 
     from src.main import app
 
@@ -98,7 +93,8 @@ def test_catalog_returns_providers_models_families(web_mode, monkeypatch, tmp_pa
     assert any(ids)
 
 
-def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog) -> None:
+def test_stateless_run_end_to_end_no_leak(web_mode, isolated_web_database, monkeypatch, caplog, tmp_path) -> None:
+    """Run SSE with the real request-context builder and exclude secret canaries."""
     from src.main import app
 
     _mock_filtered_router(monkeypatch)
@@ -110,6 +106,7 @@ def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog) -> None
             "question": CANARY_QUESTION,
             "time_budget_minutes": 3,
             "provider_keys": {"groq": CANARY_KEY},
+            "search_keys": {"tavily": CANARY_SEARCH_KEY},
             "model_selection": {"selected": [], "pins": {}},
             "usage_snapshot": [],
         },
@@ -127,8 +124,12 @@ def test_stateless_run_end_to_end_no_leak(web_mode, monkeypatch, caplog) -> None
     assert events[-1].get("usage") != []
     blob = json.dumps(events)
     assert CANARY_KEY not in blob
+    assert CANARY_SEARCH_KEY not in blob
     assert CANARY_KEY not in caplog.text
+    assert CANARY_SEARCH_KEY not in caplog.text
     assert CANARY_QUESTION not in caplog.text
+    assert list(tmp_path.rglob("*.db")) == []
+    assert not isolated_web_database.exists()
 
 
 def test_canary_question_never_in_422(web_mode) -> None:
@@ -217,6 +218,7 @@ def test_cancel_on_disconnect(web_mode, monkeypatch) -> None:
         entry = run_mod._RunEntry(run_id="run-test", created_at=run_mod._now())
 
         async def _work() -> None:
+            """Simulate a cancellable run task and publish its terminal event."""
             try:
                 await asyncio.sleep(30.0)
             except asyncio.CancelledError:
@@ -334,6 +336,8 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
     from src.providers.quota import get_limiter
 
     fake_key = "TEST-ONLY-WEB-KEY-CLEANUP-CANARY"
+    fake_search_key = "TEST-ONLY-TAVILY-KEY-CLEANUP-CANARY"
+    search_keys = {"tavily": fake_search_key}
     entry = run_mod._RunEntry(run_id="run-cleanup-canary", created_at=run_mod._now())
     limiter = get_limiter()
     token = limiter.set_usage_snapshot(
@@ -346,6 +350,7 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
             self.router = None
 
         async def execute(self, **kwargs):
+            """Capture transient request keys, then simulate a provider failure."""
             # Record exactly what the handler passed to the run, then fail
             # with a secret-shaped payload to test safe diagnostic behavior.
             assert kwargs["provider_keys"] == {"groq": fake_key}
@@ -362,7 +367,7 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
             {},
             [{"provider": "groq", "model": "m", "count": 2, "tokens": 100}],
             entry,
-            search_keys={"tavily": "TEST-ONLY-SEARCH-KEY-CANARY"},
+            search_keys=search_keys,
             router_override=object(),
         )
 
@@ -380,8 +385,11 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
     assert finished["status"] == "failed"
     assert finished["error_code"] == "runtime_error"
     assert fake_key not in rendered
+    assert fake_search_key not in rendered
     assert fake_key not in caplog.text
+    assert fake_search_key not in caplog.text
     assert "upstream error unexpectedly included" not in caplog.text
+    assert search_keys == {}
     # The run cleans up only its nested snapshot; this caller resets its own.
     limiter.reset_usage_snapshot(token)
     assert limiter._snapshot.get() == {}

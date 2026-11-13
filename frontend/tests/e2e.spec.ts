@@ -61,7 +61,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
     await page.goto("/")
     await expect(page.locator("html")).toHaveClass(/dark/)
-    await expect(page.locator("head #assembly-theme-bootstrap")).toHaveCount(1)
+    await expect(page.locator("head #assembly-theme-bootstrap")).toHaveAttribute("src", "/theme-bootstrap.js")
     await expect(page.getByRole("button", { name: "Switch to light mode" }).first()).toBeVisible()
 
     const themeToggles = await page.evaluate(() =>
@@ -225,6 +225,33 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
       await expect(page.getByRole("main")).toHaveCount(1)
       await expect(page.locator("#main-content")).toHaveJSProperty("tagName", "MAIN")
     }
+  })
+
+  test("announces offline status politely and removes it after reconnecting", async ({
+    page,
+    context,
+  }) => {
+    const offlineMessage = "You are currently offline. Some features may not work."
+    const offlineStatus = page.getByRole("status")
+    const offlineBanner = page.getByTestId("offline-banner")
+
+    await page.goto("/")
+    await expect(offlineStatus).toBeEmpty()
+    await expect(offlineBanner).toHaveCount(0)
+
+    await context.setOffline(true)
+    try {
+      await expect(offlineStatus).toHaveText(offlineMessage)
+      await expect(offlineStatus).toHaveAttribute("aria-live", "polite")
+      await expect(offlineBanner).toHaveText(offlineMessage)
+      await expect(offlineBanner).toBeVisible()
+      await expect(page.getByRole("alert").filter({ hasText: offlineMessage })).toHaveCount(0)
+    } finally {
+      await context.setOffline(false)
+    }
+
+    await expect(offlineStatus).toBeEmpty()
+    await expect(offlineBanner).toHaveCount(0)
   })
 
   test("mobile navigation traps focus, closes on Escape, and restores its trigger", async ({ page }) => {

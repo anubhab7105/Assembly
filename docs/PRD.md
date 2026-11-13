@@ -1,6 +1,6 @@
 # Assembly — Product Requirements Document
 
-*Multi-Agent AI Consensus Platform · v1.2 · October 18, 2026 · Owner: Anubhab Das · Supersedes v1.1 (October 10, 2026)*
+*Multi-Agent AI Consensus Platform · v1.3 · November 8, 2026 · Owner: Anubhab Das · Supersedes v1.1 (October 10, 2026)*
 
 ## Status key
 
@@ -46,7 +46,7 @@ Everything in the MVP exists to test and demonstrate this one hypothesis.
 1. **Win a live demo.** A judge types a hard question, watches the team work, and gets a visibly better, sourced answer.
 2. **Prove the hypothesis with numbers.** A small benchmark: Assembly vs. the best single free model.
 3. **Cost the user nothing.** Every feature works on free-tier keys.
-4. **Keep keys safe.** User API keys never reach a server database or a log file.
+4. **Keep keys safe.** Submitted keys travel through the relevant Assembly backend over HTTPS (hosted web) or loopback (desktop); application code must not persist key values in its database or logs.
 
 ### 3.2 Metrics
 
@@ -82,8 +82,8 @@ Everything in the MVP exists to test and demonstrate this one hypothesis.
 | D1 | BYOK. Users paste their own free keys. | Free quotas are per account and small; a shared operator key would be exhausted by a few runs. |
 | D2 | Free-tier models only. | Hard project constraint. |
 | D3 | Diversity is measured by **model family**, not provider. Groq and Cerebras can both serve Llama; that is one family. | Correlated errors destroy the value of independent first-pass reasoning. |
-| D4 | Local-first orchestration on Windows: the orchestrator runs on the user's machine, so keys never leave it. | Strongest security story; also the most reliable demo setup (no cold-starting free server). |
-| D5 | Web keys are saved in browser storage (IndexedDB with localStorage fallback) and sent over HTTPS for key-test/run requests; the backend uses them transiently and never persists or logs key values. | Separates user-controlled browser retention from stateless server handling. |
+| D4 | Local-first orchestration on Windows: the orchestrator runs on the user's machine; keys go from the local backend directly to providers and do not traverse the hosted Assembly backend. | Avoids a hosted Assembly hop and is also the most reliable demo setup (no cold-starting free server). |
+| D5 | Web keys are saved in browser storage (IndexedDB with localStorage fallback) and sent over HTTPS for preflight, key-test and run requests; the backend uses them transiently and never persists or logs key values. | Separates user-controlled browser retention from stateless server handling. |
 | D6 | Capacity-aware planning. The orchestrator reads the user's available providers and quotas before choosing team size and rounds. | Free rate limits vary by account and change over time. |
 | D7 | Time budget is a hard constraint with a safety cutoff. | Core feature; also protects the demo. |
 | D8 | No accounts, no login and no server-side data storage in any mode. | BYOK + privacy (nothing on the server to leak) + simpler hosting (no database to run). See consequences in section 8.4 and risks in section 14. |
@@ -148,14 +148,14 @@ Note on FR-14: the planner field `needs_code_execution` exists (`src/orchestrati
 | ID | Requirement | Pri |
 | --- | --- | --- |
 | FR-30 | Key Setup wizard with per-provider instructions and a Test button. | M |
-| FR-31 | Windows app stores keys in the Windows Credential Manager (encrypted by the OS), never in plain files. | M |
-| FR-32 | Website saves keys persistently in browser IndexedDB with a localStorage fallback by default; they survive refreshes until the user removes them in Settings or clears site/browser data. The backend uses submitted keys only for key-test/run requests and never persists or logs key values. | M |
+| FR-31 | A Windows Credential Manager adapter exists, but the current Settings save/test flow still uses the embedded WebView browser vault. Do not claim Settings keys are OS-protected until the UI is integrated with the keyring adapter. | M (integration remains outstanding) |
+| FR-32 | Hosted web saves readable keys in IndexedDB with a localStorage fallback; they are not encrypted at rest and remain exposed to same-origin JavaScript (including XSS). If browser storage fails during removal, a key may remain saved. The browser sends all saved model-provider keys over HTTPS for preflight, independently of model selection; a key-test request sends only the provider key being tested; every run request sends all saved model-provider keys plus any saved Tavily key, even when search is not used; the Assembly application uses them transiently and does not write them to its database or disk. Application logs are metadata-focused and key values are scrubbed. Hosting providers may keep their own operational logs. | M |
 | FR-33 | Keys are redacted from all logs, error messages and stored execution records. | M |
 | FR-34 | Per-provider quota tracker (requests per minute and per day) that the planner reads. | M |
 | FR-35 | Privacy notice per provider where free tiers may use inputs for model improvement (for example Gemini free tier). | M |
 | FR-36 | Key health panel: valid, rate-limited, exhausted for today. | C (acceptance: per-key status is visible in Settings — see note below). |
 
-FR-32 storage note: the browser copy is persistent by design. The user can remove an individual key or clear all keys in Settings; clearing site/browser data also removes the browser copy. This does not imply server-side persistence: provider keys are sent over HTTPS with the relevant request, used transiently, and not written to server databases or logs. Browser storage is not the Windows Credential Manager or an OS-protected credential store.
+FR-32 storage note: saved web keys are readable browser values (not encrypted at rest) in IndexedDB with a localStorage fallback. They survive refreshes until removed in Settings or browser/site data is cleared. If browser storage fails during removal, a key may remain saved; clearing browser/site data removes the browser copy. Same-origin JavaScript, including injected code in an XSS incident, can read them. Preflight requests send all saved model-provider keys over HTTPS to the hosted backend, independently of model selection; a key-test request sends only the provider key being tested; every run request also sends all saved model-provider keys and any saved Tavily key, even when search is not used; web request handlers use them transiently and do not write them to the Assembly application database or disk. Application logs are metadata-focused and key values are scrubbed; hosting providers may retain separate operational logs. In desktop mode, the current Settings flow uses the embedded WebView browser vault and sends keys to the local backend over loopback. A Windows Credential Manager adapter exists, but the Settings flow does not currently use it as its primary key store.
 
 Note on FR-36: each provider card in Settings shows a per-key status (`unknown` / `valid` / `invalid` / `rate_limited` / `testing`, `frontend/src/components/keys-manager.tsx`) plus a family-readiness chip. There is no consolidated valid / rate-limited / exhausted-for-today panel with cooldown display.
 
@@ -316,6 +316,10 @@ Other safeguards, unchanged: keys from at least three providers loaded and teste
 *Free-tier limits quoted in the companion documents come from third-party summaries checked in October 2026 and must be verified in each provider's own dashboard before the demo.*
 
 ## 17. Changelog
+
+### v1.3 — November 8, 2026
+
+- Issue #48: align Settings, consent and public privacy copy with the verified web request path (browser → hosted backend over HTTPS → provider); disclose readable browser storage, the same-origin/XSS exposure, application-scoped non-persistence/logging behavior and separate hosting-provider logs. Clarify that desktop Settings currently uses WebView browser storage and loopback requests; the Windows Credential Manager adapter is not yet the primary Settings save path. Bump the consent notice to version 4 and disclose that failed browser-storage deletion can leave a key saved. Browser encryption work remains tracked in #82.
 
 ### v1.2 — October 18, 2026
 

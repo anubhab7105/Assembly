@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
-import Script from "next/script"
 import "./globals.css"
 import "./chat-design.css"
 import "./cinematic.css"
@@ -61,37 +60,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/* eslint-disable-next-line @next/next/no-sync-scripts -- Applies the saved theme before first paint. */}
+        <script id="assembly-theme-bootstrap" src="/theme-bootstrap.js" />
+      </head>
       <body className="flex min-h-full flex-col bg-background text-foreground">
-      <Script id="assembly-theme-bootstrap" strategy="beforeInteractive">
-        {`(() => {
-          let theme = null;
-          let comfort = {};
-          try {
-            const saved = window.localStorage.getItem("assembly:theme");
-            if (saved === "light" || saved === "dark") theme = saved;
-            comfort = JSON.parse(window.localStorage.getItem("assembly:comfort") || "{}") || {};
-          } catch {
-            // Browser storage is optional; use the system preference below.
-          }
-          if (!theme) {
-            try {
-              theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-            } catch {
-              theme = "light";
-            }
-          }
-          if (comfort.matchSystem) {
-            try {
-              theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-            } catch {}
-          }
-          const root = document.documentElement;
-          root.classList.toggle("dark", theme === "dark");
-          root.classList.toggle("comfort-reduce-3d", comfort.reduce3d === true);
-          root.classList.toggle("comfort-large-text", comfort.largerText === true);
-          root.dataset.sourcesFirst = comfort.sourcesFirst === true ? "true" : "false";
-        })();`}
-      </Script>
         <LayoutWrapper>{children}</LayoutWrapper>
         <CookieBanner />
       </body>

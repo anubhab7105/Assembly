@@ -10,7 +10,6 @@ import { BrandMark } from "@/components/cinematic/brand-mark"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   ArrowRight,
-  ArrowUpRight,
   BookOpen,
   History,
   Menu,
@@ -23,6 +22,8 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react"
+
+const OFFLINE_MESSAGE = "You are currently offline. Some features may not work."
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {}
@@ -55,9 +56,8 @@ const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/history", label: "History", icon: History },
   { href: "/models", label: "Models", icon: SlidersHorizontal },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/references", label: "References", icon: BookOpen },
 ]
-
-const DOCS_URL = "https://github.com/arkap1502/Assembly#readme"
 
 function pageMeta(pathname: string): { number: string; label: string } {
   if (pathname.startsWith("/chat")) return { number: "01", label: "Workspace" }
@@ -65,6 +65,7 @@ function pageMeta(pathname: string): { number: string; label: string } {
   if (pathname.startsWith("/history")) return { number: "06", label: "History" }
   if (pathname.startsWith("/models")) return { number: "07", label: "Models" }
   if (pathname.startsWith("/settings")) return { number: "08", label: "Settings" }
+  if (pathname.startsWith("/references")) return { number: "09", label: "References" }
   if (pathname.startsWith("/styleguide")) return { number: "—", label: "Design system" }
   return { number: "08", label: "Assembly" }
 }
@@ -157,16 +158,6 @@ function MobileMenu({
                 {item.label}
               </Link>
             ))}
-            <a
-              href={DOCS_URL}
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => setOpen(false)}
-              className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <BookOpen className="size-4" aria-hidden />
-              Docs
-            </a>
           </nav>
 
           <div className="mt-6 border-t border-border pt-5">
@@ -265,11 +256,6 @@ function AppSidebar({ pathname }: { pathname: string }) {
             </Link>
           )
         })}
-        <a href={DOCS_URL} target="_blank" rel="noreferrer" className="mn-nav-link">
-          <BookOpen aria-hidden />
-          <span>Docs</span>
-          <ArrowUpRight className="ml-auto size-3.5 opacity-60" aria-hidden />
-        </a>
       </nav>
 
       <div className="mn-recents">
@@ -378,9 +364,6 @@ function AppChrome({ children }: { children: React.ReactNode }) {
             {item.label}
           </Link>
         ))}
-        <a href={DOCS_URL} target="_blank" rel="noreferrer" className="cin-nav-link">
-          Docs
-        </a>
       </nav>
 
       <Suspense fallback={null}>

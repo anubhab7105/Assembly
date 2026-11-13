@@ -913,47 +913,6 @@ body:has(.cin-landing) {
   animation: cin-spin 176s linear infinite;
 }
 
-.cin-orbit-node {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--landing-node-blue);
-  transform: scaleY(2.2);
-  box-shadow:
-    0 0 0 7px var(--landing-node-blue-halo),
-    0 0 26px color-mix(in srgb, var(--landing-node-blue) 75%, transparent);
-}
-
-.cin-orbit-node.is-violet {
-  background: var(--landing-node-violet);
-  box-shadow:
-    0 0 0 8px var(--landing-node-violet-halo),
-    0 0 28px color-mix(in srgb, var(--landing-node-violet) 75%, transparent);
-}
-
-.cin-orbit-node.is-mint {
-  background: var(--landing-node-mint);
-  box-shadow:
-    0 0 0 8px var(--landing-node-mint-halo),
-    0 0 26px color-mix(in srgb, var(--landing-node-mint) 70%, transparent);
-}
-
-.cin-orbit-node:nth-of-type(1) {
-  left: 8%;
-  top: 34%;
-}
-
-.cin-orbit-node:nth-of-type(2) {
-  right: 6%;
-  top: 52%;
-}
-
-.cin-orbit-node:nth-of-type(3) {
-  left: 30%;
-  bottom: 10%;
-}
-
 .cin-hero-cards {
   position: absolute;
   inset: 0;

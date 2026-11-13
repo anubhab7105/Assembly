@@ -723,6 +723,17 @@
 - Restyled the investigation composer, suggested prompts, results workspace, synthesis card, and settings shell while preserving existing interaction logic and test IDs.
 - Added DOM-enabled theme preference regression coverage for persistence and synchronization across multiple toggles. Validation: pending PR CI; packaged Windows desktop verification not run in this environment.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:4c5894da69a596dac768d649d4498050c92e08ca7ea4de1505c4fbb67a827930 -->
+
+## 2026-11-05 — Theme bootstrap and hosted CSP guidance
+
+- Load the existing theme bootstrap as a synchronous script in the document head, and direct hosted operators to update both backend CSP origins and policy test values.
+- Verified the CSP policy test, production export, layout lint, and two theme browser tests. A live hosted run was not performed; it requires deployment and provider keys.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## 2026-11-06 - Landing hand field (no-dependency camera interaction)
 
 - Replaced the camera brightness-centroid path with a local hand approximation in `frontend/src/lib/hand-tracker.ts`: 128x96 analysis, 4x4 cell skin/motion mask, connected components, spatial/temporal prior, one-euro smoothing and presence hysteresis. No new package, CDN asset or model download.
@@ -765,3 +776,9 @@
 - Tightened the header below 430px so the brand, theme toggle and Launch app fit at 390 and 360.
 - Updated the landing Playwright test to the rebuilt copy and the new header controls.
 - Verification: `npx tsc --noEmit`, ESLint, `npm test` (15) and `npm run build` pass. The three landing/theme Playwright tests pass against the dev server. Screenshots at 1440, 1024, 768, 390 and 360 in both themes look correct.
+## 2026-11-13 - Offline execution event schema drift guard (Issue #70)
+
+- Added `python scripts/export_event_schema.py --check` and wired it into backend CI. Checking never rewrites the destination; ordinary generation and JSON formatting are preserved.
+- Regenerated the existing artifact to include the backend's already-defined `resolved_disagreement_count` field. Added six command-line regression cases, demonstrated failing before the change and passing afterward.
+- Verification on Python 3.11 and 3.12: `pytest -q` reports 663 passed, 1 skipped; scoped Ruff lint and format checks pass; the committed-artifact check passes. Existing Gemini-package deprecation warning remains. Tests are offline with mock providers. No live-provider or Windows desktop run was performed because this is an offline schema/CI change and no provider credentials are needed.
+- AI-assisted implementation, tests and documentation.

@@ -6,6 +6,7 @@ default mock plan sets needs_research=False so no search HTTP occurs.
 """
 
 import sys
+from datetime import date
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -179,7 +180,7 @@ def make_models_yaml(
             # Synthetic offline catalogs use a fixed, explicit source/date.
             # Tests for stale or missing evidence override these fields.
             "quota_source": "https://test.invalid/quota-fixture",
-            "quota_last_verified": "2026-10-24",
+            "quota_last_verified": date.today().isoformat(),
             "models": rendered,
         }
     path = Path(tmp_path) / filename
@@ -252,6 +253,18 @@ def db_session() -> Session:
     finally:
         session.close()
         Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture()
+def isolated_web_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Run web-mode tests from a temporary directory and return the forbidden DB path."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "app_mode", "web")
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "debug", False)
+    monkeypatch.chdir(tmp_path)
+    return tmp_path / "assembly.db"
 
 
 @pytest.fixture(autouse=True)

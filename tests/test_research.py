@@ -53,6 +53,7 @@ class _StubProvider(SearchProvider):
         self.calls: list[str] = []
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+        """Record a query, then return scripted results or raise the configured error."""
         self.calls.append(query)
         if self._error is not None:
             raise self._error
@@ -304,6 +305,31 @@ async def test_router_unexpected_error_falls_back() -> None:
     assert await broken.search("q") == []
 
 
+async def test_router_never_logs_provider_exception_text(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Provider exceptions may contain credentials or query text; log types only."""
+    query = "PRIVATE-ROUTER-QUERY-CANARY-61f2"
+    secret = "tvly-ROUTER-SECRET-CANARY-38ab"
+    errors = [
+        SearchQuotaExhausted("tavily", f"quota response contained {secret} {query}"),
+        SearchProviderError(f"provider payload contained {secret} {query}"),
+        RuntimeError(f"unexpected provider payload contained {secret} {query}"),
+    ]
+
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        for index, error in enumerate(errors):
+            router = SearchRouter(
+                providers=[_StubProvider(f"provider-{index}", error=error)]
+            )
+            assert await router.search(query) == []
+
+    assert query not in caplog.text
+    assert secret not in caplog.text
+    assert "provider payload contained" not in caplog.text
+    assert "quota response contained" not in caplog.text
+
+
 async def test_orchestrator_total_search_failure_reports_nothing() -> None:
     """needs_research + every provider down → nothing-event, honest finish."""
     from src.orchestration.orchestrator import Orchestrator
@@ -364,6 +390,7 @@ async def test_router_budget_controller_blocks_without_calling() -> None:
     budget.state.searches_used = budget.state.max_searches
 
     async def _fail(_query: str, _max_results: int = 5) -> list[SearchResult]:
+        """Fail if the provider is called after the search budget is exhausted."""
         raise AssertionError("provider must not be called on exhausted budget")
 
     stub = _StubProvider("tavily", results=[_result()])
@@ -383,15 +410,22 @@ async def test_router_empty_query_spends_no_budget() -> None:
 # ── Router: cache ──────────────────────────────────────────────────────
 
 
-async def test_router_cache_dedupes_identical_queries() -> None:
+async def test_router_cache_dedupes_identical_queries(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Verify equivalent normalized queries reuse the completed search result cache."""
+    query = "PRIVATE-CACHE-QUERY-CANARY-7f9c"
     stub = _StubProvider("tavily", results=[_result()])
     router = SearchRouter(providers=[stub], max_searches=10)
-    first = await router.search("  Hello World ")
-    second = await router.search("hello world")
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        first = await router.search(f"  {query} ")
+        second = await router.search(query.lower())
     assert len(first) == len(second) == 1
     assert len(stub.calls) == 1
     assert router.cache_size == 1
     assert router.searches_used == 1
+    assert query not in caplog.text
+    assert f"query_chars={len(query)}" in caplog.text
 
 
 async def test_router_cache_empty_pass_not_refetched() -> None:
@@ -429,3 +463,60 @@ async def test_search_never_leaks_key(
     assert fake_key not in caplog.text
     assert fake_key not in str(results)
     assert fake_key not in str(router.searches_used)
+
+
+@pytest.mark.parametrize(
+    "provider_name",
+    ["tavily", "wikipedia", "arxiv", "semantic_scholar", "duckduckgo"],
+)
+@respx.mock
+async def test_search_providers_do_not_log_query_text(
+    provider_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Search queries can contain user prompts; logs keep only their length."""
+    from src.research.providers import (
+        ArxivSearchProvider,
+        DuckDuckGoSearchProvider,
+        TavilySearchProvider,
+    )
+
+    query = "PRIVATE-SEARCH-QUERY-CANARY-4a82"
+    providers = {
+        "tavily": TavilySearchProvider,
+        "wikipedia": WikipediaSearchProvider,
+        "arxiv": ArxivSearchProvider,
+        "semantic_scholar": SemanticScholarSearchProvider,
+        "duckduckgo": DuckDuckGoSearchProvider,
+    }
+    if provider_name == "tavily":
+        monkeypatch.setattr(settings, "tavily_api_key", "tvly-test-key")
+        respx.post("https://api.tavily.com/search").mock(
+            return_value=httpx.Response(200, json={"results": []})
+        )
+    elif provider_name == "wikipedia":
+        respx.get("https://en.wikipedia.org/w/api.php").mock(
+            return_value=httpx.Response(200, json={"query": {"search": []}})
+        )
+    elif provider_name == "arxiv":
+        respx.get("https://export.arxiv.org/api/query").mock(
+            return_value=httpx.Response(200, text=ARXIV_FEED)
+        )
+    elif provider_name == "semantic_scholar":
+        respx.get("https://api.semanticscholar.org/graph/v1/paper/search").mock(
+            return_value=httpx.Response(200, json={"data": []})
+        )
+    else:
+        respx.get("https://api.duckduckgo.com/").mock(
+            return_value=httpx.Response(
+                200,
+                json={"AbstractText": "", "AbstractURL": "", "RelatedTopics": []},
+            )
+        )
+
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        await providers[provider_name]().search(query)
+
+    assert query not in caplog.text
+    assert f"query_chars={len(query)}" in caplog.text

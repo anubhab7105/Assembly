@@ -33,9 +33,6 @@ export function FloatingWindows({ heroRef }: { heroRef?: RefObject<HTMLElement |
         <span className="cin-ring" />
         <span className="cin-ring" />
         <span className="cin-ring" />
-        <span className="cin-orbit-node" />
-        <span className="cin-orbit-node is-violet" />
-        <span className="cin-orbit-node is-mint" />
       </div>
 
       <div className="cin-hero-cards">

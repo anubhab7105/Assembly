@@ -635,6 +635,19 @@
           "title": "Elapsed Seconds",
           "type": "number"
         },
+        "resolved_disagreement_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved Disagreement Count"
+        },
         "verification": {
           "additionalProperties": true,
           "title": "Verification",
