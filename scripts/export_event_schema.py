@@ -68,7 +68,7 @@ def main() -> int:
             return 1
         print(f"Schema artifact {out_path} is up to date.")
         return 0
-    out_path.write_text(rendered, encoding="utf-8")
+    out_path.write_bytes(rendered.encode("utf-8"))
     print(
         f"Wrote {out_path} "
         f"({len(bundle['event_types'])} event types, "
