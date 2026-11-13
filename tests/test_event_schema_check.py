@@ -74,3 +74,37 @@ def test_check_rejects_unreadable_path(tmp_path) -> None:
     assert result.returncode == 1
     assert "Cannot read" in result.stderr
     assert tmp_path.is_dir()
+
+
+def test_generate_then_check_uses_lf_even_with_windows_text_defaults(
+    tmp_path, monkeypatch
+) -> None:
+    import os
+    import runpy
+
+    original_write_text = Path.write_text
+
+    def windows_write_text(self, data, encoding=None, errors=None, newline=None):
+        # Emulate Windows' default text-file translation without claiming a
+        # Windows run. An explicit newline policy must still be respected.
+        return original_write_text(
+            self,
+            data,
+            encoding=encoding,
+            errors=errors,
+            newline="\r\n" if newline is None else newline,
+        )
+
+    monkeypatch.setattr(Path, "write_text", windows_write_text)
+    monkeypatch.setattr(os, "linesep", "\r\n")
+    artifact = tmp_path / "schema with spaces.json"
+    main = runpy.run_path(str(EXPORTER))["main"]
+    monkeypatch.setattr(sys, "argv", [str(EXPORTER), "--out", str(artifact)])
+    assert main() == 0
+    generated = artifact.read_bytes()
+    modified = artifact.stat().st_mtime_ns
+    assert b"\r\n" not in generated
+    monkeypatch.setattr(sys, "argv", [str(EXPORTER), "--out", str(artifact), "--check"])
+    assert main() == 0
+    assert artifact.read_bytes() == generated
+    assert artifact.stat().st_mtime_ns == modified
