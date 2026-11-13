@@ -142,4 +142,5 @@ python scripts/export_event_schema.py --check
 
 Backend CI runs this offline check. A stale or missing artifact fails with a
 regeneration command; stale content also produces a diff. `--out PATH` selects
-another artifact for either generation or checking.
+another artifact for either generation or checking. Generation always writes
+UTF-8 with LF newlines, including on Windows, so generate-then-check agrees.
