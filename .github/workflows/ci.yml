@@ -81,6 +81,8 @@ jobs:
       run: pip install -r requirements.txt -r requirements-dev.txt alembic pip-audit
     - name: Run Python dependency audit gate
       run: python scripts/audit_python.py
+    - name: Check committed execution event schema
+      run: python scripts/export_event_schema.py --check
     - name: Run SQLite migrations and tests
       run: |
         alembic upgrade head
