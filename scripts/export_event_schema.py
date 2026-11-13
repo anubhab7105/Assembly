@@ -53,13 +53,16 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        if current != rendered.encode("utf-8"):
+        # Git may check out the committed artifact with CRLF on Windows.
+        # Ignore that transport-only difference without rewriting the file.
+        normalized = current.replace(b"\r\n", b"\n")
+        if normalized != rendered.encode("utf-8"):
             print(
                 f"Schema artifact {out_path} is out of date. Regenerate with:\n{command}",
                 file=sys.stderr,
             )
             diff = difflib.unified_diff(
-                current.decode("utf-8", errors="replace").splitlines(keepends=True),
+                normalized.decode("utf-8", errors="replace").splitlines(keepends=True),
                 rendered.splitlines(keepends=True),
                 fromfile=str(out_path),
                 tofile="generated event schema",
