@@ -62,7 +62,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         {/* eslint-disable-next-line @next/next/no-sync-scripts -- Applies the saved theme before first paint. */}
-        <script id="assembly-theme-bootstrap" src="/theme-bootstrap.js" />
+        <script
+          id="assembly-theme-bootstrap"
+          src="/theme-bootstrap.js"
+          // Browser extensions can rewrite this tag before hydration; that is not an app mismatch.
+          suppressHydrationWarning
+        />
       </head>
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <LayoutWrapper>{children}</LayoutWrapper>

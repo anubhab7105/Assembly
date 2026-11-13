@@ -280,7 +280,7 @@ export default function LandingPage() {
               </div>
               <p>What Assembly does, what it uses, and what stays in your control.</p>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3">
               {faqs.map((faq) => (
                 <details
                   key={faq.question}
