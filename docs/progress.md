@@ -725,3 +725,10 @@
 - Verified the CSP policy test, production export, layout lint, and two theme browser tests. A live hosted run was not performed; it requires deployment and provider keys.
 
 <!-- /coderabbit-ai-generated:v1 -->
+
+## 2026-11-13 - Offline execution event schema drift guard (Issue #70)
+
+- Added `python scripts/export_event_schema.py --check` and wired it into backend CI. Checking never rewrites the destination; ordinary generation and JSON formatting are preserved.
+- Regenerated the existing artifact to include the backend's already-defined `resolved_disagreement_count` field. Added six command-line regression cases, demonstrated failing before the change and passing afterward.
+- Verification on Python 3.11 and 3.12: `pytest -q` reports 663 passed, 1 skipped; scoped Ruff lint and format checks pass; the committed-artifact check passes. Existing Gemini-package deprecation warning remains. Tests are offline with mock providers. No live-provider or Windows desktop run was performed because this is an offline schema/CI change and no provider credentials are needed.
+- AI-assisted implementation, tests and documentation.
