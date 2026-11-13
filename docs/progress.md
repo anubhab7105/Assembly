@@ -1,3 +1,12 @@
+## 2026-11-13 — Landing trims, cookie consent buttons, sidebar export
+
+- Landing hero (`frontend/src/app/page.tsx`): removed the "Watch 1-min demo" button, the 3–15 min / 4+ roles / BYOK / Apache 2.0 stats row and the "Experimental research project…" footnote, along with their now-unused `cinematic.css` rules and responsive overrides. "Start an Assembly" is the only hero action left, and "How it works" now follows the description directly.
+- Cookie banner (`frontend/src/components/cookie-banner.tsx`): the single "Got it" button is replaced by Reject and Accept, which store `accepted`/`rejected` in `assembly:cookie-choice`. Assembly sets no non-essential cookies, so the banner copy and `frontend/src/app/cookies/page.tsx` now state plainly that both choices behave identically and only the choice itself is saved on the device. `tests/keys-persist.spec.ts` and `scripts/field-smoke.mjs` follow the new button label.
+- Sidebar (`frontend/src/components/layout-wrapper.tsx`): removed the History nav item (the `/history` route still renders) and added an Export button in the footer that downloads `assembly-history.json` through the same `storage.exportJSON()` call the History page uses.
+- Workspace (`frontend/src/app/chat/page.tsx`, `minimal.css`): the prompt is absolutely centred on the page midpoint and the status/chips/composer stack is wrapped in `.mn-dock`, pinned to the bottom with an 8px gap.
+- Landing GitHub button now points at `https://github.com/anubhab7105/Assembly` (previous value was a different account).
+- Verification: `npx tsc --noEmit` and `npx eslint` pass on all touched files; `npx next build` (static export) succeeds and `frontend/out/` was regenerated so the exported build matches the source. Banner Accept/Reject, sidebar Export, hero geometry and the GitHub href were checked in the running dev server. `tests/keys-persist.spec.ts` was not run locally (Playwright is CI-only here).
+
 ## 2026-11-11 — Minimal chat-style workspace
 
 - Reworked `frontend/src/app/chat/page.tsx` into a quiet, chat-like workspace: one centered prompt ("What's on your mind today?"), a single rounded composer with attach, model picker, 3/5/10/15 minute budget pills and a circular send button. Removed the "New investigation" window chrome, the "Run check" side panel, the budget card grid, the example card grid and the duplicate quick-history panel.

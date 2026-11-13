@@ -7,7 +7,6 @@ import {
   ArrowUpRight,
   CheckCircle2,
   GitBranch,
-  Play,
   Search,
   ShieldCheck,
   Users,
@@ -16,7 +15,7 @@ import { BrandMark } from "@/components/cinematic/brand-mark"
 import { FloatingWindows } from "@/components/cinematic/floating-windows"
 import { ThemeToggle } from "@/components/theme-toggle"
 
-const DOCS_URL = "https://github.com/arkap1502/Assembly#readme"
+const REPO_URL = "https://github.com/anubhab7105/Assembly"
 
 const steps = [
   {
@@ -46,28 +45,6 @@ const steps = [
     description:
       "The synthesis carries its sources, confidence, and the uncertainties that remain. You decide what to trust.",
     icon: ShieldCheck,
-  },
-]
-
-const faqs = [
-  {
-    question: "Why use more than one model?",
-    answer:
-      "A single model can miss a counterargument or sound certain about a weak claim. Assembly gives different model families independent passes, then uses cross-examination and evidence review before synthesizing an answer.",
-  },
-  {
-    question: "Do I need an account or a subscription?",
-    answer:
-      "No account is required. Assembly is BYOK: you add your own provider keys and use the providers' available free tiers and quotas.",
-  },
-  {
-    question: "Where are my API keys and investigation history stored?",
-    answer: "In web mode, saved keys and local history stay in your browser. All saved model-provider keys are sent to the Assembly backend over HTTPS for capacity preflight, regardless of model selection; a key-test request sends only the provider key being tested; every run also sends all saved model-provider keys and any saved Tavily key, even when search is not used. The backend uses them transiently to contact providers. Browser-stored keys are not encrypted at rest and can be read by same-origin JavaScript. Read the privacy notice for the full details before your first run.",
-  },
-  {
-    question: "Can I control how long an investigation runs?",
-    answer:
-      "Yes. Choose a 3, 5, 10, or 15 minute budget before you start. The budget is a hard cutoff that shapes how many rounds the team can run.",
   },
 ]
 
@@ -121,8 +98,8 @@ export default function LandingPage() {
         <nav className="cin-landing-nav" aria-label="Main navigation">
           <a href="#product">Product</a>
           <a href="#how">How it works</a>
-          <Link href="/references">References</Link>
-          <a href={DOCS_URL} target="_blank" rel="noreferrer">
+          <Link href="/references">Research</Link>
+          <a href={REPO_URL} target="_blank" rel="noreferrer">
             GitHub
           </a>
         </nav>
@@ -170,39 +147,11 @@ export default function LandingPage() {
                 Start an Assembly
                 <ArrowRight className="size-4" aria-hidden />
               </Link>
-              <a href="#how" className="cin-btn cin-btn-outline cin-btn-lg">
-                <Play className="size-3.5 fill-current" aria-hidden />
-                Watch 1-min demo
-              </a>
             </div>
-
-            <dl className="cin-hero-stats" aria-label="Product principles">
-              <div className="cin-hero-stat">
-                <strong>3–15 min</strong>
-                <span>Time budgets</span>
-              </div>
-              <div className="cin-hero-stat">
-                <strong>4+ roles</strong>
-                <span>Agent team</span>
-              </div>
-              <div className="cin-hero-stat">
-                <strong>BYOK</strong>
-                <span>Keys stay local</span>
-              </div>
-              <div className="cin-hero-stat">
-                <strong>Apache 2.0</strong>
-                <span>Open source</span>
-              </div>
-            </dl>
           </div>
 
           <FloatingWindows heroRef={heroRef} />
         </section>
-
-        <p className="cin-landing-footnote">
-          Experimental research project. Not a sole source for high-stakes medical, legal or financial
-          decisions.
-        </p>
 
         <section id="how" className="cin-section">
           <div className="cin-shell">
@@ -267,34 +216,6 @@ export default function LandingPage() {
                 </strong>
                 <span>With sources, confidence, and an explicit statement of what remains uncertain.</span>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="cin-section" id="faq">
-          <div className="cin-shell">
-            <div className="cin-section-head">
-              <div>
-                <span className="cin-kicker">Good to know</span>
-                <h2>Before you begin.</h2>
-              </div>
-              <p>What Assembly does, what it uses, and what stays in your control.</p>
-            </div>
-            <div className="grid gap-3">
-              {faqs.map((faq) => (
-                <details
-                  key={faq.question}
-                  className="group rounded-2xl border border-border/70 bg-card/40 p-5 backdrop-blur-md"
-                >
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-foreground">
-                    {faq.question}
-                    <span className="text-lg text-brand transition-transform group-open:rotate-45" aria-hidden>
-                      +
-                    </span>
-                  </summary>
-                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{faq.answer}</p>
-                </details>
-              ))}
             </div>
           </div>
         </section>

@@ -10,8 +10,7 @@ import { BrandMark } from "@/components/cinematic/brand-mark"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   ArrowRight,
-  BookOpen,
-  History,
+  Download,
   Menu,
   Plus,
   Settings,
@@ -53,10 +52,8 @@ function useOfflineStatus() {
 
 const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
   { href: "/chat", label: "Workspace", icon: SquarePen },
-  { href: "/history", label: "History", icon: History },
   { href: "/models", label: "Models", icon: SlidersHorizontal },
   { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/references", label: "References", icon: BookOpen },
 ]
 
 function pageMeta(pathname: string): { number: string; label: string } {
@@ -65,7 +62,7 @@ function pageMeta(pathname: string): { number: string; label: string } {
   if (pathname.startsWith("/history")) return { number: "06", label: "History" }
   if (pathname.startsWith("/models")) return { number: "07", label: "Models" }
   if (pathname.startsWith("/settings")) return { number: "08", label: "Settings" }
-  if (pathname.startsWith("/references")) return { number: "09", label: "References" }
+  if (pathname.startsWith("/references")) return { number: "09", label: "Research" }
   if (pathname.startsWith("/styleguide")) return { number: "—", label: "Design system" }
   return { number: "08", label: "Assembly" }
 }
@@ -206,6 +203,18 @@ function AppSidebar({ pathname }: { pathname: string }) {
   const router = useRouter()
   const [records, setRecords] = useState<HistoryRecord[]>([])
 
+  // Same export the history page offers: one JSON file with runs and usage.
+  const handleExport = async () => {
+    const text = await storage.exportJSON()
+    const blob = new Blob([text], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = "assembly-history.json"
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   useEffect(() => {
     let active = true
     const load = () => {
@@ -277,6 +286,10 @@ function AppSidebar({ pathname }: { pathname: string }) {
       </div>
 
       <div className="mn-sidebar-foot">
+        <button type="button" className="mn-nav-link" onClick={() => void handleExport()}>
+          <Download aria-hidden />
+          <span>Export</span>
+        </button>
         <p className="mn-key-note">
           <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
           Keys stay on this device
@@ -344,7 +357,7 @@ function AppChrome({ children }: { children: React.ReactNode }) {
           {isOffline && (
             <div className="mx-auto mt-3 flex w-[min(1240px,calc(100%-32px))] items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-center text-sm font-medium text-danger">
               <WifiOff className="size-4" aria-hidden />
-              You are currently offline. Some features may not work.
+              {OFFLINE_MESSAGE}
             </div>
           )}
 
@@ -381,6 +394,9 @@ function AppChrome({ children }: { children: React.ReactNode }) {
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/"
   const isLandingPage = pathname === "/"
+  // The references page is a standalone document with its own top bar, so it
+  // renders outside the workspace chrome instead of inside the app sidebar.
+  const isStandalonePage = isLandingPage || pathname.startsWith("/references")
 
   return (
     <ToastProvider>
@@ -391,7 +407,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
       <div className="cin-app">
-        {isLandingPage ? children : <AppChrome>{children}</AppChrome>}
+        {isStandalonePage ? children : <AppChrome>{children}</AppChrome>}
       </div>
     </ToastProvider>
   )

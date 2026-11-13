@@ -810,42 +810,6 @@ body:has(.cin-landing) {
 .cin-hero-actions .cin-btn-outline svg {
   color: var(--landing-outline-icon);
 }
-
-.cin-hero-stats {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 0;
-  margin-top: clamp(30px, 4.4vh, 46px);
-  padding-top: 20px;
-  border-top: 1px solid var(--landing-line);
-}
-
-.cin-hero-stat {
-  min-width: 112px;
-  padding-right: clamp(12px, 1.8vw, 28px);
-}
-
-.cin-hero-stat + .cin-hero-stat {
-  padding-left: clamp(12px, 1.8vw, 28px);
-  border-left: 1px solid var(--landing-line);
-}
-
-.cin-hero-stat strong {
-  display: block;
-  color: var(--landing-stat-ink);
-  font-size: clamp(1.05rem, 1.5vw, 1.22rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.cin-hero-stat span {
-  display: block;
-  margin-top: 5px;
-  color: var(--landing-stat-muted);
-  font-size: 0.82rem;
-}
-
 .cin-hero-stage {
   position: relative;
   z-index: 2;
@@ -1018,14 +982,6 @@ body:has(.cin-landing) {
   color: var(--landing-card-ink);
   font-size: 0.98rem;
   line-height: 1.55;
-}
-
-.cin-landing-footnote {
-  width: min(1360px, calc(100% - 64px));
-  margin: 0 auto;
-  padding: 0 0 24px;
-  color: var(--landing-footnote);
-  font-size: 0.8rem;
 }
 
 /* Landing sections --------------------------------------------------------- */
@@ -3523,32 +3479,6 @@ html.comfort-reduce-3d .cin-watch-float {
     padding-inline: 24px;
   }
 
-  .cin-hero-stats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px 0;
-  }
-
-  .cin-hero-stat {
-    min-width: 0;
-    padding-right: 14px;
-  }
-
-  .cin-hero-stat + .cin-hero-stat {
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  .cin-hero-stat:nth-child(even) {
-    padding-left: 16px;
-    border-left: 1px solid rgba(160, 190, 255, 0.16);
-  }
-
-  .cin-hero-stat:nth-child(n + 3) {
-    padding-top: 14px;
-    border-top: 1px solid rgba(160, 190, 255, 0.16);
-  }
-
   .cin-float-window.is-live {
     right: 0;
   }
@@ -3652,10 +3582,6 @@ html.comfort-reduce-3d .cin-watch-float {
     bottom: 3%;
     left: 2%;
     width: min(360px, 80%);
-  }
-
-  .cin-hero-stats {
-    margin-top: 30px;
   }
 
   .cin-section-head {
@@ -3768,22 +3694,6 @@ html.comfort-reduce-3d .cin-watch-float {
 
   .cin-hero-actions .cin-btn {
     flex: 1 1 100%;
-  }
-
-  .cin-hero-stats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px 0;
-  }
-
-  .cin-hero-stat {
-    min-width: 0;
-    padding-right: 12px;
-  }
-
-  .cin-hero-stat:nth-child(3) {
-    padding-left: 0;
-    border-left: 0;
   }
 
   .cin-hero-stage {

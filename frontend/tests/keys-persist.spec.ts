@@ -119,7 +119,7 @@ test.describe("Keys survive refresh (P0)", () => {
     // Wait for the client-side cookie notice to hydrate before deciding
     // whether it needs dismissing; the initial server snapshot is hidden.
     await expect(cookieNotice).toBeVisible()
-    await cookieNotice.getByRole("button", { name: /Got it/i }).click()
+    await cookieNotice.getByRole("button", { name: /Accept/i }).click()
     await expect(cookieNotice).toBeHidden()
 
     await page.getByRole("link", { name: /Settings/i }).click()

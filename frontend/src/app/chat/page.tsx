@@ -494,6 +494,85 @@ export default function Home() {
         <div className="mn-chat-center">
           <h1 className="mn-hello">What&apos;s on your mind today?</h1>
 
+
+          <div className="mn-dock">
+          {status && (
+            <div className="mn-status" id="question-status">
+              <ChatStatusMessage status={status} />
+            </div>
+          )}
+
+          <div
+            data-testid="diversity-chip"
+            data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
+            className="mn-meta"
+            aria-live="polite"
+          >
+            {catalogLoading ? (
+              <span>Checking provider keys…</span>
+            ) : catalogFailed ? (
+              <span className="mn-meta-warn">
+                Provider status unavailable ·{" "}
+                <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
+                  Retry
+                </button>
+              </span>
+            ) : (
+              <>
+                <span>{gateChipText(gate)}</span>
+                {gate.level === "DEGRADED" && !degradedConfirmed && (
+                  <button
+                    type="button"
+                    className="mn-link"
+                    data-testid="degraded-confirm"
+                    onClick={() => setConfirmedGateSignature(gateSignature)}
+                  >
+                    Run anyway
+                  </button>
+                )}
+                {gate.families_count === 0 && (
+                  <Link href="/settings" className="mn-link">
+                    Add provider keys
+                  </Link>
+                )}
+              </>
+            )}
+          </div>
+
+          {runHint && (
+            <p className="mn-hint" id="run-hint">
+              {runHint}
+            </p>
+          )}
+
+          {catalogFailed && (
+            <div className="mn-alert" role="alert">
+              <span>
+                Can&apos;t reach the Assembly server at {env.apiUrl}. Check that the backend is running.
+              </span>
+              <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
+                Retry
+              </button>
+            </div>
+          )}
+
+          <div className="mn-suggestions" aria-label="Suggested questions">
+            <span>Try</span>
+            {EXAMPLES.map((example) => (
+              <button
+                key={example.label}
+                type="button"
+                className="mn-chip"
+                title={example.question}
+                onClick={() => {
+                  setQuestion(example.question)
+                  textareaRef.current?.focus()
+                }}
+              >
+                {example.label}
+              </button>
+            ))}
+          </div>
           {attachments.length > 0 && (
             <div className="mn-attachments" aria-label="Selected attachments">
               {attachments.map((attachment) => (
@@ -609,83 +688,6 @@ export default function Home() {
               </button>
             </div>
           </form>
-
-          {status && (
-            <div className="mn-status" id="question-status">
-              <ChatStatusMessage status={status} />
-            </div>
-          )}
-
-          <div
-            data-testid="diversity-chip"
-            data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
-            className="mn-meta"
-            aria-live="polite"
-          >
-            {catalogLoading ? (
-              <span>Checking provider keys…</span>
-            ) : catalogFailed ? (
-              <span className="mn-meta-warn">
-                Provider status unavailable ·{" "}
-                <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
-                  Retry
-                </button>
-              </span>
-            ) : (
-              <>
-                <span>{gateChipText(gate)}</span>
-                {gate.level === "DEGRADED" && !degradedConfirmed && (
-                  <button
-                    type="button"
-                    className="mn-link"
-                    data-testid="degraded-confirm"
-                    onClick={() => setConfirmedGateSignature(gateSignature)}
-                  >
-                    Run anyway
-                  </button>
-                )}
-                {gate.families_count === 0 && (
-                  <Link href="/settings" className="mn-link">
-                    Add provider keys
-                  </Link>
-                )}
-              </>
-            )}
-          </div>
-
-          {runHint && (
-            <p className="mn-hint" id="run-hint">
-              {runHint}
-            </p>
-          )}
-
-          {catalogFailed && (
-            <div className="mn-alert" role="alert">
-              <span>
-                Can&apos;t reach the Assembly server at {env.apiUrl}. Check that the backend is running.
-              </span>
-              <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
-                Retry
-              </button>
-            </div>
-          )}
-
-          <div className="mn-suggestions" aria-label="Suggested questions">
-            <span>Try</span>
-            {EXAMPLES.map((example) => (
-              <button
-                key={example.label}
-                type="button"
-                className="mn-chip"
-                title={example.question}
-                onClick={() => {
-                  setQuestion(example.question)
-                  textareaRef.current?.focus()
-                }}
-              >
-                {example.label}
-              </button>
-            ))}
           </div>
         </div>
       </main>

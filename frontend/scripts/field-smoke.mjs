@@ -58,7 +58,7 @@ async function fakeCamera(page) {
 }
 
 async function dismissCookie(page) {
-  const gotIt = page.getByRole("button", { name: "Got it" })
+  const gotIt = page.getByRole("button", { name: "Accept" })
   // The dev-tools indicator sits over the banner on narrow viewports, so
   // dispatch the click directly instead of aiming at coordinates.
   if (await gotIt.count()) await gotIt.evaluate((node) => node.click())

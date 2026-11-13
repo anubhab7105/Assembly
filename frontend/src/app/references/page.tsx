@@ -1,3 +1,7 @@
+import Link from "next/link"
+import { BrandMark } from "@/components/cinematic/brand-mark"
+import { ThemeToggle } from "@/components/theme-toggle"
+
 const REFERENCES: Array<{
   title: string
   authors: string
@@ -80,6 +84,20 @@ const NUMBERED = REFERENCES.map((reference, index) => ({ ...reference, number: i
 export default function ReferencesPage() {
   return (
     <div className="cin-page cin-about-page">
+      <header className="cin-topbar is-transparent">
+        <Link href="/" className="cin-brand" aria-label="Assembly home">
+          <BrandMark />
+          <span className="cin-brand-word">Assembly</span>
+        </Link>
+
+        <div className="cin-topbar-actions">
+          <ThemeToggle className="cin-icon-button" />
+          <Link href="/chat" className="cin-btn cin-btn-sm cin-btn-primary">
+            Open workspace
+          </Link>
+        </div>
+      </header>
+
       <main id="main-content" tabIndex={-1} className="cin-main">
         <div className="cin-shell cin-page-inner">
           <header className="cin-page-head">

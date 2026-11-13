@@ -162,27 +162,45 @@
 .mn-chat {
   display: flex;
   width: 100%;
-  min-height: calc(100dvh - 40px);
+  min-height: 100dvh;
   flex-direction: column;
 }
 
 .mn-chat-main {
   display: flex;
   flex: 1;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  padding: 40px 20px 96px;
+  padding: 8px 20px 8px;
 }
 
 .mn-chat-center {
+  position: relative;
   display: flex;
-  width: min(760px, 100%);
+  width: 100%;
+  flex: 1;
   flex-direction: column;
+  justify-content: flex-start;
   gap: 16px;
 }
 
+/* Bottom stack (status, chips, composer) docked to the bottom edge. */
+.mn-dock {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: auto;
+}
+
+
 .mn-hello {
-  margin: 0 0 8px;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  transform: translateY(-50%);
   color: var(--foreground);
   font-size: clamp(1.6rem, 3.2vw, 2.1rem);
   font-weight: 500;
@@ -192,6 +210,9 @@
 }
 
 .mn-composer {
+  width: 100%;
+  max-width: 720px;
+  align-self: center;
   padding: 14px 16px 10px;
   border: 1px solid var(--border);
   border-radius: 26px;
