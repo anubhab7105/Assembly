@@ -1,4 +1,5 @@
 """Offline tests for attachment validation and prompt-safety context."""
+import csv
 import pytest
 
 from src.research.attachments import (
@@ -305,3 +306,23 @@ def test_rejects_excessive_attachment_count() -> None:
     ]
     with pytest.raises(AttachmentValidationError, match="per-investigation limit"):
         validate_attachments(files)
+
+
+def test_validate_attachment_catches_csv_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Malformed CSV that triggers csv.Error while iterating is converted to AttachmentValidationError with cause."""
+    raw_content = b"header1,header2\nval1,val2\n"
+
+    class FailingReader:
+        def __iter__(self) -> FailingReader:
+            return self
+
+        def __next__(self) -> list[str]:
+            raise csv.Error("line contains malformed record delimiter")
+
+    monkeypatch.setattr(csv, "reader", lambda *args, **kwargs: FailingReader())
+
+    with pytest.raises(AttachmentValidationError) as exc_info:
+        validate_attachment(filename="bad.csv", content=raw_content, media_type="text/csv")
+
+    assert "bad.csv: invalid CSV." in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, csv.Error)

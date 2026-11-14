@@ -217,5 +217,59 @@ describe("Chat page investigation attachment handling", () => {
       content: "hello delayed content",
     })
   })
+
+  it("evaluates new files against updated total when an existing 10 MiB attachment is removed during delayed file read", async () => {
+    render(<Home />)
+    const input = screen.getByLabelText("Choose investigation attachments") as HTMLInputElement
+
+    // 1. Upload existing attachments totaling 42 MiB (including a 10 MiB file to remove)
+    const tenToRemove = makePickedFile("ten-to-remove.txt", 10 * MiB, "remove-me")
+    const keepFiles = [
+      makePickedFile("keep-1.txt", 10 * MiB, "k1"),
+      makePickedFile("keep-2.txt", 10 * MiB, "k2"),
+      makePickedFile("keep-3.txt", 10 * MiB, "k3"),
+      makePickedFile("keep-4.txt", 2 * MiB, "k4"),
+    ]
+    selectFiles(input, [tenToRemove, ...keepFiles])
+
+    await waitFor(() => {
+      expect(screen.getByText(/5 files ready/i)).toBeTruthy()
+    })
+    expect(screen.getByRole("button", { name: "Remove ten-to-remove.txt" })).toBeTruthy()
+
+    // 2. Prepare new batch: new-1 (5 MiB, delayed read) and new-2 (9 MiB, normal read)
+    // Without removing the 10 MiB file: 42 + 5 + 9 = 56 MiB > 50 MiB, so new-2 would be rejected.
+    let resolveDelayedRead: (v: string) => void = () => {}
+    const delayedPromise = new Promise<string>((resolve) => {
+      resolveDelayedRead = resolve
+    })
+
+    const delayedNewFile = {
+      name: "new-1.txt",
+      size: 5 * MiB,
+      type: "text/plain",
+      text: vi.fn().mockImplementation(() => delayedPromise),
+    }
+    const secondNewFile = makePickedFile("new-2.txt", 9 * MiB, "second-ok")
+
+    selectFiles(input, [delayedNewFile, secondNewFile])
+
+    // 3. While new-1.txt is awaiting file read, remove the 10 MiB attachment
+    fireEvent.click(screen.getByRole("button", { name: "Remove ten-to-remove.txt" }))
+    await waitFor(() => {
+      expect(screen.queryByText("ten-to-remove.txt")).toBeNull()
+    })
+
+    // 4. Resolve the delayed file read
+    resolveDelayedRead("new-1-content")
+
+    // 5. Verify both new files are accepted and evaluated against the updated total
+    await waitFor(() => {
+      expect(screen.getByText("new-1.txt")).toBeTruthy()
+      expect(screen.getByText("new-2.txt")).toBeTruthy()
+    })
+    expect(screen.getByText(/2 files ready/i)).toBeTruthy()
+    expect(screen.queryByText(/exceed the 50 MiB combined limit/i)).toBeNull()
+  })
 })
 

@@ -175,7 +175,7 @@ export default function Home() {
     setIsValidatingAttachments(true)
     const runBatch = async () => {
       try {
-        const result = await validateAttachmentBatch(attachmentsRef.current, picked)
+        const result = await validateAttachmentBatch(() => attachmentsRef.current, picked)
         if (result.accepted.length > 0) {
           const next = [...attachmentsRef.current, ...result.accepted]
           attachmentsRef.current = next

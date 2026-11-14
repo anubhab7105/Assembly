@@ -138,16 +138,18 @@ function hasUnsupportedControlChars(text: string): boolean {
 }
 
 export async function validateAttachmentBatch(
-  existingAttachments: ReadonlyArray<DraftAttachment>,
+  existingAttachments:
+    | ReadonlyArray<DraftAttachment>
+    | (() => ReadonlyArray<DraftAttachment>),
   pickedFiles: ReadonlyArray<PickedAttachmentFile>,
 ): Promise<AttachmentBatchResult> {
-  let totalBytes = calculateAttachmentsTotalBytes(existingAttachments)
-  let currentCount = existingAttachments.length
+  const getExisting = () =>
+    typeof existingAttachments === "function"
+      ? existingAttachments()
+      : existingAttachments
+
   const accepted: DraftAttachment[] = []
   const errors: string[] = []
-  const seenFilenames = new Set(
-    existingAttachments.map((item) => safeAttachmentDisplayName(item.filename).toLowerCase()),
-  )
   const pushError = (message: string) => {
     if (!errors.includes(message)) {
       errors.push(message)
@@ -156,6 +158,21 @@ export async function validateAttachmentBatch(
   const encoder = new TextEncoder()
 
   for (const file of pickedFiles) {
+    const currentExisting = getExisting()
+    const currentTotalBytes =
+      calculateAttachmentsTotalBytes(currentExisting) +
+      calculateAttachmentsTotalBytes(accepted)
+    const currentCount = currentExisting.length + accepted.length
+
+    const seenFilenames = new Set([
+      ...currentExisting.map((item) =>
+        safeAttachmentDisplayName(item.filename).toLowerCase(),
+      ),
+      ...accepted.map((item) =>
+        safeAttachmentDisplayName(item.filename).toLowerCase(),
+      ),
+    ])
+
     if (currentCount >= MAX_ATTACHMENT_COUNT) {
       pushError(`Attachments exceed the ${MAX_ATTACHMENT_COUNT}-file per-investigation limit.`)
       continue
@@ -186,7 +203,7 @@ export async function validateAttachmentBatch(
       continue
     }
 
-    if (totalBytes + file.size > MAX_ATTACHMENT_TOTAL_BYTES) {
+    if (currentTotalBytes + file.size > MAX_ATTACHMENT_TOTAL_BYTES) {
       pushError("Attachments exceed the 50 MiB combined limit.")
       continue
     }
@@ -201,7 +218,14 @@ export async function validateAttachmentBatch(
         continue
       }
 
-      if (totalBytes + effectiveSize > MAX_ATTACHMENT_TOTAL_BYTES) {
+      // Re-evaluate current attachment total after async file reading to account
+      // for concurrent removals.
+      const updatedExisting = getExisting()
+      const updatedTotalBytes =
+        calculateAttachmentsTotalBytes(updatedExisting) +
+        calculateAttachmentsTotalBytes(accepted)
+
+      if (updatedTotalBytes + effectiveSize > MAX_ATTACHMENT_TOTAL_BYTES) {
         pushError("Attachments exceed the 50 MiB combined limit.")
         continue
       }
@@ -221,8 +245,6 @@ export async function validateAttachmentBatch(
       }
 
       const normalizedMediaType = normalizeAttachmentMediaType(file.type || "", extension)
-      totalBytes += effectiveSize
-      currentCount += 1
       seenFilenames.add(lowerName)
       accepted.push({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${accepted.length}`,
@@ -235,6 +257,11 @@ export async function validateAttachmentBatch(
       pushError(`${file.name}: couldn't read this file.`)
     }
   }
+
+  const finalExisting = getExisting()
+  const totalBytes =
+    calculateAttachmentsTotalBytes(finalExisting) +
+    calculateAttachmentsTotalBytes(accepted)
 
   return { accepted, errors, totalBytes }
 }

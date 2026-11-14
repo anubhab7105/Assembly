@@ -741,3 +741,29 @@
 - Verified the CSP policy test, production export, layout lint, and two theme browser tests. A live hosted run was not performed; it requires deployment and provider keys.
 
 <!-- /coderabbit-ai-generated:v1 -->
+
+## 2026-11-14 — Issue #74 & PR #96: Synchronized dynamic attachment capacity and batch validation
+
+- Synchronized in-progress attachment batch validation with live attachment removal in `frontend/src/app/chat/page.tsx` and `frontend/src/lib/attachments.ts`:
+  - Updated `validateAttachmentBatch` to accept a dynamic getter function (`() => ReadonlyArray<DraftAttachment>`), allowing real-time attachment capacity re-evaluation before and after asynchronous `file.text()` reads.
+  - When an existing attachment (e.g. 10 MiB) is removed while asynchronous file reading is in flight, the freed capacity is recognized dynamically, enabling remaining queued files to be evaluated against the updated total rather than a stale snapshot.
+  - Added unit regression tests in `frontend/src/lib/attachments.test.ts` and an integration regression test in `frontend/src/app/chat/page.test.tsx` verifying that removing an existing 10 MiB attachment during a delayed file read updates the capacity accounting and allows new files that fit within the updated total.
+- Enforced total-size bound on persisted history in `frontend/src/lib/history-file-limits.ts` and `frontend/src/lib/storage.ts`:
+  - Added `serializeAssemblyBackup` and `calculateBackupSerializedBytes` ensuring `saveHistory`, `exportJSON`, and `importJSON` share canonical version-and-usage envelope serialization and 2-space indentation.
+  - `saveHistory` evaluates the resulting persisted history and current usage against `MAX_BACKUP_EXPORT_BYTES` (50 MiB) prior to `idbSet`, rejecting oversized saves and preserving existing history intact.
+  - Expanded `frontend/src/lib/storage.test.ts` to verify rejection of over-limit saves before storage write and ensure all saved history can always be exported.
+- Separated incoming-record size validation from legacy-record handling in `normalizeHistory` (`frontend/src/lib/storage.ts`):
+  - Updated `normalizeHistory` with `NormalizeHistoryOptions` (`isIncoming?: boolean`) so oversized saved legacy records remain visible in `listHistory`/`getHistory` and are not silently dropped during `saveHistory`, `deleteHistory`, or `importJSON`.
+  - Maintained strict size checks on new incoming records in `saveHistory` (`isIncoming: true`).
+  - Added regression test in `frontend/src/lib/storage.test.ts` verifying that seeding an oversized legacy record keeps it visible, exportable in backups, and intact across saves and deletions.
+- Bounded attachment validation concurrency and waiter queue in `src/api/run.py`:
+  - Added `AttachmentValidationGate` preserving the 4-concurrency limit while enforcing an 8-waiter threshold on in-flight validation requests, rejecting excess queued requests with HTTP 503 (`Retry-After: 5`) to prevent server memory exhaustion.
+  - Added async regression tests in `tests/test_stateless_web.py` covering gate concurrency, waiter thresholds, and 503 response headers without spending run rate limit quota.
+- Structured CSV parsing error handling in `src/research/attachments.py`:
+  - Caught `csv.Error` during CSV reader iteration in `validate_attachment`, converting to `AttachmentValidationError` identifying `safe_name` while preserving the underlying exception cause (`from exc`).
+  - Added unit regression test in `tests/test_attachments.py` verifying that malformed CSV structure raises `AttachmentValidationError` with `csv.Error` as cause.
+- Verification:
+  - Frontend test suites: 35 tests passed in `vitest.storage.config.mts` and 4 tests passed in `page.test.tsx`.
+  - Type-checking: `tsc --noEmit` passed with 0 errors.
+  - Linting: ESLint passed with 0 errors.
+  - Backend test suites: 58 tests passed in `tests/test_attachments.py` and `tests/test_stateless_web.py`.

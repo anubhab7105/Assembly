@@ -148,6 +148,8 @@ def validate_attachment(
                     )
     except json.JSONDecodeError as exc:
         raise AttachmentValidationError(f"{safe_name}: invalid JSON.") from exc
+    except csv.Error as exc:
+        raise AttachmentValidationError(f"{safe_name}: invalid CSV.") from exc
     normalized = _normalize_text(safe_name, text)
     return Attachment(
         filename=safe_name,

@@ -214,5 +214,42 @@ describe("Frontend attachment limits and batch validation", () => {
     expect(result.accepted[0].filename).toBe("app.ts")
     expect(result.accepted[0].media_type).toBe("text/plain")
   })
+
+  it("evaluates live attachment sizes from a getter when an existing 10 MiB attachment is removed during delayed read", async () => {
+    let existingList: DraftAttachment[] = [
+      { id: "1", filename: "old-10m.txt", media_type: "text/plain", content: "x", size: 10 * MiB },
+      { id: "2", filename: "keep-1.txt", media_type: "text/plain", content: "x", size: 10 * MiB },
+      { id: "3", filename: "keep-2.txt", media_type: "text/plain", content: "x", size: 10 * MiB },
+      { id: "4", filename: "keep-3.txt", media_type: "text/plain", content: "x", size: 10 * MiB },
+      { id: "5", filename: "keep-4.txt", media_type: "text/plain", content: "x", size: 2 * MiB },
+    ]
+
+    let resolveRead: (v: string) => void = () => {}
+    const delayedPromise = new Promise<string>((resolve) => {
+      resolveRead = resolve
+    })
+
+    const delayedFile = {
+      name: "new-1.txt",
+      size: 5 * MiB,
+      type: "text/plain",
+      text: vi.fn().mockImplementation(() => delayedPromise),
+    }
+    const secondFile = makeMockFile("new-2.txt", 9 * MiB, "ok")
+
+    const validationPromise = validateAttachmentBatch(() => existingList, [delayedFile, secondFile])
+
+    // Simulate removing the 10 MiB attachment during in-flight read
+    existingList = existingList.filter((item) => item.id !== "1")
+
+    resolveRead("delayed-done")
+    const result = await validationPromise
+
+    expect(result.errors).toEqual([])
+    expect(result.accepted).toHaveLength(2)
+    expect(result.accepted.map((f) => f.filename)).toEqual(["new-1.txt", "new-2.txt"])
+    // 32 MiB existing + 5 MiB + 9 MiB = 46 MiB
+    expect(result.totalBytes).toBe(46 * MiB)
+  })
 })
 

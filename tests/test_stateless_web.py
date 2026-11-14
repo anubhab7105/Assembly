@@ -723,3 +723,89 @@ def test_run_reports_attachment_truncation_and_bounds_pre_validation_cost(
     started_event = json.loads(started_line.removeprefix("data: "))
     assert started_event["attachment_truncated"] is True
     assert started_event["attachment_included_count"] == 1
+
+
+async def test_attachment_validation_gate_bounds_concurrency_and_waiters() -> None:
+    """AttachmentValidationGate limits concurrent executions and rejects excess waiters."""
+    from src.api.run import AttachmentValidationGate, AttachmentValidationQueueFull
+
+    gate = AttachmentValidationGate(max_concurrent=2, max_waiters=2)
+    started_active: list[int] = []
+    started_waiters: list[int] = []
+    release_active = asyncio.Event()
+
+    async def active_task(idx: int) -> None:
+        async with gate:
+            started_active.append(idx)
+            await release_active.wait()
+
+    async def waiter_task(idx: int) -> None:
+        started_waiters.append(idx)
+        async with gate:
+            pass
+
+    # Launch 2 active tasks that acquire the 2 semaphore slots
+    t1 = asyncio.create_task(active_task(1))
+    t2 = asyncio.create_task(active_task(2))
+    await asyncio.sleep(0.01)
+    assert len(started_active) == 2
+    assert gate.waiters == 0
+
+    # Launch 2 waiter tasks that wait for slots (reaching max_waiters=2)
+    t3 = asyncio.create_task(waiter_task(3))
+    t4 = asyncio.create_task(waiter_task(4))
+    await asyncio.sleep(0.01)
+    assert gate.waiters == 2
+
+    # A 5th task must fail immediately with AttachmentValidationQueueFull
+    with pytest.raises(AttachmentValidationQueueFull):
+        async with gate:
+            pass
+
+    # Release active tasks so waiters can proceed
+    release_active.set()
+    await asyncio.gather(t1, t2, t3, t4)
+    assert gate.waiters == 0
+
+
+def test_run_rejects_with_503_when_attachment_validation_queue_full(
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the attachment validation queue is full, /api/run returns 503 with Retry-After."""
+    import src.api.run as run_mod
+    from src.api.run import AttachmentValidationQueueFull
+    from src.core.rate_limit import _rate_limit_history
+    from src.main import app
+
+    _mock_filtered_router(monkeypatch)
+
+    class FullGate:
+        async def __aenter__(self) -> None:
+            raise AttachmentValidationQueueFull()
+
+        async def __aexit__(self, *args: object) -> None:
+            pass
+
+    monkeypatch.setattr(run_mod, "_ATTACHMENT_VALIDATION_GATE", FullGate())
+    _rate_limit_history.clear()
+
+    client = TestClient(app)
+    resp = client.post(
+        "/api/run",
+        json={
+            "question": "Test waiter threshold",
+            "time_budget_minutes": 3,
+            "provider_keys": {"groq": CANARY_KEY},
+            "model_selection": {"selected": [], "pins": {}},
+            "usage_snapshot": [],
+            "attachments": [
+                {"filename": "test.txt", "media_type": "text/plain", "content": "valid content"}
+            ],
+        },
+    )
+
+    assert resp.status_code == 503
+    assert resp.headers.get("Retry-After") == "5"
+    assert "Server is busy" in resp.json()["detail"]
+    # Rejection at the gate must not consume run rate limit quota
+    assert not any(action == "run" for _, action in _rate_limit_history)
