@@ -1,6 +1,7 @@
 import React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { PRIVACY_NOTICE_VERSION } from "@/lib/privacy-notice"
 import Home from "./page"
 
 vi.mock("next/navigation", () => ({
@@ -23,7 +24,7 @@ vi.mock("@/lib/api-client", () => ({
 
 vi.mock("@/lib/storage", () => ({
   storage: {
-    getSetting: vi.fn().mockResolvedValue(JSON.stringify({ version: 1 })),
+    getSetting: vi.fn().mockResolvedValue(JSON.stringify({ version: PRIVACY_NOTICE_VERSION })),
     setSetting: vi.fn().mockResolvedValue(undefined),
     getUsage: vi.fn().mockResolvedValue([]),
     setUsage: vi.fn().mockResolvedValue(undefined),
@@ -151,6 +152,70 @@ describe("Chat page investigation attachment handling", () => {
       expect(screen.getByText("ten.txt")).toBeTruthy()
     })
     expect(tenMiB.text).toHaveBeenCalledOnce()
+  })
+
+  it("prevents launch while validation is pending and includes the validated attachment in startRunStream", async () => {
+    let resolveFileRead: (value: string) => void = () => {}
+    const delayedTextPromise = new Promise<string>((resolve) => {
+      resolveFileRead = resolve
+    })
+    const delayedFile = {
+      name: "delayed.txt",
+      size: 100,
+      type: "text/plain",
+      text: vi.fn().mockImplementation(() => delayedTextPromise),
+    }
+
+    const { ApiClient } = await import("@/lib/api-client")
+    const { globalVault } = await import("@/lib/key-vault")
+    vi.mocked(globalVault.allKeys).mockResolvedValue({
+      groq: "k1",
+      google: "k2",
+      mistral: "k3",
+    })
+    vi.mocked(ApiClient.catalog).mockResolvedValue({
+      providers: [
+        { id: "groq", key_url: "https://groq.com", enabled: true, limits_ready: true, models: [{ id: "l", family: "llama", roles: ["solver"], scope: "free" }] },
+        { id: "google", key_url: "https://aistudio.google.com", enabled: true, limits_ready: true, models: [{ id: "g", family: "gemini", roles: ["solver"], scope: "free" }] },
+        { id: "mistral", key_url: "https://mistral.ai", enabled: true, limits_ready: true, models: [{ id: "m", family: "mistral", roles: ["critic"], scope: "free" }] },
+      ],
+      families: ["llama", "gemini", "mistral"],
+    })
+    vi.mocked(ApiClient.preflight).mockResolvedValue({ feasible: true })
+    vi.mocked(ApiClient.startRunStream).mockResolvedValue({ status: "completed", usage: [] })
+
+    render(<Home />)
+    const input = screen.getByLabelText("Choose investigation attachments") as HTMLInputElement
+    const questionInput = screen.getByPlaceholderText(/Ask anything/i)
+    fireEvent.change(questionInput, { target: { value: "Analyze this immediately" } })
+
+    // Select file with pending async validation
+    selectFiles(input, [delayedFile])
+
+    // The Run button is disabled while validation is in progress
+    const runButton = screen.getByRole("button", { name: /Run|Checking/i })
+    expect(runButton).toBeTruthy()
+
+    // Immediately resolve the file text so validation finishes
+    resolveFileRead("hello delayed content")
+
+    await waitFor(() => {
+      expect((runButton as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    fireEvent.click(runButton)
+
+    await waitFor(() => {
+      expect(ApiClient.startRunStream).toHaveBeenCalled()
+    })
+
+    const payload = vi.mocked(ApiClient.startRunStream).mock.calls[0][0]
+    expect(payload.attachments).toHaveLength(1)
+    expect(payload.attachments?.[0]).toEqual({
+      filename: "delayed.txt",
+      media_type: "text/plain",
+      content: "hello delayed content",
+    })
   })
 })
 

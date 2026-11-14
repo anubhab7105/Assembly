@@ -86,6 +86,29 @@ export type AttachmentBatchResult = {
   totalBytes: number
 }
 
+export function normalizeAttachmentMediaType(rawType: string, extension: string): string {
+  const declared = (rawType || "").split(";")[0].trim().toLowerCase()
+  if (extension === "json") return "application/json"
+  if (extension === "csv") return "text/csv"
+  if (extension === "md") return "text/markdown"
+  if (extension === "html") return "text/html"
+  if (extension === "css") return "text/css"
+  if (extension === "xml") return "text/xml"
+  if (extension === "yml" || extension === "yaml") return "text/yaml"
+  if (extension === "toml") return "application/toml"
+  if (extension === "js" || extension === "jsx") return "application/javascript"
+  if (extension === "ts" || extension === "tsx") return "text/plain"
+
+  if (
+    BACKEND_TEXT_MIME_TYPES.has(declared) ||
+    declared.startsWith("text/") ||
+    declared === "application/octet-stream"
+  ) {
+    return declared
+  }
+  return "text/plain"
+}
+
 export function getAttachmentExtension(filename: string): string {
   const lower = filename.toLowerCase()
   return lower.endsWith(".env.example")
@@ -122,6 +145,9 @@ export async function validateAttachmentBatch(
   let currentCount = existingAttachments.length
   const accepted: DraftAttachment[] = []
   const errors: string[] = []
+  const seenFilenames = new Set(
+    existingAttachments.map((item) => safeAttachmentDisplayName(item.filename).toLowerCase()),
+  )
   const pushError = (message: string) => {
     if (!errors.includes(message)) {
       errors.push(message)
@@ -132,6 +158,13 @@ export async function validateAttachmentBatch(
   for (const file of pickedFiles) {
     if (currentCount >= MAX_ATTACHMENT_COUNT) {
       pushError(`Attachments exceed the ${MAX_ATTACHMENT_COUNT}-file per-investigation limit.`)
+      continue
+    }
+
+    const safeName = safeAttachmentDisplayName(file.name)
+    const lowerName = safeName.toLowerCase()
+    if (seenFilenames.has(lowerName)) {
+      pushError(`${file.name}: an attachment with this name is already attached.`)
       continue
     }
 
@@ -187,12 +220,14 @@ export async function validateAttachmentBatch(
         }
       }
 
+      const normalizedMediaType = normalizeAttachmentMediaType(file.type || "", extension)
       totalBytes += effectiveSize
       currentCount += 1
+      seenFilenames.add(lowerName)
       accepted.push({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${accepted.length}`,
-        filename: file.name,
-        media_type: file.type || "text/plain",
+        filename: safeName,
+        media_type: normalizedMediaType,
         content,
         size: effectiveSize,
       })

@@ -4,10 +4,13 @@ import {
 } from "./attachments"
 import {
   isAssemblyBackupEnvelope,
+  MAX_ANSWER_CHARS,
+  MAX_BACKUP_EXPORT_BYTES,
   MAX_BACKUP_IMPORT_BYTES,
   MAX_BACKUP_IMPORT_MIB,
   MAX_HISTORY,
   MAX_HISTORY_FILE_SIZE,
+  MAX_QUESTION_CHARS,
   MAX_USAGE,
 } from "./history-file-limits"
 
@@ -263,7 +266,9 @@ function normalizeHistory(value: unknown): HistoryRecord | null {
   if (
     !isNonEmptyString(value.id) ||
     typeof value.question !== "string" ||
+    value.question.length > MAX_QUESTION_CHARS ||
     typeof value.answer !== "string" ||
+    value.answer.length > MAX_ANSWER_CHARS ||
     !isNonEmptyString(value.status) ||
     !isNonEmptyString(value.created_at) ||
     typeof value.minutes !== "number" ||
@@ -458,6 +463,12 @@ class BaseStorage implements StorageService {
   }
 
   async saveHistory(record: HistoryRecord): Promise<void> {
+    if (typeof record.question === "string" && record.question.length > MAX_QUESTION_CHARS) {
+      throw new Error(`Question exceeds maximum allowed length of ${MAX_QUESTION_CHARS.toLocaleString()} characters. Nothing was saved.`)
+    }
+    if (typeof record.answer === "string" && record.answer.length > MAX_ANSWER_CHARS) {
+      throw new Error(`Answer exceeds maximum allowed length of ${MAX_ANSWER_CHARS.toLocaleString()} characters. Nothing was saved.`)
+    }
     const normalized = normalizeHistory(record)
     if (!normalized) throw new Error("Invalid history record. Nothing was saved.")
     const items = (await idbGet<unknown>("history")) ?? []
@@ -504,7 +515,14 @@ class BaseStorage implements StorageService {
     const history = await this.listHistory()
     const usage = await this.getUsage()
 
-    return JSON.stringify({ version: 1, history, usage }, null, 2)
+    const payload = JSON.stringify({ version: 1, history, usage }, null, 2)
+    const size = new TextEncoder().encode(payload).byteLength
+    if (size > MAX_BACKUP_EXPORT_BYTES) {
+      throw new Error(
+        `History backup is too large to export (${Math.round(size / (1024 * 1024))} MiB). Maximum allowed backup size is ${MAX_BACKUP_IMPORT_MIB} MiB.`
+      )
+    }
+    return payload
   }
 
 

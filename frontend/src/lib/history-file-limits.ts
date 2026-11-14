@@ -7,14 +7,22 @@ export const MAX_HISTORY = 200
 /** Maximum number of usage entries retained and accepted in Assembly v1 backups. */
 export const MAX_USAGE = 200
 
-/**
- * Hard OOM guard when restoring Assembly version-1 backups (256 MiB).
- * Covers large valid saveHistory() exports (up to 200 records with uncapped
- * answer text) while remaining safely below JS string/IndexedDB limits.
- */
-export const MAX_BACKUP_IMPORT_BYTES = 256 * 1024 * 1024
+/** Maximum allowed character count for a question in a history record. */
+export const MAX_QUESTION_CHARS = 4_000
 
-/** Human-readable MiB value for MAX_BACKUP_IMPORT_BYTES error messages. */
+/** Maximum allowed character count for an answer in a history record (~50,000 words). */
+export const MAX_ANSWER_CHARS = 250_000
+
+/**
+ * Hard bound for Assembly version-1 history exports and backup restoration (50 MiB).
+ * Enforces a consistent contract across saveHistory, exportJSON, and importJSON:
+ * with 200 records at up to 250,000 characters each, all valid generated backups
+ * remain under 50 MiB and are guaranteed to be restorable.
+ */
+export const MAX_BACKUP_IMPORT_BYTES = 50 * 1024 * 1024
+export const MAX_BACKUP_EXPORT_BYTES = MAX_BACKUP_IMPORT_BYTES
+
+/** Human-readable MiB value for backup limit error messages. */
 export const MAX_BACKUP_IMPORT_MIB = Math.round(MAX_BACKUP_IMPORT_BYTES / (1024 * 1024))
 
 /** Validates the strict top-level shape of an Assembly version-1 backup envelope. */

@@ -34,6 +34,8 @@ from src.database.schemas import RunRequest
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
 from src.providers.quota import get_limiter
 from src.research.attachments import (
+    Attachment,
+    AttachmentContext,
     AttachmentValidationError,
     build_attachment_context,
     validate_attachments,
@@ -110,6 +112,16 @@ class _RunEntry:
 
 _runs: dict[str, _RunEntry] = {}
 _runs_lock = asyncio.Lock()
+_ATTACHMENT_VALIDATION_SEMAPHORE = asyncio.Semaphore(4)
+
+
+def _process_attachments_worker(
+    raw_items: list[dict],
+) -> tuple[list[Attachment], AttachmentContext]:
+    """CPU-bound worker executing attachment decoding and parsing off the event loop."""
+    attachments = validate_attachments(raw_items)
+    attachment_data = build_attachment_context(attachments)
+    return attachments, attachment_data
 
 
 def _now() -> float:
@@ -335,11 +347,15 @@ async def start_run(req: RunRequest, request: Request):
             60,
         )
 
+    raw_items = [item.model_dump() for item in (req.attachments or [])]
     try:
-        attachments = validate_attachments(
-            [item.model_dump() for item in (req.attachments or [])]
-        )
-        attachment_data = build_attachment_context(attachments)
+        if raw_items:
+            async with _ATTACHMENT_VALIDATION_SEMAPHORE:
+                _attachments, attachment_data = await asyncio.to_thread(
+                    _process_attachments_worker, raw_items
+                )
+        else:
+            attachment_data = build_attachment_context([])
     except AttachmentValidationError as exc:
         limited = await _count_invalid_or_429(ip)
         if limited is not None:
@@ -492,7 +508,7 @@ async def start_run(req: RunRequest, request: Request):
             while True:
                 try:
                     item = await asyncio.wait_for(entry.queue.get(), timeout=heartbeat)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ":heartbeat\n\n"
                     continue
                 if item is None:
@@ -503,7 +519,7 @@ async def start_run(req: RunRequest, request: Request):
                     try:
                         term = await asyncio.wait_for(entry.queue.get(), timeout=2.0)
                         _ = term
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         pass
                     break
         except asyncio.CancelledError:

@@ -92,12 +92,12 @@ describe("History import file size validation", () => {
     const baseRecord: HistoryRecord = {
       id: "run-0",
       question: "Test question?",
-      answer: "x".repeat(900_000),
+      answer: "x".repeat(240_000),
       status: "completed",
       created_at: "2026-01-01T00:00:00.000Z",
       minutes: 5,
     }
-    for (let i = 0; i < 6; i += 1) {
+    for (let i = 0; i < 24; i += 1) {
       await storage.saveHistory({ ...baseRecord, id: `big-${i}` })
     }
     await storage.setUsage([{ provider: "google", model: "gemini", count: 2, tokens: 1200 }])
@@ -114,7 +114,7 @@ describe("History import file size validation", () => {
 
     expect(exportedFile.text).toHaveBeenCalledOnce()
     expect(importSpy).toHaveBeenCalledWith(exportedPayload)
-    expect(await storage.listHistory()).toHaveLength(6)
+    expect(await storage.listHistory()).toHaveLength(24)
     expect(await storage.getUsage()).toEqual([
       { provider: "google", model: "gemini", count: 2, tokens: 1200 },
     ])
@@ -137,7 +137,7 @@ describe("History import file size validation", () => {
     importSpy.mockClear()
     await importHistoryFile(reorderedFile, (text) => storage.importJSON(text))
     expect(importSpy).toHaveBeenCalledWith(reorderedPayload)
-    expect(await storage.listHistory()).toHaveLength(6)
+    expect(await storage.listHistory()).toHaveLength(24)
 
     // Non-backup > 5 MiB fails preflight before reading full file.
     const externalPayload = JSON.stringify({
@@ -152,19 +152,35 @@ describe("History import file size validation", () => {
     expect(externalFile.text).not.toHaveBeenCalled()
     expect(importExternal).not.toHaveBeenCalled()
 
-    // Spoofed prefix > 5 MiB passes preflight only for validation, then fails without invoking importJSON.
+    // Spoofed prefix > 5 MiB with extra_field fails preflight before reading full file.
     const spoofedPayload = JSON.stringify({
       version: 1,
-      history: [{ ...baseRecord, answer: "a".repeat(MAX_IMPORT_FILE_SIZE + 1024) }],
+      history: [{ ...baseRecord, answer: "a".repeat(240_000) }],
       usage: [],
       extra_field: true,
+      padding: "p".repeat(MAX_IMPORT_FILE_SIZE),
     })
     const spoofedFile = makeByteBackedFile(spoofedPayload)
     const importSpoofed = vi.fn().mockResolvedValue(undefined)
     await expect(importHistoryFile(spoofedFile, importSpoofed)).rejects.toThrow(
       "This file is too large to import.",
     )
-    expect(spoofedFile.text).toHaveBeenCalledOnce()
+    expect(spoofedFile.text).not.toHaveBeenCalled()
     expect(importSpoofed).not.toHaveBeenCalled()
+
+    // Spoofed prefix > 5 MiB with empty history fails preflight without reading full file.
+    const emptyHistorySpoof = JSON.stringify({
+      version: 1,
+      history: [],
+      usage: [],
+      junk: "j".repeat(MAX_IMPORT_FILE_SIZE + 1024),
+    })
+    const emptyHistoryFile = makeByteBackedFile(emptyHistorySpoof)
+    const importEmptySpoof = vi.fn().mockResolvedValue(undefined)
+    await expect(importHistoryFile(emptyHistoryFile, importEmptySpoof)).rejects.toThrow(
+      "This file is too large to import.",
+    )
+    expect(emptyHistoryFile.text).not.toHaveBeenCalled()
+    expect(importEmptySpoof).not.toHaveBeenCalled()
   })
 })

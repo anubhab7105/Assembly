@@ -10,6 +10,8 @@
 import asyncio
 import json
 import logging
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -524,35 +526,70 @@ def test_run_accepts_empty_and_more_than_five_attachments_within_50_mib(web_mode
     assert "batch-0.txt" in captured["attachment_context"]
 
 
-def test_run_rejects_excessive_request_body_over_max_run_body_bytes(web_mode, monkeypatch):
+def test_run_rejects_excessive_request_body_over_max_run_body_bytes(
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.api.run import _runs
     from src.core.config import settings
     from src.main import app
 
     monkeypatch.setattr(settings, "max_run_body_bytes", 128)
     monkeypatch.setattr(settings, "max_body_bytes", 64)
-    res = TestClient(app).post(
+    client = TestClient(app)
+
+    # 1. Declared Content-Length exceeding the route limit is rejected with 413.
+    res_declared = client.post(
         "/api/run",
         content=b"x" * 200,
         headers={"content-type": "application/json", "content-length": "200"},
     )
-    assert res.status_code == 413
-    assert res.json() == {"detail": "Request body too large."}
+    assert res_declared.status_code == 413
+    assert res_declared.json() == {"detail": "Request body too large."}
+    assert len(_runs) == 0
+
+    # 2. Streamed request body without Content-Length exceeding the limit returns 413.
+    def stream_oversized_chunks() -> Iterator[bytes]:
+        for _ in range(4):
+            yield b"x" * 50
+
+    res_streamed = client.post(
+        "/api/run",
+        content=stream_oversized_chunks(),
+        headers={"content-type": "application/json"},
+    )
+    assert res_streamed.status_code == 413
+    assert res_streamed.json() == {"detail": "Request body too large."}
+    assert len(_runs) == 0
+
+    # 3. Streamed request body with understated Content-Length returns 413.
+    res_understated = client.post(
+        "/api/run",
+        content=stream_oversized_chunks(),
+        headers={"content-type": "application/json", "content-length": "50"},
+    )
+    assert res_understated.status_code == 413
+    assert res_understated.json() == {"detail": "Request body too large."}
+    assert len(_runs) == 0
 
 
-def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(web_mode, monkeypatch, caplog):
+def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """The uploaded text becomes prompt context, not response/log metadata."""
     import src.orchestration.orchestrator as orch_mod
     from src.main import app
     from src.orchestration.orchestrator import ExecutionResult
 
     source_marker = "ATTACHMENT-CONTENT-CANARY-7F3C"
-    captured = {}
+    captured: dict[str, Any] = {}
 
     class StubOrch:
-        def __init__(self):
+        router: Any
+
+        def __init__(self) -> None:
             self.router = None
 
-        async def execute(self, **kwargs):
+        async def execute(self, **kwargs: Any) -> ExecutionResult:
             captured["question"] = kwargs["question"]
             captured["attachment_context"] = kwargs["attachment_context"]
             return ExecutionResult(
@@ -603,7 +640,7 @@ def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(web_mode, m
 
 
 def test_run_reports_attachment_truncation_and_bounds_pre_validation_cost(
-    web_mode, monkeypatch
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """SSE run.started reports truncation, and invalid attachments don't spend run quota."""
     import src.orchestration.orchestrator as orch_mod

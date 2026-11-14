@@ -179,5 +179,40 @@ describe("Frontend attachment limits and batch validation", () => {
       MAX_ATTACHMENT_CONTEXT_CHARS,
     )
   })
+
+  it("rejects duplicate filenames case-insensitively against existing and batch files", async () => {
+    const existing: DraftAttachment[] = [
+      {
+        id: "1",
+        filename: "notes.txt",
+        media_type: "text/plain",
+        content: "first",
+        size: 5,
+      },
+    ]
+    const duplicateOfExisting = makeMockFile("NOTES.TXT", 5, "dup")
+    const batchFile1 = makeMockFile("sample.py", 10, "code")
+    const batchFile2 = makeMockFile("SAMPLE.PY", 10, "duplicate in batch")
+
+    const result = await validateAttachmentBatch(existing, [
+      duplicateOfExisting,
+      batchFile1,
+      batchFile2,
+    ])
+
+    expect(result.accepted.map((a) => a.filename)).toEqual(["sample.py"])
+    expect(result.errors).toContain("NOTES.TXT: an attachment with this name is already attached.")
+    expect(result.errors).toContain("SAMPLE.PY: an attachment with this name is already attached.")
+  })
+
+  it("normalizes browser MIME types such as video/mp2t on .ts files to backend allowlist", async () => {
+    const tsFile = makeMockFile("app.ts", 20, "const x = 1;", "video/mp2t")
+    const result = await validateAttachmentBatch([], [tsFile])
+
+    expect(result.errors).toEqual([])
+    expect(result.accepted).toHaveLength(1)
+    expect(result.accepted[0].filename).toBe("app.ts")
+    expect(result.accepted[0].media_type).toBe("text/plain")
+  })
 })
 

@@ -261,26 +261,49 @@ describe("BrowserStorage lifecycle contracts", () => {
     expect((await store.getHistory("run-over-50"))?.attachments).toBeUndefined()
   })
 
+  it("enforces consistent answer, export, and import size contracts", async () => {
+    const store = new BrowserStorage()
+
+    // 1. saveHistory rejects records exceeding MAX_ANSWER_CHARS (250,000 chars)
+    await expect(
+      store.saveHistory({
+        ...baseRecord,
+        id: "too-long",
+        answer: "a".repeat(250_001),
+      }),
+    ).rejects.toThrow(/exceeds maximum allowed length/)
+
+    // 2. importJSON rejects backups exceeding MAX_BACKUP_IMPORT_BYTES (50 MiB)
+    const overFiftyMiB = JSON.stringify({
+      version: 1,
+      history: [],
+      usage: [],
+      padding: "x".repeat(50 * 1024 * 1024 + 1),
+    })
+    await expect(store.importJSON(overFiftyMiB)).rejects.toThrow(/Maximum allowed backup size is 50 MiB/)
+  })
+
   it("enforces the 5 MiB limit on external imports while allowing export and restore of valid > 5 MiB Assembly v1 backups", async () => {
     const store = new BrowserStorage()
     await store.saveHistory(baseRecord)
 
-    // External non-backup > 5 MiB (multi-byte UTF-8) is rejected before updating storage.
+    // External non-backup > 5 MiB is rejected before updating storage.
     const utf8Over5MiBExternal = JSON.stringify({
       version: 1,
       external_source: true,
-      history: [{ ...baseRecord, id: "oversized", answer: "é".repeat(2_650_000) }],
+      history: [{ ...baseRecord, id: "oversized", answer: "x".repeat(100_000) }],
       usage: [],
+      extra_payload: "p".repeat(5 * 1024 * 1024 + 1024),
     })
     await expect(store.importJSON(utf8Over5MiBExternal)).rejects.toThrow(/5 MiB/)
     expect(await store.listHistory()).toEqual([baseRecord])
 
-    // Large valid histories (> 5 MiB UTF-8 bytes) still export cleanly and restore into storage.
-    for (let i = 0; i < 6; i += 1) {
+    // Large valid histories (> 5 MiB UTF-8 bytes) within MAX_ANSWER_CHARS still export cleanly and restore.
+    for (let i = 0; i < 24; i += 1) {
       await store.saveHistory({
         ...baseRecord,
         id: `big-${i}`,
-        answer: "x".repeat(900_000),
+        answer: "x".repeat(240_000),
       })
     }
     const backup = await store.exportJSON()
@@ -290,6 +313,6 @@ describe("BrowserStorage lifecycle contracts", () => {
     expect(await store.listHistory()).toEqual([])
 
     await store.importJSON(backup)
-    expect((await store.listHistory()).length).toBe(7)
+    expect((await store.listHistory()).length).toBe(25)
   })
 })

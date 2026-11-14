@@ -44,6 +44,8 @@ export default function Home() {
   const [attachments, setAttachments] = useState<DraftAttachment[]>([])
   const attachmentsRef = useRef<DraftAttachment[]>([])
   const attachmentQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const [isValidatingAttachments, setIsValidatingAttachments] = useState(false)
+  const pendingValidationCountRef = useRef(0)
   const [minutes, setMinutes] = useState(5)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
@@ -169,38 +171,47 @@ export default function Home() {
   const handleFilesSelected = async (files: FileList | null) => {
     if (!files?.length) return
     const picked = Array.from(files)
+    pendingValidationCountRef.current += 1
+    setIsValidatingAttachments(true)
     const runBatch = async () => {
-      const result = await validateAttachmentBatch(attachmentsRef.current, picked)
-      if (result.accepted.length > 0) {
-        const next = [...attachmentsRef.current, ...result.accepted]
-        attachmentsRef.current = next
-        setAttachments(next)
-      }
-      const estimatedPromptChars = estimateAttachmentContextChars(
-        attachmentsRef.current,
-      )
-      const truncationNotice =
-        estimatedPromptChars > MAX_ATTACHMENT_CONTEXT_CHARS
-          ? ` Formatted attachment context exceeds ${MAX_ATTACHMENT_CONTEXT_CHARS.toLocaleString()} characters, so extra content will be truncated before sending to models.`
-          : ""
-      if (result.accepted.length > 0 && result.errors.length > 0) {
-        setStatus(
-          makeChatStatus(
-            `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. ${result.errors.join(" ")}${truncationNotice}`,
-            "warning",
-          ),
+      try {
+        const result = await validateAttachmentBatch(attachmentsRef.current, picked)
+        if (result.accepted.length > 0) {
+          const next = [...attachmentsRef.current, ...result.accepted]
+          attachmentsRef.current = next
+          setAttachments(next)
+        }
+        const estimatedPromptChars = estimateAttachmentContextChars(
+          attachmentsRef.current,
         )
-      } else if (result.errors.length > 0) {
-        setStatus(makeChatStatus(result.errors.join(" "), "warning"))
-      } else if (result.accepted.length > 0) {
-        setStatus(
-          makeChatStatus(
-            `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.${truncationNotice}`,
-            truncationNotice ? "warning" : "info",
-          ),
-        )
+        const truncationNotice =
+          estimatedPromptChars > MAX_ATTACHMENT_CONTEXT_CHARS
+            ? ` Formatted attachment context exceeds ${MAX_ATTACHMENT_CONTEXT_CHARS.toLocaleString()} characters, so extra content will be truncated before sending to models.`
+            : ""
+        if (result.accepted.length > 0 && result.errors.length > 0) {
+          setStatus(
+            makeChatStatus(
+              `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. ${result.errors.join(" ")}${truncationNotice}`,
+              "warning",
+            ),
+          )
+        } else if (result.errors.length > 0) {
+          setStatus(makeChatStatus(result.errors.join(" "), "warning"))
+        } else if (result.accepted.length > 0) {
+          setStatus(
+            makeChatStatus(
+              `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.${truncationNotice}`,
+              truncationNotice ? "warning" : "info",
+            ),
+          )
+        }
+        if (fileInputRef.current) fileInputRef.current.value = ""
+      } finally {
+        pendingValidationCountRef.current = Math.max(0, pendingValidationCountRef.current - 1)
+        if (pendingValidationCountRef.current === 0) {
+          setIsValidatingAttachments(false)
+        }
       }
-      if (fileInputRef.current) fileInputRef.current.value = ""
     }
     const nextQueue = attachmentQueueRef.current.then(runBatch, runBatch)
     attachmentQueueRef.current = nextQueue
@@ -208,7 +219,11 @@ export default function Home() {
   }
 
   const handleLaunch = async () => {
-    if ((!question.trim() && attachments.length === 0) || loading) return
+    if (loading) return
+    // Wait for any queued attachment validation to settle before launching
+    await attachmentQueueRef.current
+    const activeAttachments = attachmentsRef.current
+    if ((!question.trim() && activeAttachments.length === 0) || loading) return
     if (!privacyAcked) {
       setShowPrivacy(true)
       setStatus(makeChatStatus("Please acknowledge the privacy notice first.", "info"))
@@ -269,7 +284,7 @@ export default function Home() {
           minutes,
           providerKeys,
           searchKeys,
-          attachments: attachments.map(({ filename, media_type, content }) => ({ filename, media_type, content })),
+          attachments: activeAttachments.map(({ filename, media_type, content }) => ({ filename, media_type, content })),
           selection: { selected: selection.selected, pins: selection.pins },
           usage,
         },
@@ -332,7 +347,7 @@ export default function Home() {
           tokens,
           elapsedSeconds,
           disagreements: [],
-          attachments: attachments.map(({ filename, media_type, size }) => ({
+          attachments: activeAttachments.map(({ filename, media_type, size }) => ({
             filename,
             media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
             size_bytes: size,
@@ -367,7 +382,7 @@ export default function Home() {
         elapsedSeconds,
         verification: verification ?? undefined,
         disagreements: [],
-        attachments: attachments.map(({ filename, media_type, size }) => ({
+        attachments: activeAttachments.map(({ filename, media_type, size }) => ({
           filename,
           media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
           size_bytes: size,
@@ -565,9 +580,14 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <Button size="default" onClick={handleLaunch} disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"} className="assembly-chat-run-button min-h-10 rounded-xl px-4">
+              <Button
+                size="default"
+                onClick={handleLaunch}
+                disabled={loading || isValidatingAttachments || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
+                className="assembly-chat-run-button min-h-10 rounded-xl px-4"
+              >
                 {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="mr-1.5 size-4" />}
-                {loading ? "Running…" : "Run"}
+                {loading ? "Running…" : isValidatingAttachments ? "Checking…" : "Run"}
               </Button>
             </div>
           </div>
