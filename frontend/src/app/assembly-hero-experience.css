@@ -141,31 +141,11 @@
   margin: 0;
 }
 
-/* Sticky 3D Orbiting Models on Right */
-.assembly-nova-experience-root .sticky-orbit-wrapper {
+/* Orbiting Models on Right (Scrolls up naturally with Section 1) */
+.assembly-nova-experience-root .intro-orbit-box {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: clamp(24px, calc(50vh - 230px), 140px);
-  left: 0;
-  pointer-events: none;
-  z-index: 5;
-  display: flex;
-  justify-content: center;
-}
-
-.assembly-nova-experience-root .sticky-orbit-stage {
-  width: 1240px;
-  max-width: calc(100% - 48px);
-  height: 100%;
-  position: relative;
-  pointer-events: none;
-}
-
-.assembly-nova-experience-root .sticky-orbit-box {
-  position: sticky;
   top: clamp(48px, calc(50vh - 220px), 185px);
-  margin-left: auto;
+  right: 0;
   width: 640px;
   height: 580px;
   max-width: 52%;

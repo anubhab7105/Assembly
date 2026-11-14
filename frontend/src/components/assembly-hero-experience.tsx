@@ -55,15 +55,6 @@ export function AssemblyHeroExperience() {
 
   return (
     <div ref={rootRef} className="assembly-nova-experience-root">
-      {/* Sticky 3D Orbiting Models on Right */}
-      <div className="sticky-orbit-wrapper" aria-hidden="true">
-        <div className="sticky-orbit-stage">
-          <div className="sticky-orbit-box">
-            <BrandOrbsOrbitCanvas />
-          </div>
-        </div>
-      </div>
-
       {/* Main Multi-Section Content */}
       <div className="content-container">
         {/* Section 1: Intro */}
@@ -98,6 +89,11 @@ export function AssemblyHeroExperience() {
                   debates, replacing blind single-model trust with verifiable epistemic rigor.
                 </p>
               </div>
+            </div>
+
+            {/* Orbiting Models on Right (Scrolls up naturally with Section 1) */}
+            <div className="intro-orbit-box" aria-hidden="true">
+              <BrandOrbsOrbitCanvas />
             </div>
           </div>
         </section>
