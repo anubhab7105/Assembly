@@ -255,16 +255,6 @@ class Orchestrator:
 
         total_tokens = 0
         warnings: list[str] = []
-        # Report metadata only: never include attachment text in events or logs.
-        if attachment_context:
-            await emit_event(
-                ProgressEventType.AGENT_STATUS,
-                {
-                    "role": "system",
-                    "activity": "Using attached file context (untrusted data).",
-                    "state": ExecState.CAPACITY_CHECK.value,
-                },
-            )
         call_log: list[dict] = []
         recorder = EventRecorder(execution_id)
         open_disagreement_keys: dict = {}
@@ -420,6 +410,16 @@ class Orchestrator:
                     "state": ExecState.CAPACITY_CHECK.value,
                 },
             )
+            # Report metadata only: never include attachment text in events or logs.
+            if attachment_context:
+                await emit_event(
+                    ProgressEventType.AGENT_STATUS,
+                    {
+                        "role": "system",
+                        "activity": "Using attached file context (untrusted data).",
+                        "state": ExecState.CAPACITY_CHECK.value,
+                    },
+                )
             warning_texts, quota_payload = self._advisory_capacity_check(
                 router, question
             )
@@ -584,7 +584,7 @@ class Orchestrator:
                             ),
                         },
                     )
-            except Exception:  # noqa: BLE001 — warning must not break the run
+            except Exception:  # noqa: BLE001, S110 — warning must not break the run
                 pass
 
             # ════════════════════════════════════════════════════════════

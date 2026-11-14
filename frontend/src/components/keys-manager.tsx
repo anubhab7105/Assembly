@@ -1,9 +1,11 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { globalVault } from "@/lib/key-vault"
 import { env } from "@/lib/env"
 import { ApiClient, type Catalog } from "@/lib/api-client"
@@ -16,11 +18,21 @@ import {
   whyProviderLine,
 } from "@/lib/key-setup"
 import { useToast } from "@/components/ui/toast"
-import { Shield, Key, Trash2, ExternalLink, Copy, AlertTriangle, Sparkles } from "lucide-react"
+import { Shield, Key, Trash2, ExternalLink, Copy, AlertTriangle, Sparkles, ArrowRight } from "lucide-react"
 
 type KeyStatus = "unknown" | "valid" | "invalid" | "rate_limited" | "model_unavailable" | "unreachable" | "testing"
 
 type StatusDetail = { message?: string; availableModels?: string[] }
+
+const KEY_STATUS_LABEL: Record<KeyStatus, string> = {
+  unknown: "Not tested",
+  valid: "Valid",
+  invalid: "Key not accepted",
+  rate_limited: "Valid, rate-limited",
+  model_unavailable: "Valid, model unavailable",
+  unreachable: "Server unreachable",
+  testing: "Testing…",
+}
 
 function cleanPastedKey(raw: string): string {
   return (raw || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim()
@@ -37,6 +49,7 @@ export function KeysManager() {
   const desktopMode = env.NEXT_PUBLIC_APP_MODE === "desktop"
 
   const [catalog, setCatalog] = useState<Catalog | null>(null)
+  const [catalogLoading, setCatalogLoading] = useState(true)
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({})
   const [statuses, setStatuses] = useState<Record<string, KeyStatus>>({})
@@ -55,6 +68,8 @@ export function KeysManager() {
         setCatalog(await ApiClient.catalog())
       } catch {
         setCatalog(null)
+      } finally {
+        setCatalogLoading(false)
       }
       // Load first: read the canonical store before rendering anything that
       // could write. A legacy encrypted blob with an empty canonical store
@@ -221,6 +236,7 @@ export function KeysManager() {
   }
 
   const handleClearAll = async () => {
+    if (!confirm("Remove all saved keys from this browser? This cannot be undone.")) return
     try {
       await globalVault.clearAll()
     } catch {
@@ -275,7 +291,40 @@ export function KeysManager() {
     providers.filter((p) => p.limits_ready && savedKeys[p.id]).length,
   )
 
-  if (!vaultLoaded) return null
+  if (!vaultLoaded) {
+    return (
+      <div className="w-full space-y-8" aria-busy="true" aria-label="Loading saved keys and providers">
+        <Card>
+          <CardHeader className="space-y-3">
+            <Skeleton className="h-5 w-40 rounded-none" />
+            <Skeleton className="h-3 w-full rounded-none" />
+            <Skeleton className="h-3 w-3/4 rounded-none" />
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="space-y-3">
+            <Skeleton className="h-5 w-40 rounded-none" />
+            <Skeleton className="h-3 w-56 rounded-none" />
+          </CardHeader>
+        </Card>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((index) => (
+            <Card key={index}>
+              <CardHeader className="space-y-3">
+                <Skeleton className="h-5 w-24 rounded-none" />
+                <Skeleton className="h-3 w-full rounded-none" />
+                <Skeleton className="h-3 w-2/3 rounded-none" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-10 w-full rounded-none" />
+                <Skeleton className="h-9 w-full rounded-none" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   const recommendedOrder = catalog?.recommended_order ?? providers.map((p) => p.id)
   const banner = minimumToStartBanner(readyFamilies.size, recommendedOrder)
@@ -295,10 +344,51 @@ export function KeysManager() {
         <CardHeader className="pb-3">
           <CardTitle>Minimum to start</CardTitle>
           <CardDescription data-testid="minimum-to-start-text">{banner}</CardDescription>
-          <CardDescription className="mt-1">
-            Quick setup: (1) save keys for available providers, (2) check that each provider has usable quota limits, and (3) return to New Investigation. Three distinct model families are recommended; two can run with a warning. The readiness status below counts only configured providers whose quota metadata is ready.
-          </CardDescription>
+          <div className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
+            <p className="font-medium text-foreground">Quick setup</p>
+            <ol className="list-decimal space-y-1 pl-4">
+              <li>Save a free key for each provider you want to use.</li>
+              <li>Press <b className="font-medium text-foreground">Save &amp; Test</b> and check the result.</li>
+              <li>Return to Run and start an investigation.</li>
+            </ol>
+            <p>
+              Three distinct model families are recommended; two can run with a warning. The readiness
+              status below counts only configured providers whose quota metadata is ready.
+            </p>
+          </div>
         </CardHeader>
+      </Card>
+      <Card className={gate.level === "OK" ? "border-success/30" : "border-warning/30"}>
+        <CardHeader className="pb-3">
+          <CardTitle>Team Readiness</CardTitle>
+          <CardDescription data-testid="readiness-chip">
+            {catalog ? gateChipText(gate) : "Waiting for the provider list"}
+          </CardDescription>
+          {gate.level !== "OK" && catalog && (
+            <CardDescription className="text-warning">{gate.reasons[0]}</CardDescription>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {gate.families_ready.map((f) => (
+              <Badge key={f} variant="secondary" className="font-mono">{f}</Badge>
+            ))}
+            {gate.families_ready.length === 0 && (
+              <span className="text-sm opacity-60">
+                {catalog ? "No keys configured yet." : "Provider list unavailable. Saved keys stay on this device."}
+              </span>
+            )}
+          </div>
+          {gate.level !== "BLOCKED" && (
+            <Link
+              href="/chat"
+              className="asm-btn asm-btn-primary flex min-h-10 w-full items-center justify-between px-3 text-[0.6rem]"
+            >
+              Start an investigation
+              <ArrowRight className="size-3.5" aria-hidden />
+            </Link>
+          )}
+        </CardContent>
       </Card>
 
       {needsUnlock && (
@@ -339,8 +429,33 @@ export function KeysManager() {
         Saved keys stay in this browser across refreshes and can be removed here or cleared with site data. Keys are stored unencrypted in local browser storage, not protected by the OS.
       </p>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {providers.map((provider) => {
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={catalogLoading || undefined}>
+        {catalogLoading ? (
+          [0, 1, 2].map((index) => (
+            <Card key={index} aria-hidden="true">
+              <CardHeader className="space-y-3">
+                <Skeleton className="h-5 w-24 rounded-none" />
+                <Skeleton className="h-3 w-2/3 rounded-none" />
+                <Skeleton className="h-3 w-full rounded-none" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-10 w-full rounded-none" />
+                <Skeleton className="h-9 w-full rounded-none" />
+              </CardContent>
+            </Card>
+          ))
+        ) : !catalog ? (
+          <Card data-testid="provider-catalog-unavailable" className="sm:col-span-2 lg:col-span-3">
+            <CardHeader>
+              <CardTitle>Provider list unavailable</CardTitle>
+              <CardDescription>
+                Assembly couldn&apos;t load the list of free providers. Check that the Assembly server is
+                running, then use Retry on the connection banner above. Keys already saved stay on this
+                device.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        ) : providers.map((provider) => {
           const hasSavedKey = !!savedKeys[provider.id]
           const st = statuses[provider.id] || "unknown"
           const steps = provider.key_steps ?? []
@@ -426,7 +541,7 @@ export function KeysManager() {
                   {st !== "unknown" && st !== "testing" && (
                     <div className="space-y-1">
                       <p data-testid={`test-result-${provider.id}`} className="text-xs">
-                        Test result: {st}
+                        Test result: {KEY_STATUS_LABEL[st]}
                       </p>
                       {details[provider.id]?.message && (
                         <p data-testid={`test-message-${provider.id}`} className="text-xs opacity-80">

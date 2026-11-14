@@ -1,7 +1,7 @@
 """Offline tests for scripts/quota_report.py (tmp SQLite, no network/keys)."""
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from scripts.quota_report import (
     format_duration,
@@ -65,7 +65,7 @@ def test_read_missing_db_is_empty(tmp_path) -> None:
 
 
 def test_render_totals_and_countdown() -> None:
-    now = datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 9, 12, 0, tzinfo=UTC)
     table, calls, tokens = render([("groq", "m", 5, 150)], now)
     assert calls == 5 and tokens == 150
     assert "groq" in table and "150" in table

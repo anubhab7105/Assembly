@@ -9,12 +9,10 @@ conftest socket guard would fail anything that slipped through.
 from datetime import date
 
 import httpx
-import pytest
 import respx
 
 import scripts.verify_models as verify
 from src.providers.config import ProviderSpec, provider_limits_issue
-
 
 
 def test_quota_metadata_requires_source_and_verification_date() -> None:
@@ -40,9 +38,7 @@ def test_quota_metadata_requires_source_and_verification_date() -> None:
     )
     issue = provider_limits_issue("testprov", spec)
     assert issue is not None and "quota_source" in issue
-    dated = spec.model_copy(
-        update={"quota_source": "https://provider.example/limits"}
-    )
+    dated = spec.model_copy(update={"quota_source": "https://provider.example/limits"})
     issue = provider_limits_issue("testprov", dated)
     assert issue is not None and "quota_last_verified" in issue
 

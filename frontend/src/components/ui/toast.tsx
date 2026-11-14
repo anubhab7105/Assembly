@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 /* ─── Variants ────────────────────────────────────────────────────────────── */
 const toastVariants = cva(
   [
-    "relative flex w-[360px] max-w-[90vw] items-start gap-3 rounded-xl border p-4 shadow-lg",
+    "relative flex w-[360px] max-w-[90vw] items-start gap-3 rounded-none border p-4 shadow-lg",
     "animate-toast-in",
   ].join(" "),
   {
@@ -40,7 +40,7 @@ function DismissButton({ onClick }: { onClick: () => void }) {
     <button
       onClick={onClick}
       aria-label="Dismiss notification"
-      className="ml-auto flex-none rounded-md p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="ml-auto flex-none rounded-none p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <X className="size-4" />
     </button>

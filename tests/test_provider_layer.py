@@ -310,9 +310,7 @@ async def test_429_surfaces_immediately_for_router_failover() -> None:
         await _provider(max_retries=2).generate(_messages())
     assert exc_info.value.retry_after == 99999.0
     assert route.call_count == 1
-    assert get_limiter().is_exhausted(
-        "test", _provider()._fingerprint, "m"
-    )
+    assert get_limiter().is_exhausted("test", _provider()._fingerprint, "m")
 
 
 @respx.mock
@@ -343,6 +341,7 @@ async def test_connection_error_raises_provider_down() -> None:
     with pytest.raises(ProviderDown):
         await _provider(max_retries=1).generate(_messages())
     assert len(respx.calls) == 2
+
 
 @respx.mock
 async def test_timeout_retries_only_within_configured_bound() -> None:

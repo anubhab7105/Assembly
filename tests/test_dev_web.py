@@ -6,7 +6,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "dev_web.py"
 SPEC = importlib.util.spec_from_file_location("assembly_dev_web", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
@@ -62,7 +61,9 @@ def test_frontend_environment_does_not_receive_provider_keys() -> None:
 
 
 def test_rehearsal_report_keeps_unrun_attempts_explicit() -> None:
-    report = (SCRIPT.parents[1] / "docs" / "hosted-rehearsal.md").read_text(encoding="utf-8")
+    report = (SCRIPT.parents[1] / "docs" / "hosted-rehearsal.md").read_text(
+        encoding="utf-8"
+    )
     assert report.count("| NOT RUN |") == 10
     assert "**not** evidence of a hosted live run" in report
     assert "Never paste credentials" in report

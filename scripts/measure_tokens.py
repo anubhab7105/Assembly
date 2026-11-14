@@ -21,7 +21,7 @@ import json
 import math
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -162,16 +162,14 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, OSError):
         pass
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     run_id = args.run_id or f"measure-5m-{stamp}"
     print(f"Run id: {run_id}")
     print(f"Question: {args.question}")
     print(f"Tier: {args.tier} minutes")
-    print(f"Date (UTC): {datetime.now(timezone.utc).isoformat()}")
+    print(f"Date (UTC): {datetime.now(UTC).isoformat()}")
     try:
-        result, summary = asyncio.run(
-            run_measurement(args.question, args.tier, run_id)
-        )
+        result, summary = asyncio.run(run_measurement(args.question, args.tier, run_id))
     except KeyboardInterrupt:
         print("\nInterrupted.")
         return 130
@@ -187,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Reasoning tokens reported by any provider: {reasoning_seen}")
     payload = {
         "run_id": run_id,
-        "date_utc": datetime.now(timezone.utc).isoformat(),
+        "date_utc": datetime.now(UTC).isoformat(),
         "question": args.question,
         "tier_minutes": args.tier,
         "status": result.status,

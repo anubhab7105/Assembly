@@ -24,7 +24,9 @@ def reset_limits():
 @pytest.mark.asyncio
 async def test_max_question_length():
     """Test request-size / max question length limit."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         response = await client.post(
             "/api/executions/",
             json={"question": "a" * 2001, "time_budget_minutes": 5},
@@ -37,7 +39,9 @@ async def test_max_question_length():
 async def test_rate_limit_preflight():
     """Test the rate limit for preflight endpoint."""
     body = {"question": "test", "time_budget_minutes": 5}
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         for _ in range(10):
             res = await client.post("/api/preflight", json=body)
             assert res.status_code in (200, 422)
@@ -55,13 +59,18 @@ async def test_concurrent_execution_cap(db_session, monkeypatch):
     app.dependency_overrides[get_db] = lambda: db_session
     monkeypatch.setattr(rl, "MAX_RUNS_PER_IP", 0)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         res = await client.post(
             "/api/executions/",
             json={"question": "test", "time_budget_minutes": 5},
         )
         assert res.status_code == 429
-        assert "Concurrent execution limit" in res.json()["detail"] or "Global" in res.json()["detail"]
+        assert (
+            "Concurrent execution limit" in res.json()["detail"]
+            or "Global" in res.json()["detail"]
+        )
 
 
 @pytest.mark.asyncio

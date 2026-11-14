@@ -6,8 +6,8 @@ default mock plan sets needs_research=False so no search HTTP occurs.
 """
 
 import sys
-from datetime import date
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 

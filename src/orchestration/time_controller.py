@@ -242,11 +242,6 @@ def synth_reserve_seconds_capacity(budget_seconds: float) -> float:
     return synth_reserve_seconds(budget_seconds / 60.0)
 
 
-def synth_reserve_seconds_capacity(budget_seconds: float) -> float:
-    """Synthesis reserve via the single capacity formula (minutes-based)."""
-    return synth_reserve_seconds(budget_seconds / 60.0)
-
-
 # ── Task tracking (no orphaned tasks) ─────────────────────────────────
 
 

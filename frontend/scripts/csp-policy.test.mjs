@@ -77,7 +77,8 @@ function runThemeBootstrap(savedTheme, systemDark) {
 test("the application theme bootstrap is parser-blocking in the document head", () => {
   const head = layout.match(/<head>([\s\S]*?)<\/head>/)?.[1];
   assert.ok(head, "the layout must contain a document head");
-  const scriptTag = head.match(/<script id="assembly-theme-bootstrap"[^>]*\/>/)?.[0];
+  // Allow the tag to be formatted across lines; the attributes are what matter here.
+  const scriptTag = head.match(/<script\s+id="assembly-theme-bootstrap"[^>]*\/>/)?.[0];
   assert.ok(scriptTag, "the theme bootstrap must be present as a regular script element");
   assert.match(scriptTag, /\bsrc="\/theme-bootstrap\.js"/);
   assert.doesNotMatch(scriptTag, /\b(?:async|defer|type)\b/);
