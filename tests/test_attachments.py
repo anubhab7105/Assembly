@@ -2,11 +2,10 @@
 import pytest
 
 from src.research.attachments import (
-    Attachment,
-    AttachmentValidationError,
-    MAX_ATTACHMENT_CONTEXT_CHARS,
     MAX_FILE_BYTES,
     MAX_TOTAL_BYTES,
+    Attachment,
+    AttachmentValidationError,
     build_attachment_context,
     safe_filename,
     validate_attachment,
@@ -45,6 +44,19 @@ def test_supported_text_formats(filename, content, media_type):
         ("bad.json", b"{invalid", "application/json", "invalid JSON"),
         ("bad-encoding.txt", b"\xff\xfe\xfa", "text/plain", "UTF-8"),
         ("spoof.csv", b"\x00\x01\x02", "text/csv", "binary"),
+    ],
+    # Short ids keep the per-test environment variable (PYTEST_CURRENT_TEST)
+    # under Windows' 32767-character limit; the oversized-content case would
+    # otherwise embed its whole 5 MB payload in the id.
+    ids=[
+        "exe-type",
+        "pdf-type",
+        "docx-type",
+        "empty",
+        "oversized",
+        "bad-json",
+        "bad-encoding",
+        "binary-csv",
     ],
 )
 def test_rejects_malformed_or_unsupported_content(filename, content, media_type, message):
@@ -150,7 +162,6 @@ def test_preserves_prompt_delimiter_escaping_for_source_text():
 
 
 def test_total_attachment_limit_matches_serialized_api_budget():
-    from src.research.attachments import MAX_TOTAL_BYTES
 
     assert MAX_TOTAL_BYTES <= 384 * 1024
 
@@ -176,7 +187,6 @@ def test_rejects_mime_spoof_for_supported_extension():
 
 
 def test_rejects_aggregate_size_over_384_kib():
-    from src.research.attachments import MAX_TOTAL_BYTES
 
     item = {"filename": "first.txt", "media_type": "text/plain", "content": "a" * 220_000}
     other = {"filename": "second.txt", "media_type": "text/plain", "content": "b" * 220_000}

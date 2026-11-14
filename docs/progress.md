@@ -1,3 +1,10 @@
+## 2026-11-13 — Full check: three real test failures fixed
+
+- `tests/test_attachments.py` errored on Windows (2 errors, 0 test failures) with `ValueError: the environment variable is longer than 32767 characters`. The oversized-content case parametrized a 5 MB payload, and pytest embeds the generated id in `PYTEST_CURRENT_TEST`. Gave the eight cases explicit short ids; the assertions are unchanged. Also cleared the file's five pre-existing ruff findings.
+- `src/lib/privacy-notice.test.ts` failed on `src/app/privacy/page.tsx` wording: the page said "Same-origin JavaScript" and "the Assembly backend over HTTPS", and one sentence wrapped as "embedded WebView / browser profile", so the phrases the notice guarantees were not present literally. Reworded the three sentences so the policy states "hosted Assembly backend over HTTPS", "same-origin JavaScript" and "WebView browser profile"; the test is untouched.
+- `src/lib/key-vault.test.ts` "does not seed the cache from localStorage when initial IndexedDB loading fails" failed because jsdom has no `indexedDB`, so the vault legitimately treated the localStorage mirror as its primary store and the removal resolved. The test now stubs `indexedDB` so it exercises an established primary whose read fails; the vault code is unchanged.
+- Verification: full vitest 149/149, storage suite 15/15, `eslint`/`tsc` clean, CSP and audit gate tests pass, `pytest` 666 passed / 1 skipped / 0 errors. `ruff` had to be installed locally to run; it reports 84 further pre-existing findings across ~20 untouched files (unused imports, `E501`), which CI does not gate and this change does not address.
+
 ## 2026-11-13 — Landing trims, cookie consent buttons, sidebar export
 
 - Landing hero (`frontend/src/app/page.tsx`): removed the "Watch 1-min demo" button, the 3–15 min / 4+ roles / BYOK / Apache 2.0 stats row and the "Experimental research project…" footnote, along with their now-unused `cinematic.css` rules and responsive overrides. "Start an Assembly" is the only hero action left, and "How it works" now follows the description directly.
