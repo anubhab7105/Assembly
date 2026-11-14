@@ -13,7 +13,6 @@ import {
 } from "lucide-react"
 import { BrandMark } from "@/components/cinematic/brand-mark"
 import { FloatingWindows } from "@/components/cinematic/floating-windows"
-import { ThemeToggle } from "@/components/theme-toggle"
 
 const REPO_URL = "https://github.com/anubhab7105/Assembly"
 
@@ -105,7 +104,6 @@ export default function LandingPage() {
         </nav>
 
         <div className="cin-topbar-actions">
-          <ThemeToggle className="cin-icon-button cin-landing-theme" />
           <Link href="/chat" className="cin-btn cin-btn-sm cin-btn-primary" aria-label="Launch the Assembly app">
             Launch app
             <ArrowUpRight className="size-4" aria-hidden />

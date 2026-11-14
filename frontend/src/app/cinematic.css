@@ -473,81 +473,16 @@ html.comfort-reduce-3d .cin-hero-field {
 
 /* Landing ------------------------------------------------------------------ */
 html:has(.cin-landing) {
-  background: var(--background);
+  background: #05070f;
 }
 
 body:has(.cin-landing) {
-  background: var(--background);
+  background: #05070f;
 }
 
 .cin-landing {
-  /* Light defaults; `.dark .cin-landing` overrides these below. */
-  --landing-bg: #eef3fc;
-  --landing-ink: #0b1730;
-  --landing-muted: #5a6f8f;
-  --landing-nav: #4c6285;
-  --landing-nav-hover: #0b1730;
-  --landing-line: rgba(21, 51, 102, 0.14);
-  --landing-badge-border: rgba(37, 99, 235, 0.34);
-  --landing-badge-bg: rgba(255, 255, 255, 0.72);
-  --landing-badge-ink: #1d4ed8;
-  --landing-badge-shadow:
-    0 0 0 1px rgba(37, 99, 235, 0.06),
-    0 10px 30px -18px rgba(37, 99, 235, 0.35);
-  --landing-accent: #2563eb;
-  --landing-accent-glow: rgba(37, 99, 235, 0.14);
-  --landing-outline-border: rgba(15, 23, 42, 0.16);
-  --landing-outline-bg: rgba(255, 255, 255, 0.68);
-  --landing-outline-ink: #0b1730;
-  --landing-outline-hover-border: rgba(15, 23, 42, 0.3);
-  --landing-outline-hover-bg: rgba(255, 255, 255, 0.96);
-  --landing-outline-icon: #2563eb;
-  --landing-primary-border: rgba(255, 255, 255, 0.4);
-  --landing-primary-bg: linear-gradient(180deg, #3f8bf7 0%, #2563eb 100%);
-  --landing-primary-ink: #ffffff;
-  --landing-primary-shadow:
-    0 14px 30px -14px rgba(37, 99, 235, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  --landing-primary-hover-bg: #3f8bf7;
-  --landing-primary-hover-shadow:
-    0 18px 38px -16px rgba(37, 99, 235, 0.8),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  --landing-stat-ink: #0b1730;
-  --landing-stat-muted: #5e708c;
-  --landing-card-border: rgba(37, 99, 235, 0.18);
-  --landing-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(242, 247, 255, 0.95));
-  --landing-card-shadow:
-    0 30px 70px -34px rgba(30, 58, 138, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --landing-card-ink: #0b1730;
-  --landing-card-muted: #5e708c;
-  --landing-progress-track: rgba(37, 99, 235, 0.14);
-  --landing-progress-bg: linear-gradient(90deg, #7fb2ff, #2563eb);
-  --landing-progress-glow: rgba(37, 99, 235, 0.45);
-  --landing-agreement: #2563eb;
-  --landing-ring: rgba(37, 99, 235, 0.26);
-  --landing-ring-1: rgba(37, 99, 235, 0.42);
-  --landing-ring-2: rgba(37, 99, 235, 0.28);
-  --landing-ring-3: rgba(37, 99, 235, 0.18);
-  --landing-ring-glow: rgba(37, 99, 235, 0.08);
-  --landing-node-blue: #2563eb;
-  --landing-node-blue-halo: rgba(37, 99, 235, 0.16);
-  --landing-node-violet: #7c5cff;
-  --landing-node-violet-halo: rgba(124, 92, 255, 0.16);
-  --landing-node-mint: #0f9b7a;
-  --landing-node-mint-halo: rgba(15, 155, 122, 0.16);
-  --landing-footnote: #64789a;
-  --landing-field-opacity: 0.9;
-  --landing-field-filter: saturate(1.05);
-  --landing-glow-violet: rgba(124, 92, 255, 0.2);
-  --landing-glow-blue: rgba(37, 99, 235, 0.12);
-  --landing-glow-bottom: rgba(37, 99, 235, 0.08);
-  --landing-bg-top: #f7faff;
-  --landing-bg-mid: #eef3fc;
-  --landing-bg-bottom: #e9f0fb;
-  --landing-speck-1: rgba(37, 99, 235, 0.32);
-  --landing-speck-2: rgba(124, 92, 255, 0.22);
-  --landing-speck-opacity: 0.5;
+  /* Landing is dark-only: no light palette and no theme toggle. */
+  color-scheme: dark;
 
   position: relative;
   min-height: 100dvh;
@@ -555,9 +490,6 @@ body:has(.cin-landing) {
   isolation: isolate;
   background: var(--landing-bg);
   color: var(--landing-ink);
-}
-
-.dark .cin-landing {
   --landing-bg: #05070f;
   --landing-ink: #eef4ff;
   --landing-muted: #9db0cd;
@@ -625,6 +557,7 @@ body:has(.cin-landing) {
   --landing-speck-2: rgba(150, 180, 255, 0.55);
   --landing-speck-opacity: 0.34;
 }
+
 
 .cin-landing::before {
   content: "";
@@ -694,20 +627,6 @@ body:has(.cin-landing) {
 .cin-landing .cin-topbar-actions {
   justify-self: end;
   gap: 10px;
-}
-
-.cin-landing-theme {
-  border-color: var(--landing-line);
-  background: var(--landing-outline-bg);
-  color: var(--landing-outline-ink);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
-.cin-landing-theme:hover {
-  border-color: var(--landing-outline-hover-border);
-  background: var(--landing-outline-hover-bg);
-  color: var(--landing-outline-ink);
 }
 
 .cin-landing .cin-btn-primary {
@@ -3941,11 +3860,6 @@ html.comfort-reduce-3d .cin-watch-float {
 
   .cin-landing .cin-topbar-actions {
     gap: 8px;
-  }
-
-  .cin-landing-theme {
-    width: 38px;
-    height: 38px;
   }
 
   .cin-landing .cin-btn-sm {
