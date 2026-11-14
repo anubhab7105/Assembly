@@ -1,49 +1,55 @@
-"use client"
-
-import Link from "next/link"
-import { useEffect, useRef } from "react"
+import { LandingHeader } from "@/components/landing-header"
+import { LandingFooter } from "@/components/landing-footer"
+import { AboutHeroSection } from "@/components/about-hero-section"
+import { TextIntroScene } from "@/components/text-intro-scene"
 import {
   ArrowRight,
-  ArrowUpRight,
   CheckCircle2,
-  GitBranch,
+  LockKeyhole,
+  MessageSquare,
   Search,
-  ShieldCheck,
-  Users,
+  Timer,
 } from "lucide-react"
-import { BrandMark } from "@/components/cinematic/brand-mark"
-import { FloatingWindows } from "@/components/cinematic/floating-windows"
 
-const REPO_URL = "https://github.com/anubhab7105/Assembly"
-
-const steps = [
+const controlItems = [
   {
-    number: "01",
-    title: "Independent perspectives",
-    description:
-      "Different model families take the same question separately, before they can see one another's conclusions.",
-    icon: Users,
+    icon: LockKeyhole,
+    title: "Your credentials",
+    description: "Bring your own provider keys. Saved web keys stay in your browser.",
   },
   {
-    number: "02",
-    title: "Cross-examination",
-    description:
-      "A critic from another family attacks the weak points and names the contradictions worth resolving.",
-    icon: GitBranch,
+    icon: Timer,
+    title: "Your time",
+    description: "Choose 3, 5, 10, or 15 minutes for the investigation.",
   },
   {
-    number: "03",
-    title: "Evidence, not vibes",
-    description:
-      "A researcher checks claims against sources. Disagreement runs another round only when it still matters.",
     icon: Search,
+    title: "Your evidence",
+    description: "Review cited sources, confidence, and areas that remain uncertain.",
   },
   {
-    number: "04",
-    title: "One inspectable answer",
-    description:
-      "The synthesis carries its sources, confidence, and the uncertainties that remain. You decide what to trust.",
-    icon: ShieldCheck,
+    icon: MessageSquare,
+    title: "Your history",
+    description: "Return to investigations saved locally on this device.",
+  },
+]
+
+const faqs = [
+  {
+    question: "Why use more than one model?",
+    answer: "A single model can miss a counterargument or sound certain about a weak claim. Assembly gives different model families independent passes, then uses cross-examination and evidence review before synthesizing an answer.",
+  },
+  {
+    question: "Do I need an account or a subscription?",
+    answer: "No account is required. Assembly uses bring-your-own-key (BYOK): you add your own provider keys and use the providers' available tiers and quotas.",
+  },
+  {
+    question: "Where are my API keys and investigation history stored?",
+    answer: "In web mode, saved keys and local history stay in your browser. All saved model-provider keys are sent to the Assembly backend over HTTPS for capacity preflight, regardless of model selection; a key-test request sends only the provider key being tested; every run also sends all saved model-provider keys and any saved Tavily key, even when search is not used. The backend uses them transiently to contact providers. Browser-stored keys are not encrypted at rest and can be read by same-origin JavaScript. Read the privacy notice for the full details before your first run.",
+  },
+  {
+    question: "Can I control how long an investigation runs?",
+    answer: "Yes. Choose a 3, 5, 10, or 15 minute time budget before you start. Assembly uses that budget to coordinate the research workflow.",
   },
 ]
 
@@ -56,205 +62,94 @@ const schema = {
 }
 
 export default function LandingPage() {
-  const rootRef = useRef<HTMLDivElement>(null)
-  const heroRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"))
-    if (!nodes.length) return
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      nodes.forEach((node) => node.classList.add("is-visible"))
-      return
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible")
-            observer.unobserve(entry.target)
-          }
-        }
-      },
-      { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
-    )
-    nodes.forEach((node) => observer.observe(node))
-    return () => observer.disconnect()
-  }, [])
-
   return (
-    <div ref={rootRef} className="cin-landing">
+    <div className="assembly-landing-page">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
       />
 
-      <header className="cin-topbar is-transparent cin-landing-top">
-        <Link href="/" className="cin-brand" aria-label="Assembly home">
-          <BrandMark />
-          <span className="cin-brand-word">Assembly</span>
-        </Link>
+      <div className="assembly-landing-atmosphere" aria-hidden="true">
+        <div className="assembly-atmosphere-glow assembly-glow-one" />
+        <div className="assembly-atmosphere-glow assembly-glow-two" />
+        <div className="assembly-atmosphere-grid" />
+      </div>
 
-        <nav className="cin-landing-nav" aria-label="Main navigation">
-          <a href="#product">Product</a>
-          <a href="#how">How it works</a>
-          <Link href="/references">Research</Link>
-          <a href={REPO_URL} target="_blank" rel="noreferrer">
-            GitHub
-          </a>
-        </nav>
+      <LandingHeader />
 
-        <div className="cin-topbar-actions">
-          <Link href="/chat" className="cin-btn cin-btn-sm cin-btn-primary" aria-label="Launch the Assembly app">
-            Launch app
-            <ArrowUpRight className="size-4" aria-hidden />
-          </Link>
+      <main id="main-content" tabIndex={-1} className="assembly-landing-curtain">
+        <div className="assembly-hero-yellow-stage">
+          <AboutHeroSection />
         </div>
-      </header>
 
-      <main id="main-content" tabIndex={-1}>
-        <section
-          ref={heroRef}
-          id="product"
-          className="cin-hero"
-          aria-label="Assembly introduction"
-        >
-          <div className="cin-hero-copy">
-            <p className="cin-badge">
-              Open source
-              <span className="cin-badge-sep" aria-hidden>
-                ·
-              </span>
-              Multi-agent research
-            </p>
+        <section id="your-control" className="assembly-control-section">
+            <div className="assembly-control-inner">
+              <div className="assembly-control-copy">
+                <span className="assembly-section-kicker">Built around your control</span>
+                <h2>You set the boundaries.<br /><em>Assembly does the <span className="assembly-legwork">legwork.</span></em></h2>
+                <p>
+                  Choose the time budget, decide which models take part, attach the context that matters, and inspect the answer before you rely on it.
+                </p>
+              </div>
 
-            <h1
-              className="cin-hero-title"
-              aria-label="Convene many minds. Leave with one answer."
-            >
-              Convene many minds.
-              <span className="accent">Leave with one answer.</span>
-            </h1>
-
-            <p className="cin-hero-desc">
-              Set a time budget and ask. A team of AI agents works separately, challenges each other, and
-              returns one answer with sources and doubts.
-            </p>
-
-            <div className="cin-hero-actions">
-              <Link href="/chat" className="cin-btn cin-btn-primary cin-btn-lg" aria-label="Start an investigation">
-                Start an Assembly
-                <ArrowRight className="size-4" aria-hidden />
-              </Link>
+              <div className="assembly-control-list-wrapper">
+                <div className="assembly-control-marquee">
+                  <div className="assembly-control-marquee-track">
+                    {[...controlItems, ...controlItems].map((item, idx) => {
+                      const Icon = item.icon
+                      return (
+                        <div
+                          key={idx}
+                          className="assembly-control-item"
+                          aria-hidden={idx >= controlItems.length ? "true" : undefined}
+                        >
+                          <span className="assembly-control-icon">
+                            <Icon className="size-4" />
+                          </span>
+                          <div>
+                            <b>{item.title}</b>
+                            <p>{item.description}</p>
+                          </div>
+                          <CheckCircle2 className="size-4 assembly-control-check" />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <FloatingWindows heroRef={heroRef} />
-        </section>
+          <section id="get-started" className="assembly-section assembly-intro-text-section" aria-label="Assembly intro animation">
+            <div className="assembly-intro-text-stage">
+              <TextIntroScene />
+            </div>
+          </section>
 
-        <section id="how" className="cin-section">
-          <div className="cin-shell">
-            <div className="cin-section-head">
+          <section id="faq" className="assembly-faq-section">
+            <div className="assembly-section-heading">
               <div>
-                <span className="cin-kicker">How it works</span>
-                <h2>Disagreement is the point.</h2>
+                <span className="assembly-section-kicker">Good to know</span>
+                <h2>Before you begin.</h2>
               </div>
-              <p>
-                Asking more models is not the value. The value is independent reasoning that gets
-                cross-examined, evidence that gets checked, and an answer that shows its work.
-              </p>
+              <p>Clear answers about what Assembly does, what it uses, and what stays in your control.</p>
             </div>
-
-            <div className="cin-flow-grid">
-              {steps.map((step) => {
-                const Icon = step.icon
-                return (
-                  <article className="cin-flow-card" key={step.number}>
-                    <span className="cin-flow-num">{step.number}</span>
-                    <span className="cin-flow-icon">
-                      <Icon className="size-5" aria-hidden />
-                    </span>
-                    <h3>{step.title}</h3>
-                    <p>{step.description}</p>
-                  </article>
-                )
-              })}
+            <div className="assembly-faq-list">
+              {faqs.map((faq) => (
+                <details className="assembly-faq-item" key={faq.question}>
+                  <summary>{faq.question}<span><ArrowDownIcon /></span></summary>
+                  <p>{faq.answer}</p>
+                </details>
+              ))}
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section className="cin-section">
-          <div className="cin-shell">
-            <div className="cin-section-head">
-              <div>
-                <span className="cin-kicker">Receipts</span>
-                <h2>Built to be checked.</h2>
-              </div>
-              <p>
-                No shared operator key, no hidden paid path, no account. Every run leaves a trail you can
-                read, export, and challenge.
-              </p>
-            </div>
-
-            <div className="cin-proof-band">
-              <div className="cin-proof">
-                <strong>
-                  3<em>+</em>
-                </strong>
-                <span>Distinct model families minimum, counted by family — never by provider.</span>
-              </div>
-              <div className="cin-proof">
-                <strong>
-                  0<em> keys</em>
-                </strong>
-                <span>Written to the backend. Web keys stay in your browser; desktop uses the OS keyring.</span>
-              </div>
-              <div className="cin-proof">
-                <strong>
-                  1<em> answer</em>
-                </strong>
-                <span>With sources, confidence, and an explicit statement of what remains uncertain.</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="cin-section">
-          <div className="cin-shell">
-            <div className="cin-cta">
-              <div>
-                <span className="cin-kicker">Begin</span>
-                <h2>
-                  Make room for a<br />
-                  second opinion.
-                </h2>
-                <p>Start with one hard question. Add a third opinion when the stakes go up.</p>
-              </div>
-              <Link href="/chat" className="cin-btn cin-btn-primary cin-btn-lg" aria-label="Start an investigation">
-                Start an investigation
-                <ArrowRight className="size-4" aria-hidden />
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        <footer className="cin-shell cin-landing-footer">
-          <div className="flex items-center gap-3">
-            <BrandMark />
-            <span>Independent thinking, made inspectable.</span>
-          </div>
-          <nav aria-label="Legal and product links">
-            <Link href="/history">History</Link>
-            <Link href="/models">Models</Link>
-            <Link href="/settings">Settings</Link>
-            <Link href="/privacy">Privacy</Link>
-            <Link href="/terms">Terms</Link>
-          </nav>
-          <span className="flex items-center gap-2">
-            <CheckCircle2 className="size-3.5 text-success" aria-hidden />
-            No account required
-          </span>
-        </footer>
-      </main>
+          <LandingFooter />
+        </main>
     </div>
   )
+}
+
+function ArrowDownIcon() {
+  return <ArrowRight className="size-4" aria-hidden="true" />
 }

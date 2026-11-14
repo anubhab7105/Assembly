@@ -46,3 +46,4 @@ desktop/public/
 # Playwright Test Artifacts
 playwright-report/
 test-results/
+scratch/
