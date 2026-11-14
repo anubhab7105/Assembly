@@ -185,7 +185,7 @@ async def limit_upload_size(request: Request, call_next):
                         status_code=429,
                         content={"detail": "Too many invalid requests; try again later."},
                     )
-            except Exception:  # noqa: BLE001 — oversized bodies fail closed either way
+            except Exception:  # noqa: BLE001, S110 — oversized bodies fail closed either way
                 pass
             return JSONResponse(
                 status_code=413, content={"detail": "Request body too large."}
@@ -239,7 +239,7 @@ async def validation_exception_handler(request, exc: RequestValidationError):
                 status_code=429,
                 content={"detail": "Too many invalid requests; try again later."},
             )
-    except Exception:  # noqa: BLE001 — limiter trouble must not break the 422
+    except Exception:  # noqa: BLE001, S110 — limiter trouble must not break the 422
         pass
     return JSONResponse(status_code=422, content={"detail": "Invalid request."})
 

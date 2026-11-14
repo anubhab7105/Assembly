@@ -39,9 +39,7 @@ def test_openai_reasoning_extraction_shapes() -> None:
     extract = OpenAICompatibleProvider._extract_reasoning_tokens
     assert extract({}) == 0
     assert extract({"reasoning_tokens": 12}) == 12
-    assert (
-        extract({"completion_tokens_details": {"reasoning_tokens": 34}}) == 34
-    )
+    assert extract({"completion_tokens_details": {"reasoning_tokens": 34}}) == 34
     assert extract({"completion_tokens_details": {"reasoning": 5}}) == 5
     assert extract({"completion_tokens_details": None}) == 0
 

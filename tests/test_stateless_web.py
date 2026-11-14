@@ -42,7 +42,9 @@ def _mock_filtered_router(monkeypatch):
     monkeypatch.setattr(context_mod, "_filtered_router", _fake_filtered_router)
 
 
-def test_web_mode_creates_no_database_file(web_mode, isolated_web_database, tmp_path) -> None:
+def test_web_mode_creates_no_database_file(
+    web_mode, isolated_web_database, tmp_path
+) -> None:
     """Verify web-mode database setup remains a no-op."""
     from src.core.config import settings
     from src.database.base import init_db
@@ -63,23 +65,29 @@ def test_web_mode_creates_no_database_file(web_mode, isolated_web_database, tmp_
     assert list(tmp_path.glob("*.db")) == []
 
 
-def test_catalog_returns_providers_models_families(web_mode, monkeypatch, tmp_path) -> None:
+def test_catalog_returns_providers_models_families(
+    web_mode, monkeypatch, tmp_path
+) -> None:
     from src.main import app
     from tests.conftest import make_models_yaml
 
     path = make_models_yaml(
         tmp_path,
         {
-            "groq": [{
-                "id": "openai/gpt-oss-20b",
-                "family": "gpt-oss",
-                "roles": ["solver", "critic", "planner"],
-            }],
-            "openrouter": [{
-                "id": "google/gemma-4-26b-a4b-it:free",
-                "family": "gemma",
-                "roles": ["solver", "critic", "planner"],
-            }],
+            "groq": [
+                {
+                    "id": "openai/gpt-oss-20b",
+                    "family": "gpt-oss",
+                    "roles": ["solver", "critic", "planner"],
+                }
+            ],
+            "openrouter": [
+                {
+                    "id": "google/gemma-4-26b-a4b-it:free",
+                    "family": "gemma",
+                    "roles": ["solver", "critic", "planner"],
+                }
+            ],
         },
     )
     monkeypatch.setattr("src.providers.config.default_catalog_path", lambda: path)
@@ -93,24 +101,29 @@ def test_catalog_returns_providers_models_families(web_mode, monkeypatch, tmp_pa
     assert any(ids)
 
 
-def test_stateless_run_end_to_end_no_leak(web_mode, isolated_web_database, monkeypatch, caplog, tmp_path) -> None:
+def test_stateless_run_end_to_end_no_leak(
+    web_mode, isolated_web_database, monkeypatch, caplog, tmp_path
+) -> None:
     """Run SSE with the real request-context builder and exclude secret canaries."""
     from src.main import app
 
     _mock_filtered_router(monkeypatch)
     client = TestClient(app)
-    with caplog.at_level(logging.INFO, logger="assembly"), client.stream(
-        "POST",
-        "/api/run",
-        json={
-            "question": CANARY_QUESTION,
-            "time_budget_minutes": 3,
-            "provider_keys": {"groq": CANARY_KEY},
-            "search_keys": {"tavily": CANARY_SEARCH_KEY},
-            "model_selection": {"selected": [], "pins": {}},
-            "usage_snapshot": [],
-        },
-    ) as res:
+    with (
+        caplog.at_level(logging.INFO, logger="assembly"),
+        client.stream(
+            "POST",
+            "/api/run",
+            json={
+                "question": CANARY_QUESTION,
+                "time_budget_minutes": 3,
+                "provider_keys": {"groq": CANARY_KEY},
+                "search_keys": {"tavily": CANARY_SEARCH_KEY},
+                "model_selection": {"selected": [], "pins": {}},
+                "usage_snapshot": [],
+            },
+        ) as res,
+    ):
         assert res.status_code == 200, res.text
         events = []
         for line in res.iter_lines():
@@ -206,7 +219,9 @@ def test_quota_snapshot_extreme_counts_are_bounded() -> None:
     )
     calls, tokens = limiter._today_counters(provider, fp, model.id)
     assert calls <= (model.limits.rpd if isinstance(model.limits.rpd, int) else 100_000)
-    assert tokens <= (model.limits.tpd if isinstance(model.limits.tpd, int) else 100_000_000)
+    assert tokens <= (
+        model.limits.tpd if isinstance(model.limits.tpd, int) else 100_000_000
+    )
     limiter.reset_usage_snapshot(token)
 
 
@@ -324,7 +339,9 @@ def test_per_ip_concurrency_cap(web_mode, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio()
-async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch, caplog):
+async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(
+    monkeypatch, caplog
+):
     """Request secrets and client quota snapshots are cleared on every terminal path.
 
     The orchestrator stub deliberately raises an exception containing the
@@ -394,7 +411,10 @@ async def test_failed_web_run_wipes_request_keys_and_quota_snapshot(monkeypatch,
     limiter.reset_usage_snapshot(token)
     assert limiter._snapshot.get() == {}
 
-def test_run_rejects_unsupported_attachment_without_echoing_content(web_mode, monkeypatch):
+
+def test_run_rejects_unsupported_attachment_without_echoing_content(
+    web_mode, monkeypatch
+):
     """Unsupported attachments are rejected before any run or provider call."""
     from src.main import app
 
@@ -406,11 +426,13 @@ def test_run_rejects_unsupported_attachment_without_echoing_content(web_mode, mo
             "question": "Summarize this",
             "time_budget_minutes": 3,
             "provider_keys": {"groq": CANARY_KEY},
-            "attachments": [{
-                "filename": "../../bad.exe",
-                "media_type": "application/octet-stream",
-                "content": secret_marker,
-            }],
+            "attachments": [
+                {
+                    "filename": "../../bad.exe",
+                    "media_type": "application/octet-stream",
+                    "content": secret_marker,
+                }
+            ],
         },
     )
     assert res.status_code == 422
@@ -420,8 +442,8 @@ def test_run_rejects_unsupported_attachment_without_echoing_content(web_mode, mo
 
 
 def test_run_rejects_oversized_attachment_before_creating_run(web_mode):
-    from src.main import app
     import src.api.run as run_mod
+    from src.main import app
 
     run_count = len(run_mod._runs)
     res = TestClient(app).post(
@@ -429,20 +451,23 @@ def test_run_rejects_oversized_attachment_before_creating_run(web_mode):
         json={
             "question": "Analyze file",
             "time_budget_minutes": 3,
-            "attachments": [{
-                "filename": "big.txt",
-                "media_type": "text/plain",
-                "content": "x" * (256 * 1024 + 1),
-            }],
+            "attachments": [
+                {
+                    "filename": "big.txt",
+                    "media_type": "text/plain",
+                    "content": "x" * (256 * 1024 + 1),
+                }
+            ],
         },
     )
     assert res.status_code in (413, 422)
     assert len(run_mod._runs) == run_count
 
 
-def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(web_mode, monkeypatch, caplog):
+def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(
+    web_mode, monkeypatch, caplog
+):
     """The uploaded text becomes prompt context, not response/log metadata."""
-    import src.api.run as run_mod
     import src.orchestration.orchestrator as orch_mod
     from src.main import app
     from src.orchestration.orchestrator import ExecutionResult
@@ -472,22 +497,27 @@ def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(web_mode, m
     _mock_filtered_router(monkeypatch)
     monkeypatch.setattr(orch_mod, "Orchestrator", StubOrch)
     client = TestClient(app)
-    with caplog.at_level(logging.INFO, logger="assembly"), client.stream(
-        "POST",
-        "/api/run",
-        json={
-            "question": "Summarize the attached component",
-            "time_budget_minutes": 3,
-            "provider_keys": {"groq": CANARY_KEY},
-            "model_selection": {"selected": [], "pins": {}},
-            "usage_snapshot": [],
-            "attachments": [{
-                "filename": "component.tsx",
-                "media_type": "text/plain",
-                "content": f'<div>hello</div>\\n{source_marker}',
-            }],
-        },
-    ) as res:
+    with (
+        caplog.at_level(logging.INFO, logger="assembly"),
+        client.stream(
+            "POST",
+            "/api/run",
+            json={
+                "question": "Summarize the attached component",
+                "time_budget_minutes": 3,
+                "provider_keys": {"groq": CANARY_KEY},
+                "model_selection": {"selected": [], "pins": {}},
+                "usage_snapshot": [],
+                "attachments": [
+                    {
+                        "filename": "component.tsx",
+                        "media_type": "text/plain",
+                        "content": f"<div>hello</div>\\n{source_marker}",
+                    }
+                ],
+            },
+        ) as res,
+    ):
         assert res.status_code == 200, res.text
         lines = []
         for line in res.iter_lines():

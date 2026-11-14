@@ -1,3 +1,48 @@
+## 2026-11-14 — Merge-readiness audit: three real bugs fixed
+
+- `src/orchestration/orchestrator.py`: the attachment status event was awaited before the nested `emit_event` helper was defined, so every run with attachment context failed with `UnboundLocalError` before the capacity check. Moved the emission to after the `CAPACITY_CHECK` transition; added `test_attachment_context_is_announced_without_crashing` to `tests/test_orchestrator_e2e.py`.
+- `src/api/request_context.py`: `_PinRouter.fallback_for` passed an undefined `error` to the wrapped router, so a provider retry for any unpinned role raised `NameError`. Renamed the parameter and added `test_unpinned_fallback_delegates_to_wrapped_router`.
+- `src/orchestration/time_controller.py`: removed a duplicate `synth_reserve_seconds_capacity` definition (identical body; ruff F811).
+- Fixed the Playwright history test, which raced the privacy gate and never saw the Export button; the spec now acknowledges the dialog first.
+- Removed 37 tracked `.pyc` files from the index (`.gitignore` already covered them) and cleared the scoped ruff findings/formatting in `tests/` and `scripts/`.
+- Verification: `pytest -q` 668 passed / 1 skipped; `make lint` (ruff check + format) clean; `npm run lint`, `tsc --noEmit`, `next build`, npm audit gate + regression tests, CSP tests, all Vitest suites and `playwright test` (22/22 with `CI=true`) pass; `scripts/audit_python.py` and the exported event schema check pass; Alembic has one head (`c41a9e2f7b3d`).
+- Remaining release blocker (not code): `models.yaml` quota metadata is missing/stale (`gemini` has `quota_last_verified: null`; Groq/OpenRouter last verified 2026-10-09), so the router currently exposes zero routable families and a real-key end-to-end run cannot pass until a human verifies limits against provider dashboards. The full-repo ruff run also still reports pre-existing style findings outside the `make lint` scope (documented 2026-10-08 decision), and the frontend npm audit allowlist entries for `deepmerge`/`zod` are past their 2026-11-07 review date (gate still passes; both are pre-existing).
+
+## 2026-11-13 — Playwright suite green (was 14 failing)
+
+- The CI browser job failed with 14 of 22 tests red. Three causes were app bugs, the rest were specs pinned to UI this branch replaced:
+- App fix — offline status was dropped when the shell was rewritten: `layout-wrapper.tsx` renders a persistent `role="status"` live region plus a `data-testid="offline-banner"` notice, now outside the chrome so the landing and references pages announce connectivity too.
+- App fix — the fixed cookie notice covered the composer, so the Models pill and Send button were unclickable until the visitor dismissed the banner. `minimal.css` adds bottom padding to `.mn-chat-main` while the notice is on screen (deeper on small screens).
+- Spec updates, all following deliberate UI changes rather than relaxing assertions: landing theme-toggle clicks became "dark-only landing has no toggle and keeps `color-scheme: dark` under a light system theme"; "New Investigation" (mobile menu) became the sidebar "New chat"; the history test now checks the sidebar Export plus the Import control on `/history`; the attachment chip checks the 1 KB size instead of the removed `TXT` badge; key-test results match `/valid/i` (the UI capitalises "Valid"); the send button is "Start run".
+- Verification: `npx playwright test` 22/22 passed on two consecutive runs; `eslint`/`tsc` clean; vitest 149/149; storage 15/15; CSP and audit gates pass; `next build` succeeds. `npm run audit:high` was not run here (needs npm registry access).
+
+## 2026-11-13 — Full check: three real test failures fixed
+
+- `tests/test_attachments.py` errored on Windows (2 errors, 0 test failures) with `ValueError: the environment variable is longer than 32767 characters`. The oversized-content case parametrized a 5 MB payload, and pytest embeds the generated id in `PYTEST_CURRENT_TEST`. Gave the eight cases explicit short ids; the assertions are unchanged. Also cleared the file's five pre-existing ruff findings.
+- `src/lib/privacy-notice.test.ts` failed on `src/app/privacy/page.tsx` wording: the page said "Same-origin JavaScript" and "the Assembly backend over HTTPS", and one sentence wrapped as "embedded WebView / browser profile", so the phrases the notice guarantees were not present literally. Reworded the three sentences so the policy states "hosted Assembly backend over HTTPS", "same-origin JavaScript" and "WebView browser profile"; the test is untouched.
+- `src/lib/key-vault.test.ts` "does not seed the cache from localStorage when initial IndexedDB loading fails" failed because jsdom has no `indexedDB`, so the vault legitimately treated the localStorage mirror as its primary store and the removal resolved. The test now stubs `indexedDB` so it exercises an established primary whose read fails; the vault code is unchanged.
+- Verification: full vitest 149/149, storage suite 15/15, `eslint`/`tsc` clean, CSP and audit gate tests pass, `pytest` 666 passed / 1 skipped / 0 errors. `ruff` had to be installed locally to run; it reports 84 further pre-existing findings across ~20 untouched files (unused imports, `E501`), which CI does not gate and this change does not address.
+
+## 2026-11-13 — Landing trims, cookie consent buttons, sidebar export
+
+- Landing hero (`frontend/src/app/page.tsx`): removed the "Watch 1-min demo" button, the 3–15 min / 4+ roles / BYOK / Apache 2.0 stats row and the "Experimental research project…" footnote, along with their now-unused `cinematic.css` rules and responsive overrides. "Start an Assembly" is the only hero action left, and "How it works" now follows the description directly.
+- Cookie banner (`frontend/src/components/cookie-banner.tsx`): the single "Got it" button is replaced by Reject and Accept, which store `accepted`/`rejected` in `assembly:cookie-choice`. Assembly sets no non-essential cookies, so the banner copy and `frontend/src/app/cookies/page.tsx` now state plainly that both choices behave identically and only the choice itself is saved on the device. `tests/keys-persist.spec.ts` and `scripts/field-smoke.mjs` follow the new button label.
+- Sidebar (`frontend/src/components/layout-wrapper.tsx`): removed the History nav item (the `/history` route still renders) and added an Export button in the footer that downloads `assembly-history.json` through the same `storage.exportJSON()` call the History page uses.
+- Workspace (`frontend/src/app/chat/page.tsx`, `minimal.css`): the prompt is absolutely centred on the page midpoint and the status/chips/composer stack is wrapped in `.mn-dock`, pinned to the bottom with an 8px gap.
+- Landing GitHub button now points at `https://github.com/anubhab7105/Assembly` (previous value was a different account).
+- `/references` simplified to one plain numbered list: the three grouped sections with kickers, titles, descriptions, the "N sources" chip and the header aside number are gone, along with the card styling (rounded borders, backdrop blur) and the unused `type` grouping field. Six citations and their DOI links are unchanged.
+- Landing is now dark-only: removed the header theme toggle (`ThemeToggle` and its `cin-landing-theme` styles), folded the former `.dark .cin-landing` palette into the base `.cin-landing` block with `color-scheme: dark`, and pinned the `html`/`body` background to `#05070f`. A visitor whose saved app theme is light still sees the dark landing; the workspace, settings and references pages keep their toggle.
+- Fixed the resulting CI failure in `frontend/scripts/csp-policy.test.mjs`: the theme-bootstrap assertion matched `<script id="assembly-theme-bootstrap"` on a single line, so the multi-line formatted tag in `layout.tsx` failed with "the theme bootstrap must be present as a regular script element". The regex now tolerates whitespace (including a newline) after `<script` and still requires the id, `src="/theme-bootstrap.js"`, and no `async`/`defer`/`type`.
+- Verification: `npx tsc --noEmit` and `npx eslint` pass on all touched files; `npx next build` (static export) succeeds and `frontend/out/` was regenerated so the exported build matches the source. Banner Accept/Reject, sidebar Export, hero geometry and the GitHub href were checked in the running dev server. `tests/keys-persist.spec.ts` was not run locally (Playwright is CI-only here).
+
+## 2026-11-11 — Minimal chat-style workspace
+
+- Reworked `frontend/src/app/chat/page.tsx` into a quiet, chat-like workspace: one centered prompt ("What's on your mind today?"), a single rounded composer with attach, model picker, 3/5/10/15 minute budget pills and a circular send button. Removed the "New investigation" window chrome, the "Run check" side panel, the budget card grid, the example card grid and the duplicate quick-history panel.
+- Kept the run logic untouched: privacy acknowledgement, attachment validation, diversity gate (including the `Run anyway` confirm), preflight, SSE streaming, history save and navigation all behave as before. Provider/readiness state is now a one-line status under the composer, with a compact retry alert when the backend is unreachable.
+- Simplified the app shell in `frontend/src/components/layout-wrapper.tsx`: sidebar is now brand + "New chat" + nav + recent runs (from IndexedDB history) + appearance row, and the desktop top bar is hidden. Mobile keeps the top bar, bottom nav and menu dialog.
+- Added `frontend/src/app/minimal.css` (imported last in the root layout) for the new styles.
+- Verification: `npx tsc --noEmit` and `npx eslint` pass on the touched files; the running dev server serves `/chat` with the new markup and renders the composer at mobile width. Visual check of the desktop sidebar/composer was not performed; the preview was left running for review.
+
 ## 2026-10-26 — Typed chat status states (Issue #53)
 
 - Root cause: `frontend/src/app/chat/page.tsx` derived `statusIsError` from string matching (any status not equal to `"Checking capacity…"` or `"Running team… (streaming)"` was treated as an error), so file-readiness, privacy, informational, and success messages were rendered as `role="alert"` / `text-danger` / `bg-danger-subtle` — announced as errors to screen readers.
@@ -726,6 +771,48 @@
 
 <!-- /coderabbit-ai-generated:v1 -->
 
+## 2026-11-06 - Landing hand field (no-dependency camera interaction)
+
+- Replaced the camera brightness-centroid path with a local hand approximation in `frontend/src/lib/hand-tracker.ts`: 128x96 analysis, 4x4 cell skin/motion mask, connected components, spatial/temporal prior, one-euro smoothing and presence hysteresis. No new package, CDN asset or model download.
+- Rewrote `frontend/src/components/landing/particle-sphere.tsx` around per-particle 3D springs with explicit semi-implicit position integration: the whole cloud is carried by the hand (soft-capped so it stays in frame), local repulsion carves a moving cavity, grab attraction gathers particles, and hand velocity adds a wake plus a cloud-wide wind. An open hand loosens the springs and expands the cloud; a closed hand pulls particles in. Short trails, back-to-front rendering, speed/position clamps and a dashed field ring show where the hand was tracked. Hand Y maps to cloud Y in screen orientation.
+- Camera remains opt-in; frames are drawn to an in-memory canvas and discarded after each analysis. Nothing is recorded, stored or uploaded. Landing copy and sensor status now describe hand tracking instead of head motion.
+- Added 12 unit tests for skin scoring, blob detection, face-vs-hand selection, one-euro smoothing, presence hysteresis and gesture mapping. Verification: ESLint, `tsc --noEmit`, `npm run build`, `npm test` (15), full Vitest (22 files / 140 tests) and Playwright (21) all pass. A synthetic camera stream in Chromium exercised the full camera -> detector -> physics path with a hand-carried, dispersing cloud, smooth `--px`/`--py` movement and no console errors.
+- Not verified: a physical webcam across skin tones, lighting and backgrounds. Openness/closed-hand mapping is a bbox-fill heuristic, not finger landmark detection; MediaPipe remains the future accuracy upgrade if a dependency is acceptable.
+
+## 2026-11-07 - Full-viewport particle field and two-hand gestures
+
+- Lifted the particle cloud out of the framed hero orb into a fixed full-viewport canvas (`asm-field-canvas`). The cloud rests at the viewport centre, follows the cursor or one tracked hand with easing, and returns to centre when the pointer leaves and no hand is present.
+- Extended the dependency-free tracker with two-hand detection: a second well-separated blob is paired with the primary hand, and the smoother exposes `first`, `second` and a normalised `span` alongside the existing single-hand fields. `span` drives the scatter target (`0.58 + openness * 1.62`), so spread hands open the shell past the viewport and closing hands contract it below resting size. A central core and crosshair fade in as the shell opens.
+- Removed the hero field console entirely: no panel, stage grid, guide, tilt switch or footer. The camera control now sits in `.asm-topbar-actions` as a compact state button (`CAM OFF` / `ASKING` / `CAM ON` / `TRACKING` / `RETRY` / `N/A`) with `aria-pressed`, a dynamic accessible label and a referenced local-only privacy description. Camera errors appear as a header row under the top bar. On narrow screens the control collapses to an icon and the top-bar CTA to "Start", both keeping their accessible names. The outline headline word uses an opaque fill and hero copy carries a background text-shadow so the field never obscures type.
+- The field fades to `opacity: 0` and pauses rendering when the hero leaves the app-shell scroll container (the landing scrolls inside `.assembly-app-shell`, not `window`).
+- Added `frontend/scripts/field-smoke.mjs` (`npm run smoke:field`) for repeatable local QA with a synthetic skin-coloured camera stream: rest, pointer corners, one-hand sweep, two-hand open/closed, scrolled, 390x844 mobile and top-bar camera screenshots, with console/page errors reported.
+- Verification: ESLint, `tsc --noEmit`, `npm run build`, `npm test` (15), full Vitest (22 files / 144 tests) and Playwright (21) pass. The synthetic-camera Chromium run produced no console/page errors, the scrolled field measured `opacity: 0`, and the mobile viewport was reviewed.
+- Not verified: a physical webcam across lighting, backgrounds and skin tones. Finger-level gestures remain unavailable without a landmark model; openness and closed-hand states are still heuristics.
+
+## 2026-11-11 - Left sidebar navigation
+
+- Moved primary navigation into a persistent left sidebar on desktop: brand, New Investigation, Workspace, History, Models, Settings, Docs, plus an appearance toggle and the local-key note. Active links use the outlined blue pill from the previous bottom nav.
+- Kept the bottom pill nav and top-bar menu below 901px, and hid the duplicated top-bar brand, CTA and theme control on desktop.
+- Extended the single-column collapse for the workspace, settings and live-run grids to 901-1179px so the reduced content width stays readable.
+- Verification: tsc, ESLint, npm test (15) and npm run build pass; Playwright screenshots at 1440, 1280, 1024 and 390 in light/dark show no horizontal overflow.
+
+## 2026-11-11 - Dark galaxy landing, no camera or cursor motion
+
+- Rebuilt the landing hero to the dark reference: forced-dark wrapper, brand plus Product / How it works / Docs / GitHub plus Launch app in the header, badge, "Convene many minds. / Leave with one answer." headline, new copy, "Start an Assembly" and "Watch 1-min demo" CTAs, and the 3-15 min / 4+ roles / BYOK / Apache 2.0 stats.
+- Removed every landing interaction that depended on input devices: no camera toggle, hand tracking, pointer parallax, camera state or cursor hook is mounted. `page.tsx` no longer imports `useMotionInput`/`ThemeToggle`, and `floating-windows.tsx` no longer takes a `MotionField`.
+- Replaced the interactive particle sphere with `frontend/src/components/landing/galaxy-field.tsx`: a two-arm logarithmic spiral on a tilted disk with a warm bulge, blue/white/violet/mint stars, background specks, and a continuous ~108 s rotation. Rendering pauses when the hero is off-screen or the tab is hidden and draws a single static frame under reduced motion.
+- Rebuilt the landing CSS around a dark navy palette with elliptical orbit rings (`rotateX(64deg)`), glowing floating cards (Live run, Agreement, Answer) and layouts verified at 1920, 1440, 1280, 1024, 768 and 390.
+- Verification: `npx tsc --noEmit`, ESLint, `npm test` (15) and `npm run build` pass. Playwright confirmed the canvas changes between frames, the header has zero buttons, and no camera/hand-tracking nodes exist on the landing.
+- Note: the old `particle-sphere.tsx`, `use-motion-input.ts`, `cursor-3d.tsx` and `hand-tracker.ts` remain in the repo but are unused by the landing; removing them is a separate cleanup.
+
+## 2026-11-11 - Landing theme toggle and light hero
+
+- Added the existing `ThemeToggle` to the landing header and removed the forced `dark` class, so the landing follows the saved/system theme like the rest of the app.
+- Split the hero palette into light defaults on `.cin-landing` and dark overrides under `.dark .cin-landing`; converted the badge, headline, nav, buttons, stats, orbit rings, floating cards, progress bar and footnote.
+- Taught `GalaxyField` to draw deep blue/violet stars on the light hero and bright stars on the dark hero. It redraws when `assembly:theme-change` fires or the html class changes.
+- Tightened the header below 430px so the brand, theme toggle and Launch app fit at 390 and 360.
+- Updated the landing Playwright test to the rebuilt copy and the new header controls.
+- Verification: `npx tsc --noEmit`, ESLint, `npm test` (15) and `npm run build` pass. The three landing/theme Playwright tests pass against the dev server. Screenshots at 1440, 1024, 768, 390 and 360 in both themes look correct.
 ## 2026-11-13 - Offline execution event schema drift guard (Issue #70)
 
 - Added `python scripts/export_event_schema.py --check` and wired it into backend CI. Checking never rewrites the destination; ordinary generation and JSON formatting are preserved.

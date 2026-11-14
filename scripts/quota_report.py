@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 import sqlite3
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -61,7 +61,7 @@ def today_str(now: datetime) -> str:
 def time_until_reset(now: datetime) -> timedelta:
     """Time left until the daily window resets at UTC midnight."""
     midnight = datetime.combine(
-        now.date() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+        now.date() + timedelta(days=1), datetime.min.time(), tzinfo=UTC
     )
     return midnight - now
 
@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as exc:
         print(exc)
         return 2
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = read_today_rows(db_path, today_str(now))
     if not rows:
         print(f"No quota usage recorded for {today_str(now)} UTC ({db_path}).")

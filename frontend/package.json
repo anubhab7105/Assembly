@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run --config vitest.storage.config.mts",
+    "smoke:field": "node scripts/field-smoke.mjs",
     "audit:high": "node scripts/audit-high.mjs",
     "audit:test": "node --test scripts/audit-high.test.mjs",
     "security:csp:test": "node --test scripts/csp-policy.test.mjs",

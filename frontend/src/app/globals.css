@@ -66,88 +66,135 @@
 
 /* ─── Light mode tokens ─────────────────────────────────────────────────────── */
 :root {
-  --background: #f7f7f5;
+  color-scheme: light;
+  --background: #edf2fb;
   --card: #ffffff;
   --popover: #ffffff;
-  --muted: #efefec;
-  --input: #eae9e5;
-  --foreground: #242321;
-  --card-foreground: #242321;
-  --popover-foreground: #242321;
-  --secondary-foreground: #242321;
-  --muted-foreground: #706e68;
-  --border: #e3e1dc;
-  --ring: #885315;
-  --radius: 0.8rem;
-  --primary: #885315;
+  --muted: #e7eef9;
+  --input: #dfe8f5;
+  --foreground: #0b1730;
+  --card-foreground: #0b1730;
+  --popover-foreground: #0b1730;
+  --secondary-foreground: #0b1730;
+  --muted-foreground: #5e708c;
+  --border: #d3dfef;
+  --ring: #2563eb;
+  --radius: 1rem;
+  --primary: #1f6fe8;
   --primary-foreground: #ffffff;
-  --secondary: #efefec;
-  --accent: #fbf1e2;
-  --accent-foreground: #885315;
-  --destructive: #b83030;
-  --brand: #885315;
-  --brand-subtle: #fbf1e2;
-  --brand-hover: #8f5718;
+  --secondary: #e8effb;
+  --accent: #e6efff;
+  --accent-foreground: #1a5fd0;
+  --destructive: #d3454b;
+  --brand: #2563eb;
+  --brand-subtle: #e6f0ff;
+  --brand-hover: #1d4ed8;
   --brand-foreground: #ffffff;
-  --success: #277451;
-  --success-subtle: #e8f4ed;
-  --warning: #9a641c;
-  --warning-subtle: #fbf3e4;
-  --danger: #b83030;
-  --danger-subtle: #fdeaea;
-  --info: #3b6d9b;
-  --info-subtle: #eaf1f7;
-  --sidebar: #f0efec;
-  --sidebar-foreground: #242321;
-  --sidebar-primary: #885315;
+  --success: #159a63;
+  --success-subtle: #e7f7ef;
+  --warning: #b97408;
+  --warning-subtle: #fdf3da;
+  --danger: #d3454b;
+  --danger-subtle: #fdecec;
+  --info: #2f6fd0;
+  --info-subtle: #e8f1fe;
+  --sidebar: #eef3fc;
+  --sidebar-foreground: #0b1730;
+  --sidebar-primary: #1f6fe8;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e8e6e1;
-  --sidebar-accent-foreground: #885315;
-  --sidebar-border: #e3e1dc;
-  --sidebar-ring: #885315;
+  --sidebar-accent: #e1eafb;
+  --sidebar-accent-foreground: #1a5fd0;
+  --sidebar-border: #d3dfef;
+  --sidebar-ring: #2563eb;
+
+  /* Assembly surface tokens */
+  --panel: color-mix(in oklab, var(--card) 92%, var(--background));
+  --panel-strong: var(--card);
+  --hairline: color-mix(in oklab, var(--border) 78%, transparent);
+  --hairline-strong: var(--border);
+  --ink-soft: color-mix(in oklab, var(--muted-foreground) 82%, var(--foreground));
+  --grid-line: color-mix(in oklab, var(--border) 42%, transparent);
+  --glow-soft: color-mix(in oklab, var(--brand) 16%, transparent);
+  --glow-strong: color-mix(in oklab, var(--brand) 32%, transparent);
+  --shadow-panel: 0 24px 70px -44px color-mix(in oklab, var(--brand) 30%, transparent);
+  --focus-ring: color-mix(in oklab, var(--brand) 60%, transparent);
+
+  /* Cinematic glass surfaces */
+  --glass: color-mix(in srgb, #ffffff 74%, transparent);
+  --glass-strong: color-mix(in srgb, #ffffff 90%, transparent);
+  --glass-border: color-mix(in srgb, var(--brand) 16%, transparent);
+  --glass-shadow: 0 24px 70px -34px color-mix(in srgb, #1e3a8a 38%, transparent);
+  --window-bg: color-mix(in srgb, #ffffff 86%, transparent);
+  --window-title: #0b1730;
+  --nav-bg: color-mix(in srgb, #ffffff 82%, transparent);
+  --hero-glow: color-mix(in srgb, #7c5cff 22%, transparent);
+  --field-opacity: 0.9;
 }
 
 /* ─── Dark mode tokens ──────────────────────────────────────────────────────── */
 .dark {
-  --background: #101112;
-  --card: #17191b;
-  --popover: #1b1d20;
-  --muted: #222528;
-  --input: #25282b;
-  --foreground: #f3f2ef;
-  --card-foreground: #f3f2ef;
-  --popover-foreground: #f3f2ef;
-  --secondary-foreground: #f3f2ef;
-  --muted-foreground: #9a9b98;
-  --border: #303438;
-  --ring: #e5ad65;
-  --radius: 0.8rem;
-  --primary: #e5ad65;
-  --primary-foreground: #20170d;
-  --secondary: #25282b;
-  --accent: #302619;
-  --accent-foreground: #efbd7d;
-  --destructive: #e05252;
-  --brand: #e5ad65;
-  --brand-subtle: #302619;
-  --brand-hover: #efbd7d;
-  --brand-foreground: #20170d;
-  --success: #69b28a;
-  --success-subtle: #16291f;
-  --warning: #e8b66e;
-  --warning-subtle: #302619;
-  --danger: #e46a6a;
-  --danger-subtle: #321d1d;
-  --info: #8ab1d4;
-  --info-subtle: #1b2a37;
-  --sidebar: #151719;
-  --sidebar-foreground: #f3f2ef;
-  --sidebar-primary: #e5ad65;
-  --sidebar-primary-foreground: #20170d;
-  --sidebar-accent: #25282b;
-  --sidebar-accent-foreground: #efbd7d;
-  --sidebar-border: #303438;
-  --sidebar-ring: #e5ad65;
+  color-scheme: dark;
+  --background: #070d1a;
+  --card: #0e1729;
+  --popover: #0d1526;
+  --muted: #152035;
+  --input: #1a2740;
+  --foreground: #eef4ff;
+  --card-foreground: #eef4ff;
+  --popover-foreground: #eef4ff;
+  --secondary-foreground: #eef4ff;
+  --muted-foreground: #93a4c1;
+  --border: #22314b;
+  --ring: #5b9dff;
+  --radius: 1rem;
+  --primary: #4f95ff;
+  --primary-foreground: #06142c;
+  --secondary: #152035;
+  --accent: #17233b;
+  --accent-foreground: #8fbcff;
+  --destructive: #ff7b7b;
+  --brand: #64a6ff;
+  --brand-subtle: #12233d;
+  --brand-hover: #7fb7ff;
+  --brand-foreground: #06142c;
+  --success: #45d39a;
+  --success-subtle: #0e2a21;
+  --warning: #f0b45a;
+  --warning-subtle: #2a1f0c;
+  --danger: #ff8585;
+  --danger-subtle: #2b1116;
+  --info: #82b7ff;
+  --info-subtle: #0d1e36;
+  --sidebar: #08101f;
+  --sidebar-foreground: #eef4ff;
+  --sidebar-primary: #4f95ff;
+  --sidebar-primary-foreground: #06142c;
+  --sidebar-accent: #131f36;
+  --sidebar-accent-foreground: #8fbcff;
+  --sidebar-border: #22314b;
+  --sidebar-ring: #5b9dff;
+
+  --panel: color-mix(in oklab, var(--card) 88%, var(--background));
+  --panel-strong: #111b30;
+  --hairline: color-mix(in oklab, var(--border) 90%, transparent);
+  --hairline-strong: #33456a;
+  --ink-soft: color-mix(in oklab, var(--muted-foreground) 86%, var(--foreground));
+  --grid-line: color-mix(in oklab, var(--border) 55%, transparent);
+  --glow-soft: color-mix(in oklab, var(--brand) 22%, transparent);
+  --glow-strong: color-mix(in oklab, var(--brand) 42%, transparent);
+  --shadow-panel: 0 30px 90px -48px #000;
+  --focus-ring: color-mix(in oklab, var(--brand) 65%, transparent);
+
+  /* Cinematic glass surfaces */
+  --glass: color-mix(in srgb, #101a2e 66%, transparent);
+  --glass-strong: color-mix(in srgb, #0f192c 86%, transparent);
+  --glass-border: color-mix(in srgb, #8fb8ff 16%, transparent);
+  --glass-shadow: 0 28px 80px -30px #000;
+  --window-bg: color-mix(in srgb, #0f192c 88%, transparent);
+  --window-title: #eaf2ff;
+  --nav-bg: color-mix(in srgb, #0c1526 84%, transparent);
+  --hero-glow: color-mix(in srgb, #5b3cff 40%, transparent);
+  --field-opacity: 1;
 }
 
 /* ─── Base layer ────────────────────────────────────────────────────────────── */
@@ -166,12 +213,48 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: clip;
+    background: var(--background);
   }
 
   body {
     @apply bg-background text-foreground min-h-full;
     font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv05", "cv11";
     overflow-x: clip;
+    background-color: var(--background);
+    background-image:
+      radial-gradient(1200px 820px at 4% -12%, #cfe4ff 0%, transparent 58%),
+      radial-gradient(1000px 720px at 96% -4%, #e4d9ff 0%, transparent 56%),
+      radial-gradient(1100px 820px at 78% 112%, #d6c8ff 0%, transparent 58%),
+      radial-gradient(760px 620px at 34% 56%, #f8fbff 0%, transparent 62%),
+      linear-gradient(165deg, #eef5ff 0%, #edf0fb 46%, #ece5fd 100%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+
+  .dark body {
+    background-color: var(--background);
+    background-image:
+      radial-gradient(1100px 760px at -4% -8%, #123059 0%, transparent 54%),
+      radial-gradient(980px 720px at 92% 8%, #1b2350 0%, transparent 55%),
+      radial-gradient(1000px 760px at 72% 112%, #2a1b55 0%, transparent 60%),
+      linear-gradient(160deg, #070d1a 0%, #081120 48%, #0b0f22 100%);
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.035em;
+  }
+
+  h1,
+  h2 {
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: var(--brand);
+    color: var(--brand-foreground);
   }
 
   code,
@@ -184,7 +267,32 @@
   /* Visible keyboard focus everywhere (WCAG 2.4.7). */
   :focus-visible {
     outline: 2px solid var(--ring);
-    outline-offset: 2px;
+    outline-offset: 3px;
+  }
+
+  /* Square, quiet scrollbars that belong to the editorial surface. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    background-clip: content-box;
+    background-color: color-mix(in oklab, var(--foreground) 22%, transparent);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--foreground) 34%, transparent);
   }
 
   /* 8-point scale as CSS vars for components */

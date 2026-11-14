@@ -97,7 +97,7 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
     );
     expect(await screen.findByTestId("tavily-input")).toBeDefined();
     expect(await screen.findByTestId("tavily-save")).toBeDefined();
-    // Persistent vault: saving restores after refresh; the legacy unlock
+    // Persistent vault: saved keys survive refresh; the legacy unlock
     // prompt appears only for pre-fix encrypted blobs.
     expect((await screen.findByTestId("persisted-banner")).textContent).toContain(
       "across refreshes",

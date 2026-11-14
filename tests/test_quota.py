@@ -511,7 +511,6 @@ async def test_unlimited_fields_are_not_enforced(tmp_path) -> None:
     assert remaining["tpm_limit"] is None and remaining["tpm_remaining"] is None
 
 
-
 async def test_request_snapshots_are_isolated_during_overlapping_runs(tmp_path) -> None:
     """One task's snapshot and cleanup must not affect another active task."""
     limiter, _ = _limiter(tmp_path, providers=_scoped_providers())
