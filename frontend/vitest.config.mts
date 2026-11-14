@@ -6,7 +6,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     // Playwright specs live in tests/ and run under `npx playwright test`.
-    exclude: ["tests/**", "node_modules/**"],
+    // scripts/audit-high.test.mjs uses node:test (`npm run audit:test`).
+    exclude: ["tests/**", "scripts/**", "node_modules/**"],
   },
   resolve: {
     alias: {

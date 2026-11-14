@@ -30,21 +30,27 @@ def web_mode(monkeypatch, tmp_path):
     path = make_models_yaml(
         tmp_path,
         {
-            "groq": [{
-                "id": "openai/gpt-oss-20b",
-                "family": "gpt-oss",
-                "roles": ["solver", "critic", "planner"],
-            }],
-            "openrouter": [{
-                "id": "google/gemma-4-26b-a4b-it:free",
-                "family": "gemma",
-                "roles": ["solver", "critic", "planner"],
-            }],
-            "cerebras": [{
-                "id": "gpt-oss-120b",
-                "family": "qwen",
-                "roles": ["solver", "critic", "planner"],
-            }],
+            "groq": [
+                {
+                    "id": "openai/gpt-oss-20b",
+                    "family": "gpt-oss",
+                    "roles": ["solver", "critic", "planner"],
+                }
+            ],
+            "openrouter": [
+                {
+                    "id": "google/gemma-4-26b-a4b-it:free",
+                    "family": "gemma",
+                    "roles": ["solver", "critic", "planner"],
+                }
+            ],
+            "cerebras": [
+                {
+                    "id": "gpt-oss-120b",
+                    "family": "qwen",
+                    "roles": ["solver", "critic", "planner"],
+                }
+            ],
         },
     )
     with patch("src.providers.config.default_catalog_path", return_value=path):

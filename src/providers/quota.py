@@ -22,9 +22,9 @@ import hashlib
 import os
 import time
 from collections import deque
-from contextvars import ContextVar, Token
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from contextvars import ContextVar, Token
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Self
 
@@ -41,7 +41,7 @@ ACCOUNT_BUCKET = ""
 def today_str() -> str:
     """Current day in UTC (YYYY-MM-DD). UTC keeps day boundaries
     identical on desktop and hosted machines in any timezone."""
-    return datetime.now(timezone.utc).date().isoformat()
+    return datetime.now(UTC).date().isoformat()
 
 
 class QuotaExhausted(Exception):
@@ -231,9 +231,12 @@ class QuotaLimiter:
         self._warned_unknown_pairs: set[tuple[str, str]] = set()
         self._day_counts: dict[tuple[str, str, str], list[int]] = {}
         # Client usage is task-local rather than process-wide mutable state.
-        self._snapshot: ContextVar[
-            dict[tuple[str, str, str, str], tuple[int, int]]
-        ] = ContextVar(f"assembly_quota_snapshot_{id(self)}", default={})
+        self._snapshot: ContextVar[dict[tuple[str, str, str, str], tuple[int, int]]] = (
+            ContextVar(
+                f"assembly_quota_snapshot_{id(self)}",
+                default={},  # noqa: B039 — read-only default; replaced via set()/reset()
+            )
+        )
 
     # ── internal helpers ─────────────────────────────────────────────
 
@@ -449,9 +452,7 @@ class QuotaLimiter:
                 row.tokens = (row.tokens or 0) + max(0, est_tokens)
                 db.commit()
                 # Drop rows older than yesterday; fingerprints rotate anyway.
-                cutoff = (
-                    datetime.now(timezone.utc).date() - timedelta(days=2)
-                ).isoformat()
+                cutoff = (datetime.now(UTC).date() - timedelta(days=2)).isoformat()
                 db.query(QuotaUsage).filter(QuotaUsage.day < cutoff).delete()
                 db.commit()
             finally:
@@ -698,6 +699,7 @@ class QuotaLimiter:
         self._in_flight.clear()
         self._day_counts.clear()
         self._snapshot.set({})
+
 
 _limiter: QuotaLimiter | None = None
 

@@ -1,7 +1,8 @@
 """Search engine tests: graceful offline fallback + mocked Tavily HTTP via respx."""
 
-import httpx
 import logging
+
+import httpx
 import respx
 
 from src.core.config import settings

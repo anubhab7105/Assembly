@@ -10,9 +10,10 @@ export const metadata: Metadata = {
 
 export default function RefundsPage() {
   return (
-    <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
+    <main id="main-content" tabIndex={-1} className="asm-legal mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
+      <span className="asm-index">[ 11 / Refunds ]</span>
       <h1 className="text-4xl font-bold tracking-tight">Refund policy</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Last updated: 12 October 2026.</p>
+      <p className="asm-legal-meta mt-2 text-sm text-muted-foreground">Last updated: 12 October 2026.</p>
 
       <div className="mt-8 space-y-8 text-left">
         <section>

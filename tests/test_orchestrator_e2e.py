@@ -35,9 +35,7 @@ async def test_full_execution_end_to_end(orchestrator: Orchestrator) -> None:
     total_calls = sum(len(p.calls) for p in providers)
     assert total_calls > 0
     assert result.total_tokens == total_calls * 30
-    assert any(
-        entry.get("stage") == "planner" for entry in (result.call_log or [])
-    )
+    assert any(entry.get("stage") == "planner" for entry in (result.call_log or []))
 
     # Events are published to the progress callback.
     event_types = {e["event_type"] for e in events}
@@ -60,6 +58,37 @@ async def test_full_execution_end_to_end(orchestrator: Orchestrator) -> None:
     # Only mock providers were used.
     assert set(result.providers_used) <= {"mock-a", "mock-b", "mock-c"}
     assert result.providers_used != []
+
+
+async def test_attachment_context_is_announced_without_crashing(
+    orchestrator: Orchestrator,
+) -> None:
+    """Attachment runs emit a status event instead of raising.
+
+    Regression: the attachment status event was awaited before its local
+    ``emit_event`` helper was defined, so any run with attachment context
+    died with UnboundLocalError before the capacity check.
+    """
+    events: list[dict[str, Any]] = []
+
+    async def on_progress(event: dict[str, Any]) -> None:
+        events.append(event)
+
+    result = await orchestrator.execute(
+        execution_id="test-exec-attachment",
+        question="Summarize the attachment.",
+        time_budget_minutes=3,
+        on_progress=on_progress,
+        attachment_context="<<<UNTRUSTED_WEB_CONTENT title=User attachment: notes.txt>>>\nhello\n<<<END_UNTRUSTED_WEB_CONTENT>>>",
+    )
+
+    assert result.status == "completed"
+    activities = [
+        e["data"].get("activity", "")
+        for e in events
+        if e["event_type"] == "agent.status"
+    ]
+    assert any("attached file context" in activity for activity in activities)
 
 
 async def test_workspace_events_published_during_run(

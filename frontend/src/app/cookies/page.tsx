@@ -9,17 +9,18 @@ export const metadata: Metadata = {
 }
 
 const ROWS: [string, string, string][] = [
-  ["_none by Assembly_", "No cookies are set by this site.", "Not applicable. There is nothing to accept or reject."],
+  ["_none by Assembly_", "No cookies are set by this site.", "Not applicable. Accept and Reject both leave the site cookie-free; only your choice is saved."],
   ["assembly (IndexedDB)", "Your keys, run history, settings, usage counters, privacy acknowledgment. Stays on your device.", "Delete via History and Settings, or clear browser site data."],
-  ["assembly:* (localStorage)", "Fallback mirror used only when IndexedDB is unavailable, plus the cookie-banner dismissal.", "Clear browser site data. Runs still work; saved data may not persist."],
+  ["assembly:* (localStorage)", "Fallback mirror used only when IndexedDB is unavailable, plus the cookie-banner choice (accepted or rejected).", "Clear browser site data. Runs still work; saved data may not persist."],
   ["Host logs (Vercel, Render)", "IP addresses and request metadata in platform operational logs under their policies.", "Platform-controlled. See their policies."],
 ]
 
 export default function CookiesPage() {
   return (
-    <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
+    <main id="main-content" tabIndex={-1} className="asm-legal mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
+      <span className="asm-index">[ 10 / Cookies ]</span>
       <h1 className="text-4xl font-bold tracking-tight">Cookie policy</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
+      <p className="asm-legal-meta mt-2 text-sm text-muted-foreground">
         Last updated: 12 October 2026. Contact:{" "}
         <a
           href="mailto:anubhab7105@gmail.com"
@@ -37,8 +38,8 @@ export default function CookiesPage() {
             and no third-party advertising or analytics cookies. There is no Google Analytics, no Meta Pixel, no
             Hotjar, and no social-media trackers on this site. Fonts are self-hosted, so loading a page does
             not call Google Fonts servers. Because there are no non-essential cookies, there is nothing for a
-            consent banner to switch off; the banner on this site is informational and dismisses without
-            recording anything about you beyond its own dismissal.
+            consent banner to switch off: the banner&apos;s Accept and Reject buttons record your choice on your
+            own device, and both choices leave the site cookie-free and behave identically.
           </p>
         </section>
 

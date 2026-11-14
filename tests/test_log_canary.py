@@ -67,8 +67,8 @@ def test_mask_leaves_git_commit_shas_alone() -> None:
 
 def test_mask_keeps_secret_hex_outside_git_context() -> None:
     secret = "0123456789abcdef0123456789abcdef01234567"
-    assert secret not in mask_text(f'api_key={secret}')
-    assert "***" in mask_text(f'api_key={secret}')
+    assert secret not in mask_text(f"api_key={secret}")
+    assert "***" in mask_text(f"api_key={secret}")
 
 
 def test_filter_applies_to_assembly_logs(caplog) -> None:
@@ -237,9 +237,7 @@ def test_canary_end_to_end_api_db_ws(monkeypatch, tmp_path, caplog) -> None:
     try:
         from src.core.config import settings as _settings
 
-        with client.websocket_connect(
-            f"/api/executions/ws/{execution_id}"
-        ) as ws:
+        with client.websocket_connect(f"/api/executions/ws/{execution_id}") as ws:
             ws.send_text(json.dumps({"type": "auth", "token": _settings.desktop_token}))
             deadline = time.monotonic() + 8.0
             while time.monotonic() < deadline:

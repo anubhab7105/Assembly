@@ -5,6 +5,8 @@ import Link from "next/link"
 
 const CHOICE_KEY = "assembly:cookie-choice"
 const COOKIE_CHOICE_EVENT = "assembly:cookie-choice-change"
+
+type CookieChoice = "accepted" | "rejected"
 let dismissedInMemory = false
 
 function subscribeCookieChoice(onStoreChange: () => void) {
@@ -41,12 +43,12 @@ export function CookieBanner() {
     getServerCookieBannerSnapshot,
   )
 
-  const dismiss = () => {
+  const choose = (choice: CookieChoice) => {
     dismissedInMemory = true
     try {
-      window.localStorage.setItem(CHOICE_KEY, "dismissed")
+      window.localStorage.setItem(CHOICE_KEY, choice)
     } catch {
-      // Dismissal remains effective for this page session if storage is blocked.
+      // The choice remains effective for this page session if storage is blocked.
     }
     window.dispatchEvent(new Event(COOKIE_CHOICE_EVENT))
   }
@@ -61,17 +63,28 @@ export function CookieBanner() {
     >
       <div className="mx-auto flex w-full max-w-6xl flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-2xl text-xs text-muted-foreground">
-          Assembly sets no cookies and runs no analytics. Keys and history stay on your device.{" "}
+          Assembly sets no cookies and runs no analytics, so accepting and rejecting behave the same. Your
+          choice is saved on this device only. Keys and history stay on your device.{" "}
           <Link href="/cookies" className="font-medium text-foreground underline decoration-brand/50 underline-offset-4 hover:text-brand">
             Cookie policy
           </Link>
         </p>
-        <button
-          onClick={dismiss}
-          className="inline-flex min-h-11 items-center rounded-lg bg-brand px-5 text-sm font-semibold text-brand-foreground"
-        >
-          Got it
-        </button>
+        <div className="flex flex-none items-center gap-2">
+          <button
+            type="button"
+            onClick={() => choose("rejected")}
+            className="inline-flex min-h-11 items-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-foreground"
+          >
+            Reject
+          </button>
+          <button
+            type="button"
+            onClick={() => choose("accepted")}
+            className="inline-flex min-h-11 items-center rounded-lg bg-brand px-5 text-sm font-semibold text-brand-foreground"
+          >
+            Accept
+          </button>
+        </div>
       </div>
     </div>
   )

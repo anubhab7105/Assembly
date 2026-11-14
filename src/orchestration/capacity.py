@@ -34,6 +34,7 @@ VALID_TIERS: tuple[int, ...] = (3, 5, 10, 15)
 #: Keep a 30% safety margin on quota math (WORKFLOW section 4).
 SAFETY_FACTOR: float = 0.7
 
+
 #: Tokens-per-call divisor converting tpm/tpd token windows into call
 #: counts. Measured, not guessed: the max of the per-stage Settings avgs
 #: (planner/solve/debate/adversarial/synthesis, source run id/date in
@@ -237,7 +238,9 @@ def affordable_calls(
             count = max(0, int(getattr(entry, "count", 0) or 0))
             tokens = max(0, int(getattr(entry, "tokens", 0) or 0))
         if provider:
-            snapshot_by_provider[provider] = snapshot_by_provider.get(provider, 0) + count
+            snapshot_by_provider[provider] = (
+                snapshot_by_provider.get(provider, 0) + count
+            )
             snapshot_tokens_by_provider[provider] = (
                 snapshot_tokens_by_provider.get(provider, 0) + tokens
             )
