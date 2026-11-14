@@ -40,6 +40,8 @@ load_dotenv(PROJECT_ROOT / ".env", override=False)
 load_dotenv(PROJECT_ROOT / ".env.dev", override=True)
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from datetime import UTC
+
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -621,10 +623,10 @@ def render_report(verdicts: list[ProviderVerdict]) -> str:
     bodies, and anything key-like — the file is meant to be pasted back
     into chat. All snippets are masked and truncated.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     lines: list[str] = ["# Assembly verify report", ""]
-    lines.append(f"Checked (UTC): {datetime.now(timezone.utc).isoformat()}")
+    lines.append(f"Checked (UTC): {datetime.now(UTC).isoformat()}")
     lines.append("")
     for verdict in verdicts:
         lines.append(f"## {verdict.provider} (base={verdict.base or '?'})")

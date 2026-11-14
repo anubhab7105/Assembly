@@ -28,8 +28,8 @@ def _ctx(**over):
     args.update(over)
     # Keep tests independent of production models.yaml freshness. Offline
     # tests use a temporary, explicit synthetic catalog for provider keys.
-    from pathlib import Path
     import tempfile
+    from pathlib import Path
     from unittest.mock import patch
 
     from tests.conftest import make_models_yaml
@@ -117,7 +117,10 @@ def test_cross_provider_pin_uses_matching_provider_adapter() -> None:
     assert decision.model == "gpt-oss-120b"
     assert decision.provider_name == "cerebras"
     assert decision.provider is ctx.router._w._providers["cerebras"]
-    assert ctx.router.fallback_for(decision, RuntimeError("simulated provider failure")) is None
+    assert (
+        ctx.router.fallback_for(decision, RuntimeError("simulated provider failure"))
+        is None
+    )
 
 
 def test_pin_without_provider_key_fails_clearly() -> None:
@@ -133,7 +136,9 @@ def test_pin_without_provider_key_fails_clearly() -> None:
 def test_pin_excluded_by_model_selection_is_rejected() -> None:
     from src.providers.router import PinViolationError
 
-    with pytest.raises(PinViolationError, match="excluded by the current model selection"):
+    with pytest.raises(
+        PinViolationError, match="excluded by the current model selection"
+    ):
         _ctx(
             provider_keys={"groq": CANARY_PROV, "cerebras": "csk-TEST-KEY-123"},
             selected=["openai/gpt-oss-20b"],
@@ -168,6 +173,26 @@ def test_unpinned_routing_keeps_router_choice() -> None:
 
     assert decision.provider_name == "groq"
     assert decision.model == "openai/gpt-oss-20b"
+
+
+def test_unpinned_fallback_delegates_to_wrapped_router() -> None:
+    """A pin on one role must not break retries for every other role."""
+    ctx = _ctx(
+        provider_keys={"groq": CANARY_PROV, "cerebras": "csk-TEST-KEY-123"},
+        pins={"critic": "gpt-oss-120b"},
+    )
+
+    decision = ctx.router.route("solver")
+    fallback = ctx.router.fallback_for(
+        decision, RuntimeError("simulated provider failure")
+    )
+
+    assert fallback is not None
+    assert (fallback.provider_name, fallback.model) != (
+        decision.provider_name,
+        decision.model,
+    )
+    assert "RuntimeError" in fallback.reason
 
 
 def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:

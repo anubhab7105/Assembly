@@ -79,7 +79,9 @@ async def test_valid_workflow_shape() -> None:
     assert plan.needs_research is True
     assert plan.needs_code_execution is False
     assert plan.suggested_roles == ["solver", "solver", "researcher", "critic"]
-    assert plan.estimated_rounds == 3  # 5-min ceiling is 3 rounds (early-stop via consensus)
+    assert (
+        plan.estimated_rounds == 3
+    )  # 5-min ceiling is 3 rounds (early-stop via consensus)
     assert [m["agent_type"] for m in plan.team_composition] == plan.suggested_roles
     assert plan.fallback_used is False
     assert len(provider.calls) == 1  # no retry needed

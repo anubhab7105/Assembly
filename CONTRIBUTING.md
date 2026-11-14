@@ -125,3 +125,24 @@ Open a pull request against `main`, fill in the pull-request template, and keep 
 ## Maintainer workflow
 
 The repository owner should protect `main` in GitHub Settings and require pull requests plus the CI status checks `build-and-test` and `backend-test` before merging. Disable force pushes and direct pushes where practical. Once the repository is public, enable private vulnerability reporting under **Settings → Security and quality → Advanced Security** and confirm notifications for security reports. These are repository settings and must be verified in GitHub itself; adding documentation alone does not turn them on.
+
+### Execution event schema
+
+After changing `src/api/events.py`, regenerate the frontend contract with:
+
+```sh
+python scripts/export_event_schema.py
+```
+
+Check the committed artifact without modifying it:
+
+```sh
+python scripts/export_event_schema.py --check
+```
+
+Backend CI runs this offline check. A stale or missing artifact fails with a
+regeneration command; stale content also produces a diff. `--out PATH` selects
+another artifact for either generation or checking. Generation always writes
+UTF-8 with LF newlines, including on Windows. The check also accepts CRLF
+from Git checkouts without modifying the artifact; other formatting and schema
+drift still fail.

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type Catalog, type UsageEntry } from "@/lib/api-client"
 import { storage } from "@/lib/storage"
@@ -11,7 +12,6 @@ import {
   PRIVACY_NOTICE_VERSION,
 } from "@/lib/privacy-notice"
 import { PrivacyDialog } from "@/components/privacy-dialog"
-import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
   estimateAttachmentContextChars,
@@ -26,7 +26,13 @@ import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Zap, Send, Settings, Clock, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
+import {
+  ArrowUp,
+  FileText,
+  Paperclip,
+  SlidersHorizontal,
+  X,
+} from "lucide-react"
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
@@ -36,6 +42,29 @@ const EXAMPLES = [
 ]
 
 const TIME_BUDGETS = [3, 5, 10, 15]
+const TIME_BUDGETS = [3, 5, 10, 15] as const
+const BUDGET_COPY: Record<(typeof TIME_BUDGETS)[number], string> = {
+  3: "Quick",
+  5: "Balanced",
+  10: "Thorough",
+  15: "Deep dive",
+}
+const MAX_ATTACHMENTS = 5
+const MAX_FILE_BYTES = 256 * 1024
+const MAX_TOTAL_BYTES = 384 * 1024
+const SUPPORTED_EXTENSIONS = new Set([
+  "txt", "md", "csv", "json", "log", "py", "js", "jsx", "ts", "tsx",
+  "html", "css", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml",
+  "sql", "sh", "ps1", "bat", "env.example",
+])
+
+type DraftAttachment = {
+  id: string
+  filename: string
+  media_type: string
+  content: string
+  size: number
+}
 
 export default function Home() {
   const router = useRouter()
@@ -56,6 +85,7 @@ export default function Home() {
   const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [catalogFailed, setCatalogFailed] = useState(false)
+  const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogTick, setCatalogTick] = useState(0)
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
@@ -90,18 +120,27 @@ export default function Home() {
     pins: selection.pins,
   })
   const degradedConfirmed = confirmedGateSignature === gateSignature
+  const missingQuestion = !question.trim() && attachments.length === 0
+  const runHint = missingQuestion
+    ? "Write a question to start."
+    : catalogLoading
+      ? "Checking provider keys…"
+      : catalogFailed
+        ? "Provider status is unavailable. Retry the connection above."
+        : gate.level === "BLOCKED"
+          ? "Add at least two provider keys in Settings to enable Run."
+          : gate.level === "DEGRADED" && !degradedConfirmed
+            ? "Choose Run anyway above to start with one model family."
+            : null
 
   useEffect(() => {
     const refreshKeys = () => {
       globalVault.allKeys().then((k) => {
-        // Tavily is an optional search credential, not a runnable model provider.
         const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
         setEnabledIds(modelProviderIds)
       }).catch(() => {})
     }
     refreshKeys()
-    // The vault is persistent: re-read when the tab regains focus so the
-    // picker gate and the execution request always agree on readiness.
     window.addEventListener("focus", refreshKeys)
     document.addEventListener("visibilitychange", refreshKeys)
     storage
@@ -144,6 +183,7 @@ export default function Home() {
         setCatalog(null)
         setCatalogFailed(true)
       })
+      .finally(() => setCatalogLoading(false))
   }, [catalogTick])
 
   useEffect(() => {
@@ -239,8 +279,6 @@ export default function Home() {
     }
     setLoading(true)
     setStatus(makeChatStatus("Checking capacity…", "progress"))
-    // Run state hoisted above try: the catch block persists a cancelled
-    // record on mid-stream failure, so it must see these bindings.
     let finalAnswer = ""
     let consensus: number | null = null
     let confidence: "High" | "Moderate" | "Low" | null = null
@@ -261,7 +299,6 @@ export default function Home() {
     const questionForRun = question.trim() || "Analyze the attached files and summarize their key contents, important claims, and uncertainties."
     try {
       const keys = await globalVault.allKeys()
-      // The Tavily search key travels separately; it is never a model key.
       const { tavily, ...providerKeys } = keys
       const searchKeys = tavily ? { tavily } : undefined
       const usage: UsageEntry[] = await storage.getUsage()
@@ -327,9 +364,6 @@ export default function Home() {
           }
         },
       )
-      // Explicit terminal handling: only a completed run with a non-empty
-      // final answer is presentable. Failed/incomplete runs keep their
-      // failure history but never navigate to the active-run screen.
       if (!isPresentableRun({ status: result.status, finalAnswer })) {
         const failedStatus = result.status === "completed" ? "failed" : result.status
         await storage.saveHistory({
@@ -390,10 +424,6 @@ export default function Home() {
       })
       router.push(`/executions?id=${runId}`)
     } catch (err) {
-      // Mid-stream failures (abort vs. broken stream) keep distinct states:
-      // a user abort is cancelled; a stream that dies without run.finished
-      // is a failure, never a silent empty run. Pre-stream rejections (no
-      // run started) only show the error.
       const message = err instanceof Error ? err.message : "Run failed"
       const aborted =
         (err instanceof DOMException && err.name === "AbortError") ||
@@ -429,8 +459,6 @@ export default function Home() {
     }
   }
 
-  // Warn before a refresh/tab-close kills a running team (the server
-  // cancels the run on disconnect; there is no resume for web runs).
   useEffect(() => {
     if (!loading) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -441,70 +469,106 @@ export default function Home() {
   }, [loading])
 
   return (
-    <div className="assembly-chat-page flex min-h-screen flex-col bg-background">
-      <main id="main-content" tabIndex={-1} className="assembly-chat-main flex w-full flex-1 flex-col justify-center">
-        <div className="assembly-chat-intro">
-          <div className="assembly-chat-orb">
-            <Zap className="size-6" aria-hidden />
-          </div>
-          <div className="assembly-chat-kicker"><span className="assembly-live-dot" /> NEW INVESTIGATION</div>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            What would you like to investigate?
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Bring the question, context, and time you want to spend. You stay in charge of the process.
-          </p>
-          <div className="assembly-chat-personal-control" aria-label="Workspace principles"><span>Independent perspectives</span><span>Inspectable sources</span><span>Local history</span></div>
-        </div>
+    <div className="mn-chat">
+      <main id="main-content" tabIndex={-1} className="mn-chat-main">
+        <div className="mn-chat-center">
+          <h1 className="mn-hello">What&apos;s on your mind today?</h1>
 
-        {gate.families_count === 0 && (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-3 py-2.5">
-            <p className="text-xs font-medium text-warning">
-              Set up provider keys in Settings. Two ready model families are the minimum for a normal run; three are recommended. Providers with unverified quota limits do not count toward readiness.
-            </p>
-            <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0">
-              <Settings className="mr-1.5 size-3.5" />
-              Add keys
-            </Button>
-          </div>
-        )}
 
-        <div
-          data-testid="diversity-chip"
-          className={`assembly-readiness-chip mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
-            gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
-          }`}
-        >
-          <span className="font-medium">{gateChipText(gate)}</span>
-          {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
-          {gate.level === "DEGRADED" && !degradedConfirmed && (
-            <Button variant="outline" size="sm" className="min-h-8" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
-              Run anyway
-            </Button>
+          <div className="mn-dock">
+          {status && (
+            <div className="mn-status" id="question-status">
+              <ChatStatusMessage status={status} />
+            </div>
           )}
-        </div>
 
-        {catalogFailed && (
-          <div className="mb-3">
-            <ServerStatusBanner url={env.apiUrl} onRetry={() => setCatalogTick((t) => t + 1)} />
+          <div
+            data-testid="diversity-chip"
+            data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
+            className="mn-meta"
+            aria-live="polite"
+          >
+            {catalogLoading ? (
+              <span>Checking provider keys…</span>
+            ) : catalogFailed ? (
+              <span className="mn-meta-warn">
+                Provider status unavailable ·{" "}
+                <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
+                  Retry
+                </button>
+              </span>
+            ) : (
+              <>
+                <span>{gateChipText(gate)}</span>
+                {gate.level === "DEGRADED" && !degradedConfirmed && (
+                  <button
+                    type="button"
+                    className="mn-link"
+                    data-testid="degraded-confirm"
+                    onClick={() => setConfirmedGateSignature(gateSignature)}
+                  >
+                    Run anyway
+                  </button>
+                )}
+                {gate.families_count === 0 && (
+                  <Link href="/settings" className="mn-link">
+                    Add provider keys
+                  </Link>
+                )}
+              </>
+            )}
           </div>
-        )}
 
-        <div className="assembly-chat-form-stack space-y-3">
+          {runHint && (
+            <p className="mn-hint" id="run-hint">
+              {runHint}
+            </p>
+          )}
+
+          {catalogFailed && (
+            <div className="mn-alert" role="alert">
+              <span>
+                Can&apos;t reach the Assembly server at {env.apiUrl}. Check that the backend is running.
+              </span>
+              <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
+                Retry
+              </button>
+            </div>
+          )}
+
+          <div className="mn-suggestions" aria-label="Suggested questions">
+            <span>Try</span>
+            {EXAMPLES.map((example) => (
+              <button
+                key={example.label}
+                type="button"
+                className="mn-chip"
+                title={example.question}
+                onClick={() => {
+                  setQuestion(example.question)
+                  textareaRef.current?.focus()
+                }}
+              >
+                {example.label}
+              </button>
+            ))}
+          </div>
           {attachments.length > 0 && (
-            <div className="assembly-attachment-list flex flex-wrap gap-2" aria-label="Selected attachments">
+            <div className="mn-attachments" aria-label="Selected attachments">
               {attachments.map((attachment) => (
-                <div key={attachment.id} className="flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs">
-                  <FileText className="size-4 shrink-0 text-brand" aria-hidden />
-                  <span className="max-w-48 truncate font-medium" title={attachment.filename}>{attachment.filename}</span>
-                  <span className="shrink-0 text-muted-foreground">{attachment.filename.toLowerCase().endsWith(".env.example") ? "ENV.EXAMPLE" : (attachment.filename.split(".").pop() || "TEXT").toUpperCase()}</span>
-                  <span className="shrink-0 text-muted-foreground">{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
+                <div key={attachment.id} className="mn-attachment">
+                  <FileText className="size-3.5 shrink-0 text-brand" aria-hidden />
+                  <b title={attachment.filename}>{attachment.filename}</b>
+                  <span>{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
                   <button
                     type="button"
                     aria-label={`Remove ${attachment.filename}`}
                     disabled={loading}
                     onClick={() => handleRemoveAttachment(attachment.id)}
                     className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    onClick={() =>
+                      setAttachments((current) => current.filter((item) => item.id !== attachment.id))
+                    }
                   >
                     <X className="size-3.5" aria-hidden />
                   </button>
@@ -512,22 +576,38 @@ export default function Home() {
               ))}
             </div>
           )}
-          <div className="assembly-chat-composer rounded-2xl border border-border bg-card p-3 shadow-sm transition-colors focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10">
-            <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
+
+          <form
+            className="mn-composer"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void handleLaunch()
+            }}
+          >
+            <label htmlFor="research-question" className="sr-only">
+              Ask a question (max 2000 characters)
+            </label>
             <textarea
               id="research-question"
               ref={textareaRef}
               value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask anything worth checking across multiple models…"
+              onChange={(event) => setQuestion(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault()
+                  void handleLaunch()
+                }
+              }}
+              placeholder="Ask Assembly"
               aria-describedby="question-status"
-              className="assembly-chat-question-input max-h-56 min-h-24 w-full resize-y bg-transparent px-2 py-2 text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
-              rows={3}
+              className="mn-input"
+              rows={1}
               maxLength={2000}
               required
             />
-            <div className="assembly-chat-composer-footer flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
-              <div className="assembly-chat-composer-tools flex flex-wrap items-center gap-2">
+
+            <div className="mn-composer-tools">
+              <div className="mn-tools-left">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -538,44 +618,42 @@ export default function Home() {
                   disabled={loading}
                   onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
                 />
-                <Button
+                <button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="min-h-9"
                   disabled={loading}
+                  className="mn-icon-btn"
+                  disabled={loading || attachments.length >= MAX_ATTACHMENTS}
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Attach files"
+                  title={`Attach up to ${MAX_ATTACHMENTS} files`}
                 >
-                  <Paperclip className="mr-1.5 size-3.5" />
-                  Attach{attachments.length ? ` · ${attachments.length}` : ""}
-                </Button>
-                <Button
+                  <Paperclip className="size-[18px]" aria-hidden />
+                </button>
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-h-9"
+                  className="mn-pill"
                   onClick={() => setShowModelSettings(true)}
                   aria-haspopup="dialog"
                   aria-label="Open model and role settings"
                 >
-                  <SlidersHorizontal className="mr-1.5 size-3.5" />
-                  Models{selection.selected.length > 0 ? ` · ${selection.selected.length}` : " · Auto"}
-                </Button>
-                <div className="assembly-chat-budget flex items-center rounded-lg border border-border bg-background p-0.5" role="group" aria-label="Time budget">
-                  <Clock className="ml-2 mr-1 size-3.5 text-muted-foreground" aria-hidden />
-                  {TIME_BUDGETS.map((m) => (
+                  <SlidersHorizontal className="size-3.5" aria-hidden />
+                  {selection.selected.length > 0 ? `${selection.selected.length} models` : "Models · Auto"}
+                </button>
+                <div className="mn-budget" role="group" aria-label="Time budget">
+                  {TIME_BUDGETS.map((value) => (
                     <button
-                      key={m}
+                      key={value}
                       type="button"
-                      onClick={() => setMinutes(m)}
-                      aria-pressed={minutes === m}
-                      aria-label={`${m} minutes`}
-                      className={`min-h-9 min-w-9 rounded-md px-2 text-xs font-medium transition-colors ${
-                        minutes === m ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                      }`}
+                      className="mn-budget-opt"
+                      onClick={() => setMinutes(value)}
+                      aria-pressed={minutes === value}
+                      aria-label={`${value} minutes, ${BUDGET_COPY[value]}`}
+                      title={BUDGET_COPY[value]}
                     >
-                      {m}m
+                      {value}m
                     </button>
                   ))}
                 </div>
@@ -589,28 +667,24 @@ export default function Home() {
                 {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="mr-1.5 size-4" />}
                 {loading ? "Running…" : isValidatingAttachments ? "Checking…" : "Run"}
               </Button>
-            </div>
-          </div>
-          {status && (
-            <ChatStatusMessage status={status} />
-          )}
-        </div>
 
-        <div className="assembly-chat-suggestions mt-4" aria-label="Suggested questions">
-          <div className="assembly-chat-suggestions-heading">Need a starting point?</div><div className="assembly-chat-suggestion-grid">
-          {EXAMPLES.map((example) => (
-            <button
-              key={example.label}
-              type="button"
-              onClick={() => { setQuestion(example.question); textareaRef.current?.focus() }}
-              className="assembly-chat-suggestion"
-              title={example.question}
-            >
-              {example.label}
-            </button>
-          ))}
+              <button
+                type="submit"
+                className="mn-send"
+                disabled={loading || missingQuestion || catalogLoading || catalogFailed || gate.level === "BLOCKED"}
+                aria-label={loading ? "Running" : "Start run"}
+                aria-describedby={runHint ? "run-hint" : undefined}
+              >
+                {loading ? (
+                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <ArrowUp className="size-[18px]" aria-hidden />
+                )}
+              </button>
+            </div>
+          </form>
+          </div>
         </div>
-</div>
       </main>
 
       <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
@@ -623,7 +697,9 @@ export default function Home() {
           </DialogHeader>
           <ModelPicker value={selection} onChange={setSelection} keyedProviderIds={enabledIds} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowModelSettings(false)}>Done</Button>
+            <Button variant="outline" onClick={() => setShowModelSettings(false)}>
+              Done
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

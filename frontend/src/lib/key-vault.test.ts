@@ -195,6 +195,10 @@ describe("KeyVault persistence (P0)", () => {
   it("does not seed the cache from localStorage when initial IndexedDB loading fails", async () => {
     const fallback = mockLocalStorage();
     fallback.set("assembly:keys_v1", JSON.stringify({ groq: CANARY_B }));
+    // The vault only treats IndexedDB as the primary store when `indexedDB`
+    // exists, so the environment must look like a real browser: without this a
+    // read failure would legitimately fall back to the localStorage mirror.
+    vi.stubGlobal("indexedDB", {});
     vi.mocked(get).mockRejectedValue(new Error("IndexedDB read failed"));
 
     const vault = new KeyVault();

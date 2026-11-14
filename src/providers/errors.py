@@ -7,6 +7,7 @@ drop the key on AuthError, fail over on ProviderDown, retry-or-fallback
 on BadResponse.
 """
 
+from datetime import UTC
 from email.utils import parsedate_to_datetime
 
 
@@ -77,10 +78,10 @@ def parse_retry_after(value: str | None) -> float | None:
     except ValueError:
         pass
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         retry_at = parsedate_to_datetime(value)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return max(0.0, (retry_at - now).total_seconds())
     except (ValueError, TypeError, OverflowError):
         return None
