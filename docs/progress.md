@@ -1,3 +1,15 @@
+## 2026-11-14 — Restored Carousel Slider Tabs in Section 2 (Multi-Agent Consensus)
+- **Product Carousel Tabs Restored**:
+  - Re-introduced `PRODUCT_TABS` array with auto-rotation state (`activeTab` every 2.4s) in `frontend/src/components/assembly-hero-experience.tsx`.
+  - Added `.product-carousel-wrap` with interactive clickable buttons and smooth horizontal slider transition directly above the centered "Multi-Agent Consensus" block in Section 2 (`#product`).
+  - Added matching CSS in `frontend/src/app/assembly-hero-experience.css` for `.product-carousel-wrap`, `.product-carousel-strip`, `.carousel-tab`, and `.carousel-tab.active` (with technical corner bracket accents).
+  - Maintained centered layout and generous editorial paragraphs for "Multi-Agent Consensus".
+- **Verification**:
+  - Vitest: 15/15 tests passing.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
+  - Committed as `0a43023` and pushed to `feat/issue-106-redesign-website-ui-ux` updating PR #109.
+
 ## 2026-11-14 — Integrated Low-Opacity Neural Network Banner on Hero Stage
 - **Hero Stage Network Banner**:
   - Copied user's golden neural network constellation image to `frontend/public/idea-network-banner.jpg`.
@@ -47,6 +59,18 @@
   - Visual proof: [the_idea_behind_shift_left_comparison.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/the_idea_behind_shift_left_comparison.png)
   - [the_idea_behind_shifted_left_stage.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/the_idea_behind_shifted_left_stage.png)
   - Vitest (15/15) and ESLint clean (0 errors, 0 warnings).
+
+## 2026-11-14 — Restored Carousel Slider Tabs in Section 2 (Multi-Agent Consensus)
+- **Product Carousel Tabs Restored**:
+  - Re-introduced `PRODUCT_TABS` array with auto-rotation state (`activeTab` every 2.4s) in `frontend/src/components/assembly-hero-experience.tsx`.
+  - Added `.product-carousel-wrap` with interactive clickable buttons and smooth horizontal slider transition directly above the centered "Multi-Agent Consensus" block in Section 2 (`#product`).
+  - Added matching CSS in `frontend/src/app/assembly-hero-experience.css` for `.product-carousel-wrap`, `.product-carousel-strip`, `.carousel-tab`, and `.carousel-tab.active` (with technical corner bracket accents).
+  - Maintained centered layout and generous editorial paragraphs for "Multi-Agent Consensus".
+- **Verification**:
+  - Vitest: 15/15 tests passing.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
+  - Committed as `0a43023` and pushed to `feat/issue-106-redesign-website-ui-ux` updating PR #109.
 
 ## 2026-11-14 — Integrated Low-Opacity Neural Network Banner on Hero Stage
 - **Hero Stage Network Banner**:
