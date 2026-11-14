@@ -1,12 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BrandOrbsOrbitCanvas } from "./brand-orbs-orbit-canvas";
 import "../app/assembly-hero-experience.css";
 
+const PRODUCT_TABS = [
+  "Multi-Agent Collaboration",
+  "Independent Problem Analysis",
+  "AI-Powered Research",
+  "Automated Fact-Checking",
+  "Agent-to-Agent Debate",
+  "Consensus Building",
+  "Answer Verification",
+  "Code Review and Analysis",
+];
+
 export function AssemblyHeroExperience() {
   const rootRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState(0);
+
+  // Tab Auto-Rotation Interval
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveTab((prev) => (prev + 1) % PRODUCT_TABS.length);
+    }, 2400);
+
+    return () => clearInterval(timer);
+  }, []);
 
   // IntersectionObserver for reveal animation (.rv -> .revealed)
   useEffect(() => {
@@ -80,6 +101,25 @@ export function AssemblyHeroExperience() {
         {/* Section 2: Product — Centered Multi-Agent Consensus */}
         <section id="product" className="assembly-hero-section">
           <div className="section-stage">
+            <div className="product-carousel-wrap rv rv-del-1">
+              <div
+                className="product-carousel-strip"
+                style={{ transform: `translateX(-${activeTab * 336}px)` }}
+              >
+                {PRODUCT_TABS.map((tab, idx) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(idx)}
+                    className={`carousel-tab ${idx === activeTab ? "active" : ""}`}
+                    aria-pressed={idx === activeTab}
+                  >
+                    <span>{tab}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="product-headline rv rv-del-2">
               <div className="gateway-box">How Assembly Works</div>
               <h2 className="product-title">Multi-Agent Consensus</h2>
