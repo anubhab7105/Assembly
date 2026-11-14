@@ -151,20 +151,23 @@ def setup_logging(level: str = "INFO") -> logging.Logger:
         return logger
 
     import os
+
     is_production = os.environ.get("APP_ENV", "development") == "production"
 
     if is_production:
+
         class JSONFormatter(logging.Formatter):
             def format(self, record):
                 log_record = {
                     "time": self.formatTime(record, self.datefmt),
                     "level": record.levelname,
                     "name": record.name,
-                    "message": record.getMessage()
+                    "message": record.getMessage(),
                 }
                 if record.exc_info:
                     log_record["exc_info"] = self.formatException(record.exc_info)
                 return json.dumps(log_record)
+
         formatter = JSONFormatter()
     else:
         formatter = logging.Formatter(

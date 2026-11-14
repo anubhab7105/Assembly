@@ -14,7 +14,7 @@ import argparse
 import asyncio
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,7 @@ DEFAULT_QUESTION = (
 
 def default_out_path() -> Path:
     """Timestamped default so runs never overwrite each other."""
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     return PROJECT_ROOT / "recordings" / f"run-{stamp}.json"
 
 

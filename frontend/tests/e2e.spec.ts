@@ -169,6 +169,11 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
   test("3. History export/import round-trips without server storage", async ({ page }) => {
     await page.goto("/chat")
+    // The privacy gate replaces the workspace chrome until acknowledged.
+    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
+    await page.getByLabel(/my question is sent to the model providers/i).check()
+    await page.getByTestId("privacy-acknowledge").click()
+
     // The workspace sidebar exports the local run history as JSON. A cold dev
     // compile can lag the first paint, so allow for that.
     await expect(page.getByRole("button", { name: "Export" })).toBeVisible({ timeout: 15000 })

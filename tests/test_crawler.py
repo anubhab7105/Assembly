@@ -81,9 +81,9 @@ async def test_crawl_adds_same_origin_links_only_and_respects_page_cap() -> None
                 "Related page", "<main>Useful related evidence</main>"
             )
         )
-        result = await WebCrawler(
-            max_pages=2, resolver=public_resolver
-        ).crawl([{"title": "Start", "url": "https://example.com/start", "snippet": ""}])
+        result = await WebCrawler(max_pages=2, resolver=public_resolver).crawl(
+            [{"title": "Start", "url": "https://example.com/start", "snippet": ""}]
+        )
 
     assert len(result) == 2
     assert result[1]["url"] == "https://example.com/related"

@@ -1,3 +1,13 @@
+## 2026-11-14 — Merge-readiness audit: three real bugs fixed
+
+- `src/orchestration/orchestrator.py`: the attachment status event was awaited before the nested `emit_event` helper was defined, so every run with attachment context failed with `UnboundLocalError` before the capacity check. Moved the emission to after the `CAPACITY_CHECK` transition; added `test_attachment_context_is_announced_without_crashing` to `tests/test_orchestrator_e2e.py`.
+- `src/api/request_context.py`: `_PinRouter.fallback_for` passed an undefined `error` to the wrapped router, so a provider retry for any unpinned role raised `NameError`. Renamed the parameter and added `test_unpinned_fallback_delegates_to_wrapped_router`.
+- `src/orchestration/time_controller.py`: removed a duplicate `synth_reserve_seconds_capacity` definition (identical body; ruff F811).
+- Fixed the Playwright history test, which raced the privacy gate and never saw the Export button; the spec now acknowledges the dialog first.
+- Removed 37 tracked `.pyc` files from the index (`.gitignore` already covered them) and cleared the scoped ruff findings/formatting in `tests/` and `scripts/`.
+- Verification: `pytest -q` 668 passed / 1 skipped; `make lint` (ruff check + format) clean; `npm run lint`, `tsc --noEmit`, `next build`, npm audit gate + regression tests, CSP tests, all Vitest suites and `playwright test` (22/22 with `CI=true`) pass; `scripts/audit_python.py` and the exported event schema check pass; Alembic has one head (`c41a9e2f7b3d`).
+- Remaining release blocker (not code): `models.yaml` quota metadata is missing/stale (`gemini` has `quota_last_verified: null`; Groq/OpenRouter last verified 2026-10-09), so the router currently exposes zero routable families and a real-key end-to-end run cannot pass until a human verifies limits against provider dashboards. The full-repo ruff run also still reports pre-existing style findings outside the `make lint` scope (documented 2026-10-08 decision), and the frontend npm audit allowlist entries for `deepmerge`/`zod` are past their 2026-11-07 review date (gate still passes; both are pre-existing).
+
 ## 2026-11-13 — Playwright suite green (was 14 failing)
 
 - The CI browser job failed with 14 of 22 tests red. Three causes were app bugs, the rest were specs pinned to UI this branch replaced:

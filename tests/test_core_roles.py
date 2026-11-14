@@ -68,7 +68,11 @@ def test_old_preflight_routes_are_gone() -> None:
     for method in ("get", "post"):
         resp = getattr(client, method)(
             "/api/executions/preflight",
-            **({"params": {"question": "Hi?", "time_budget_minutes": 3}} if method == "get" else {"json": {"question": "Hi?", "time_budget_minutes": 3}}),
+            **(
+                {"params": {"question": "Hi?", "time_budget_minutes": 3}}
+                if method == "get"
+                else {"json": {"question": "Hi?", "time_budget_minutes": 3}}
+            ),
         )
         assert resp.status_code == 410, resp.text
         assert resp.json()["use"] == "POST /api/preflight"
