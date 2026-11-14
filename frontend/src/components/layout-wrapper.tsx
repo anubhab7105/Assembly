@@ -307,6 +307,113 @@ const handleImport = async (file: File, input: HTMLInputElement) => {
   )
 }
 
+export function MobileMenu({
+  open,
+  onOpenChange,
+  menuCloseRef,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  menuCloseRef: React.RefObject<HTMLButtonElement | null>
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        aria-modal="true"
+        aria-describedby="mobile-menu-description"
+        className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 rounded-none border-r border-border bg-card p-0 sm:max-w-sm"
+      >
+        <DialogTitle className="sr-only">Navigation menu</DialogTitle>
+        <DialogDescription id="mobile-menu-description" className="sr-only">
+          Navigate between Assembly pages and manage your investigation history.
+        </DialogDescription>
+        <div id="mobile-menu" className="relative h-full min-h-0">
+          <Suspense fallback={<div className="p-4">Loading menu...</div>}>
+            <SidebarContent onClose={() => onOpenChange(false)} />
+          </Suspense>
+          <button
+            ref={menuCloseRef}
+            type="button"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close menu"
+            className="absolute right-3 top-3 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-background/80 hover:bg-muted"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function AppSidebar() {
+  return (
+    <aside className="assembly-sidebar-shell hidden md:block w-[264px] shrink-0 h-full relative z-20">
+      <Suspense fallback={<div className="p-4">Loading menu...</div>}>
+        <SidebarContent />
+      </Suspense>
+    </aside>
+  )
+}
+
+export function AppChrome({
+  children,
+  isLandingPage,
+  isOffline,
+  mobileMenuOpen,
+  onOpenMobileMenu,
+  menuTriggerRef,
+}: {
+  children: React.ReactNode
+  isLandingPage: boolean
+  isOffline: boolean
+  mobileMenuOpen: boolean
+  onOpenMobileMenu: () => void
+  menuTriggerRef: React.RefObject<HTMLButtonElement | null>
+}) {
+  return (
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+      {!isLandingPage && (
+        <header className="assembly-mobile-header md:hidden sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Zap className="size-5 text-brand" />
+            <span className="font-bold tracking-tight">assembly<span className="text-brand">.</span></span>
+          </div>
+          <button
+            ref={menuTriggerRef}
+            onClick={onOpenMobileMenu}
+            aria-label="Open menu"
+            aria-expanded={mobileMenuOpen}
+            aria-controls={mobileMenuOpen ? "mobile-menu" : undefined}
+            className="p-3 -mr-1 min-h-11 min-w-11 rounded hover:bg-muted"
+          >
+            <Menu className="size-6" />
+          </button>
+        </header>
+      )}
+
+      <div role="status" aria-live="polite" className="sr-only">
+        {isOffline ? OFFLINE_MESSAGE : ""}
+      </div>
+
+      {isOffline && (
+        <div
+          data-testid="offline-banner"
+          className="bg-danger/90 text-white px-4 py-1.5 text-center text-sm font-medium flex items-center justify-center gap-2"
+        >
+          <WifiOff className="size-4" />
+          {OFFLINE_MESSAGE}
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const isOffline = useOfflineStatus()
   const pathname = usePathname()
@@ -339,80 +446,23 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
       <div className="assembly-app-shell flex h-screen overflow-hidden bg-background">
-        {!isLandingPage && (
-          <aside className="assembly-sidebar-shell hidden md:block w-[264px] shrink-0 h-full relative z-20">
-            <Suspense fallback={<div className="p-4">Loading menu...</div>}>
-              <SidebarContent />
-            </Suspense>
-          </aside>
-        )}
+        {!isLandingPage && <AppSidebar />}
 
-        <Dialog open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <DialogContent
-            showCloseButton={false}
-            aria-modal="true"
-            aria-describedby="mobile-menu-description"
-            className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 rounded-none border-r border-border bg-card p-0 sm:max-w-sm"
-          >
-            <DialogTitle className="sr-only">Navigation menu</DialogTitle>
-            <DialogDescription id="mobile-menu-description" className="sr-only">
-              Navigate between Assembly pages and manage your investigation history.
-            </DialogDescription>
-            <div id="mobile-menu" className="relative h-full min-h-0">
-              <Suspense fallback={<div className="p-4">Loading menu...</div>}>
-                <SidebarContent onClose={() => setMobileMenuOpen(false)} />
-              </Suspense>
-              <button
-                ref={menuCloseRef}
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                aria-label="Close menu"
-                className="absolute right-3 top-3 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-background/80 hover:bg-muted"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <MobileMenu
+          open={mobileMenuOpen}
+          onOpenChange={setMobileMenuOpen}
+          menuCloseRef={menuCloseRef}
+        />
 
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          {!isLandingPage && (
-            <header className="assembly-mobile-header md:hidden sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Zap className="size-5 text-brand" />
-                <span className="font-bold tracking-tight">assembly<span className="text-brand">.</span></span>
-              </div>
-              <button
-                ref={menuTriggerRef}
-                onClick={() => setMobileMenuOpen(true)}
-                aria-label="Open menu"
-                aria-expanded={mobileMenuOpen}
-                aria-controls={mobileMenuOpen ? "mobile-menu" : undefined}
-                className="p-3 -mr-1 min-h-11 min-w-11 rounded hover:bg-muted"
-              >
-                <Menu className="size-6" />
-              </button>
-            </header>
-          )}
-
-          <div role="status" aria-live="polite" className="sr-only">
-            {isOffline ? OFFLINE_MESSAGE : ""}
-          </div>
-
-          {isOffline && (
-            <div
-              data-testid="offline-banner"
-              className="bg-danger/90 text-white px-4 py-1.5 text-center text-sm font-medium flex items-center justify-center gap-2"
-            >
-              <WifiOff className="size-4" />
-              {OFFLINE_MESSAGE}
-            </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
-            {children}
-          </div>
-        </div>
+        <AppChrome
+          isLandingPage={isLandingPage}
+          isOffline={isOffline}
+          mobileMenuOpen={mobileMenuOpen}
+          onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          menuTriggerRef={menuTriggerRef}
+        >
+          {children}
+        </AppChrome>
       </div>
     </ToastProvider>
   )

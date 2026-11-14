@@ -16,6 +16,7 @@ import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
   estimateAttachmentContextChars,
   MAX_ATTACHMENT_CONTEXT_CHARS,
+  MAX_ATTACHMENT_COUNT,
   SUPPORTED_ATTACHMENT_EXTENSIONS,
   type DraftAttachment,
   validateAttachmentBatch,
@@ -26,7 +27,10 @@ import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Zap, Send, Settings, Clock, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { ArrowUp, Clock, FileText, Paperclip, Send, Settings, SlidersHorizontal, X, Zap } from "lucide-react"
+
+const MAX_ATTACHMENTS = MAX_ATTACHMENT_COUNT
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
@@ -542,8 +546,8 @@ export default function Home() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="min-h-9"
-                  disabled={loading}
+                  className="mn-icon-btn"
+                  disabled={loading || attachments.length >= MAX_ATTACHMENTS}
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Attach files"
                 >
