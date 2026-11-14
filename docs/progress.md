@@ -5,6 +5,7 @@
 - Sidebar (`frontend/src/components/layout-wrapper.tsx`): removed the History nav item (the `/history` route still renders) and added an Export button in the footer that downloads `assembly-history.json` through the same `storage.exportJSON()` call the History page uses.
 - Workspace (`frontend/src/app/chat/page.tsx`, `minimal.css`): the prompt is absolutely centred on the page midpoint and the status/chips/composer stack is wrapped in `.mn-dock`, pinned to the bottom with an 8px gap.
 - Landing GitHub button now points at `https://github.com/anubhab7105/Assembly` (previous value was a different account).
+- Fixed the resulting CI failure in `frontend/scripts/csp-policy.test.mjs`: the theme-bootstrap assertion matched `<script id="assembly-theme-bootstrap"` on a single line, so the multi-line formatted tag in `layout.tsx` failed with "the theme bootstrap must be present as a regular script element". The regex now tolerates whitespace (including a newline) after `<script` and still requires the id, `src="/theme-bootstrap.js"`, and no `async`/`defer`/`type`.
 - Verification: `npx tsc --noEmit` and `npx eslint` pass on all touched files; `npx next build` (static export) succeeds and `frontend/out/` was regenerated so the exported build matches the source. Banner Accept/Reject, sidebar Export, hero geometry and the GitHub href were checked in the running dev server. `tests/keys-persist.spec.ts` was not run locally (Playwright is CI-only here).
 
 ## 2026-11-11 — Minimal chat-style workspace
