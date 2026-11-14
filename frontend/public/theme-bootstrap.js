@@ -1,16 +1,19 @@
 (() => {
-  const pathname = window.location.pathname;
-  if (pathname === "/" || pathname === "/science") {
-    document.documentElement.classList.add("dark");
-    return;
-  }
+  let theme = null;
 
-  let theme = "dark";
   try {
     const saved = window.localStorage.getItem("assembly:theme");
     if (saved === "light" || saved === "dark") theme = saved;
   } catch {
-    // Default to dark
+    // Browser storage is optional; use the system preference below.
+  }
+
+  if (!theme) {
+    try {
+      theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } catch {
+      theme = "light";
+    }
   }
 
   document.documentElement.classList.toggle("dark", theme === "dark");
