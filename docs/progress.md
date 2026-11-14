@@ -1,3 +1,14 @@
+## 2026-11-14 — Placed "How Assembly Works" Directly After Slider in Natural Document Flow
+- **Section 2 Flow & Visibility Fix**:
+  - Replaced absolute positioning on the carousel slider with a vertical flex layout inside `.section-stage`: the carousel sits cleanly at the top of Section 2, followed immediately by `.product-headline` containing the `"How Assembly Works"` badge, `"Multi-Agent Consensus"` title, and editorial paragraphs.
+  - Set `#product.assembly-hero-section` to `height: auto; min-height: 100vh; overflow: visible; padding: 120px 0 100px 0` to prevent clipping or viewport collisions with the fixed header.
+  - Optimized IntersectionObserver threshold (`0.05`) with a `-20px` root margin so content reveals promptly as the user scrolls into the section.
+- **Verification**:
+  - Vitest: 15/15 tests passing.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
+  - Committed as `0715252` and pushed to `feat/issue-106-redesign-website-ui-ux` (PR #109).
+
 ## 2026-11-14 — Restored Carousel Slider Tabs in Section 2 (Multi-Agent Consensus)
 - **Product Carousel Tabs Restored**:
   - Re-introduced `PRODUCT_TABS` array with auto-rotation state (`activeTab` every 2.4s) in `frontend/src/components/assembly-hero-experience.tsx`.
@@ -59,6 +70,17 @@
   - Visual proof: [the_idea_behind_shift_left_comparison.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/the_idea_behind_shift_left_comparison.png)
   - [the_idea_behind_shifted_left_stage.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/the_idea_behind_shifted_left_stage.png)
   - Vitest (15/15) and ESLint clean (0 errors, 0 warnings).
+
+## 2026-11-14 — Placed "How Assembly Works" Directly After Slider in Natural Document Flow
+- **Section 2 Flow & Visibility Fix**:
+  - Replaced absolute positioning on the carousel slider with a vertical flex layout inside `.section-stage`: the carousel sits cleanly at the top of Section 2, followed immediately by `.product-headline` containing the `"How Assembly Works"` badge, `"Multi-Agent Consensus"` title, and editorial paragraphs.
+  - Set `#product.assembly-hero-section` to `height: auto; min-height: 100vh; overflow: visible; padding: 120px 0 100px 0` to prevent clipping or viewport collisions with the fixed header.
+  - Optimized IntersectionObserver threshold (`0.05`) with a `-20px` root margin so content reveals promptly as the user scrolls into the section.
+- **Verification**:
+  - Vitest: 15/15 tests passing.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
+  - Committed as `0715252` and pushed to `feat/issue-106-redesign-website-ui-ux` (PR #109).
 
 ## 2026-11-14 — Restored Carousel Slider Tabs in Section 2 (Multi-Agent Consensus)
 - **Product Carousel Tabs Restored**:
