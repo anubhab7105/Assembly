@@ -198,86 +198,21 @@
 }
 
 /* ================= SECTION 2: PRODUCT ================= */
-.assembly-nova-experience-root .product-carousel-wrap {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 15%;
-  height: 74px;
-  overflow: hidden;
-}
-
-.assembly-nova-experience-root .product-carousel-strip {
-  display: flex;
-  gap: 16px;
-  transition: transform 0.9s cubic-bezier(0.65, 0, 0.2, 1);
-}
-
-.assembly-nova-experience-root .carousel-tab {
-  flex: 0 0 320px;
-  min-width: 280px;
-  height: 74px;
+.assembly-nova-experience-root #product .section-stage {
   display: flex;
   align-items: center;
-  padding: 0 28px;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  opacity: 0.14;
-  transition: opacity 0.5s ease;
-  position: relative;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-}
-
-.assembly-nova-experience-root .carousel-tab.active {
-  opacity: 1;
-  border: 1px solid var(--text);
-  background: rgba(22, 24, 30, 0.95);
-}
-
-.assembly-nova-experience-root .carousel-tab.active::before,
-.assembly-nova-experience-root .carousel-tab.active::after {
-  content: '';
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border: 1px solid var(--text);
-}
-
-.assembly-nova-experience-root .carousel-tab.active::before {
-  top: -3px;
-  left: -3px;
-  border-right: none;
-  border-bottom: none;
-}
-
-.assembly-nova-experience-root .carousel-tab.active::after {
-  bottom: -3px;
-  right: -3px;
-  border-left: none;
-  border-top: none;
-}
-
-.assembly-nova-experience-root .tab-num {
-  width: 68px;
-  font-size: 11px;
-  color: var(--dim-text);
+  justify-content: center;
 }
 
 .assembly-nova-experience-root .product-headline {
-  position: absolute;
-  left: 0;
-  bottom: 12%;
-  font-size: 44px;
-  line-height: 1.1;
-  font-weight: 500;
-  color: var(--text);
+  position: relative;
+  width: min(740px, 90%);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  z-index: 5;
 }
 
 .assembly-nova-experience-root .product-dots {
@@ -287,26 +222,50 @@
 }
 
 .assembly-nova-experience-root .gateway-box {
-  border: 1px solid var(--text);
-  color: var(--text);
-  border-radius: 8px;
-  padding: 4px 18px;
-  display: inline-block;
-  margin-bottom: 6px;
-  background: rgba(22, 24, 30, 0.85);
-  font-size: 20px;
+  border: 1px solid rgba(234, 162, 33, 0.35);
+  color: var(--marigold);
+  border-radius: 999px;
+  padding: 4px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  background: rgba(234, 162, 33, 0.08);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.assembly-nova-experience-root .product-title {
+  font-size: clamp(38px, 4.5vw, 56px);
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  color: #ffffff;
+  margin: 0 0 22px 0;
+  text-align: center;
 }
 
 .assembly-nova-experience-root .product-desc {
-  margin-top: 14px;
-  width: 400px;
-  max-width: 400px;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: rgba(240, 237, 230, 0.74);
+  margin-top: 0;
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.assembly-nova-experience-root .product-desc p {
+  font-size: clamp(14px, 1.15vw, 15.5px);
+  line-height: 1.72;
+  color: rgba(240, 237, 230, 0.78);
   font-family: 'Schibsted Grotesk', sans-serif;
   font-weight: 400;
   letter-spacing: -0.01em;
+  margin: 0;
+  text-align: center;
 }
 
 /* ================= SECTION 3: REVIEWS ================= */
@@ -480,8 +439,8 @@
   }
 
   .assembly-nova-experience-root .product-headline {
-    left: 20px;
-    bottom: 60px;
+    width: calc(100% - 32px);
+    margin-inline: auto;
   }
 
   .assembly-nova-experience-root .reviews-header-strip {

@@ -1,33 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { BrandOrbsOrbitCanvas } from "./brand-orbs-orbit-canvas";
 import "../app/assembly-hero-experience.css";
 
-const PRODUCT_TABS = [
-  "Multi-Agent Collaboration",
-  "Independent Problem Analysis",
-  "AI-Powered Research",
-  "Automated Fact-Checking",
-  "Agent-to-Agent Debate",
-  "Consensus Building",
-  "Answer Verification",
-  "Code Review and Analysis",
-];
-
 export function AssemblyHeroExperience() {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState(0);
-
-  // Tab Auto-Rotation Interval
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setActiveTab((prev) => (prev + 1) % PRODUCT_TABS.length);
-    }, 2400);
-
-    return () => clearInterval(timer);
-  }, []);
 
   // IntersectionObserver for reveal animation (.rv -> .revealed)
   useEffect(() => {
@@ -98,36 +77,23 @@ export function AssemblyHeroExperience() {
           </div>
         </section>
 
-        {/* Section 2: Product */}
+        {/* Section 2: Product — Centered Multi-Agent Consensus */}
         <section id="product" className="assembly-hero-section">
           <div className="section-stage">
-            <div className="product-carousel-wrap rv rv-del-1">
-              <div
-                className="product-carousel-strip"
-                style={{ transform: `translateX(-${activeTab * 336}px)` }}
-              >
-                {PRODUCT_TABS.map((tab, idx) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setActiveTab(idx)}
-                    className={`carousel-tab ${idx === activeTab ? "active" : ""}`}
-                    aria-pressed={idx === activeTab}
-                  >
-                    <span>{tab}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="product-headline rv rv-del-2">
               <div className="gateway-box">How Assembly Works</div>
-              <div>Multi-Agent Consensus</div>
-              <p className="product-desc">
-                Set a 3, 5, 10, or 15-minute budget. Agents solve the problem in isolation before seeing peer outputs.
-                Assembly scores agreement, triggers adversarial rounds on contested claims, and delivers a rigorous,
-                inspectable synthesis.
-              </p>
+              <h2 className="product-title">Multi-Agent Consensus</h2>
+              <div className="product-desc">
+                <p>
+                  Set a 3, 5, 10, or 15-minute budget. Agents solve the problem in total isolation before seeing peer outputs, ensuring independent perspectives free from early herd mentality or model bias.
+                </p>
+                <p>
+                  Rather than trusting a single LLM or relying on passive majority voting, diverse model families (Gemini, Llama, Qwen, DeepSeek) are assigned specialized roles: solver, critic, and researcher. Opposing families cross-examine weak assumptions, eliminate hallucinations, and debate unresolved contradictions.
+                </p>
+                <p>
+                  Live web evidence grounds every factual claim, while an automated consensus engine mathematically evaluates confidence drift and evidentiary weight. You receive one definitive, verifiable answer complete with cited sources and transparent uncertainty notes.
+                </p>
+              </div>
             </div>
           </div>
         </section>
