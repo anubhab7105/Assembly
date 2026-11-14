@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { KeysManager } from "@/components/keys-manager";
 import { PrivacySection } from "@/components/privacy-section";
 import { ServerStatusBanner } from "@/components/server-status-banner";
 import { ApiClient } from "@/lib/api-client";
 import { env } from "@/lib/env";
-import { Shield } from "lucide-react";
+import { X } from "lucide-react";
 
 export default function SetupPage() {
   const [notes, setNotes] = useState<{ id: string; privacy_note?: string | null }[]>([]);
@@ -30,22 +31,30 @@ export default function SetupPage() {
   }, [retryTick]);
 
   return (
-    <div className="assembly-settings-page min-h-screen bg-background pb-20">
-      {/* Header */}
-      <header className="assembly-settings-heading border-b border-border bg-card">
-        <div className="mx-auto max-w-5xl px-6 py-10">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-brand-foreground shadow-sm">
-              <Shield className="size-5" />
-            </span>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Add your free keys</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Configure at least two ready model families. Three are recommended; providers with unverified quota limits are excluded from runs.
-              </p>
-            </div>
+    <div className="assembly-settings-page min-h-screen pb-20">
+      {/* Marigold Yellow Header */}
+      <header className="assembly-settings-heading relative">
+        <div className="w-full px-6 sm:px-10 lg:px-12 py-7 sm:py-9">
+          <div className="max-w-2xl pr-16 sm:pr-24">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#000000]">
+              <span className="assembly-settings-add-word">Add</span> your free keys
+            </h1>
+            <p className="text-sm text-[#000000]/80 mt-1 leading-relaxed font-medium">
+              Configure at least two ready model families. Three are recommended; providers with unverified quota limits are excluded from runs.
+            </p>
           </div>
         </div>
+
+        {/* Top-Right Corner Close Button */}
+        <Link
+          href="/chat"
+          className="assembly-settings-close-btn absolute top-3.5 right-4 sm:top-4 sm:right-6 shrink-0"
+          aria-label="Back to investigation"
+          title="Back to investigation"
+        >
+          <X className="size-4" />
+          <span className="sr-only">Back to investigation</span>
+        </Link>
       </header>
 
       {/* Content */}

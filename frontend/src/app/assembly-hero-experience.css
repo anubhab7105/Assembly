@@ -1,0 +1,516 @@
+/* Assembly Hero Experience Styles ported 1:1 from nova-agent.html */
+
+.assembly-nova-experience-root {
+  --bg: #0b0c0e;
+  --text: #f0ede6;
+  --dim-text: rgba(240, 237, 230, 0.5);
+  --marigold: #eaa221;
+  --grid-line: rgba(255, 255, 255, 0.08);
+  --brand-grad: conic-gradient(from 200deg, #ffb347, #ff8a3d 18%, #ff5a5f 34%, #ff3d8b 50%, #ff5a5f 66%, #ff8a3d 82%, #ffb347);
+  --col1: 17%;
+  --col2: 50%;
+  --col3: 83%;
+
+  position: relative;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Schibsted Grotesk', -apple-system, sans-serif;
+  width: 100%;
+  overflow: clip;
+}
+
+/* Content Layout */
+.assembly-nova-experience-root .content-container {
+  position: relative;
+  z-index: 10;
+}
+
+.assembly-nova-experience-root .assembly-hero-section {
+  position: relative;
+  height: 100vh;
+  min-height: 700px;
+  width: 100%;
+  overflow: clip;
+}
+
+/* Fixed Content Stage: Keeps typography and layout rock-solid while container widens */
+.assembly-nova-experience-root .section-stage {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1240px;
+  max-width: calc(100% - 48px);
+  pointer-events: none;
+}
+
+.assembly-nova-experience-root .section-stage > * {
+  pointer-events: auto;
+}
+
+/* Reveal Animation Class */
+.assembly-nova-experience-root .rv {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 1s cubic-bezier(0.2, 0.7, 0.2, 1), transform 1s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.assembly-nova-experience-root .rv.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.assembly-nova-experience-root .rv-del-1 {
+  transition-delay: 0.1s;
+}
+
+.assembly-nova-experience-root .rv-del-2 {
+  transition-delay: 0.2s;
+}
+
+.assembly-nova-experience-root .rv-del-3 {
+  transition-delay: 0.3s;
+}
+
+.assembly-nova-experience-root .rv-del-4 {
+  transition-delay: 0.4s;
+}
+
+/* ================= SECTION 1: INTRO ================= */
+.assembly-nova-experience-root .intro-bottom-left {
+  position: absolute;
+  left: 0;
+  top: 90px;
+  width: 540px;
+  max-width: 540px;
+}
+
+.assembly-nova-experience-root .intro-unleash {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  color: var(--marigold);
+}
+
+.assembly-nova-experience-root .headline-boxes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assembly-nova-experience-root .headline-box {
+  font-size: 68px;
+  font-weight: 400;
+  line-height: 0.95;
+  padding: 4px 18px;
+  border: 2px solid transparent;
+  display: inline-block;
+  width: fit-content;
+  position: relative;
+  color: var(--marigold);
+}
+
+.assembly-nova-experience-root .headline-box.thinking {
+  border-image: linear-gradient(135deg, #50555e, #8b929e, #c0c5cf) 1;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%);
+}
+
+.assembly-nova-experience-root .headline-box.machines {
+  border-image: linear-gradient(135deg, #424750, #7a818e, #b2b8c3) 1;
+}
+
+.assembly-nova-experience-root .intro-desc {
+  margin-top: 20px;
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.assembly-nova-experience-root .intro-desc p {
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: rgba(240, 237, 230, 0.82);
+  font-family: 'Schibsted Grotesk', sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* Sticky 3D Orbiting Models on Right */
+.assembly-nova-experience-root .sticky-orbit-wrapper {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: clamp(24px, calc(50vh - 230px), 140px);
+  left: 0;
+  pointer-events: none;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+}
+
+.assembly-nova-experience-root .sticky-orbit-stage {
+  width: 1240px;
+  max-width: calc(100% - 48px);
+  height: 100%;
+  position: relative;
+  pointer-events: none;
+}
+
+.assembly-nova-experience-root .sticky-orbit-box {
+  position: sticky;
+  top: clamp(48px, calc(50vh - 220px), 185px);
+  margin-left: auto;
+  width: 640px;
+  height: 580px;
+  max-width: 52%;
+  pointer-events: none;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.assembly-nova-experience-root .intro-orbit-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.assembly-nova-experience-root .reviews-right {
+  display: none !important;
+}
+
+.assembly-nova-experience-root .reviews-right-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--marigold);
+}
+
+.assembly-nova-experience-root .reviews-right-desc {
+  font-family: 'Schibsted Grotesk', sans-serif;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: rgba(240, 237, 230, 0.74);
+  margin: 0;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.assembly-nova-experience-root .reviews-right-desc strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ================= SECTION 2: PRODUCT ================= */
+.assembly-nova-experience-root .product-carousel-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 15%;
+  height: 74px;
+  overflow: hidden;
+}
+
+.assembly-nova-experience-root .product-carousel-strip {
+  display: flex;
+  gap: 16px;
+  transition: transform 0.9s cubic-bezier(0.65, 0, 0.2, 1);
+}
+
+.assembly-nova-experience-root .carousel-tab {
+  flex: 0 0 320px;
+  min-width: 280px;
+  height: 74px;
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.14;
+  transition: opacity 0.5s ease;
+  position: relative;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.assembly-nova-experience-root .carousel-tab.active {
+  opacity: 1;
+  border: 1px solid var(--text);
+  background: rgba(22, 24, 30, 0.95);
+}
+
+.assembly-nova-experience-root .carousel-tab.active::before,
+.assembly-nova-experience-root .carousel-tab.active::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--text);
+}
+
+.assembly-nova-experience-root .carousel-tab.active::before {
+  top: -3px;
+  left: -3px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.assembly-nova-experience-root .carousel-tab.active::after {
+  bottom: -3px;
+  right: -3px;
+  border-left: none;
+  border-top: none;
+}
+
+.assembly-nova-experience-root .tab-num {
+  width: 68px;
+  font-size: 11px;
+  color: var(--dim-text);
+}
+
+.assembly-nova-experience-root .product-headline {
+  position: absolute;
+  left: 0;
+  bottom: 12%;
+  font-size: 44px;
+  line-height: 1.1;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.assembly-nova-experience-root .product-dots {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.assembly-nova-experience-root .gateway-box {
+  border: 1px solid var(--text);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 18px;
+  display: inline-block;
+  margin-bottom: 6px;
+  background: rgba(22, 24, 30, 0.85);
+  font-size: 20px;
+}
+
+.assembly-nova-experience-root .product-desc {
+  margin-top: 14px;
+  width: 400px;
+  max-width: 400px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: rgba(240, 237, 230, 0.74);
+  font-family: 'Schibsted Grotesk', sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* ================= SECTION 3: REVIEWS ================= */
+.assembly-nova-experience-root .reviews-header-strip {
+  position: absolute;
+  left: 0;
+  top: 10%;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.assembly-nova-experience-root .tstmnl-badge {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  border: 1px solid var(--marigold);
+  color: var(--marigold);
+  padding: 4px 8px;
+  letter-spacing: 0.05em;
+}
+
+.assembly-nova-experience-root .tstmnl-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(28, 29, 34, 0.85);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.assembly-nova-experience-root .tstmnl-name-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assembly-nova-experience-root .tstmnl-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--marigold);
+}
+
+.assembly-nova-experience-root .tstmnl-role {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--dim-text);
+}
+
+.assembly-nova-experience-root .review-quote-wrap {
+  position: absolute;
+  left: 0;
+  top: 19%;
+  width: 400px;
+  max-width: 400px;
+}
+
+.assembly-nova-experience-root .review-quote {
+  font-size: 26px;
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--marigold);
+}
+
+.assembly-nova-experience-root .approach-body {
+  margin-top: 14px;
+  font-size: 13.5px;
+  line-height: 1.68;
+  color: rgba(240, 237, 230, 0.76);
+  font-family: 'Schibsted Grotesk', sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.assembly-nova-experience-root .review-cta {
+  margin-top: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.assembly-nova-experience-root .review-cta:hover {
+  color: var(--marigold);
+}
+
+.assembly-nova-experience-root .review-cta::before {
+  content: '';
+  width: 24px;
+  height: 1px;
+  background: currentColor;
+}
+
+.assembly-nova-experience-root .reviews-footer {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--dim-text);
+}
+
+/* Medium Screen Layout (901px - 1200px) */
+@media (max-width: 1200px) and (min-width: 901px) {
+  .assembly-nova-experience-root .intro-bottom-left {
+    left: 0;
+    top: 60px;
+    width: 48%;
+    max-width: 48%;
+  }
+
+  .assembly-nova-experience-root .review-quote-wrap {
+    left: 0;
+    width: 360px;
+    max-width: 360px;
+  }
+}
+
+/* Mobile Responsive (<= 900px) */
+@media (max-width: 900px) {
+  .assembly-nova-experience-root .intro-bottom-left {
+    left: 20px;
+    top: 40px;
+    bottom: auto;
+    width: calc(100% - 40px);
+    max-width: 100%;
+  }
+
+  .assembly-nova-experience-root .headline-box {
+    font-size: 38px;
+  }
+
+  .assembly-nova-experience-root .review-quote-wrap {
+    left: 20px;
+    top: 18%;
+    width: calc(100% - 40px);
+    max-width: 100%;
+  }
+
+  .assembly-nova-experience-root .review-quote {
+    font-size: 22px;
+  }
+
+  .assembly-nova-experience-root .headline-box,
+  .assembly-nova-experience-root .intro-unleash,
+  .assembly-nova-experience-root .intro-desc,
+  .assembly-nova-experience-root .gateway-box,
+  .assembly-nova-experience-root .product-desc,
+  .assembly-nova-experience-root .review-quote-wrap {
+    background: rgba(11, 12, 14, 0.9);
+  }
+
+  .assembly-nova-experience-root .product-carousel-wrap {
+    left: 20px;
+  }
+
+  .assembly-nova-experience-root .product-headline {
+    left: 20px;
+    bottom: 60px;
+  }
+
+  .assembly-nova-experience-root .reviews-header-strip {
+    left: 20px;
+    right: 20px;
+  }
+
+  .assembly-nova-experience-root .review-quote-wrap {
+    left: 20px;
+    width: calc(100% - 40px);
+  }
+}

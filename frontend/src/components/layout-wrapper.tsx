@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import {
-  Zap, Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload,
+  Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload, ChevronDown,
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { BrandOrbMark } from "@/components/brand-orb-mark"
 
 const OFFLINE_MESSAGE = "You are currently offline. Some features may not work."
 
@@ -50,6 +51,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   const [executions, setExecutions] = useState<HistoryRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [showHistory, setShowHistory] = useState(pathname === "/executions")
   const importInputRef = React.useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
 
@@ -139,11 +141,23 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   return (
     <div className="assembly-sidebar flex h-full flex-col">
       <div className="assembly-sidebar-header">
-        <Link href="/" className="assembly-sidebar-brand flex items-center gap-2 text-foreground" onClick={onClose}>
-          <div className="assembly-sidebar-mark flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-brand-foreground">
-            <Zap className="size-4" />
-          </div>
-          <span className="font-bold tracking-tight">assembly<span className="text-brand">.</span></span>
+        <Link
+          href="/"
+          className="assembly-sidebar-brand assembly-wordmark flex items-center text-white cursor-pointer"
+          onClick={() => {
+            if (onClose) onClose()
+            if (typeof document !== "undefined") {
+              const scrollContainers = document.querySelectorAll(".overflow-y-auto")
+              scrollContainers.forEach((el) => {
+                el.scrollTo({ top: 0, behavior: "instant" })
+              })
+              window.scrollTo({ top: 0, behavior: "instant" })
+            }
+          }}
+          aria-label="Assembly home"
+        >
+          <BrandOrbMark className="assembly-wordmark-mark--sidebar" style={{ width: "32px", height: "32px" }} />
+          <span>ssembly</span>
         </Link>
         <Button variant="default" className="assembly-new-investigation w-full justify-start" onClick={() => { router.push("/chat"); if (onClose) onClose() }}>
           <Plus className="size-4 mr-2" />
@@ -151,111 +165,120 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         </Button>
       </div>
 
-      <div className="assembly-sidebar-scroll flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-1">
-        <div className="assembly-sidebar-section-label px-2 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-          <History className="size-3" />
-          History (this device)
+      <div className="assembly-sidebar-scroll flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-2">
+        <div className="px-1">
+          <Button
+            variant="default"
+            className="assembly-new-investigation w-full justify-between flex items-center"
+            onClick={() => setShowHistory((prev) => !prev)}
+            aria-expanded={showHistory}
+          >
+            <div className="flex items-center">
+              <History className="size-4 mr-2 opacity-85" />
+              <span>History</span>
+              {executions.length > 0 && (
+                <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/80 font-normal">
+                  {executions.length}
+                </span>
+              )}
+            </div>
+            <ChevronDown className={`size-3.5 text-muted-foreground transition-transform duration-200 ${showHistory ? "rotate-180" : ""}`} />
+          </Button>
         </div>
 
-        <div className="px-1 pb-3">
-          <div className="relative">
-            <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" aria-hidden />
-            <label htmlFor="history-search" className="sr-only">Search history</label>
-            <input
-              id="history-search"
-              type="text"
-              placeholder="Search investigations"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="assembly-sidebar-search w-full rounded-md border border-border bg-muted/30 pl-8 pr-3 py-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
-            />
-          </div>
-        </div>
+        {showHistory && (
+          <div className="flex flex-col gap-2 pt-1">
+            {executions.length > 0 && (
+              <div className="px-1">
+                <div className="relative">
+                  <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" aria-hidden />
+                  <label htmlFor="history-search" className="sr-only">Search history</label>
+                  <input
+                    id="history-search"
+                    type="text"
+                    placeholder="Search investigations"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="assembly-sidebar-search w-full rounded-md border border-border bg-muted/30 pl-8 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
+                  />
+                </div>
+              </div>
+            )}
 
-        {loading ? (
-          <div className="space-y-2 px-1">
-            <Skeleton className="h-12 w-full rounded-md" />
-            <Skeleton className="h-12 w-full rounded-md" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="mx-1 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center">
-            <MessageSquare className="mx-auto size-8 text-muted-foreground" aria-hidden />
-            <p className="mt-3 text-sm font-semibold text-foreground">
-              {search ? "No matching runs" : "No runs yet"}
-            </p>
-            <p className="mx-auto mt-1 max-w-56 text-xs text-muted-foreground">
-              {search
-                ? "Try a different search term."
-                : "Your first cited answer is 3 minutes away."}
-            </p>
-            {!search && (
-              <Button
-                variant="default"
-                size="sm"
-                className="mt-4 min-h-11"
-                onClick={() => { router.push("/chat"); if (onClose) onClose() }}
-              >
-                <Plus className="size-4 mr-2" />
-                Run my first question
-              </Button>
+            {loading ? (
+              <div className="space-y-2 px-1">
+                <Skeleton className="h-10 w-full rounded-full" />
+                <Skeleton className="h-10 w-full rounded-full" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                {search ? "No matching runs" : "No saved investigations"}
+              </p>
+            ) : (
+              filtered.map((ex) => {
+                const isActive = pathname === `/executions` && searchParams?.get("id") === ex.id
+                return (
+                  <div key={ex.id} className="relative group px-1">
+                    <Link
+                      href={`/executions?id=${ex.id}`}
+                      prefetch={false}
+                      onClick={onClose}
+                      className={`assembly-new-investigation w-full justify-start flex items-center px-4 pr-10 ${
+                        isActive ? "border-brand/60 bg-brand/10 text-brand" : ""
+                      }`}
+                    >
+                      <MessageSquare className="size-4 mr-2 shrink-0 opacity-80" />
+                      <span className="truncate text-xs font-semibold text-white/95">{ex.question}</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(e, ex.id)}
+                      aria-label={`Delete run: ${ex.question.slice(0, 60)}`}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-danger hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                      title="Delete execution"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                )
+              })
             )}
           </div>
-        ) : (
-          filtered.map((ex) => {
-            const isActive = pathname === `/executions` && searchParams?.get("id") === ex.id
-            return (
-              <div
-                key={ex.id}
-                className={`assembly-history-row group relative rounded-xl text-sm transition-colors ${
-                  isActive ? "bg-brand/10" : "hover:bg-muted"
-                }`}
-              >
-                <Link
-                  href={`/executions?id=${ex.id}`}
-                  prefetch={false}
-                  onClick={onClose}
-                  className={`assembly-history-link flex items-start gap-2 px-2.5 py-2.5 pr-10 ${
-                    isActive ? "text-brand" : "text-foreground"
-                  }`}
-                >
-                  <MessageSquare className={`mt-0.5 size-4 shrink-0 ${isActive ? "text-brand" : "text-muted-foreground"}`} />
-                  <div className="min-w-0 flex-1 overflow-hidden">
-                    <p className="truncate text-xs font-medium">{ex.question}</p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground">{new Date(ex.created_at).toLocaleDateString()}</span>
-                      <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[9px] uppercase text-muted-foreground">{ex.status}</span>
-                    </div>
-                  </div>
-                </Link>
-                <button
-                  type="button"
-                  onClick={(e) => handleDelete(e, ex.id)}
-                  aria-label={`Delete run: ${ex.question.slice(0, 60)}`}
-                  className="absolute right-1 top-1 rounded p-2.5 text-muted-foreground hover:text-danger md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-                  title="Delete execution"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
-            )
-          })
         )}
       </div>
 
-      <div className="assembly-sidebar-footer p-4 border-t border-border mt-auto flex flex-col gap-2">
-        <div className="assembly-sidebar-utility-row flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" onClick={handleExport}>
-            <Download className="size-3.5 mr-1" /> Export
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1"
-            disabled={importing}
-            onClick={() => importInputRef.current?.click()}
-          >
-            <Upload className="size-3.5 mr-1" /> {importing ? "Importing…" : "Import"}
-          </Button>
+      <div className="assembly-sidebar-footer p-3 border-t border-border mt-auto">
+        <div className="assembly-sidebar-preferences flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/settings"
+              onClick={onClose}
+              aria-label="Settings"
+              title="Settings"
+              className="assembly-sidebar-icon-btn"
+            >
+              <Settings className="size-4" />
+            </Link>
+            <button
+              type="button"
+              aria-label="Export history"
+              title="Export history"
+              onClick={handleExport}
+              className="assembly-sidebar-icon-btn"
+            >
+              <Download className="size-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Import history"
+              title={importing ? "Importing…" : "Import history"}
+              disabled={importing}
+              onClick={() => importInputRef.current?.click()}
+              className="assembly-sidebar-icon-btn disabled:opacity-50"
+            >
+              <Upload className="size-4" />
+            </button>
+          </div>
           <input
             ref={importInputRef}
             type="file"
@@ -268,16 +291,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               if (file) void handleImport(file, input)
             }}
           />
-        </div>
-        <div className="assembly-sidebar-preferences flex items-center gap-2">
-          <Link
-            href="/settings"
-            onClick={onClose}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50"
-          >
-            <Settings className="size-4" />
-            Settings
-          </Link>
           <ThemeToggle className="assembly-theme-toggle" />
         </div>
       </div>
@@ -305,8 +318,40 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     }
   }, [mobileMenuOpen])
 
-  // The landing page renders its own nav; hide the app sidebar there.
-  const isLandingPage = pathname === "/"
+  // Public marketing/editorial pages render their own nav; hide the app sidebar there.
+  const isLandingPage = pathname === "/" || pathname === "/science"
+
+  // Enforce dark theme permanently on landing/editorial pages (/, /science).
+  // Day/night theme preference applies exclusively to the chat workspace and app shell.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (isLandingPage) {
+      document.documentElement.classList.add("dark");
+    } else {
+      try {
+        const stored = window.localStorage.getItem("assembly:theme");
+        if (stored === "light") {
+          document.documentElement.classList.remove("dark");
+        } else {
+          document.documentElement.classList.add("dark");
+        }
+      } catch {
+        document.documentElement.classList.add("dark");
+      }
+    }
+  }, [pathname, isLandingPage]);
+
+  useEffect(() => {
+    if (pathname === "/") {
+      if (typeof document !== "undefined") {
+        const scrollContainers = document.querySelectorAll(".overflow-y-auto")
+        scrollContainers.forEach((el) => {
+          el.scrollTo({ top: 0, behavior: "instant" })
+        })
+        window.scrollTo({ top: 0, behavior: "instant" })
+      }
+    }
+  }, [pathname])
 
   return (
     <ToastProvider>
@@ -356,10 +401,22 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           {!isLandingPage && (
             <header className="assembly-mobile-header md:hidden sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Zap className="size-5 text-brand" />
-                <span className="font-bold tracking-tight">assembly<span className="text-brand">.</span></span>
-              </div>
+              <Link
+                href="/"
+                className="assembly-wordmark flex items-center text-foreground"
+                aria-label="Assembly home"
+                onClick={() => {
+                  if (typeof document !== "undefined") {
+                    const scrollContainers = document.querySelectorAll(".overflow-y-auto")
+                    scrollContainers.forEach((el) => {
+                      el.scrollTo({ top: 0, behavior: "instant" })
+                    })
+                    window.scrollTo({ top: 0, behavior: "instant" })
+                  }
+                }}
+              >
+                <BrandOrbMark className="assembly-wordmark-mark--mobile" style={{ width: "28px", height: "28px" }} /><span>ssembly</span>
+              </Link>
               <button
                 ref={menuTriggerRef}
                 onClick={() => setMobileMenuOpen(true)}

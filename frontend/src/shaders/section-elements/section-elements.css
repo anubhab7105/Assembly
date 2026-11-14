@@ -1,0 +1,269 @@
+@font-face {
+  font-family: "Section SF";
+  src: local("SF Pro Text"), local("-apple-system"), local("Helvetica Neue");
+  font-display: swap;
+  font-weight: 300 700;
+}
+
+.section-element,
+.section-element *,
+.section-element *::before,
+.section-element *::after {
+  box-sizing: border-box;
+}
+
+.section-element {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.95);
+  background: #0a0a0a;
+  font-family: "Section SF", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  container-type: size;
+  isolation: isolate;
+}
+
+.section-element button,
+.section-element input {
+  font: inherit;
+}
+
+.section-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  padding: 0 32px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 32px;
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.section-button::before,
+.section-button::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+}
+
+.section-button::before {
+  background: rgba(23, 23, 23, 0.7);
+  box-shadow: inset 2px 4px 16px rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(50px);
+  backdrop-filter: blur(50px);
+}
+
+.section-button::after {
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  opacity: 0.25;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(170deg, #000, transparent 50%);
+  mask-image: linear-gradient(170deg, #000, transparent 50%);
+}
+
+.section-button__title {
+  position: relative;
+  z-index: 4;
+}
+
+.section-button__circle {
+  position: absolute;
+  z-index: 3;
+  top: calc(50% - 100px);
+  left: calc(50% - 100px);
+  width: 200px;
+  height: 200px;
+}
+
+.section-button__circle::before,
+.section-button__circle::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  content: "";
+}
+
+.section-button__circle::before {
+  background: conic-gradient(from 180deg, rgba(255, 255, 255, 0.012) 180deg, rgba(255, 255, 255, 0.05) 360deg);
+  filter: blur(15px);
+  animation: section-button-circle 3.6s linear infinite;
+  transition: opacity 0.5s;
+}
+
+.section-button__circle::after {
+  inset: 30px;
+  background: rgba(255, 255, 255, 0.12);
+  opacity: 0;
+  filter: blur(5px);
+  transform: scale(0.5);
+  transition: opacity 0.5s, transform 0.7s;
+  -webkit-mask-image: radial-gradient(50% 50%, #000, rgba(23, 23, 23, 0));
+  mask-image: radial-gradient(50% 50%, #000, rgba(23, 23, 23, 0));
+}
+
+.section-button:hover .section-button__circle::before {
+  opacity: 0;
+}
+
+.section-button:hover .section-button__circle::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.section-button:active {
+  transform: scale(0.98);
+}
+
+@keyframes section-button-circle {
+  0% { transform: translate(0) rotate(0); }
+  25% { transform: translateX(-30px) rotate(90deg); }
+  50% { transform: translate(0) rotate(180deg); }
+  75% { transform: translateX(30px) rotate(270deg); }
+  100% { transform: translate(0) rotate(360deg); }
+}
+
+.section-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 2px 16px 0;
+  overflow: hidden;
+  border-radius: 16px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.65;
+  text-transform: uppercase;
+}
+
+.section-label::before,
+.section-label::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+}
+
+.section-label::before {
+  z-index: 3;
+  inset: 1.5px;
+  background: #0a0a0a;
+}
+
+.section-label::after {
+  z-index: 2;
+  border: 1.5px solid rgba(255, 255, 255, 0.05);
+  opacity: 0.25;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(170deg, #000, transparent 50%);
+  mask-image: linear-gradient(170deg, #000, transparent 50%);
+}
+
+.section-label__title {
+  position: relative;
+  z-index: 4;
+  opacity: 0.8;
+}
+
+.section-label__circle {
+  position: absolute;
+  z-index: 1;
+  top: calc(50% - 100px);
+  left: calc(50% - 100px);
+  width: 200px;
+  height: 200px;
+}
+
+.section-label__circle::before {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 180deg at 50% 51%, rgba(255, 255, 255, 0.012) 330deg, #fff 360deg);
+  filter: blur(15px);
+  animation: section-button-circle 3.6s linear infinite;
+  content: "";
+}
+
+.section-element--glass-button {
+  display: grid;
+  place-items: center;
+}
+
+.section-element--glass-button::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(62cqw, 440px);
+  height: min(50cqh, 240px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.02);
+  filter: blur(54px);
+  transform: translate(-50%, -50%);
+  content: "";
+}
+
+.section-element--glass-button .section-button {
+  width: auto;
+  min-width: clamp(144px, 23cqw, 288px);
+  padding: 0 36px;
+  white-space: nowrap;
+  height: clamp(52px, 8.3cqw, 104px);
+  border-radius: 999px;
+  font-size: clamp(14px, 2.25cqw, 28px);
+}
+
+.section-element--glass-button[data-mode="light"] {
+  background: #eeedeb;
+  color: rgba(17, 17, 17, 0.95);
+}
+
+.section-element--glass-button[data-mode="light"]::before {
+  background: rgba(17, 17, 17, 0.06);
+}
+
+.section-element--glass-button[data-mode="light"] .section-button {
+  color: rgba(17, 17, 17, 0.72);
+}
+
+.section-element--glass-button[data-mode="light"] .section-button::before {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 2px 4px 16px rgba(17, 17, 17, 0.05), 0 10px 26px -12px rgba(17, 17, 17, 0.4);
+}
+
+.section-element--glass-button[data-mode="light"] .section-button::after {
+  border-color: rgba(17, 17, 17, 0.34);
+  opacity: 0.45;
+}
+
+.section-element--glass-button[data-mode="light"] .section-button__circle::before {
+  background: conic-gradient(from 180deg, rgba(17, 17, 17, 0.012) 180deg, rgba(17, 17, 17, 0.07) 360deg);
+}
+
+.section-element--glass-button[data-mode="light"] .section-button__circle::after {
+  background: rgba(17, 17, 17, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-element *,
+  .section-element *::before,
+  .section-element *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+

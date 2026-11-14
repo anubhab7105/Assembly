@@ -9,26 +9,18 @@ const STORAGE_KEY = "assembly:theme"
 const THEME_EVENT = "assembly:theme-change"
 let memoryTheme: Theme | null = null
 
-function getSystemTheme(): Theme {
-  try {
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-  } catch {
-    return "light"
-  }
-}
-
 function getThemeSnapshot(): Theme {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
     if (stored === "light" || stored === "dark") return stored
   } catch {
-    return memoryTheme ?? getSystemTheme()
+    return memoryTheme ?? "dark"
   }
-  return memoryTheme ?? getSystemTheme()
+  return memoryTheme ?? "dark"
 }
 
 function getServerThemeSnapshot(): Theme {
-  return "light"
+  return "dark"
 }
 
 function subscribeTheme(onStoreChange: () => void) {
@@ -54,7 +46,12 @@ function getServerHydrationSnapshot() {
 
 function applyTheme(theme: Theme) {
   memoryTheme = theme
-  document.documentElement.classList.toggle("dark", theme === "dark")
+  const pathname = typeof window !== "undefined" ? window.location.pathname : ""
+  if (pathname === "/" || pathname === "/science") {
+    document.documentElement.classList.add("dark")
+  } else {
+    document.documentElement.classList.toggle("dark", theme === "dark")
+  }
   try {
     window.localStorage.setItem(STORAGE_KEY, theme)
   } catch {

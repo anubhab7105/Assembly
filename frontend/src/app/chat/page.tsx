@@ -19,14 +19,8 @@ import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Zap, Send, Settings, Clock, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
-
-const EXAMPLES = [
-  { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
-  { label: "Superconductors", question: "What are the most viable methods for replicating room-temperature superconductors?" },
-  { label: "AGI timeline", question: "Analyse the timeline and economic impacts of AGI given current scaling laws." },
-  { label: "EV battery chemistry", question: "Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?" },
-]
+import { Send, Settings, Clock, SlidersHorizontal, X, FileText, Plus, Paperclip, Globe, Sparkles, Check } from "lucide-react"
+import { ChatIntroScene } from "@/components/chat-intro-scene"
 
 const TIME_BUDGETS = [3, 5, 10, 15]
 const MAX_ATTACHMENTS = 5
@@ -46,9 +40,62 @@ type DraftAttachment = {
   size: number
 }
 
+let chatIntroHasPlayedInCurrentSession = false
+
+function ChatGreetingHeadline({ isRevealed }: { isRevealed: boolean }) {
+  const [phase, setPhase] = useState<"welcome" | "dissolving" | "assembled">("welcome")
+
+  useEffect(() => {
+    if (!isRevealed) return
+    const dissolveTimer = setTimeout(() => {
+      setPhase("dissolving")
+    }, 2200)
+
+    const assembledTimer = setTimeout(() => {
+      setPhase("assembled")
+    }, 3000)
+
+    return () => {
+      clearTimeout(dissolveTimer)
+      clearTimeout(assembledTimer)
+    }
+  }, [isRevealed])
+
+  return (
+    <div className="assembly-chat-greeting-stage select-none" aria-live="polite">
+      <h1
+        className={`assembly-greeting-welcome ${
+          phase === "welcome"
+            ? "is-visible"
+            : phase === "dissolving"
+              ? "is-dissolving"
+              : "is-hidden"
+        }`}
+        aria-hidden={phase === "assembled"}
+      >
+        Welcome.
+      </h1>
+
+      <h1
+        className={`assembly-greeting-assemble ${
+          phase === "assembled" || phase === "dissolving"
+            ? "is-visible"
+            : "is-hidden"
+        }`}
+      >
+        <span className="assembly-greeting-subtext mr-1.5">
+          Assemble
+        </span>{" "}
+        your thoughts...
+      </h1>
+    </div>
+  )
+}
+
 export default function Home() {
   const router = useRouter()
 
+  const [isIntroComplete, setIsIntroComplete] = useState(() => chatIntroHasPlayedInCurrentSession)
   const [question, setQuestion] = useState("")
   const [attachments, setAttachments] = useState<DraftAttachment[]>([])
   const [minutes, setMinutes] = useState(5)
@@ -66,6 +113,34 @@ export default function Home() {
   const [enabledIds, setEnabledIds] = useState<string[]>([])
   const [confirmedGateSignature, setConfirmedGateSignature] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [showContextPopover, setShowContextPopover] = useState(false)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
+  const [showBudgetDropdown, setShowBudgetDropdown] = useState(false)
+  const budgetMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showContextPopover && !showBudgetDropdown) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setShowContextPopover(false)
+      }
+      if (budgetMenuRef.current && !budgetMenuRef.current.contains(e.target as Node)) {
+        setShowBudgetDropdown(false)
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowContextPopover(false)
+        setShowBudgetDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [showContextPopover, showBudgetDropdown])
 
   const appMode = env.NEXT_PUBLIC_APP_MODE === "desktop" ? "desktop" : "web"
 
@@ -480,54 +555,29 @@ export default function Home() {
   return (
     <div className="assembly-chat-page flex min-h-screen flex-col bg-background">
       <main id="main-content" tabIndex={-1} className="assembly-chat-main flex w-full flex-1 flex-col justify-center">
-        <div className="assembly-chat-intro">
-          <div className="assembly-chat-orb">
-            <Zap className="size-6" aria-hidden />
-          </div>
-          <div className="assembly-chat-kicker"><span className="assembly-live-dot" /> NEW INVESTIGATION</div>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            What would you like to investigate?
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Bring the question, context, and time you want to spend. You stay in charge of the process.
-          </p>
-          <div className="assembly-chat-personal-control" aria-label="Workspace principles"><span>Independent perspectives</span><span>Inspectable sources</span><span>Local history</span></div>
-        </div>
-
-        {gate.families_count === 0 && (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-3 py-2.5">
-            <p className="text-xs font-medium text-warning">
-              Set up provider keys in Settings. Two ready model families are the minimum for a normal run; three are recommended. Providers with unverified quota limits do not count toward readiness.
-            </p>
-            <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0">
-              <Settings className="mr-1.5 size-3.5" />
-              Add keys
-            </Button>
+        {/* Phase 1: Dedicated Loading Screen with ThreeUI Intro Pop Animation */}
+        {!isIntroComplete && (
+          <div
+            className="assembly-chat-loading-overlay is-active"
+            onClick={() => {
+              chatIntroHasPlayedInCurrentSession = true
+              setIsIntroComplete(true)
+            }}
+            title="Click to skip intro"
+          >
+            <ChatIntroScene
+              onAssembled={() => {
+                chatIntroHasPlayedInCurrentSession = true
+                setIsIntroComplete(true)
+              }}
+            />
           </div>
         )}
 
-        <div
-          data-testid="diversity-chip"
-          className={`assembly-readiness-chip mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
-            gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
-          }`}
-        >
-          <span className="font-medium">{gateChipText(gate)}</span>
-          {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
-          {gate.level === "DEGRADED" && !degradedConfirmed && (
-            <Button variant="outline" size="sm" className="min-h-8" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
-              Run anyway
-            </Button>
-          )}
-        </div>
+        <div className={`assembly-chat-box-revealer ${isIntroComplete ? "is-revealed" : "is-hidden"}`}>
+          <ChatGreetingHeadline isRevealed={isIntroComplete} />
 
-        {catalogFailed && (
-          <div className="mb-3">
-            <ServerStatusBanner url={env.apiUrl} onRetry={() => setCatalogTick((t) => t + 1)} />
-          </div>
-        )}
-
-        <div className="assembly-chat-form-stack space-y-3">
+          <div className="assembly-chat-form-stack space-y-3">
           {attachments.length > 0 && (
             <div className="assembly-attachment-list flex flex-wrap gap-2" aria-label="Selected attachments">
               {attachments.map((attachment) => (
@@ -549,100 +599,218 @@ export default function Home() {
               ))}
             </div>
           )}
-          <div className="assembly-chat-composer rounded-2xl border border-border bg-card p-3 shadow-sm transition-colors focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10">
-            <label htmlFor="research-question" className="sr-only">Research question (max 2000 characters)</label>
+          <div className="assembly-chat-composer-pill-bar">
+            {/* Left: Plus context button with Cursor-style "Add Context" menu */}
+            <div className="relative shrink-0" ref={contextMenuRef}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                aria-label="Choose investigation attachments"
+                accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
+                className="sr-only"
+                disabled={loading}
+                onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
+              />
+              <button
+                type="button"
+                className={`assembly-composer-plus-btn shrink-0 ${showContextPopover ? "is-open" : ""}`}
+                disabled={loading}
+                onClick={() => setShowContextPopover((prev) => !prev)}
+                aria-label={showContextPopover ? "Close context menu" : "Add context"}
+                aria-expanded={showContextPopover}
+                title="Add context"
+              >
+                <Plus className={`size-5 transition-transform duration-200 ${showContextPopover ? "rotate-45" : ""}`} />
+                {attachments.length > 0 && !showContextPopover && (
+                  <span className="assembly-composer-attach-badge">{attachments.length}</span>
+                )}
+              </button>
+
+              {showContextPopover && (
+                <div className="assembly-context-popover" role="menu" aria-label="Add context options">
+                  <div className="assembly-context-popover-header">Add Context</div>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="assembly-context-popover-item"
+                    onClick={() => {
+                      setShowContextPopover(false)
+                      fileInputRef.current?.click()
+                    }}
+                  >
+                    <Paperclip className="size-4" />
+                    <span>Files</span>
+                    {attachments.length > 0 && (
+                      <span className="assembly-context-popover-item-badge">{attachments.length}</span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="assembly-context-popover-item"
+                    onClick={() => {
+                      setShowContextPopover(false)
+                      setMinutes(15)
+                      setStatus(makeChatStatus("Deep research mode enabled (15m budget with adversarial debate).", "info"))
+                    }}
+                  >
+                    <Sparkles className="size-4" />
+                    <span>Deep Research</span>
+                    <span className="assembly-context-popover-item-badge">15m</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="assembly-context-popover-item"
+                    onClick={() => {
+                      setShowContextPopover(false)
+                      setStatus(makeChatStatus("Web sources active: Assembly will query live web evidence during debate rounds.", "info"))
+                    }}
+                  >
+                    <Globe className="size-4" />
+                    <span>Web Sources</span>
+                    <span className="assembly-context-popover-item-badge">Live</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="assembly-context-popover-item"
+                    onClick={() => {
+                      setShowContextPopover(false)
+                      setShowModelSettings(true)
+                    }}
+                  >
+                    <SlidersHorizontal className="size-4" />
+                    <span>Models & Roles</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Middle: Seamless input field matching Image 2 */}
+            <label htmlFor="research-question" className="sr-only">Research question</label>
             <textarea
               id="research-question"
               ref={textareaRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask anything worth checking across multiple models…"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  if (!loading && (question.trim() || attachments.length > 0) && gate.level !== "BLOCKED") {
+                    handleLaunch()
+                  }
+                }
+              }}
+              placeholder="Ask anything..."
               aria-describedby="question-status"
-              className="assembly-chat-question-input max-h-56 min-h-24 w-full resize-y bg-transparent px-2 py-2 text-base leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
-              rows={3}
+              className="assembly-composer-input resize-none"
+              rows={1}
               maxLength={2000}
               required
             />
-            <div className="assembly-chat-composer-footer flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
-              <div className="assembly-chat-composer-tools flex flex-wrap items-center gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  aria-label="Choose investigation attachments"
-                  accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
-                  className="sr-only"
-                  disabled={loading}
-                  onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
-                />
-                <Button
+
+            {/* Right: Actions group (Time Budget Dropdown button + Run pill button) */}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative" ref={budgetMenuRef}>
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-h-9"
-                  disabled={loading || attachments.length >= MAX_ATTACHMENTS}
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label="Attach files"
+                  onClick={() => setShowBudgetDropdown((prev) => !prev)}
+                  className={`assembly-composer-budget-btn ${showBudgetDropdown ? "is-open" : ""}`}
+                  aria-label="Select investigation time budget"
+                  aria-expanded={showBudgetDropdown}
+                  title={`Time budget: ${minutes} mins`}
                 >
-                  <Paperclip className="mr-1.5 size-3.5" />
-                  Attach{attachments.length ? ` · ${attachments.length}` : ""}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-h-9"
-                  onClick={() => setShowModelSettings(true)}
-                  aria-haspopup="dialog"
-                  aria-label="Open model and role settings"
-                >
-                  <SlidersHorizontal className="mr-1.5 size-3.5" />
-                  Models{selection.selected.length > 0 ? ` · ${selection.selected.length}` : " · Auto"}
-                </Button>
-                <div className="assembly-chat-budget flex items-center rounded-lg border border-border bg-background p-0.5" role="group" aria-label="Time budget">
-                  <Clock className="ml-2 mr-1 size-3.5 text-muted-foreground" aria-hidden />
-                  {TIME_BUDGETS.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setMinutes(m)}
-                      aria-pressed={minutes === m}
-                      aria-label={`${m} minutes`}
-                      className={`min-h-9 min-w-9 rounded-md px-2 text-xs font-medium transition-colors ${
-                        minutes === m ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {m}m
-                    </button>
-                  ))}
-                </div>
+                  <Clock className="size-5 transition-colors" />
+                </button>
+
+                {showBudgetDropdown && (
+                  <div className="assembly-budget-dropdown" role="menu" aria-label="Choose time budget">
+                    <div className="assembly-budget-dropdown-header">Time Budget</div>
+                    {TIME_BUDGETS.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        role="menuitem"
+                        className={`assembly-budget-dropdown-item ${minutes === m ? "is-active" : ""}`}
+                        onClick={() => {
+                          setMinutes(m)
+                          setShowBudgetDropdown(false)
+                        }}
+                      >
+                        <Clock className="size-3.5 text-muted-foreground" />
+                        <span>{m} mins</span>
+                        {minutes === m && <Check className="size-3.5 ml-auto text-amber-400" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <Button size="default" onClick={handleLaunch} disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"} className="assembly-chat-run-button min-h-10 rounded-xl px-4">
-                {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="mr-1.5 size-4" />}
-                {loading ? "Running…" : "Run"}
-              </Button>
+
+              <button
+                type="button"
+                onClick={handleLaunch}
+                disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
+                className="assembly-composer-run-pill shrink-0"
+                aria-label="Run investigation"
+              >
+                {loading ? (
+                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <Send className="size-3.5" />
+                    <span className="font-semibold text-xs tracking-wide uppercase">Run</span>
+                  </span>
+                )}
+              </button>
             </div>
           </div>
+
+          <div className="assembly-chat-banners-stack space-y-3">
+            {gate.families_count === 0 && (
+              <div className="assembly-chat-warning-banner flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
+                <p className="text-xs font-medium text-warning">
+                  Set up provider keys in Settings. Two ready model families are the minimum for a normal run; three are recommended. Providers with unverified quota limits do not count toward readiness.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0 assembly-dark-glass-btn">
+                  <Settings className="mr-1.5 size-3.5" />
+                  Add keys
+                </Button>
+              </div>
+            )}
+
+            <div
+              data-testid="diversity-chip"
+              className={`assembly-readiness-chip flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
+                gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
+              }`}
+            >
+              <span className="font-medium">{gateChipText(gate)}</span>
+              {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
+              {gate.level === "DEGRADED" && !degradedConfirmed && (
+                <Button variant="outline" size="sm" className="min-h-8" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
+                  Run anyway
+                </Button>
+              )}
+            </div>
+
+            {catalogFailed && (
+              <div>
+                <ServerStatusBanner url={env.apiUrl} onRetry={() => setCatalogTick((t) => t + 1)} />
+              </div>
+            )}
+          </div>
+
           {status && (
             <ChatStatusMessage status={status} />
           )}
         </div>
-
-        <div className="assembly-chat-suggestions mt-4" aria-label="Suggested questions">
-          <div className="assembly-chat-suggestions-heading">Need a starting point?</div><div className="assembly-chat-suggestion-grid">
-          {EXAMPLES.map((example) => (
-            <button
-              key={example.label}
-              type="button"
-              onClick={() => { setQuestion(example.question); textareaRef.current?.focus() }}
-              className="assembly-chat-suggestion"
-              title={example.question}
-            >
-              {example.label}
-            </button>
-          ))}
-        </div>
-</div>
+      </div>
       </main>
 
       <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
