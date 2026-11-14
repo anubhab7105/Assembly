@@ -161,7 +161,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         </Link>
         <Button variant="default" className="assembly-new-investigation w-full justify-start" onClick={() => { router.push("/chat"); if (onClose) onClose() }}>
           <Plus className="size-4 mr-2" />
-          New Investigation
+          New chat
         </Button>
       </div>
 
