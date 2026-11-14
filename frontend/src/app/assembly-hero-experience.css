@@ -198,20 +198,39 @@
 }
 
 /* ================= SECTION 2: PRODUCT ================= */
-.assembly-nova-experience-root #product .section-stage {
+.assembly-nova-experience-root #product.assembly-hero-section {
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+  padding: 120px 0 100px 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-top: 60px;
+}
+
+.assembly-nova-experience-root #product .section-stage {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  width: 1240px;
+  max-width: calc(100% - 48px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 0;
 }
 
 .assembly-nova-experience-root .product-carousel-wrap {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 96px;
+  position: relative;
+  width: 100%;
+  max-width: 1240px;
   height: 74px;
   overflow: hidden;
+  margin-bottom: 48px;
   z-index: 6;
 }
 
@@ -233,7 +252,7 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
-  opacity: 0.16;
+  opacity: 0.22;
   transition: opacity 0.5s ease;
   position: relative;
   background: transparent;
@@ -276,7 +295,7 @@
   position: relative;
   width: min(740px, 90%);
   margin-inline: auto;
-  margin-top: 40px;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -504,7 +523,8 @@
   }
 
   .assembly-nova-experience-root .product-carousel-wrap {
-    left: 20px;
+    width: 100%;
+    margin-bottom: 32px;
   }
 
   .assembly-nova-experience-root .product-headline {
