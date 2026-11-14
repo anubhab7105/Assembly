@@ -563,7 +563,6 @@ export default function Home() {
               chatIntroHasPlayedInCurrentSession = true
               setIsIntroComplete(true)
             }}
-            title="Click to skip intro"
           >
             <ChatIntroScene
               onAssembled={() => {
