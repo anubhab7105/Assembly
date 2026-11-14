@@ -177,7 +177,7 @@ def make_models_yaml(
             "base": base,
             "url": url,
             "enabled": flag,
-            # Synthetic offline catalogs use a fixed, explicit source/date.
+            # Synthetic offline catalogs use today's date so tests stay current.
             # Tests for stale or missing evidence override these fields.
             "quota_source": "https://test.invalid/quota-fixture",
             "quota_last_verified": date.today().isoformat(),

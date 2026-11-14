@@ -12,6 +12,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -34,6 +35,8 @@ from src.database.schemas import RunRequest
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
 from src.providers.quota import get_limiter
 from src.research.attachments import (
+    Attachment,
+    AttachmentContext,
     AttachmentValidationError,
     build_attachment_context,
     validate_attachments,
@@ -110,6 +113,64 @@ class _RunEntry:
 
 _runs: dict[str, _RunEntry] = {}
 _runs_lock = asyncio.Lock()
+
+MAX_CONCURRENT_ATTACHMENT_VALIDATIONS = 4
+MAX_ATTACHMENT_VALIDATION_WAITERS = 8
+
+
+class AttachmentValidationQueueFull(Exception):
+    """Raised when the attachment validation waiter queue threshold is reached."""
+
+
+class AttachmentValidationGate:
+    """Limits concurrent CPU-intensive attachment validations and bounds waiting requests."""
+
+    def __init__(self, max_concurrent: int = 4, max_waiters: int = 8) -> None:
+        self.max_concurrent = max_concurrent
+        self.max_waiters = max_waiters
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._waiters = 0
+        self._lock = asyncio.Lock()
+
+    @property
+    def waiters(self) -> int:
+        return self._waiters
+
+    async def __aenter__(self) -> None:
+        async with self._lock:
+            if self._semaphore.locked() and self._waiters >= self.max_waiters:
+                raise AttachmentValidationQueueFull()
+            self._waiters += 1
+
+        try:
+            await self._semaphore.acquire()
+        finally:
+            async with self._lock:
+                self._waiters = max(0, self._waiters - 1)
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
+        self._semaphore.release()
+
+
+_ATTACHMENT_VALIDATION_GATE = AttachmentValidationGate(
+    max_concurrent=MAX_CONCURRENT_ATTACHMENT_VALIDATIONS,
+    max_waiters=MAX_ATTACHMENT_VALIDATION_WAITERS,
+)
+_ATTACHMENT_VALIDATION_SEMAPHORE = _ATTACHMENT_VALIDATION_GATE._semaphore
+
+
+def _process_attachments_worker(
+    raw_items: list[dict],
+) -> tuple[list[Attachment], AttachmentContext]:
+    """CPU-bound worker executing attachment decoding and parsing off the event loop."""
+    attachments = validate_attachments(raw_items)
+    attachment_data = build_attachment_context(attachments)
+    return attachments, attachment_data
 
 
 def _now() -> float:
@@ -327,11 +388,31 @@ async def start_run(req: RunRequest, request: Request):
         limited = await _count_invalid_or_429(ip)
         return limited if limited is not None else JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
-    try:
-        attachments = validate_attachments(
-            [item.model_dump() for item in (req.attachments or [])]
+    if req.attachments:
+        await check_rate_limit(
+            f"ip:{ip}",
+            "attachment_validation",
+            settings.rate_limit_invalid_per_min_per_ip,
+            60,
         )
-        attachment_data = build_attachment_context(attachments)
+
+    raw_items = [item.model_dump() for item in (req.attachments or [])]
+    try:
+        if raw_items:
+            async with _ATTACHMENT_VALIDATION_GATE:
+                _attachments, attachment_data = await asyncio.to_thread(
+                    _process_attachments_worker, raw_items
+                )
+        else:
+            attachment_data = build_attachment_context([])
+    except AttachmentValidationQueueFull:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Server is busy. Too many attachment validations in progress. Please retry shortly."
+            },
+            headers={"Retry-After": "5"},
+        )
     except AttachmentValidationError as exc:
         limited = await _count_invalid_or_429(ip)
         if limited is not None:
@@ -446,6 +527,8 @@ async def start_run(req: RunRequest, request: Request):
             "event_type": "run.started",
             "run_id": run_id,
             "diversity": run_diversity,
+            "attachment_truncated": attachment_data.truncated,
+            "attachment_included_count": len(attachment_data.filenames),
         }
     )
 
@@ -482,7 +565,7 @@ async def start_run(req: RunRequest, request: Request):
             while True:
                 try:
                     item = await asyncio.wait_for(entry.queue.get(), timeout=heartbeat)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ":heartbeat\n\n"
                     continue
                 if item is None:
@@ -493,7 +576,7 @@ async def start_run(req: RunRequest, request: Request):
                     try:
                         term = await asyncio.wait_for(entry.queue.get(), timeout=2.0)
                         _ = term
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         pass
                     break
         except asyncio.CancelledError:

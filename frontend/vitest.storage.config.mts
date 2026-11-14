@@ -5,7 +5,12 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    include: ["src/lib/storage.test.ts", "src/lib/api-client-attachments.test.ts"],
+    include: [
+      "src/lib/storage.test.ts",
+      "src/lib/api-client-attachments.test.ts",
+      "src/lib/history-import.test.ts",
+      "src/lib/attachments.test.ts",
+    ],
   },
   resolve: {
     alias: {

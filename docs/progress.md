@@ -1,3 +1,25 @@
+## 2026-11-14 — Frontend TSX cleanup and layout component structuring
+
+- Root cause: duplicate JSX attributes on the chat attachment button and unstructured layout components in `layout-wrapper.tsx`.
+- Chat page cleanup: in `frontend/src/app/chat/page.tsx`, ensured single `className="mn-icon-btn"`, single `disabled={loading || attachments.length >= MAX_ATTACHMENTS}`, and single `onClick`, with `MAX_ATTACHMENTS = MAX_ATTACHMENT_COUNT` preserving multi-file capacity; confirmed Run button cleanly uses `<Send className="mr-1.5 size-4" />`.
+- Layout components: structured `frontend/src/components/layout-wrapper.tsx` cleanly into `MobileMenu`, `AppSidebar`, `AppChrome`, and `LayoutWrapper` with a single `OFFLINE_MESSAGE` declaration, preserving mobile drawer navigation, focus restoration, dialog accessibility, and offline detection.
+- Verification: `tsc -p frontend/tsconfig.json --noEmit` clean (0 errors), `npm run lint` clean (0 errors, 0 warnings), vitest unit tests passing (39 tests across 5 test suites), pytest passing (58 tests passed).
+
+## 2026-11-14 — Enforce streamed body limits, bounded backup import/export contracts, and async attachment validation
+
+- Request body limit on received bytes: `src/main.py`'s `limit_upload_size` now wraps `request._receive` to count bytes actually received on chunked/streamed inputs and understated `Content-Length` headers, stopping reading and returning HTTP 413 immediately without starting a run or spending run quota. Added regression tests in `tests/test_stateless_web.py`.
+- Prevent run launch while attachment validation pending: `frontend/src/app/chat/page.tsx` now tracks `isValidatingAttachments`, disables the launch button while file validation is in flight, and awaits pending validation in `handleLaunch()`, building the request from the settled selection state. Added regression test in `frontend/src/app/chat/page.test.tsx`.
+- Frontend attachment validation consistency: `frontend/src/lib/attachments.ts` now rejects duplicate filenames case-insensitively against existing attachments and the current batch, and normalizes browser MIME types (e.g. `.ts` reporting `video/mp2t`) to the backend allowlist (`text/plain`). Added tests in `frontend/src/lib/attachments.test.ts`.
+- Bounded large backup verification: `frontend/src/lib/history-import.ts`'s preflight strictly verifies head/tail top-level keys before reading large files, rejecting oversized non-backup files and spoofed envelopes without reading the full file into memory (`file.text()` is never called). Added tests in `frontend/src/lib/history-import.test.ts`.
+- Consistent export/import size contract: `frontend/src/lib/storage.ts` and `frontend/src/lib/history-file-limits.ts` now enforce `MAX_ANSWER_CHARS = 250,000` on history records and matching 50 MiB bounds (`MAX_BACKUP_IMPORT_BYTES` and `MAX_BACKUP_EXPORT_BYTES`), guaranteeing that every generated Assembly backup is restorable while keeping 5 MiB protection for ordinary external imports. Added tests in `frontend/src/lib/storage.test.ts`.
+- Offloaded attachment validation: `src/api/run.py` offloads CPU-intensive attachment decoding/validation to worker threads (`asyncio.to_thread`) bounded by a semaphore (`asyncio.Semaphore(4)`), preventing event-loop stalls while keeping invalid-request accounting separate from the run quota.
+- Maintainability type annotations: added missing type annotations across new functions and stub methods in `tests/test_attachments.py` and `tests/test_stateless_web.py`.
+
+## 2026-11-12 — Fix stale synthetic quota dates in offline test fixtures
+
+- Root cause: offline test fixtures hardcoded `quota_last_verified` to `2026-10-24`, which exceeded `QUOTA_METADATA_MAX_AGE_DAYS` (14 days) once the system date reached `2026-11-12`, causing 42 tests across 8 test files to fail on `QUOTA METADATA STALE`.
+- Change: updated `make_models_yaml` in `tests/conftest.py`, `test_router_excludes_provider_with_stale_quota_metadata` in `tests/test_routing.py`, `test_recommended_order_prefers_capacity` in `tests/test_key_setup.py`, and `test_router_skips_provider_with_unfilled_limits` in `tests/test_provider_layer.py` to use `date.today()`. Production `models.yaml` and `src/providers/config.py` fail-closed validation were left untouched.
+- Verification: `pytest --tb=short -q` passed (`655 passed, 1 skipped, 1 warning`); `ruff check` passed on all 4 edited test files (`ruff format --check` passed on `tests/conftest.py`, `tests/test_routing.py`, `tests/test_key_setup.py`; `tests/test_provider_layer.py` had only pre-existing unrelated formatting differences). Live-key tests (`test_repo_router_uses_catalog_ids`) skipped because no live keys were exercised.
 ## 2026-11-14 — Merge-readiness audit: three real bugs fixed
 
 - `src/orchestration/orchestrator.py`: the attachment status event was awaited before the nested `emit_event` helper was defined, so every run with attachment context failed with `UnboundLocalError` before the capacity check. Moved the emission to after the `CAPACITY_CHECK` transition; added `test_attachment_context_is_announced_without_crashing` to `tests/test_orchestrator_e2e.py`.
@@ -771,6 +793,31 @@
 
 <!-- /coderabbit-ai-generated:v1 -->
 
+## 2026-11-14 — Issue #74 & PR #96: Synchronized dynamic attachment capacity and batch validation
+
+- Synchronized in-progress attachment batch validation with live attachment removal in `frontend/src/app/chat/page.tsx` and `frontend/src/lib/attachments.ts`:
+  - Updated `validateAttachmentBatch` to accept a dynamic getter function (`() => ReadonlyArray<DraftAttachment>`), allowing real-time attachment capacity re-evaluation before and after asynchronous `file.text()` reads.
+  - When an existing attachment (e.g. 10 MiB) is removed while asynchronous file reading is in flight, the freed capacity is recognized dynamically, enabling remaining queued files to be evaluated against the updated total rather than a stale snapshot.
+  - Added unit regression tests in `frontend/src/lib/attachments.test.ts` and an integration regression test in `frontend/src/app/chat/page.test.tsx` verifying that removing an existing 10 MiB attachment during a delayed file read updates the capacity accounting and allows new files that fit within the updated total.
+- Enforced total-size bound on persisted history in `frontend/src/lib/history-file-limits.ts` and `frontend/src/lib/storage.ts`:
+  - Added `serializeAssemblyBackup` and `calculateBackupSerializedBytes` ensuring `saveHistory`, `exportJSON`, and `importJSON` share canonical version-and-usage envelope serialization and 2-space indentation.
+  - `saveHistory` evaluates the resulting persisted history and current usage against `MAX_BACKUP_EXPORT_BYTES` (50 MiB) prior to `idbSet`, rejecting oversized saves and preserving existing history intact.
+  - Expanded `frontend/src/lib/storage.test.ts` to verify rejection of over-limit saves before storage write and ensure all saved history can always be exported.
+- Separated incoming-record size validation from legacy-record handling in `normalizeHistory` (`frontend/src/lib/storage.ts`):
+  - Updated `normalizeHistory` with `NormalizeHistoryOptions` (`isIncoming?: boolean`) so oversized saved legacy records remain visible in `listHistory`/`getHistory` and are not silently dropped during `saveHistory`, `deleteHistory`, or `importJSON`.
+  - Maintained strict size checks on new incoming records in `saveHistory` (`isIncoming: true`).
+  - Added regression test in `frontend/src/lib/storage.test.ts` verifying that seeding an oversized legacy record keeps it visible, exportable in backups, and intact across saves and deletions.
+- Bounded attachment validation concurrency and waiter queue in `src/api/run.py`:
+  - Added `AttachmentValidationGate` preserving the 4-concurrency limit while enforcing an 8-waiter threshold on in-flight validation requests, rejecting excess queued requests with HTTP 503 (`Retry-After: 5`) to prevent server memory exhaustion.
+  - Added async regression tests in `tests/test_stateless_web.py` covering gate concurrency, waiter thresholds, and 503 response headers without spending run rate limit quota.
+- Structured CSV parsing error handling in `src/research/attachments.py`:
+  - Caught `csv.Error` during CSV reader iteration in `validate_attachment`, converting to `AttachmentValidationError` identifying `safe_name` while preserving the underlying exception cause (`from exc`).
+  - Added unit regression test in `tests/test_attachments.py` verifying that malformed CSV structure raises `AttachmentValidationError` with `csv.Error` as cause.
+- Verification:
+  - Frontend test suites: 35 tests passed in `vitest.storage.config.mts` and 4 tests passed in `page.test.tsx`.
+  - Type-checking: `tsc --noEmit` passed with 0 errors.
+  - Linting: ESLint passed with 0 errors.
+  - Backend test suites: 58 tests passed in `tests/test_attachments.py` and `tests/test_stateless_web.py`.
 ## 2026-11-06 - Landing hand field (no-dependency camera interaction)
 
 - Replaced the camera brightness-centroid path with a local hand approximation in `frontend/src/lib/hand-tracker.ts`: 128x96 analysis, 4x4 cell skin/motion mask, connected components, spatial/temporal prior, one-euro smoothing and presence hysteresis. No new package, CDN asset or model download.

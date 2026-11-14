@@ -13,19 +13,19 @@ import {
 } from "@/lib/privacy-notice"
 import { PrivacyDialog } from "@/components/privacy-dialog"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
+import {
+  estimateAttachmentContextChars,
+  MAX_ATTACHMENT_CONTEXT_CHARS,
+  SUPPORTED_ATTACHMENT_EXTENSIONS,
+  validateAttachmentBatch,
+} from "@/lib/attachments"
 import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
 import { makeChatStatus, type ChatStatus } from "@/lib/chat-status"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import {
-  ArrowUp,
-  FileText,
-  Paperclip,
-  SlidersHorizontal,
-  X,
-} from "lucide-react"
+import { ArrowUp, Send, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
@@ -41,14 +41,6 @@ const BUDGET_COPY: Record<(typeof TIME_BUDGETS)[number], string> = {
   10: "Thorough",
   15: "Deep dive",
 }
-const MAX_ATTACHMENTS = 5
-const MAX_FILE_BYTES = 256 * 1024
-const MAX_TOTAL_BYTES = 384 * 1024
-const SUPPORTED_EXTENSIONS = new Set([
-  "txt", "md", "csv", "json", "log", "py", "js", "jsx", "ts", "tsx",
-  "html", "css", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml",
-  "sql", "sh", "ps1", "bat", "env.example",
-])
 
 type DraftAttachment = {
   id: string
@@ -63,6 +55,10 @@ export default function Home() {
 
   const [question, setQuestion] = useState("")
   const [attachments, setAttachments] = useState<DraftAttachment[]>([])
+  const attachmentsRef = useRef<DraftAttachment[]>([])
+  const attachmentQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const [isValidatingAttachments, setIsValidatingAttachments] = useState(false)
+  const pendingValidationCountRef = useRef(0)
   const [minutes, setMinutes] = useState(5)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
@@ -126,7 +122,7 @@ export default function Home() {
       globalVault.allKeys().then((k) => {
         const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
         setEnabledIds(modelProviderIds)
-      }).catch(() => {})
+      }).catch(() => { })
     }
     refreshKeys()
     window.addEventListener("focus", refreshKeys)
@@ -190,100 +186,68 @@ export default function Home() {
     setShowPrivacy(false)
   }
 
+  const handleRemoveAttachment = (id: string) => {
+    const next = attachmentsRef.current.filter((item) => item.id !== id)
+    attachmentsRef.current = next
+    setAttachments(next)
+  }
+
   const handleFilesSelected = async (files: FileList | null) => {
     if (!files?.length) return
     const picked = Array.from(files)
-    if (attachments.length + picked.length > MAX_ATTACHMENTS) {
-      setStatus(makeChatStatus(`Attach up to ${MAX_ATTACHMENTS} files per investigation.`, "info"))
-      if (fileInputRef.current) fileInputRef.current.value = ""
-      return
-    }
-    let total = attachments.reduce((sum, item) => sum + item.size, 0)
-    const accepted: DraftAttachment[] = []
-    for (const file of picked) {
-      const lower = file.name.toLowerCase()
-      const extension = lower.endsWith(".env.example")
-        ? "env.example"
-        : lower.includes(".") ? lower.split(".").pop() ?? "" : ""
-      if (!SUPPORTED_EXTENSIONS.has(extension)) {
-        setStatus(
-          makeChatStatus(
-            `${file.name}: unsupported type. Choose a text, Markdown, CSV, JSON, log, or source/configuration file.`,
-            "warning",
-          ),
-        )
-        continue
-      }
-      if (file.size <= 0) {
-        setStatus(makeChatStatus(`${file.name}: file is empty.`, "warning"))
-        continue
-      }
-      if (file.size > MAX_FILE_BYTES) {
-        setStatus(
-          makeChatStatus(`${file.name}: file exceeds the 256 KiB per-file limit.`, "warning"),
-        )
-        continue
-      }
-      total += file.size
-      if (total > MAX_TOTAL_BYTES) {
-        total -= file.size
-        setStatus(makeChatStatus("Attachments exceed the 384 KiB combined limit.", "warning"))
-        continue
-      }
+    pendingValidationCountRef.current += 1
+    setIsValidatingAttachments(true)
+    const runBatch = async () => {
       try {
-        const content = await file.text()
-        const hasUnsupportedControls = Array.from(content).some((character) => {
-          const code = character.charCodeAt(0)
-          return (code < 32 && ![9, 10, 12, 13].includes(code)) || code === 127
-        })
-        if (hasUnsupportedControls) {
-          total -= file.size
+        const result = await validateAttachmentBatch(() => attachmentsRef.current, picked)
+        if (result.accepted.length > 0) {
+          const next = [...attachmentsRef.current, ...result.accepted]
+          attachmentsRef.current = next
+          setAttachments(next)
+        }
+        const estimatedPromptChars = estimateAttachmentContextChars(
+          attachmentsRef.current,
+        )
+        const truncationNotice =
+          estimatedPromptChars > MAX_ATTACHMENT_CONTEXT_CHARS
+            ? ` Formatted attachment context exceeds ${MAX_ATTACHMENT_CONTEXT_CHARS.toLocaleString()} characters, so extra content will be truncated before sending to models.`
+            : ""
+        if (result.accepted.length > 0 && result.errors.length > 0) {
           setStatus(
             makeChatStatus(
-              `${file.name}: binary or unsupported control characters aren't supported.`,
+              `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. ${result.errors.join(" ")}${truncationNotice}`,
               "warning",
             ),
           )
-          continue
+        } else if (result.errors.length > 0) {
+          setStatus(makeChatStatus(result.errors.join(" "), "warning"))
+        } else if (result.accepted.length > 0) {
+          setStatus(
+            makeChatStatus(
+              `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.${truncationNotice}`,
+              truncationNotice ? "warning" : "info",
+            ),
+          )
         }
-        if (extension === "json") {
-          try { JSON.parse(content) } catch {
-            total -= file.size
-            setStatus(makeChatStatus(`${file.name}: invalid JSON.`, "warning"))
-            continue
-          }
+        if (fileInputRef.current) fileInputRef.current.value = ""
+      } finally {
+        pendingValidationCountRef.current = Math.max(0, pendingValidationCountRef.current - 1)
+        if (pendingValidationCountRef.current === 0) {
+          setIsValidatingAttachments(false)
         }
-        if (!content.trim()) {
-          total -= file.size
-          setStatus(makeChatStatus(`${file.name}: file is empty.`, "warning"))
-          continue
-        }
-        accepted.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${accepted.length}`,
-          filename: file.name,
-          media_type: file.type || "text/plain",
-          content,
-          size: file.size,
-        })
-      } catch {
-        total -= file.size
-        setStatus(makeChatStatus(`${file.name}: couldn't read this file.`, "warning"))
       }
     }
-    if (accepted.length) {
-      setAttachments((current) => [...current, ...accepted])
-      setStatus(
-        makeChatStatus(
-          `${accepted.length} file${accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.`,
-          "info",
-        ),
-      )
-    }
-    if (fileInputRef.current) fileInputRef.current.value = ""
+    const nextQueue = attachmentQueueRef.current.then(runBatch, runBatch)
+    attachmentQueueRef.current = nextQueue
+    await nextQueue
   }
 
   const handleLaunch = async () => {
-    if ((!question.trim() && attachments.length === 0) || loading) return
+    if (loading) return
+    // Wait for any queued attachment validation to settle before launching
+    await attachmentQueueRef.current
+    const activeAttachments = attachmentsRef.current
+    if ((!question.trim() && activeAttachments.length === 0) || loading) return
     if (!privacyAcked) {
       setShowPrivacy(true)
       setStatus(makeChatStatus("Please acknowledge the privacy notice first.", "info"))
@@ -341,7 +305,7 @@ export default function Home() {
           minutes,
           providerKeys,
           searchKeys,
-          attachments: attachments.map(({ filename, media_type, content }) => ({ filename, media_type, content })),
+          attachments: activeAttachments.map(({ filename, media_type, content }) => ({ filename, media_type, content })),
           selection: { selected: selection.selected, pins: selection.pins },
           usage,
         },
@@ -401,7 +365,7 @@ export default function Home() {
           tokens,
           elapsedSeconds,
           disagreements: [],
-          attachments: attachments.map(({ filename, media_type, size }) => ({
+          attachments: activeAttachments.map(({ filename, media_type, size }) => ({
             filename,
             media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
             size_bytes: size,
@@ -436,7 +400,7 @@ export default function Home() {
         elapsedSeconds,
         verification: verification ?? undefined,
         disagreements: [],
-        attachments: attachments.map(({ filename, media_type, size }) => ({
+        attachments: activeAttachments.map(({ filename, media_type, size }) => ({
           filename,
           media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
           size_bytes: size,
@@ -496,198 +460,208 @@ export default function Home() {
 
 
           <div className="mn-dock">
-          {status && (
-            <div className="mn-status" id="question-status">
-              <ChatStatusMessage status={status} />
-            </div>
-          )}
+            {status && (
+              <div className="mn-status" id="question-status">
+                <ChatStatusMessage status={status} />
+              </div>
+            )}
 
-          <div
-            data-testid="diversity-chip"
-            data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
-            className="mn-meta"
-            aria-live="polite"
-          >
-            {catalogLoading ? (
-              <span>Checking provider keys…</span>
-            ) : catalogFailed ? (
-              <span className="mn-meta-warn">
-                Provider status unavailable ·{" "}
+            <div
+              data-testid="diversity-chip"
+              data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
+              className="mn-meta"
+              aria-live="polite"
+            >
+              {catalogLoading ? (
+                <span>Checking provider keys…</span>
+              ) : catalogFailed ? (
+                <span className="mn-meta-warn">
+                  Provider status unavailable ·{" "}
+                  <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
+                    Retry
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <span>{gateChipText(gate)}</span>
+                  {gate.level === "DEGRADED" && !degradedConfirmed && (
+                    <button
+                      type="button"
+                      className="mn-link"
+                      data-testid="degraded-confirm"
+                      onClick={() => setConfirmedGateSignature(gateSignature)}
+                    >
+                      Run anyway
+                    </button>
+                  )}
+                  {gate.families_count === 0 && (
+                    <Link href="/settings" className="mn-link">
+                      Add provider keys
+                    </Link>
+                  )}
+                </>
+              )}
+            </div>
+
+            {runHint && (
+              <p className="mn-hint" id="run-hint">
+                {runHint}
+              </p>
+            )}
+
+            {catalogFailed && (
+              <div className="mn-alert" role="alert">
+                <span>
+                  Can&apos;t reach the Assembly server at {env.apiUrl}. Check that the backend is running.
+                </span>
                 <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
                   Retry
                 </button>
-              </span>
-            ) : (
-              <>
-                <span>{gateChipText(gate)}</span>
-                {gate.level === "DEGRADED" && !degradedConfirmed && (
-                  <button
-                    type="button"
-                    className="mn-link"
-                    data-testid="degraded-confirm"
-                    onClick={() => setConfirmedGateSignature(gateSignature)}
-                  >
-                    Run anyway
-                  </button>
-                )}
-                {gate.families_count === 0 && (
-                  <Link href="/settings" className="mn-link">
-                    Add provider keys
-                  </Link>
-                )}
-              </>
+              </div>
             )}
-          </div>
 
-          {runHint && (
-            <p className="mn-hint" id="run-hint">
-              {runHint}
-            </p>
-          )}
-
-          {catalogFailed && (
-            <div className="mn-alert" role="alert">
-              <span>
-                Can&apos;t reach the Assembly server at {env.apiUrl}. Check that the backend is running.
-              </span>
-              <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
-                Retry
-              </button>
-            </div>
-          )}
-
-          <div className="mn-suggestions" aria-label="Suggested questions">
-            <span>Try</span>
-            {EXAMPLES.map((example) => (
-              <button
-                key={example.label}
-                type="button"
-                className="mn-chip"
-                title={example.question}
-                onClick={() => {
-                  setQuestion(example.question)
-                  textareaRef.current?.focus()
-                }}
-              >
-                {example.label}
-              </button>
-            ))}
-          </div>
-          {attachments.length > 0 && (
-            <div className="mn-attachments" aria-label="Selected attachments">
-              {attachments.map((attachment) => (
-                <div key={attachment.id} className="mn-attachment">
-                  <FileText className="size-3.5 shrink-0 text-brand" aria-hidden />
-                  <b title={attachment.filename}>{attachment.filename}</b>
-                  <span>{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${attachment.filename}`}
-                    disabled={loading}
-                    onClick={() =>
-                      setAttachments((current) => current.filter((item) => item.id !== attachment.id))
-                    }
-                  >
-                    <X className="size-3.5" aria-hidden />
-                  </button>
-                </div>
+            <div className="mn-suggestions" aria-label="Suggested questions">
+              <span>Try</span>
+              {EXAMPLES.map((example) => (
+                <button
+                  key={example.label}
+                  type="button"
+                  className="mn-chip"
+                  title={example.question}
+                  onClick={() => {
+                    setQuestion(example.question)
+                    textareaRef.current?.focus()
+                  }}
+                >
+                  {example.label}
+                </button>
               ))}
             </div>
-          )}
-
-          <form
-            className="mn-composer"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void handleLaunch()
-            }}
-          >
-            <label htmlFor="research-question" className="sr-only">
-              Ask a question (max 2000 characters)
-            </label>
-            <textarea
-              id="research-question"
-              ref={textareaRef}
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault()
-                  void handleLaunch()
-                }
-              }}
-              placeholder="Ask Assembly"
-              aria-describedby="question-status"
-              className="mn-input"
-              rows={1}
-              maxLength={2000}
-              required
-            />
-
-            <div className="mn-composer-tools">
-              <div className="mn-tools-left">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  aria-label="Choose investigation attachments"
-                  accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
-                  className="sr-only"
-                  disabled={loading}
-                  onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
-                />
-                <button
-                  type="button"
-                  className="mn-icon-btn"
-                  disabled={loading || attachments.length >= MAX_ATTACHMENTS}
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label="Attach files"
-                  title={`Attach up to ${MAX_ATTACHMENTS} files`}
-                >
-                  <Paperclip className="size-[18px]" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  className="mn-pill"
-                  onClick={() => setShowModelSettings(true)}
-                  aria-haspopup="dialog"
-                  aria-label="Open model and role settings"
-                >
-                  <SlidersHorizontal className="size-3.5" aria-hidden />
-                  {selection.selected.length > 0 ? `${selection.selected.length} models` : "Models · Auto"}
-                </button>
-                <div className="mn-budget" role="group" aria-label="Time budget">
-                  {TIME_BUDGETS.map((value) => (
+            {attachments.length > 0 && (
+              <div className="mn-attachments" aria-label="Selected attachments">
+                {attachments.map((attachment) => (
+                  <div key={attachment.id} className="mn-attachment">
+                    <FileText className="size-3.5 shrink-0 text-brand" aria-hidden />
+                    <b title={attachment.filename}>{attachment.filename}</b>
+                    <span>{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
                     <button
-                      key={value}
                       type="button"
-                      className="mn-budget-opt"
-                      onClick={() => setMinutes(value)}
-                      aria-pressed={minutes === value}
-                      aria-label={`${value} minutes, ${BUDGET_COPY[value]}`}
-                      title={BUDGET_COPY[value]}
+                      aria-label={`Remove ${attachment.filename}`}
+                      disabled={loading}
+                      onClick={() => handleRemoveAttachment(attachment.id)}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                     >
-                      {value}m
+                      <X className="size-3.5" aria-hidden />
                     </button>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
+            )}
 
-              <button
-                type="submit"
-                className="mn-send"
-                disabled={loading || missingQuestion || catalogLoading || catalogFailed || gate.level === "BLOCKED"}
-                aria-label={loading ? "Running" : "Start run"}
-                aria-describedby={runHint ? "run-hint" : undefined}
-              >
-                {loading ? (
-                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <ArrowUp className="size-[18px]" aria-hidden />
-                )}
-              </button>
-            </div>
-          </form>
+            <form
+              className="mn-composer"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void handleLaunch()
+              }}
+            >
+              <label htmlFor="research-question" className="sr-only">
+                Ask a question (max 2000 characters)
+              </label>
+              <textarea
+                id="research-question"
+                ref={textareaRef}
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault()
+                    void handleLaunch()
+                  }
+                }}
+                placeholder="Ask Assembly"
+                aria-describedby="question-status"
+                className="mn-input"
+                rows={1}
+                maxLength={2000}
+                required
+              />
+
+              <div className="mn-composer-tools">
+                <div className="mn-tools-left">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    aria-label="Choose investigation attachments"
+                    accept={[...SUPPORTED_ATTACHMENT_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
+                    className="sr-only"
+                    disabled={loading}
+                    onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-9"
+                    disabled={loading}
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach files"
+                    title="Attach files"
+                  >
+                    <Paperclip className="size-[18px]" aria-hidden />
+                  </Button>
+                  <button
+                    type="button"
+                    className="mn-pill"
+                    onClick={() => setShowModelSettings(true)}
+                    aria-haspopup="dialog"
+                    aria-label="Open model and role settings"
+                  >
+                    <SlidersHorizontal className="size-3.5" aria-hidden />
+                    {selection.selected.length > 0 ? `${selection.selected.length} models` : "Models · Auto"}
+                  </button>
+                  <div className="mn-budget" role="group" aria-label="Time budget">
+                    {TIME_BUDGETS.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className="mn-budget-opt"
+                        onClick={() => setMinutes(value)}
+                        aria-pressed={minutes === value}
+                        aria-label={`${value} minutes, ${BUDGET_COPY[value]}`}
+                        title={BUDGET_COPY[value]}
+                      >
+                        {value}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  size="default"
+                  onClick={handleLaunch}
+                  disabled={loading || isValidatingAttachments || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
+                  className="assembly-chat-run-button min-h-10 rounded-xl px-4"
+                >
+                  {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="mr-1.5 size-4" />}
+                  {loading ? "Running…" : isValidatingAttachments ? "Checking…" : "Run"}
+                </Button>
+
+                <button
+                  type="submit"
+                  className="mn-send"
+                  disabled={loading || missingQuestion || catalogLoading || catalogFailed || gate.level === "BLOCKED"}
+                  aria-label={loading ? "Running" : "Start run"}
+                  aria-describedby={runHint ? "run-hint" : undefined}
+                >
+                  {loading ? (
+                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <ArrowUp className="size-[18px]" aria-hidden />
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </main>

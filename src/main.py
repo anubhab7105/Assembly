@@ -163,9 +163,22 @@ async def desktop_token_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+class RequestBodyTooLarge(Exception):
+    """Raised when incoming request stream exceeds route body limit."""
+
+
 @app.middleware("http")
 async def limit_upload_size(request: Request, call_next):
     from src.core.rate_limit import client_ip, count_invalid_request
+
+    is_run_upload = (
+        request.method == "POST" and request.url.path.rstrip("/") == "/api/run"
+    )
+    body_limit = (
+        max(settings.max_body_bytes, settings.max_run_body_bytes)
+        if is_run_upload
+        else settings.max_body_bytes
+    )
 
     content_length = request.headers.get("content-length")
     if content_length is not None:
@@ -176,7 +189,7 @@ async def limit_upload_size(request: Request, call_next):
                 status_code=400, content={"detail": "Invalid Content-Length."}
             )
         body_size = int(content_length)
-        if body_size > settings.max_body_bytes:
+        if body_size > body_limit:
             try:
                 await count_invalid_request(client_ip(request))
             except HTTPException as exc:
@@ -191,6 +204,25 @@ async def limit_upload_size(request: Request, call_next):
                 status_code=413, content={"detail": "Request body too large."}
             )
 
+    # Enforce limit on bytes actually received while consuming the stream
+    # (covers chunked/streamed bodies and understated Content-Length).
+    original_receive = request._receive
+    received_bytes = 0
+    body_oversized = False
+
+    async def limited_receive():
+        nonlocal received_bytes, body_oversized
+        message = await original_receive()
+        if message["type"] == "http.request":
+            body = message.get("body", b"")
+            received_bytes += len(body)
+            if received_bytes > body_limit:
+                body_oversized = True
+                raise RequestBodyTooLarge()
+        return message
+
+    request._receive = limited_receive
+
     # SSE/WebSocket origin check (web mode with allow-list configured).
     if settings.is_web and settings.cors_origins:
         origin = request.headers.get("origin")
@@ -199,7 +231,26 @@ async def limit_upload_size(request: Request, call_next):
             if origin.rstrip("/") not in allowed:
                 return JSONResponse(status_code=403, content={"detail": "Invalid origin."})
 
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except RequestBodyTooLarge:
+        body_oversized = True
+        response = None
+
+    if body_oversized:
+        try:
+            await count_invalid_request(client_ip(request))
+        except HTTPException as exc:
+            if exc.status_code == 429:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many invalid requests; try again later."},
+                )
+        except Exception:  # noqa: BLE001, S110
+            pass
+        return JSONResponse(
+            status_code=413, content={"detail": "Request body too large."}
+        )
 
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"

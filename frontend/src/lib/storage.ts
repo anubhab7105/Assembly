@@ -1,3 +1,21 @@
+import {
+  MAX_ATTACHMENT_FILE_BYTES,
+  MAX_ATTACHMENT_TOTAL_BYTES,
+} from "./attachments"
+import {
+  calculateBackupSerializedBytes,
+  isAssemblyBackupEnvelope,
+  MAX_ANSWER_CHARS,
+  MAX_BACKUP_EXPORT_BYTES,
+  MAX_BACKUP_IMPORT_BYTES,
+  MAX_BACKUP_IMPORT_MIB,
+  MAX_HISTORY,
+  MAX_HISTORY_FILE_SIZE,
+  MAX_QUESTION_CHARS,
+  MAX_USAGE,
+  serializeAssemblyBackup,
+} from "./history-file-limits"
+
 /**
  * StorageService: client-owned history, settings and daily usage.
  *
@@ -61,8 +79,6 @@ export interface StorageService {
 
 const DB_NAME = "assembly"
 const STORE = "kv"
-const MAX_HISTORY = 200
-const MAX_USAGE = 200
 
 export class StorageError extends Error {
   constructor(operation: string) {
@@ -247,7 +263,19 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0
 }
 
-function normalizeHistory(value: unknown): HistoryRecord | null {
+interface NormalizeHistoryOptions {
+  /**
+   * When true, enforces strict incoming creation size limits on question and answer.
+   * When false (default), preserves valid legacy records already stored in history
+   * so they remain visible and restorable rather than being silently dropped.
+   */
+  isIncoming?: boolean
+}
+
+function normalizeHistory(
+  value: unknown,
+  options?: NormalizeHistoryOptions,
+): HistoryRecord | null {
   if (!isRecord(value)) return null
   if (
     !isNonEmptyString(value.id) ||
@@ -259,6 +287,17 @@ function normalizeHistory(value: unknown): HistoryRecord | null {
     !Number.isFinite(value.minutes) ||
     ![3, 5, 10, 15].includes(value.minutes)
   ) return null
+
+  const isIncoming =
+    typeof options === "object" && options !== null && Boolean(options.isIncoming)
+  if (isIncoming) {
+    if (
+      value.question.length > MAX_QUESTION_CHARS ||
+      value.answer.length > MAX_ANSWER_CHARS
+    ) {
+      return null
+    }
+  }
 
   const record: HistoryRecord = {
     id: value.id,
@@ -321,36 +360,49 @@ function normalizeHistory(value: unknown): HistoryRecord | null {
       ...(typeof item.resolved === "boolean" ? { resolved: item.resolved } : {}),
     }))
   }
-  if (
-    Array.isArray(value.attachments) &&
-    value.attachments.length <= 5 &&
-    value.attachments.every((item) =>
-      isRecord(item) &&
-      typeof item.filename === "string" &&
-      item.filename.length <= 120 &&
-      !item.filename.includes("/") &&
-      !item.filename.includes("\\") &&
-      !Array.from(item.filename).some((character) => {
-        const code = character.charCodeAt(0)
-        return code < 32 || code === 127
-      }) &&
-      item.filename !== "." &&
-      item.filename !== ".." &&
-      item.filename.trim().length > 0 &&
-      typeof item.media_type === "string" &&
-      item.media_type.length <= 100 &&
-      /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(item.media_type) &&
-      typeof item.size_bytes === "number" &&
-      Number.isFinite(item.size_bytes) &&
-      item.size_bytes >= 0 &&
-      item.size_bytes <= 256 * 1024
-    )
-  ) {
-    record.attachments = value.attachments.map((item) => ({
-      filename: item.filename as string,
-      media_type: item.media_type as string,
-      size_bytes: item.size_bytes as number,
-    }))
+  if (Array.isArray(value.attachments)) {
+    let totalAttachmentBytes = 0
+    const normalizedAttachments: NonNullable<HistoryRecord["attachments"]> = []
+    let validAttachments = true
+    for (const item of value.attachments) {
+      if (
+        !isRecord(item) ||
+        typeof item.filename !== "string" ||
+        item.filename.length > 120 ||
+        item.filename.includes("/") ||
+        item.filename.includes("\\") ||
+        Array.from(item.filename).some((character) => {
+          const code = character.charCodeAt(0)
+          return code < 32 || code === 127
+        }) ||
+        item.filename === "." ||
+        item.filename === ".." ||
+        item.filename.trim().length === 0 ||
+        typeof item.media_type !== "string" ||
+        item.media_type.length > 100 ||
+        !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(item.media_type) ||
+        typeof item.size_bytes !== "number" ||
+        !Number.isFinite(item.size_bytes) ||
+        item.size_bytes < 0 ||
+        item.size_bytes > MAX_ATTACHMENT_FILE_BYTES
+      ) {
+        validAttachments = false
+        break
+      }
+      totalAttachmentBytes += item.size_bytes
+      if (totalAttachmentBytes > MAX_ATTACHMENT_TOTAL_BYTES) {
+        validAttachments = false
+        break
+      }
+      normalizedAttachments.push({
+        filename: item.filename,
+        media_type: item.media_type,
+        size_bytes: item.size_bytes,
+      })
+    }
+    if (validAttachments) {
+      record.attachments = normalizedAttachments
+    }
   }
   return record
 }
@@ -370,13 +422,7 @@ function normalizeUsage(value: unknown): UsageRecord | null {
   }
 }
 
-function parseImport(text: string): { history: HistoryRecord[]; usage: UsageRecord[] } {
-  let raw: unknown
-  try {
-    raw = JSON.parse(text)
-  } catch {
-    throw new Error("Import file isn't valid JSON. No saved data was changed.")
-  }
+function validateImportPayload(raw: unknown): { history: HistoryRecord[]; usage: UsageRecord[] } {
   if (!isRecord(raw) || raw.version !== 1) {
     throw new Error("Unsupported history export. Choose an Assembly JSON export (version 1). No saved data was changed.")
   }
@@ -416,11 +462,21 @@ function parseImport(text: string): { history: HistoryRecord[]; usage: UsageReco
   }
 }
 
+function parseImport(text: string): { history: HistoryRecord[]; usage: UsageRecord[] } {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    throw new Error("Import file isn't valid JSON. No saved data was changed.")
+  }
+  return validateImportPayload(raw)
+}
+
 class BaseStorage implements StorageService {
   async listHistory(): Promise<HistoryRecord[]> {
     const items = (await idbGet<unknown>("history")) ?? []
     if (!Array.isArray(items)) return []
-    return items.map(normalizeHistory).filter((item): item is HistoryRecord => item !== null)
+    return items.map((item) => normalizeHistory(item)).filter((item): item is HistoryRecord => item !== null)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
   }
 
@@ -430,17 +486,30 @@ class BaseStorage implements StorageService {
   }
 
   async saveHistory(record: HistoryRecord): Promise<void> {
-    const normalized = normalizeHistory(record)
+    if (typeof record.question === "string" && record.question.length > MAX_QUESTION_CHARS) {
+      throw new Error(`Question exceeds maximum allowed length of ${MAX_QUESTION_CHARS.toLocaleString()} characters. Nothing was saved.`)
+    }
+    if (typeof record.answer === "string" && record.answer.length > MAX_ANSWER_CHARS) {
+      throw new Error(`Answer exceeds maximum allowed length of ${MAX_ANSWER_CHARS.toLocaleString()} characters. Nothing was saved.`)
+    }
+    const normalized = normalizeHistory(record, { isIncoming: true })
     if (!normalized) throw new Error("Invalid history record. Nothing was saved.")
     const items = (await idbGet<unknown>("history")) ?? []
-    const existing = Array.isArray(items) ? items.map(normalizeHistory).filter((item): item is HistoryRecord => item !== null) : []
+    const existing = Array.isArray(items) ? items.map((item) => normalizeHistory(item)).filter((item): item is HistoryRecord => item !== null) : []
     const next = [normalized, ...existing.filter((h) => h.id !== normalized.id)].slice(0, MAX_HISTORY)
+    const usage = await this.getUsage()
+    const serializedBytes = calculateBackupSerializedBytes(next, usage)
+    if (serializedBytes > MAX_BACKUP_EXPORT_BYTES) {
+      throw new Error(
+        `History exceeds maximum backup storage limit of ${MAX_BACKUP_IMPORT_MIB} MiB. Nothing was saved.`
+      )
+    }
     await idbSet("history", next)
   }
 
   async deleteHistory(id: string): Promise<void> {
     const items = (await idbGet<unknown>("history")) ?? []
-    const existing = Array.isArray(items) ? items.map(normalizeHistory).filter((item): item is HistoryRecord => item !== null) : []
+    const existing = Array.isArray(items) ? items.map((item) => normalizeHistory(item)).filter((item): item is HistoryRecord => item !== null) : []
     await idbSet("history", existing.filter((h) => h.id !== id))
   }
 
@@ -469,27 +538,84 @@ class BaseStorage implements StorageService {
     await idbSet("usage", valid.slice(0, MAX_USAGE))
   }
 
+  /**
+   * Exports history and usage as JSON so saved histories remain backupable.
+   */
   async exportJSON(): Promise<string> {
     const history = await this.listHistory()
     const usage = await this.getUsage()
-    return JSON.stringify({ version: 1, history, usage }, null, 2)
+
+    const payload = serializeAssemblyBackup(history, usage)
+    const size = new TextEncoder().encode(payload).byteLength
+    if (size > MAX_BACKUP_EXPORT_BYTES) {
+      throw new Error(
+        `History backup is too large to export (${Math.round(size / (1024 * 1024))} MiB). Maximum allowed backup size is ${MAX_BACKUP_IMPORT_MIB} MiB.`
+      )
+    }
+    return payload
   }
 
+
+   /**
+   * Validates and imports history without partially updating existing storage.
+   * Rejects external imports over 5 MiB while allowing bounded valid version-1
+   * Assembly backups up to MAX_BACKUP_IMPORT_BYTES.
+   */
   async importJSON(text: string): Promise<void> {
-    // Parse and validate everything before the first write. Parse errors,
-    // unsupported shapes and malformed records cannot partially update state.
-    const data = parseImport(text)
+    const size = new TextEncoder().encode(text).byteLength
+
+    if (size > MAX_BACKUP_IMPORT_BYTES) {
+      throw new Error(
+        `History backup is too large. Maximum allowed backup size is ${MAX_BACKUP_IMPORT_MIB} MiB. No saved data was changed.`
+      )
+    }
+
+    let data: { history: HistoryRecord[]; usage: UsageRecord[] }
+    if (size > MAX_HISTORY_FILE_SIZE) {
+      let raw: unknown
+      try {
+        raw = JSON.parse(text)
+      } catch {
+        throw new Error(
+          "History import is too large. Maximum allowed size is 5 MiB. No saved data was changed."
+        )
+      }
+      if (!isAssemblyBackupEnvelope(raw)) {
+        throw new Error(
+          "History import is too large. Maximum allowed size is 5 MiB. No saved data was changed."
+        )
+      }
+      data = validateImportPayload(raw)
+    } else {
+      // Parse and validate everything before the first write.
+      data = parseImport(text)
+    }
+
     const currentHistory = (await idbGet<unknown>("history")) ?? []
     const currentUsage = (await idbGet<unknown>("usage")) ?? []
-    const history = Array.isArray(currentHistory) ? currentHistory.map(normalizeHistory).filter((item): item is HistoryRecord => item !== null) : []
-    const usage = Array.isArray(currentUsage) ? currentUsage.map(normalizeUsage).filter((item): item is UsageRecord => item !== null) : []
+
+    const history = Array.isArray(currentHistory)
+      ? currentHistory.map((item) => normalizeHistory(item)).filter((item): item is HistoryRecord => item !== null)
+      : []
+
+    const usage = Array.isArray(currentUsage)
+      ? currentUsage.map(normalizeUsage).filter((item): item is UsageRecord => item !== null)
+      : []
 
     const mergedHistory = new Map(history.map((item) => [item.id, item]))
-    for (const item of data.history) mergedHistory.set(item.id, item)
-    const mergedUsage = new Map(usage.map((item) => [`${item.provider}\u0000${item.model}`, item]))
+
+    for (const item of data.history) {
+      mergedHistory.set(item.id, item)
+    }
+
+    const mergedUsage = new Map(
+      usage.map((item) => [`${item.provider}\u0000${item.model}`, item])
+    )
+
     for (const item of data.usage) {
       const key = `${item.provider}\u0000${item.model}`
       const current = mergedUsage.get(key)
+
       mergedUsage.set(key, current ? {
         ...item,
         count: Math.max(current.count, item.count),
@@ -497,12 +623,17 @@ class BaseStorage implements StorageService {
       } : item)
     }
 
-    // Preserve unrelated local history/settings and make repeated imports
-    // idempotent. Both payloads are written as one logical transaction.
-    await idbSetImportState(
-      [...mergedHistory.values()].slice(0, MAX_HISTORY),
-      [...mergedUsage.values()].slice(0, MAX_USAGE),
-    )
+    const nextHistory = [...mergedHistory.values()].slice(0, MAX_HISTORY)
+    const nextUsage = [...mergedUsage.values()].slice(0, MAX_USAGE)
+    const serializedBytes = calculateBackupSerializedBytes(nextHistory, nextUsage)
+    if (serializedBytes > MAX_BACKUP_EXPORT_BYTES) {
+      throw new Error(
+        `History backup is too large. Maximum allowed backup size is ${MAX_BACKUP_IMPORT_MIB} MiB. No saved data was changed.`
+      )
+    }
+
+    // Preserve unrelated local history and settings.
+    await idbSetImportState(nextHistory, nextUsage)
   }
 }
 
