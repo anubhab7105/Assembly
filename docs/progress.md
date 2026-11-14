@@ -1,3 +1,10 @@
+## 2026-11-14 — Frontend TSX cleanup and layout component structuring
+
+- Root cause: duplicate JSX attributes on the chat attachment button and unstructured layout components in `layout-wrapper.tsx`.
+- Chat page cleanup: in `frontend/src/app/chat/page.tsx`, ensured single `className="mn-icon-btn"`, single `disabled={loading || attachments.length >= MAX_ATTACHMENTS}`, and single `onClick`, with `MAX_ATTACHMENTS = MAX_ATTACHMENT_COUNT` preserving multi-file capacity; confirmed Run button cleanly uses `<Send className="mr-1.5 size-4" />`.
+- Layout components: structured `frontend/src/components/layout-wrapper.tsx` cleanly into `MobileMenu`, `AppSidebar`, `AppChrome`, and `LayoutWrapper` with a single `OFFLINE_MESSAGE` declaration, preserving mobile drawer navigation, focus restoration, dialog accessibility, and offline detection.
+- Verification: `tsc -p frontend/tsconfig.json --noEmit` clean (0 errors), `npm run lint` clean (0 errors, 0 warnings), vitest unit tests passing (39 tests across 5 test suites), pytest passing (58 tests passed).
+
 ## 2026-11-14 — Enforce streamed body limits, bounded backup import/export contracts, and async attachment validation
 
 - Request body limit on received bytes: `src/main.py`'s `limit_upload_size` now wraps `request._receive` to count bytes actually received on chunked/streamed inputs and understated `Content-Length` headers, stopping reading and returning HTTP 413 immediately without starting a run or spending run quota. Added regression tests in `tests/test_stateless_web.py`.
