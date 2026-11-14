@@ -271,12 +271,22 @@
   transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
 }
 
-.assembly-nav-cta { min-height: 40px; padding-inline: 17px; font-size: .8rem; }
-.assembly-nav-cta:hover,
-.assembly-button-primary:hover {
+.assembly-nav-cta {
+  min-height: 40px;
+  padding-inline: 17px;
+  font-size: .8rem;
+  background: #eaa221 !important;
+  color: #000000 !important;
+  border: 1px solid #eaa221 !important;
+  font-weight: 700;
+}
+
+.assembly-nav-cta:hover {
   transform: translateY(-2px);
-  background: var(--brand-hover);
-  box-shadow: 0 12px 30px color-mix(in oklch, var(--brand), transparent 76%);
+  background: #ffb75f !important;
+  color: #000000 !important;
+  border-color: #ffb75f !important;
+  box-shadow: 0 8px 24px rgba(234, 162, 33, 0.45);
 }
 
 .assembly-landing-main { position: relative; z-index: 1; }
@@ -313,7 +323,7 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  color: var(--brand);
+  color: #eaa221 !important;
   font-size: .7rem;
   font-weight: 760;
   letter-spacing: .14em;
@@ -1312,7 +1322,7 @@
 }
 
 .assembly-rich-footer-link--cta {
-  color: var(--brand);
+  color: #eaa221 !important;
   font-weight: 600;
 }
 
