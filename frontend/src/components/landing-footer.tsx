@@ -42,22 +42,22 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="#how-it-works" className="assembly-rich-footer-link">
+                <Link href="/#how-it-works" className="assembly-rich-footer-link">
                   How it works
                 </Link>
               </li>
               <li>
-                <Link href="#your-control" className="assembly-rich-footer-link">
+                <Link href="/#your-control" className="assembly-rich-footer-link">
                   Your control
                 </Link>
               </li>
               <li>
-                <Link href="#get-started" className="assembly-rich-footer-link">
+                <Link href="/#get-started" className="assembly-rich-footer-link">
                   Brand orbs orbit
                 </Link>
               </li>
               <li>
-                <Link href="#faq" className="assembly-rich-footer-link">
+                <Link href="/#faq" className="assembly-rich-footer-link">
                   FAQ &amp; Guide
                 </Link>
               </li>
@@ -134,16 +134,6 @@ export function LandingFooter() {
           <div className="assembly-rich-footer-bottom-copy">
             <span>© 2026 Assembly. All rights reserved.</span>
           </div>
-
-          <button
-            type="button"
-            onClick={scrollToTop}
-            className="assembly-rich-footer-back-to-top"
-            aria-label="Back to top"
-          >
-            <span>Back to top</span>
-            <span aria-hidden="true">↑</span>
-          </button>
         </div>
       </div>
     </footer>

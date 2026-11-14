@@ -1,3 +1,29 @@
+## 2026-11-15 — Landing Page Hero Slogan, Draggable List, Settings Light Mode, and Navigation Fixes
+- **Hero Slogan Redesign**:
+  - Replaced "Assembly" headline in Section 1 with the stacked slogan:
+    - Line 1: `[ What happens ]` inside `.headline-box.machines` with metallic gradient border.
+    - Lines 2-4: `when<br />AI questions<br />AI?` in `.headline-plain-text` without border box, flush aligned, marigold (`#eaa221`), and `Schibsted Grotesk` regular font.
+  - Adjusted vertical positioning (`top: clamp(115px, 14vh, 140px)`) to align horizontally with the right-hand brand orb.
+  - Lifted `.intro-orbit-box` up (`top: clamp(60px, calc(50vh - 290px), 95px)`) to prevent bottom galaxy/bird marks from clipping.
+- **"Your Control" Draggable + Auto-Scrolling List**:
+  - Implemented `AssemblyControlDraggableList` in `frontend/src/components/assembly-control-draggable-list.tsx` supporting pointer drag-to-scroll (`cursor: grab` / `cursor: grabbing`) while preserving continuous smooth upward auto-scrolling.
+  - Reordered homepage sections: Hero -> "Your control" -> FAQ -> Vortex Scene ("Start an investigation") -> Footer.
+  - Removed "Open research workspace (Try It Out)" from Section 3 and "Back to top" button from footer.
+- **Settings Light/Day Mode Styling**:
+  - Scoped light mode styles in `frontend/src/app/chat-design.css` under `html:not(.dark) .assembly-settings-page`:
+    - Clean white background (`#ffffff`) and crisp black text (`#0b0c0e`).
+    - Top header banner styled in warm deep cream (`#e8d1af`) with dark espresso typography.
+    - Saved / secondary action buttons styled in marigold (`#eaa221`) with black text.
+    - Clean high-contrast alert callouts and white cards with subtle borders.
+- **Header Stabilization & Cross-Page Anchor Navigation**:
+  - Fixed header fluctuation/jitter caused by capturing child element scroll events (from the auto-scrolling list); isolated scroll detection strictly to the true app/window container.
+  - Ensured header is solid and steady on `/science` (Idea page).
+  - Updated all navigation links to root-anchored targets (`/#how-it-works`, `/#your-control`, `/#faq`) and added `id="how-it-works"` to Section 2, enabling smooth section jumping from `/science` back to the homepage.
+- **Verification**:
+  - Vitest: 15/15 tests passing.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
+
 ## 2026-11-14 — Placed "How Assembly Works" Directly After Slider in Natural Document Flow
 - **Section 2 Flow & Visibility Fix**:
   - Replaced absolute positioning on the carousel slider with a vertical flex layout inside `.section-stage`: the carousel sits cleanly at the top of Section 2, followed immediately by `.product-headline` containing the `"How Assembly Works"` badge, `"Multi-Agent Consensus"` title, and editorial paragraphs.
@@ -70,6 +96,32 @@
   - Visual proof: [the_idea_behind_shift_left_comparison.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/the_idea_behind_shift_left_comparison.png)
   - [the_idea_behind_shifted_left_stage.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/the_idea_behind_shifted_left_stage.png)
   - Vitest (15/15) and ESLint clean (0 errors, 0 warnings).
+
+## 2026-11-15 — Landing Page Hero Slogan, Draggable List, Settings Light Mode, and Navigation Fixes
+- **Hero Slogan Redesign**:
+  - Replaced "Assembly" headline in Section 1 with the stacked slogan:
+    - Line 1: `[ What happens ]` inside `.headline-box.machines` with metallic gradient border.
+    - Lines 2-4: `when<br />AI questions<br />AI?` in `.headline-plain-text` without border box, flush aligned, marigold (`#eaa221`), and `Schibsted Grotesk` regular font.
+  - Adjusted vertical positioning (`top: clamp(115px, 14vh, 140px)`) to align horizontally with the right-hand brand orb.
+  - Lifted `.intro-orbit-box` up (`top: clamp(60px, calc(50vh - 290px), 95px)`) to prevent bottom galaxy/bird marks from clipping.
+- **"Your Control" Draggable + Auto-Scrolling List**:
+  - Implemented `AssemblyControlDraggableList` in `frontend/src/components/assembly-control-draggable-list.tsx` supporting pointer drag-to-scroll (`cursor: grab` / `cursor: grabbing`) while preserving continuous smooth upward auto-scrolling.
+  - Reordered homepage sections: Hero -> "Your control" -> FAQ -> Vortex Scene ("Start an investigation") -> Footer.
+  - Removed "Open research workspace (Try It Out)" from Section 3 and "Back to top" button from footer.
+- **Settings Light/Day Mode Styling**:
+  - Scoped light mode styles in `frontend/src/app/chat-design.css` under `html:not(.dark) .assembly-settings-page`:
+    - Clean white background (`#ffffff`) and crisp black text (`#0b0c0e`).
+    - Top header banner styled in warm deep cream (`#e8d1af`) with dark espresso typography.
+    - Saved / secondary action buttons styled in marigold (`#eaa221`) with black text.
+    - Clean high-contrast alert callouts and white cards with subtle borders.
+- **Header Stabilization & Cross-Page Anchor Navigation**:
+  - Fixed header fluctuation/jitter caused by capturing child element scroll events (from the auto-scrolling list); isolated scroll detection strictly to the true app/window container.
+  - Ensured header is solid and steady on `/science` (Idea page).
+  - Updated all navigation links to root-anchored targets (`/#how-it-works`, `/#your-control`, `/#faq`) and added `id="how-it-works"` to Section 2, enabling smooth section jumping from `/science` back to the homepage.
+- **Verification**:
+  - Vitest: 15/15 tests passing.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
 
 ## 2026-11-14 — Placed "How Assembly Works" Directly After Slider in Natural Document Flow
 - **Section 2 Flow & Visibility Fix**:

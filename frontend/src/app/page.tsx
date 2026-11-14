@@ -2,37 +2,8 @@ import { LandingHeader } from "@/components/landing-header"
 import { LandingFooter } from "@/components/landing-footer"
 import { AboutHeroSection } from "@/components/about-hero-section"
 import { TextIntroScene } from "@/components/text-intro-scene"
-import {
-  ArrowRight,
-  CheckCircle2,
-  LockKeyhole,
-  MessageSquare,
-  Search,
-  Timer,
-} from "lucide-react"
-
-const controlItems = [
-  {
-    icon: LockKeyhole,
-    title: "Your credentials",
-    description: "Bring your own provider keys. Saved web keys stay in your browser.",
-  },
-  {
-    icon: Timer,
-    title: "Your time",
-    description: "Choose 3, 5, 10, or 15 minutes for the investigation.",
-  },
-  {
-    icon: Search,
-    title: "Your evidence",
-    description: "Review cited sources, confidence, and areas that remain uncertain.",
-  },
-  {
-    icon: MessageSquare,
-    title: "Your history",
-    description: "Return to investigations saved locally on this device.",
-  },
-]
+import { AssemblyControlDraggableList } from "@/components/assembly-control-draggable-list"
+import { ArrowRight } from "lucide-react"
 
 const faqs = [
   {
@@ -93,36 +64,8 @@ export default function LandingPage() {
               </div>
 
               <div className="assembly-control-list-wrapper">
-                <div className="assembly-control-marquee">
-                  <div className="assembly-control-marquee-track">
-                    {[...controlItems, ...controlItems].map((item, idx) => {
-                      const Icon = item.icon
-                      return (
-                        <div
-                          key={idx}
-                          className="assembly-control-item"
-                          aria-hidden={idx >= controlItems.length ? "true" : undefined}
-                        >
-                          <span className="assembly-control-icon">
-                            <Icon className="size-4" />
-                          </span>
-                          <div>
-                            <b>{item.title}</b>
-                            <p>{item.description}</p>
-                          </div>
-                          <CheckCircle2 className="size-4 assembly-control-check" />
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
+                <AssemblyControlDraggableList />
               </div>
-            </div>
-          </section>
-
-          <section id="get-started" className="assembly-section assembly-intro-text-section" aria-label="Assembly intro animation">
-            <div className="assembly-intro-text-stage">
-              <TextIntroScene />
             </div>
           </section>
 
@@ -141,6 +84,12 @@ export default function LandingPage() {
                   <p>{faq.answer}</p>
                 </details>
               ))}
+            </div>
+          </section>
+
+          <section id="get-started" className="assembly-section assembly-intro-text-section" aria-label="Assembly intro animation">
+            <div className="assembly-intro-text-stage">
+              <TextIntroScene />
             </div>
           </section>
 

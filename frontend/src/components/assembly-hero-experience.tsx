@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { BrandOrbsOrbitCanvas } from "./brand-orbs-orbit-canvas";
 import "../app/assembly-hero-experience.css";
@@ -63,30 +62,18 @@ export function AssemblyHeroExperience() {
             <div className="intro-bottom-left rv rv-del-3">
               <div className="intro-unleash">Multi-Agent AI Orchestration Platform</div>
               <div className="headline-boxes">
-                <div className="headline-box machines">Assembly</div>
+                <h1 className="hero-slogan-title">
+                  <span className="headline-box machines">What happens</span>
+                  <span className="headline-plain-text">
+                    when<br />
+                    AI questions<br />
+                    AI?
+                  </span>
+                </h1>
               </div>
               <div className="intro-desc">
                 <p>
-                  Assembly turns one question and a time budget into a temporary team of AI agents. Models reason
-                  independently, cross-examine disagreements through structured debate and live web research, and synthesize
-                  one cited, inspectable answer with clear uncertainty notes. Bring your own free-tier API keys to get
-                  started.
-                </p>
-                <p>
-                  Instead of relying on a single LLM or passive majority voting, Assembly coordinates diverse model families
-                  (Gemini, Llama, Qwen, DeepSeek). Agents formulate hypotheses in total isolation, challenge contradictory
-                  assertions with empirical evidence, and converge mathematically to ensure every finding is thoroughly
-                  verified and transparently cited.
-                </p>
-                <p>
-                  Built around strict client-side privacy and a hard time budget, your API keys never leave your machine.
-                  An automated adversarial circuit breaker actively prevents premature consensus, scoring confidence drift,
-                  evidentiary weight, and residual uncertainty so you receive an audit-ready synthesis you can dissect and verify.
-                </p>
-                <p>
-                  Every investigation preserves a transparent, inspectable audit trail of peer challenges, citation evaluations,
-                  and confidence shifts. You can trace every synthesized conclusion back to its live web sources and underlying
-                  debates, replacing blind single-model trust with verifiable epistemic rigor.
+                  Assembly brings multiple AI agents together to solve your questions independently, challenge conflicting perspectives, and verify evidence. Through collaborative reasoning and intelligent research, it turns diverse insights into one carefully synthesized answer, within a time budget you control.
                 </p>
               </div>
             </div>
@@ -99,7 +86,7 @@ export function AssemblyHeroExperience() {
         </section>
 
         {/* Section 2: Product — Centered Multi-Agent Consensus */}
-        <section id="product" className="assembly-hero-section">
+        <section id="how-it-works" className="assembly-hero-section">
           <div className="section-stage">
             <div className="product-carousel-wrap rv rv-del-1">
               <div
@@ -125,13 +112,16 @@ export function AssemblyHeroExperience() {
               <h2 className="product-title">Multi-Agent Consensus</h2>
               <div className="product-desc">
                 <p>
-                  Set a 3, 5, 10, or 15-minute budget. Agents solve the problem in total isolation before seeing peer outputs, ensuring independent perspectives free from early herd mentality or model bias.
+                  Set a 3, 5, 10, or 15-minute time budget. Assembly immediately mobilizes an ad-hoc ensemble of specialized agents. Each model formulates its hypothesis in complete epistemic isolation before reviewing peer contributions, ensuring independent lines of reasoning that remain completely free from groupthink, prompt priming, or shared single-model bias.
                 </p>
                 <p>
-                  Rather than trusting a single LLM or relying on passive majority voting, diverse model families (Gemini, Llama, Qwen, DeepSeek) are assigned specialized roles: solver, critic, and researcher. Opposing families cross-examine weak assumptions, eliminate hallucinations, and debate unresolved contradictions.
+                  Rather than trusting a single LLM or relying on passive majority voting, Assembly coordinates diverse model architectures (Gemini, Llama, Qwen, DeepSeek) across specialized roles: independent solvers, adversarial critics, and empirical researchers. Opposing model families rigorously cross-examine contradictory claims, expose hidden assumptions, and stress-test every weak assertion.
                 </p>
                 <p>
-                  Live web evidence grounds every factual claim, while an automated consensus engine mathematically evaluates confidence drift and evidentiary weight. You receive one definitive, verifiable answer complete with cited sources and transparent uncertainty notes.
+                  Live web search results ground factual statements in verifiable primary sources, while an automated consensus engine continuously scores agreement rates, evidentiary weight, and confidence drift. If consensus emerges too quickly, an adversarial challenger round triggers to pressure fragile assumptions.
+                </p>
+                <p>
+                  The final synthesizer distills the entire debate into one definitive, audit-ready answer complete with cited sources, dissenting viewpoints, and explicit uncertainty notes — delivering verifiable epistemic rigor within your exact time budget.
                 </p>
               </div>
             </div>
@@ -182,9 +172,6 @@ export function AssemblyHeroExperience() {
                 consensus forms too easily, an adversarial check triggers — synthesizing one verified, sourced answer with
                 transparent uncertainty notes within your strict time budget.
               </p>
-              <Link className="review-cta" href="/chat">
-                Open research workspace (Try It Out)
-              </Link>
             </div>
 
             <div className="reviews-right rv rv-del-3">
@@ -199,10 +186,6 @@ export function AssemblyHeroExperience() {
                 pressures the consensus, forcing models to defend or revise their conclusions.
               </p>
             </div>
-
-            <footer className="reviews-footer">
-              ASSEMBLY · MULTI-AGENT WORKSPACE
-            </footer>
           </div>
         </section>
       </div>

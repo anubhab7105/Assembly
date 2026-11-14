@@ -121,8 +121,9 @@
   color: rgba(255, 255, 255, 0.85) !important;
 }
 
-.assembly-landing-header .assembly-landing-links a:hover {
-  color: #ffffff !important;
+.assembly-landing-header .assembly-landing-links a:hover,
+.assembly-landing-header .assembly-landing-links a.is-active {
+  color: #eaa221 !important;
 }
 
 .assembly-landing-header .assembly-landing-links,
@@ -813,6 +814,33 @@
   height: clamp(280px, 32vw, 310px);
   mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+}
+
+.assembly-control-draggable-viewport {
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: clamp(280px, 32vw, 310px);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.assembly-control-draggable-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.assembly-control-draggable-viewport.is-dragging {
+  cursor: grabbing;
+}
+
+.assembly-control-draggable-track {
+  display: flex;
+  flex-direction: column;
 }
 
 .assembly-control-marquee-track {
@@ -3039,3 +3067,278 @@ html:not(.dark) .assembly-mobile-header {
 html:not(.dark) .assembly-mobile-header .assembly-wordmark {
   color: #17181c;
 }
+
+/* ─── Settings Page in Day / Light Mode (Clean White Surface & Black Typography) ─── */
+html:not(.dark) .assembly-settings-page {
+  background-color: #ffffff !important;
+  color: #0b0c0e !important;
+  background-image: none !important;
+}
+
+/* Header Banner in Light Mode: Warm deep cream background matching user swatch */
+html:not(.dark) .assembly-settings-heading {
+  background: #e8d1af !important;
+  border-bottom: 1px solid #d8bea0 !important;
+}
+
+html:not(.dark) .assembly-settings-heading h1 {
+  color: #17181c !important;
+}
+
+html:not(.dark) .assembly-settings-heading p {
+  color: #4a3f31 !important;
+}
+
+html:not(.dark) .assembly-settings-heading .assembly-settings-add-word {
+  color: #17181c !important;
+}
+
+html:not(.dark) .assembly-settings-heading .assembly-settings-close-btn {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.35) !important;
+}
+
+html:not(.dark) .assembly-settings-heading .assembly-settings-close-btn:hover {
+  background: #18191c !important;
+  color: #ffffff !important;
+  transform: scale(1.06);
+}
+
+html:not(.dark) .assembly-settings-main {
+  color: #0b0c0e !important;
+}
+
+/* Cards */
+html:not(.dark) .assembly-settings-page [data-slot="card"],
+html:not(.dark) .assembly-settings-page .assembly-settings-card {
+  background: #ffffff !important;
+  border: 1px solid #e5e5e0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04) !important;
+  color: #0b0c0e !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-slot="card"]:hover {
+  border-color: #d1d1cc !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06) !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-slot="card-title"] {
+  color: #0b0c0e !important;
+  font-weight: 600;
+}
+
+html:not(.dark) .assembly-settings-page [data-slot="card-description"] {
+  color: #555760 !important;
+}
+
+html:not(.dark) .assembly-settings-page .text-muted-foreground {
+  color: #555760 !important;
+}
+
+html:not(.dark) .assembly-settings-page .text-foreground {
+  color: #0b0c0e !important;
+}
+
+html:not(.dark) .assembly-settings-page p,
+html:not(.dark) .assembly-settings-page li,
+html:not(.dark) .assembly-settings-page ol {
+  color: #27272a !important;
+}
+
+/* Inputs in Settings */
+html:not(.dark) .assembly-settings-page input[type="text"],
+html:not(.dark) .assembly-settings-page input[type="password"] {
+  background: #f8f8f6 !important;
+  border: 1px solid #dcdcd8 !important;
+  color: #0b0c0e !important;
+  border-radius: 10px !important;
+}
+
+html:not(.dark) .assembly-settings-page input[type="text"]:focus,
+html:not(.dark) .assembly-settings-page input[type="password"]:focus {
+  background: #ffffff !important;
+  border-color: #eaa221 !important;
+  box-shadow: 0 0 0 2px rgba(234, 162, 33, 0.2) !important;
+  outline: none !important;
+}
+
+html:not(.dark) .assembly-settings-page input::placeholder {
+  color: #8e9099 !important;
+}
+
+/* Action Buttons in Settings */
+html:not(.dark) .assembly-settings-page [data-slot="button"].bg-primary,
+html:not(.dark) .assembly-settings-page .bg-primary {
+  background-color: #eaa221 !important;
+  color: #000000 !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-slot="button"].bg-primary:hover,
+html:not(.dark) .assembly-settings-page .bg-primary:hover {
+  background-color: #f5a623 !important;
+  box-shadow: 0 2px 10px rgba(234, 162, 33, 0.28) !important;
+}
+
+/* Secondary / Saved Buttons in Light Mode: Marigold (#eaa221) with black text */
+html:not(.dark) .assembly-settings-page [data-slot="button"].bg-secondary,
+html:not(.dark) .assembly-settings-page .bg-secondary,
+html:not(.dark) .assembly-settings-page [data-testid="tavily-save"] {
+  background-color: #eaa221 !important;
+  color: #000000 !important;
+  font-weight: 600 !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 2px 8px rgba(234, 162, 33, 0.22) !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-slot="button"].bg-secondary:hover:not(:disabled),
+html:not(.dark) .assembly-settings-page .bg-secondary:hover:not(:disabled),
+html:not(.dark) .assembly-settings-page [data-testid="tavily-save"]:hover:not(:disabled) {
+  background-color: #f5a623 !important;
+  box-shadow: 0 4px 12px rgba(234, 162, 33, 0.32) !important;
+}
+
+/* Saved state when disabled in Light Mode: Marigold (#eaa221) with black text */
+html:not(.dark) .assembly-settings-page [data-slot="button"].bg-secondary:disabled,
+html:not(.dark) .assembly-settings-page button.bg-secondary:disabled,
+html:not(.dark) .assembly-settings-page [data-testid="tavily-save"]:disabled {
+  background-color: #eaa221 !important;
+  color: #000000 !important;
+  font-weight: 600 !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  opacity: 0.9 !important;
+  cursor: default !important;
+  box-shadow: none !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-slot="button"].border-border,
+html:not(.dark) .assembly-settings-page button[data-variant="outline"] {
+  background-color: #ffffff !important;
+  color: #27272a !important;
+  border: 1px solid #dcdcd8 !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-slot="button"].border-border:hover,
+html:not(.dark) .assembly-settings-page button[data-variant="outline"]:hover {
+  background-color: #f4f4f2 !important;
+  color: #0b0c0e !important;
+  border-color: #cfcfca !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-slot="button"]:disabled:not(.bg-secondary):not([data-testid="tavily-save"]),
+html:not(.dark) .assembly-settings-page button:disabled:not(.bg-secondary):not([data-testid="tavily-save"]) {
+  background-color: #f4f4f2 !important;
+  color: #9ca3af !important;
+  border: 1px solid #e5e5e0 !important;
+}
+
+html:not(.dark) .assembly-settings-page .assembly-trash-btn {
+  color: #9ca3af !important;
+}
+
+html:not(.dark) .assembly-settings-page .assembly-trash-btn:hover:not(:disabled) {
+  color: #dc2626 !important;
+}
+
+/* Badges in Settings */
+html:not(.dark) .assembly-settings-page [data-slot="badge"] {
+  background: #f0f0ec !important;
+  color: #27272a !important;
+  border: 1px solid #dcdcd8 !important;
+}
+
+/* Stepper / Details */
+html:not(.dark) .assembly-settings-page details {
+  background: #fbfbf9 !important;
+  border: 1px solid #e5e5e0 !important;
+}
+
+html:not(.dark) .assembly-settings-page details summary {
+  color: #b45309 !important;
+}
+
+html:not(.dark) .assembly-settings-page details ol {
+  color: #374151 !important;
+}
+
+/* Storage / Vault Card */
+html:not(.dark) .assembly-settings-page .assembly-vault-card {
+  background: #fbfbf9 !important;
+  border: 1px solid #e5e5e0 !important;
+  color: #0b0c0e !important;
+}
+
+/* Server Status Banner in Settings */
+html:not(.dark) .assembly-settings-page [data-testid="server-unreachable-banner"] {
+  background: #fef2f2 !important;
+  border: 1px solid #fecaca !important;
+  color: #991b1b !important;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.06) !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-testid="server-unreachable-banner"] * {
+  color: #991b1b !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-testid="server-unreachable-banner"] button {
+  background: #ffffff !important;
+  border: 1px solid #fca5a5 !important;
+  color: #991b1b !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-testid="server-unreachable-banner"] button:hover {
+  background: #fee2e2 !important;
+}
+
+/* Readiness Callout (Light Mode) */
+html:not(.dark) .assembly-settings-page .assembly-readiness-callout {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
+html:not(.dark) .assembly-settings-page .assembly-readiness-callout span.text-white {
+  color: #0b0c0e !important;
+}
+
+html:not(.dark) .assembly-settings-page .assembly-readiness-callout p.text-white\/75 {
+  color: #374151 !important;
+}
+
+/* Privacy Section in Settings (Light Mode) */
+html:not(.dark) .assembly-settings-page [data-testid="privacy-section"] {
+  background: #ffffff !important;
+  border: 1px solid #e5e5e0 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04) !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-testid="privacy-section"] h3 {
+  color: #0b0c0e !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-testid="privacy-section"] div {
+  background: #fbfbf9 !important;
+  border-color: #e5e5e0 !important;
+  color: #374151 !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-testid="privacy-section"] p,
+html:not(.dark) .assembly-settings-page [data-testid="privacy-section"] li {
+  color: #374151 !important;
+}
+
+html:not(.dark) .assembly-settings-page [data-testid="privacy-section"] li span {
+  color: #b45309 !important;
+}
+
+/* Brand links in Light Mode */
+html:not(.dark) .assembly-settings-page a.text-brand,
+html:not(.dark) .assembly-settings-page button.text-brand {
+  color: #b45309 !important;
+}
+
+html:not(.dark) .assembly-settings-page a.text-brand:hover,
+html:not(.dark) .assembly-settings-page button.text-brand:hover {
+  color: #92400e !important;
+}
+
