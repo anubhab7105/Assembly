@@ -1,3 +1,11 @@
+## 2026-11-13 — Playwright suite green (was 14 failing)
+
+- The CI browser job failed with 14 of 22 tests red. Three causes were app bugs, the rest were specs pinned to UI this branch replaced:
+- App fix — offline status was dropped when the shell was rewritten: `layout-wrapper.tsx` renders a persistent `role="status"` live region plus a `data-testid="offline-banner"` notice, now outside the chrome so the landing and references pages announce connectivity too.
+- App fix — the fixed cookie notice covered the composer, so the Models pill and Send button were unclickable until the visitor dismissed the banner. `minimal.css` adds bottom padding to `.mn-chat-main` while the notice is on screen (deeper on small screens).
+- Spec updates, all following deliberate UI changes rather than relaxing assertions: landing theme-toggle clicks became "dark-only landing has no toggle and keeps `color-scheme: dark` under a light system theme"; "New Investigation" (mobile menu) became the sidebar "New chat"; the history test now checks the sidebar Export plus the Import control on `/history`; the attachment chip checks the 1 KB size instead of the removed `TXT` badge; key-test results match `/valid/i` (the UI capitalises "Valid"); the send button is "Start run".
+- Verification: `npx playwright test` 22/22 passed on two consecutive runs; `eslint`/`tsc` clean; vitest 149/149; storage 15/15; CSP and audit gates pass; `next build` succeeds. `npm run audit:high` was not run here (needs npm registry access).
+
 ## 2026-11-13 — Full check: three real test failures fixed
 
 - `tests/test_attachments.py` errored on Windows (2 errors, 0 test failures) with `ValueError: the environment variable is longer than 32767 characters`. The oversized-content case parametrized a 5 MB payload, and pytest embeds the generated id in `PYTEST_CURRENT_TEST`. Gave the eight cases explicit short ids; the assertions are unchanged. Also cleared the file's five pre-existing ruff findings.

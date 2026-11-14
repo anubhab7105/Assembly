@@ -305,7 +305,6 @@ function AppSidebar({ pathname }: { pathname: string }) {
 
 function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/"
-  const isOffline = useOfflineStatus()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const menuTriggerRef = React.useRef<HTMLButtonElement>(null)
   const menuCloseRef = React.useRef<HTMLButtonElement>(null)
@@ -354,13 +353,6 @@ function AppChrome({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          {isOffline && (
-            <div className="mx-auto mt-3 flex w-[min(1240px,calc(100%-32px))] items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-center text-sm font-medium text-danger">
-              <WifiOff className="size-4" aria-hidden />
-              {OFFLINE_MESSAGE}
-            </div>
-          )}
-
           <div className="cin-app-body flex-1">{children}</div>
         </div>
       </div>
@@ -397,6 +389,9 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   // The references page is a standalone document with its own top bar, so it
   // renders outside the workspace chrome instead of inside the app sidebar.
   const isStandalonePage = isLandingPage || pathname.startsWith("/references")
+  // Connectivity is announced on every page, including the standalone ones
+  // that render outside the workspace chrome.
+  const isOffline = useOfflineStatus()
 
   return (
     <ToastProvider>
@@ -406,6 +401,21 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       >
         Skip to content
       </a>
+      {/* Polite live region: empty online, announced when connectivity changes. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {isOffline ? OFFLINE_MESSAGE : ""}
+      </div>
+
+      {isOffline && (
+        <div
+          data-testid="offline-banner"
+          className="fixed inset-x-0 top-0 z-100 flex items-center justify-center gap-2 border-b border-danger/30 bg-danger/10 px-4 py-2 text-center text-sm font-medium text-danger backdrop-blur"
+        >
+          <WifiOff className="size-4" aria-hidden />
+          {OFFLINE_MESSAGE}
+        </div>
+      )}
+
       <div className="cin-app">
         {isStandalonePage ? children : <AppChrome>{children}</AppChrome>}
       </div>

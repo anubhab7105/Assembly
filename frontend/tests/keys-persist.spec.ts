@@ -34,7 +34,7 @@ async function saveKey(page: Page, provider: string, key: string) {
   const card = page.getByTestId(`provider-card-${provider}`)
   await card.locator('input[type="password"]').fill(key)
   await card.getByRole("button", { name: /Save & Test/i }).click()
-  await expect(card.getByTestId(`test-result-${provider}`)).toContainText("valid", { timeout: 10000 })
+  await expect(card.getByTestId(`test-result-${provider}`)).toContainText(/valid/i, { timeout: 10000 })
 }
 
 test.describe("Keys survive refresh (P0)", () => {
@@ -134,7 +134,7 @@ test.describe("Keys survive refresh (P0)", () => {
     const groqCard = page.getByTestId("provider-card-groq")
     await groqCard.locator('input[type="password"]').fill("gsk-CANARY-PERSIST-GROQ-02")
     await groqCard.getByRole("button", { name: /Save & Test/i }).click()
-    await expect(groqCard.getByTestId("test-result-groq")).toContainText("valid", { timeout: 10000 })
+    await expect(groqCard.getByTestId("test-result-groq")).toContainText(/valid/i, { timeout: 10000 })
 
     await page.reload()
     await expect(page.getByTestId("readiness-chip")).toContainText("1 families ready", { timeout: 10000 })
@@ -188,7 +188,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page.getByTestId("picker-gate-chip")).toContainText("2 families ready", { timeout: 10000 })
     await page.getByRole("button", { name: /Done/i }).click()
     await page.locator("#research-question").fill("Does the picker agree with the run?")
-    await page.getByRole("button", { name: /^Run$/i }).click()
+    await page.getByRole("button", { name: /Start run/i }).click()
     await expect(page).toHaveURL(/\/executions\?id=local-.+/, { timeout: 15000 })
 
     expect(preflightBody).not.toBeNull()

@@ -62,7 +62,8 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await page.goto("/")
     await expect(page.locator("html")).toHaveClass(/dark/)
     await expect(page.locator("head #assembly-theme-bootstrap")).toHaveAttribute("src", "/theme-bootstrap.js")
-    await expect(page.getByRole("button", { name: "Switch to light mode" }).first()).toBeVisible()
+    // The landing page is dark-only, so it exposes no theme control at all.
+    await expect(page.getByRole("button", { name: /Switch to (light|dark) mode/ })).toHaveCount(0)
 
     const themeToggles = await page.evaluate(() =>
       (window as unknown as { __assemblyThemeToggles: boolean[] }).__assemblyThemeToggles,
@@ -78,24 +79,24 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.locator("head #assembly-theme-bootstrap")).toHaveCount(1)
   })
 
-  test("landing page explains the research workflow and remembers the chosen theme", async ({ page }) => {
+  test("landing page explains the research workflow and stays dark in a light system theme", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "light" })
     await page.goto("/")
     await expect(page.getByRole("heading", { name: /convene many minds/i })).toBeVisible()
     await expect(page.getByRole("link", { name: "Launch the Assembly app" })).toHaveAttribute("href", "/chat")
 
-    const themeToggle = page.getByRole("button", { name: "Switch to dark mode" })
-    await themeToggle.click()
-    await expect(page.locator("html")).toHaveClass(/dark/)
-    await expect(page.getByRole("button", { name: "Switch to light mode" })).toBeVisible()
+    // Dark-only: the landing has no theme control and keeps its dark palette
+    // even when the operating system asks for light.
+    await expect(page.getByRole("button", { name: /Switch to (light|dark) mode/ })).toHaveCount(0)
+    await expect(page.locator(".cin-landing")).toHaveCSS("color-scheme", "dark")
 
     await page.getByRole("link", { name: "Start an investigation" }).first().click()
     await expect(page).toHaveURL(/\/chat$/)
-    await expect(page.locator("html")).toHaveClass(/dark/)
   })
 
   test("New Investigation opens the composer, not the landing page", async ({ page }) => {
     await page.goto("/executions")
-    await page.getByRole("button", { name: /New Investigation/i }).click()
+    await page.getByRole("button", { name: /New chat/i }).click()
     await expect(page).toHaveURL(/\/chat$/)
     await expect(page.locator("#research-question")).toBeVisible()
   })
@@ -122,7 +123,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
       const card = page.getByTestId(`provider-card-${provider}`)
       await card.locator('input[type="password"]').fill(CANARY_KEY)
       await card.getByRole("button", { name: /Test Saved Key|Save & Test/i }).click()
-      await expect(card.getByTestId(`test-result-${provider}`)).toContainText("valid", {
+      await expect(card.getByTestId(`test-result-${provider}`)).toContainText(/valid/i, {
         timeout: 10000,
       })
     }
@@ -157,7 +158,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await page.getByRole("button", { name: /Done/i }).click()
 
     await page.locator("#research-question").fill("Will quantum computing win?")
-    await page.getByRole("button", { name: /^Run$/i }).click()
+    await page.getByRole("button", { name: /Start run/i }).click()
     await expect(page).toHaveURL(/\/executions\?id=local-.+/)
     await expect(page.getByRole("heading", { name: /Research Team/i })).toBeVisible()
     // N-04: chip carries the capped server label, not a default.
@@ -168,9 +169,14 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
   test("3. History export/import round-trips without server storage", async ({ page }) => {
     await page.goto("/chat")
-    await expect(page.getByText(/History \(this device\)/i)).toBeVisible()
-    await expect(page.getByRole("button", { name: /Export/i })).toBeVisible()
-    await expect(page.getByText(/Import/i)).toBeVisible()
+    // The workspace sidebar exports the local run history as JSON. A cold dev
+    // compile can lag the first paint, so allow for that.
+    await expect(page.getByRole("button", { name: "Export" })).toBeVisible({ timeout: 15000 })
+
+    // Import lives with the full history list, not in the composer.
+    await page.goto("/history")
+    await expect(page.getByLabel("Import Assembly history JSON")).toHaveCount(1)
+    await expect(page.getByRole("button", { name: /^Import/ }).first()).toBeVisible()
   })
 
 
@@ -187,7 +193,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     })
 
     await expect(page.locator('[aria-label="Selected attachments"]')).toContainText("analysis-notes.txt")
-    await expect(page.locator('[aria-label="Selected attachments"]')).toContainText("TXT")
+    await expect(page.locator('[aria-label="Selected attachments"]')).toContainText("1 KB")
     const remove = page.getByRole("button", { name: "Remove analysis-notes.txt" })
     await expect(remove).toBeVisible()
     await remove.click()

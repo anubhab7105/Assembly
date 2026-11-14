@@ -166,6 +166,18 @@
   flex-direction: column;
 }
 
+/* The cookie notice is fixed to the viewport bottom; keep the composer and
+   its controls clickable while it is on screen. */
+body:has([aria-label="Cookie notice"]) .mn-chat-main {
+  padding-bottom: 104px;
+}
+
+@media (max-width: 640px) {
+  body:has([aria-label="Cookie notice"]) .mn-chat-main {
+    padding-bottom: 160px;
+  }
+}
+
 .mn-chat-main {
   display: flex;
   flex: 1;
