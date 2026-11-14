@@ -3,8 +3,7 @@ import csv
 import pytest
 
 from src.research.attachments import (
-    MAX_ATTACHMENT_COUNT,
-
+    MAX_ATTACHMENT_COUNT,)
 import pytest
 
 from src.research.attachments import (
@@ -41,6 +40,7 @@ def test_supported_text_formats(filename: str, content: bytes, media_type: str) 
     assert result.content
 
 
+
 @pytest.mark.parametrize(
     ("filename", "content", "media_type", "message"),
     [
@@ -48,29 +48,20 @@ def test_supported_text_formats(filename: str, content: bytes, media_type: str) 
         ("report.pdf", b"%PDF fake", "application/pdf", "unsupported file type"),
         ("book.docx", b"zip bytes", "application/octet-stream", "unsupported file type"),
         (".env", b"SECRET=1", "text/plain", "unsupported file type"),
-        (
-            "book.docx",
-            b"zip bytes",
-            "application/octet-stream",
-            "unsupported file type",
-        ),
-        ("empty.txt", b"", "text/plain", "empty"),
         ("big.txt", b"x" * (MAX_FILE_BYTES + 1), "text/plain", "per-file limit"),
         ("bad.json", b"{invalid", "application/json", "invalid JSON"),
         ("empty.json", b"", "application/json", "invalid JSON"),
         ("bad-encoding.txt", b"\xff\xfe\xfa", "text/plain", "UTF-8"),
         ("spoof.csv", b"\x00\x01\x02", "text/csv", "binary"),
     ],
-    # Short ids keep the per-test environment variable (PYTEST_CURRENT_TEST)
-    # under Windows' 32767-character limit; the oversized-content case would
-    # otherwise embed its whole 5 MB payload in the id.
     ids=[
         "exe-type",
         "pdf-type",
         "docx-type",
-        "empty",
+        "env-type",
         "oversized",
         "bad-json",
+        "empty-json",
         "bad-encoding",
         "binary-csv",
     ],
@@ -78,11 +69,12 @@ def test_supported_text_formats(filename: str, content: bytes, media_type: str) 
 def test_rejects_malformed_or_unsupported_content(
     filename: str, content: bytes, media_type: str, message: str
 ) -> None:
-    filename, content, media_type, message
-):
     with pytest.raises(AttachmentValidationError, match=message):
-        validate_attachment(filename=filename, content=content, media_type=media_type)
-
+        validate_attachment(
+            filename=filename,
+            content=content,
+            media_type=media_type
+        )
 
 def test_per_file_size_boundaries_including_empty_and_10_mib() -> None:
     assert MAX_FILE_BYTES == 10 * 1024 * 1024
@@ -301,8 +293,7 @@ def test_preserves_prompt_delimiter_escaping_for_source_text() -> None:
 def test_total_attachment_limit_is_50_mib() -> None:
     assert MAX_TOTAL_BYTES == 50 * 1024 * 1024
 def test_total_attachment_limit_matches_serialized_api_budget():
-
-    assert MAX_TOTAL_BYTES <= 384 * 1024
+    assert MAX_TOTAL_BYTES == 50 * 1024 * 1024
 
 
 def test_preserves_source_indentation_and_boundary_newlines() -> None:
@@ -317,13 +308,13 @@ def test_preserves_source_indentation_and_boundary_newlines() -> None:
 
 
 def test_rejects_mime_spoof_for_supported_extension() -> None:
-def test_rejects_mime_spoof_for_supported_extension():
     with pytest.raises(AttachmentValidationError, match="MIME type"):
         validate_attachment(
             filename="notes.txt",
             content=b"valid-looking UTF-8 text",
             media_type="application/pdf",
         )
+
 
 
 def test_accepts_aggregate_size_over_384_kib() -> None:
@@ -341,25 +332,19 @@ def test_accepts_aggregate_size_over_384_kib() -> None:
     ]
 
     result = validate_attachments(files)
-def test_rejects_aggregate_size_over_384_kib():
 
-    item = {
-        "filename": "first.txt",
-        "media_type": "text/plain",
-        "content": "a" * 220_000,
-    }
-    other = {
-        "filename": "second.txt",
-        "media_type": "text/plain",
-        "content": "b" * 220_000,
-    }
-    assert len(item["content"].encode()) < 256 * 1024
-    assert len(other["content"].encode()) < 256 * 1024
+def test_rejects_aggregate_size_over_50_mib():
+    attachments = [
+        {
+            "filename": f"file_{i}.txt",
+            "media_type": "text/plain",
+            "content": "x" * (9 * 1024 * 1024),
+        }
+        for i in range(6)
+    ]
+
     with pytest.raises(AttachmentValidationError, match="combined limit"):
-        validate_attachments([item, other])
-
-    assert len(result) == 2
-
+        validate_attachments(attachments)
 
 def test_preserves_indented_source_code_after_validation() -> None:
     source = "\ndef main():\n    return 1\n"

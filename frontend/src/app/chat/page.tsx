@@ -16,9 +16,7 @@ import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
   estimateAttachmentContextChars,
   MAX_ATTACHMENT_CONTEXT_CHARS,
-  MAX_ATTACHMENT_COUNT,
   SUPPORTED_ATTACHMENT_EXTENSIONS,
-  type DraftAttachment,
   validateAttachmentBatch,
 } from "@/lib/attachments"
 import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
@@ -27,7 +25,7 @@ import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Zap, Send, Settings, Clock, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
+import { ArrowUp, Send, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
@@ -36,7 +34,6 @@ const EXAMPLES = [
   { label: "EV battery chemistry", question: "Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?" },
 ]
 
-const TIME_BUDGETS = [3, 5, 10, 15]
 const TIME_BUDGETS = [3, 5, 10, 15] as const
 const BUDGET_COPY: Record<(typeof TIME_BUDGETS)[number], string> = {
   3: "Quick",
@@ -44,14 +41,6 @@ const BUDGET_COPY: Record<(typeof TIME_BUDGETS)[number], string> = {
   10: "Thorough",
   15: "Deep dive",
 }
-const MAX_ATTACHMENTS = 5
-const MAX_FILE_BYTES = 256 * 1024
-const MAX_TOTAL_BYTES = 384 * 1024
-const SUPPORTED_EXTENSIONS = new Set([
-  "txt", "md", "csv", "json", "log", "py", "js", "jsx", "ts", "tsx",
-  "html", "css", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml",
-  "sql", "sh", "ps1", "bat", "env.example",
-])
 
 type DraftAttachment = {
   id: string
@@ -561,9 +550,6 @@ export default function Home() {
                       disabled={loading}
                       onClick={() => handleRemoveAttachment(attachment.id)}
                       className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                      onClick={() =>
-                        setAttachments((current) => current.filter((item) => item.id !== attachment.id))
-                      }
                     >
                       <X className="size-3.5" aria-hidden />
                     </button>
@@ -613,7 +599,7 @@ export default function Home() {
                     disabled={loading}
                     onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
                   />
-                  <button
+                  <Button
                     type="button"
                     variant="outline"
                     size="sm"
@@ -621,10 +607,10 @@ export default function Home() {
                     disabled={loading}
                     onClick={() => fileInputRef.current?.click()}
                     aria-label="Attach files"
-                    title={`Attach up to ${MAX_ATTACHMENTS} files`}
+                    title="Attach files"
                   >
                     <Paperclip className="size-[18px]" aria-hidden />
-                  </button>
+                  </Button>
                   <button
                     type="button"
                     className="mn-pill"

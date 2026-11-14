@@ -450,24 +450,19 @@ def test_run_rejects_oversized_attachment_before_creating_run(web_mode):
 
     run_count = len(run_mod._runs)
     res = TestClient(app).post(
-        "/api/run",
-        json={
-            "question": "Analyze file",
-            "time_budget_minutes": 3,
-            "attachments": [{
+    "/api/run",
+    json={
+        "question": "Analyze file",
+        "time_budget_minutes": 3,
+        "attachments": [
+            {
                 "filename": "big.txt",
                 "media_type": "text/plain",
                 "content": "x" * (MAX_FILE_BYTES + 1),
-            }],
-            "attachments": [
-                {
-                    "filename": "big.txt",
-                    "media_type": "text/plain",
-                    "content": "x" * (256 * 1024 + 1),
-                }
-            ],
-        },
-    )
+            }
+        ],
+    },
+)
     assert res.status_code == 422
     assert "per-file limit" in res.json()["detail"].lower()
     assert len(run_mod._runs) == run_count
@@ -497,10 +492,6 @@ def test_run_rejects_combined_over_50_mib_before_creating_run(web_mode):
 
 
 def test_run_accepts_empty_and_more_than_five_attachments_within_50_mib(web_mode, monkeypatch):
-def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(
-    web_mode, monkeypatch, caplog
-):
-    """The uploaded text becomes prompt context, not response/log metadata."""
     import src.orchestration.orchestrator as orch_mod
     from src.main import app
     from src.orchestration.orchestrator import ExecutionResult
