@@ -1,3 +1,15 @@
+## 2026-11-15 — CI Playwright Test Suite Fixes (Issue #106 / PR #109)
+- **Resolved Playwright Test Failures in CI**:
+  - **Keys Persistence Strict Mode Violation**: Removed duplicate `data-testid="readiness-chip"` from the decorative hidden span in `frontend/src/components/keys-manager.tsx`, restoring single-element resolution for all 9 `tests/keys-persist.spec.ts` tests.
+  - **Chat Status Accessibility Target**: Added `id="question-status"` to `ChatStatusMessage` in `frontend/src/components/chat-status-message.tsx` matching `aria-describedby="question-status"`, satisfying `tests/e2e.spec.ts` validation error tests.
+  - **Sidebar Export Accessible Name**: Updated sidebar export button to `aria-label="Export" title="Export history"` in `frontend/src/components/layout-wrapper.tsx`, satisfying exact accessible name matching in `tests/e2e.spec.ts:179`.
+  - **Landing Page E2E Alignment**: Added `cin-landing` class to `frontend/src/app/page.tsx`, ensured `.assembly-landing-actions` (`Start an investigation`) remains clickable without requiring scroll, and updated `tests/e2e.spec.ts` heading match to support the new hero slogan.
+- **Verification**:
+  - Vitest: 41/41 unit tests passing across all suites.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
+  - Next.js Production Build: 18/18 static routes compiled successfully.
+
 ## 2026-11-15 — Landing Page Hero Slogan, Draggable List, Settings Light Mode, and Navigation Fixes
 - **Hero Slogan Redesign**:
   - Replaced "Assembly" headline in Section 1 with the stacked slogan:
@@ -96,6 +108,18 @@
   - Visual proof: [the_idea_behind_shift_left_comparison.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/the_idea_behind_shift_left_comparison.png)
   - [the_idea_behind_shifted_left_stage.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/the_idea_behind_shifted_left_stage.png)
   - Vitest (15/15) and ESLint clean (0 errors, 0 warnings).
+
+## 2026-11-15 — CI Playwright Test Suite Fixes (Issue #106 / PR #109)
+- **Resolved Playwright Test Failures in CI**:
+  - **Keys Persistence Strict Mode Violation**: Removed duplicate `data-testid="readiness-chip"` from the decorative hidden span in `frontend/src/components/keys-manager.tsx`, restoring single-element resolution for all 9 `tests/keys-persist.spec.ts` tests.
+  - **Chat Status Accessibility Target**: Added `id="question-status"` to `ChatStatusMessage` in `frontend/src/components/chat-status-message.tsx` matching `aria-describedby="question-status"`, satisfying `tests/e2e.spec.ts` validation error tests.
+  - **Sidebar Export Accessible Name**: Updated sidebar export button to `aria-label="Export" title="Export history"` in `frontend/src/components/layout-wrapper.tsx`, satisfying exact accessible name matching in `tests/e2e.spec.ts:179`.
+  - **Landing Page E2E Alignment**: Added `cin-landing` class to `frontend/src/app/page.tsx`, ensured `.assembly-landing-actions` (`Start an investigation`) remains clickable without requiring scroll, and updated `tests/e2e.spec.ts` heading match to support the new hero slogan.
+- **Verification**:
+  - Vitest: 41/41 unit tests passing across all suites.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
+  - Next.js Production Build: 18/18 static routes compiled successfully.
 
 ## 2026-11-15 — Landing Page Hero Slogan, Draggable List, Settings Light Mode, and Navigation Fixes
 - **Hero Slogan Redesign**:

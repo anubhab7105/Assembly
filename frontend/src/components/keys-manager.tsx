@@ -640,7 +640,7 @@ export function KeysManager() {
                   <span className="text-xs font-semibold uppercase tracking-wider text-white">
                     Team Readiness
                   </span>
-                  <span data-testid="readiness-chip" className="sr-only">
+                  <span className="sr-only">
                     {gateChipText(gate)}
                   </span>
                 </div>

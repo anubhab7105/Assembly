@@ -126,8 +126,7 @@
   color: #eaa221 !important;
 }
 
-.assembly-landing-header .assembly-landing-links,
-.assembly-landing-header .assembly-landing-actions {
+.assembly-landing-header .assembly-landing-links {
   opacity: 0;
   transform: translateY(-8px);
   pointer-events: none;
@@ -135,8 +134,13 @@
               transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.assembly-landing-header.is-scrolled .assembly-landing-links,
-.assembly-landing-header.is-scrolled .assembly-landing-actions {
+.assembly-landing-header.is-scrolled .assembly-landing-links {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.assembly-landing-header .assembly-landing-actions {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;

@@ -144,14 +144,11 @@ export function LandingHeader() {
         </Link>
       </nav>
 
-      <div
-        className="assembly-landing-actions"
-        aria-hidden={!isHeaderSolid}
-      >
+      <div className="assembly-landing-actions">
         <Link
           href="/chat"
           className="assembly-nav-cta"
-          tabIndex={isHeaderSolid ? 0 : -1}
+          tabIndex={0}
         >
           Start an investigation
           <ArrowUpRight className="size-4" />

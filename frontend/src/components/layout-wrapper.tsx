@@ -261,7 +261,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             </Link>
             <button
               type="button"
-              aria-label="Export history"
+              aria-label="Export"
               title="Export history"
               onClick={handleExport}
               className="assembly-sidebar-icon-btn"

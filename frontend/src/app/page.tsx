@@ -34,7 +34,7 @@ const schema = {
 
 export default function LandingPage() {
   return (
-    <div className="assembly-landing-page">
+    <div className="assembly-landing-page cin-landing">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
