@@ -556,7 +556,6 @@ export default function Home() {
             )}
 
             <div
-              data-testid="diversity-chip"
               data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
               className="mn-meta"
               aria-live="polite"
@@ -820,15 +819,17 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      {showPrivacy && (
-        <PrivacyDialog
-          mode={appMode}
-          providers={catalogNotes.filter((p) =>
-            enabledIds.length > 0 ? enabledIds.includes(p.id) : true,
-          )}
-          onAcknowledge={() => void handleAcknowledge()}
-        />
-      )}
-    </div>
+      {
+        showPrivacy && (
+          <PrivacyDialog
+            mode={appMode}
+            providers={catalogNotes.filter((p) =>
+              enabledIds.length > 0 ? enabledIds.includes(p.id) : true,
+            )}
+            onAcknowledge={() => void handleAcknowledge()}
+          />
+        )
+      }
+    </div >
   )
 }

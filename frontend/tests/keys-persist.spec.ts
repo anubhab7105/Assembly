@@ -103,7 +103,7 @@ test.describe("Keys survive refresh (P0)", () => {
   test("4. navigate away and back without losing configuration", async ({ page }) => {
     await page.goto("/settings")
     await saveKey(page, "groq", CANARY_GROQ)
-    await page.locator('a[href="/"]').first().click()
+    await page.getByRole("link", { name: "Assembly home" }).click()
     await expect(page).toHaveURL(/\/$/)
     await page.locator('a[href="/chat"]:visible').first().click()
     await expect(page).toHaveURL(/\/chat/)

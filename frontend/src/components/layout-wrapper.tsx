@@ -1,5 +1,5 @@
 "use client"
-import { importHistoryFile } from "@/lib/history-import"
+
 import React, { useState, useEffect, useSyncExternalStore, Suspense } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -12,7 +12,6 @@ import {
   X,
   WifiOff,
   Trash2,
-  Upload,
   Download,
   SquarePen,
   SlidersHorizontal,
@@ -64,8 +63,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
   const [records, setRecords] = useState<HistoryRecord[]>([])
   const [search, setSearch] = useState("")
-  const importInputRef = React.useRef<HTMLInputElement>(null)
-  const [importing, setImporting] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -116,39 +113,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       })
     }
   }
-  const handleImport = async (file: File, input: HTMLInputElement) => {
-    if (importing) return
-
-    setImporting(true)
-
-    try {
-      await importHistoryFile(file, (text) => storage.importJSON(text))
-
-      const items = await storage.listHistory()
-      setRecords(items.slice(0, 12))
-
-      toast({
-        title: "Import complete",
-        description: "History and usage were imported successfully.",
-        variant: "success",
-      })
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Couldn't import this file. Check that it is a valid Assembly history export and try again."
-
-      toast({
-        title: "History import failed",
-        description: message,
-        variant: "danger",
-        duration: 7000,
-      })
-    } finally {
-      input.value = ""
-      setImporting(false)
-    }
-  }
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault()
@@ -189,7 +153,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           href="/"
           className="mn-brand"
           aria-label="Assembly home"
-          onClick={onClose}
         >
           <BrandOrbMark />
           <span>Assembly</span>
@@ -280,29 +243,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           <Download aria-hidden />
           <span>Export</span>
         </button>
-
-        <button
-          type="button"
-          className="mn-nav-link"
-          disabled={importing}
-          onClick={() => importInputRef.current?.click()}
-        >
-          <Upload aria-hidden />
-          <span>{importing ? "Importing..." : "Import"}</span>
-        </button>
-
-        <input
-          ref={importInputRef}
-          type="file"
-          accept="application/json,.json"
-          aria-label="Import Assembly history JSON"
-          className="hidden"
-          onChange={(e) => {
-            const input = e.currentTarget
-            const file = input.files?.[0]
-            if (file) void handleImport(file, input)
-          }}
-        />
 
         <p className="mn-key-note">
           <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
@@ -603,12 +543,9 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          <main
-            id="main-content"
-            className="flex-1 overflow-y-auto overflow-x-hidden relative"
-          >
+          <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
             {children}
-          </main>
+          </div>
         </div>
       </div>
     </ToastProvider>
