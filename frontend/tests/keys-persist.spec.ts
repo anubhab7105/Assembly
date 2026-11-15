@@ -105,7 +105,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await saveKey(page, "groq", CANARY_GROQ)
     await page.locator('a[href="/"]').first().click()
     await expect(page).toHaveURL(/\/$/)
-    await page.locator('a[href="/chat"]').first().click()
+    await page.locator('a[href="/chat"]:visible').first().click()
     await expect(page).toHaveURL(/\/chat/)
     // First visit shows the blocking privacy dialog: wait for it, then
     // acknowledge before using sidebar navigation.
@@ -178,7 +178,7 @@ test.describe("Keys survive refresh (P0)", () => {
 
     await page.reload()
     await page.locator('a[href="/"]').first().click()
-    await page.locator('a[href="/chat"]').first().click()
+    await page.locator('a[href="/chat"]:visible').first().click()
     await expect(page.getByTestId("diversity-chip")).toContainText("gpt-oss", { timeout: 10000 })
 
     await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })

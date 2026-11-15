@@ -74,11 +74,6 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/#how-it-works" className="assembly-rich-footer-link">
-                  Cross-Examination
-                </Link>
-              </li>
-              <li>
                 <Link href="/#your-control" className="assembly-rich-footer-link">
                   Diversity Gate (7 Families)
                 </Link>
@@ -113,11 +108,6 @@ export function LandingFooter() {
               <li>
                 <Link href="/cookies" className="assembly-rich-footer-link">
                   Cookie Policy
-                </Link>
-              </li>
-              <li>
-                <Link href="/refunds" className="assembly-rich-footer-link">
-                  Refunds Policy
                 </Link>
               </li>
               <li>

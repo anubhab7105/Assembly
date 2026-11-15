@@ -1,3 +1,21 @@
+## 2026-11-15 — Refine Hero CTA, Single-Open FAQ, and Trust & Legal Editorial Redesign
+- **Refined Landing Hero & Header**:
+  - Added primary "Start an investigation ↗" CTA button directly inside the black hero card with 29px top margin.
+  - Pinned the Assembly logo to the extreme left and navigation items to the extreme right in full-width site headers.
+  - Smoothly revealed the floating frosted glass navbar on scroll while hiding the header actions at scrollTop = 0 with `visibility: hidden`.
+- **Single-Open FAQ Accordion**:
+  - Implemented `LandingFaqAccordion` component to automatically close open FAQ items whenever another item is toggled.
+- **Trust & Legal Redesign (`LegalPageLayout`)**:
+  - Expanded narrow 768px layout to a full-width editorial layout (`max-w-6xl`) across `/privacy`, `/terms`, `/cookies`, and `/refunds`.
+  - Removed app sidebar and mobile chat chrome on public document pages.
+  - Replaced plain headings with Georgia serif italic headings in brand marigold (`#eaa221`).
+  - Removed redundant index badges, metadata lines, and cross-navigation bars, keeping clean link targets inside `LandingFooter`.
+- **Verification**:
+  - Vitest: 15/15 unit tests passing.
+  - Playwright: 22/22 tests passing (`keys-persist.spec.ts` 9/9, `e2e.spec.ts` 13/13).
+  - ESLint: 0 errors, 0 warnings.
+  - Next.js Production Build: 18/18 static routes compiled successfully.
+
 ## 2026-11-15 — Fix CodeRabbit Major/Minor Reviews & Playwright CI Stalls (PR #109)
 - **Resolved CodeRabbit Major & Minor Review Findings**:
   - **Major 1 (CSP Three.js Origin)**: Avoided external `unpkg.com` script in `orb-gallery.ts`. Downloaded and pinned Three.js to `frontend/public/vendor/three.min.js`, satisfying `'self'` in deployed CSP. Added `public/vendor/**` to ESLint global ignores.
