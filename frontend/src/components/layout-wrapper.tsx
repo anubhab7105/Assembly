@@ -97,7 +97,9 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
     setExecutions((prev) => prev.filter((x) => x.id !== id))
     window.dispatchEvent(new CustomEvent("assembly:history-change"))
     toast({ title: "Deleted", description: "Execution removed from history." })
-    if (pathname === `/executions` && searchParams?.get("id") === id) {
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname
+    const currentSearch = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : searchParams
+    if (currentPath === `/executions` && currentSearch?.get("id") === id) {
       router.push("/chat")
       if (onClose) onClose()
     }
@@ -166,7 +168,17 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           <BrandOrbMark className="assembly-wordmark-mark--sidebar" style={{ width: "32px", height: "32px" }} />
           <span>ssembly</span>
         </Link>
-        <Button variant="default" className="assembly-new-investigation w-full justify-start" onClick={() => { router.push("/chat"); if (onClose) onClose() }}>
+        <Button
+          variant="default"
+          className="assembly-new-investigation w-full justify-start"
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("assembly:new-chat"))
+            }
+            router.push("/chat")
+            if (onClose) onClose()
+          }}
+        >
           <Plus className="size-4 mr-2" />
           New chat
         </Button>

@@ -690,7 +690,7 @@ export function KeysManager() {
                 <Trash2 className="size-4" />
               </button>
             </div>
-            <p className="sr-only">
+            <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
               <Shield className="size-3 shrink-0" />
               {desktopMode
                 ? "Stored in this WebView browser profile; a saved Tavily key is sent to the local Assembly backend over loopback with every run request, even when search is not used."

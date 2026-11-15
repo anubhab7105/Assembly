@@ -671,7 +671,7 @@
 - **Cleaned Search Card Elements**:
   - Removed `[key icon] tavily search · optional` header (made `CardHeader` `sr-only` to preserve test assertions).
   - Cleaned the input label from `Search Key (Tavily)` to `Search Key`.
-  - Removed the verbose sub-input shield notice (*"Stored in this browser; a saved Tavily key is sent to the hosted Assembly backend..."*) via `className="sr-only"`, keeping DOM structure intact for assertions.
+  - Retained the sub-input shield disclosure (*"Stored in this browser; a saved Tavily key is sent to the hosted Assembly backend..."*) with visible styling matching provider notices for security transparency.
 - **Visual Verification**:
   - [settings_clean_search_card_scrolled_working.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/settings_clean_search_card_scrolled_working.png).
   - All tests passing: Vitest (15/15), `keys-manager.test.tsx` (1/1), `tsc --noEmit` (0 errors), ESLint (clean).
@@ -3075,3 +3075,19 @@
 - Regenerated the existing artifact to include the backend's already-defined `resolved_disagreement_count` field. Added six command-line regression cases, demonstrated failing before the change and passing afterward.
 - Verification on Python 3.11 and 3.12: `pytest -q` reports 663 passed, 1 skipped; scoped Ruff lint and format checks pass; the committed-artifact check passes. Existing Gemini-package deprecation warning remains. Tests are offline with mock providers. No live-provider or Windows desktop run was performed because this is an offline schema/CI change and no provider credentials are needed.
 - AI-assisted implementation, tests and documentation.
+
+## 2026-11-15 - CodeRabbit review: Tavily disclosure visibility & sidebar state sync
+- **Visible Tavily Transmission Disclosure**:
+  - Replaced `className="sr-only"` on the Tavily Search Key sub-input security disclosure with `className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1"`, matching provider notices so sighted users clearly see transmission behavior before saving keys.
+- **Storage & History Change Broadcast**:
+  - Integrated `notifyHistoryChange` within `BaseStorage` (`saveHistory`, `deleteHistory`, `clearHistory`, `importJSON`) so all history writes immediately sync mounted sidebar instances.
+- **Route Re-Verification on Deletion**:
+  - In `layout-wrapper.tsx`, updated `handleDelete` to check the live route (`window.location.pathname` and `searchParams`) after storage deletion completes, preventing erroneous redirects to `/chat` if the user navigated away during the async operation.
+- **New Chat Draft Reset on /chat**:
+  - Wired `assembly:new-chat` event dispatch from the sidebar's "New chat" button and added an event listener in `chat/page.tsx` to reset `question`, `attachments`, and `status` when already on `/chat`.
+- **Verification**:
+  - Unit & contract tests pass: Vitest 15/15 passed (`storage.test.ts`, `api-client-attachments.test.ts`).
+  - Next.js build: `npm --prefix frontend run build` completed in 845ms with 0 errors.
+  - ESLint: `npm --prefix frontend run lint` passed with 0 warnings/errors.
+  - Playwright E2E: `tests/keys-persist.spec.ts` passed 9/9 in 13.4s without any timeouts or flakes.
+

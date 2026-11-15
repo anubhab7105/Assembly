@@ -119,6 +119,16 @@ export default function Home() {
   const budgetMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    const handleNewChat = () => {
+      setQuestion("")
+      setAttachments([])
+      setStatus(null)
+    }
+    window.addEventListener("assembly:new-chat", handleNewChat)
+    return () => window.removeEventListener("assembly:new-chat", handleNewChat)
+  }, [])
+
+  useEffect(() => {
     if (!showContextPopover && !showBudgetDropdown) return
     const handleClickOutside = (e: MouseEvent) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
