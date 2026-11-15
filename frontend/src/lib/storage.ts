@@ -505,16 +505,19 @@ class BaseStorage implements StorageService {
       )
     }
     await idbSet("history", next)
+    notifyHistoryChange()
   }
 
   async deleteHistory(id: string): Promise<void> {
     const items = (await idbGet<unknown>("history")) ?? []
     const existing = Array.isArray(items) ? items.map((item) => normalizeHistory(item)).filter((item): item is HistoryRecord => item !== null) : []
     await idbSet("history", existing.filter((h) => h.id !== id))
+    notifyHistoryChange()
   }
 
   async clearHistory(): Promise<void> {
     await idbDel("history")
+    notifyHistoryChange()
   }
 
   async getSetting(key: string): Promise<string | null> {

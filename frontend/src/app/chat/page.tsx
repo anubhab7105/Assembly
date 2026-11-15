@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type Catalog, type UsageEntry } from "@/lib/api-client"
 import { storage } from "@/lib/storage"
@@ -12,6 +11,7 @@ import {
   PRIVACY_NOTICE_VERSION,
 } from "@/lib/privacy-notice"
 import { PrivacyDialog } from "@/components/privacy-dialog"
+import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
   estimateAttachmentContextChars,
@@ -50,9 +50,62 @@ type DraftAttachment = {
   size: number
 }
 
+let chatIntroHasPlayedInCurrentSession = false
+
+function ChatGreetingHeadline({ isRevealed }: { isRevealed: boolean }) {
+  const [phase, setPhase] = useState<"welcome" | "dissolving" | "assembled">("welcome")
+
+  useEffect(() => {
+    if (!isRevealed) return
+    const dissolveTimer = setTimeout(() => {
+      setPhase("dissolving")
+    }, 2200)
+
+    const assembledTimer = setTimeout(() => {
+      setPhase("assembled")
+    }, 3000)
+
+    return () => {
+      clearTimeout(dissolveTimer)
+      clearTimeout(assembledTimer)
+    }
+  }, [isRevealed])
+
+  return (
+    <div className="assembly-chat-greeting-stage select-none" aria-live="polite">
+      <h1
+        className={`assembly-greeting-welcome ${
+          phase === "welcome"
+            ? "is-visible"
+            : phase === "dissolving"
+              ? "is-dissolving"
+              : "is-hidden"
+        }`}
+        aria-hidden={phase === "assembled"}
+      >
+        Welcome.
+      </h1>
+
+      <h1
+        className={`assembly-greeting-assemble ${
+          phase === "assembled" || phase === "dissolving"
+            ? "is-visible"
+            : "is-hidden"
+        }`}
+      >
+        <span className="assembly-greeting-subtext mr-1.5">
+          Assemble
+        </span>{" "}
+        your thoughts...
+      </h1>
+    </div>
+  )
+}
+
 export default function Home() {
   const router = useRouter()
 
+  const [isIntroComplete, setIsIntroComplete] = useState(() => chatIntroHasPlayedInCurrentSession)
   const [question, setQuestion] = useState("")
   const [attachments, setAttachments] = useState<DraftAttachment[]>([])
   const attachmentsRef = useRef<DraftAttachment[]>([])
@@ -69,12 +122,49 @@ export default function Home() {
   const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [catalogFailed, setCatalogFailed] = useState(false)
-  const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogTick, setCatalogTick] = useState(0)
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
   const [confirmedGateSignature, setConfirmedGateSignature] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [showContextPopover, setShowContextPopover] = useState(false)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
+  const [showBudgetDropdown, setShowBudgetDropdown] = useState(false)
+  const budgetMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleNewChat = () => {
+      setQuestion("")
+      setAttachments([])
+      setStatus(null)
+    }
+    window.addEventListener("assembly:new-chat", handleNewChat)
+    return () => window.removeEventListener("assembly:new-chat", handleNewChat)
+  }, [])
+
+  useEffect(() => {
+    if (!showContextPopover && !showBudgetDropdown) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setShowContextPopover(false)
+      }
+      if (budgetMenuRef.current && !budgetMenuRef.current.contains(e.target as Node)) {
+        setShowBudgetDropdown(false)
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowContextPopover(false)
+        setShowBudgetDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [showContextPopover, showBudgetDropdown])
 
   const appMode = env.NEXT_PUBLIC_APP_MODE === "desktop" ? "desktop" : "web"
 
@@ -104,27 +194,18 @@ export default function Home() {
     pins: selection.pins,
   })
   const degradedConfirmed = confirmedGateSignature === gateSignature
-  const missingQuestion = !question.trim() && attachments.length === 0
-  const runHint = missingQuestion
-    ? "Write a question to start."
-    : catalogLoading
-      ? "Checking provider keys…"
-      : catalogFailed
-        ? "Provider status is unavailable. Retry the connection above."
-        : gate.level === "BLOCKED"
-          ? "Add at least two provider keys in Settings to enable Run."
-          : gate.level === "DEGRADED" && !degradedConfirmed
-            ? "Choose Run anyway above to start with one model family."
-            : null
 
   useEffect(() => {
     const refreshKeys = () => {
       globalVault.allKeys().then((k) => {
+        // Tavily is an optional search credential, not a runnable model provider.
         const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
         setEnabledIds(modelProviderIds)
       }).catch(() => { })
     }
     refreshKeys()
+    // The vault is persistent: re-read when the tab regains focus so the
+    // picker gate and the execution request always agree on readiness.
     window.addEventListener("focus", refreshKeys)
     document.addEventListener("visibilitychange", refreshKeys)
     storage
@@ -167,7 +248,6 @@ export default function Home() {
         setCatalog(null)
         setCatalogFailed(true)
       })
-      .finally(() => setCatalogLoading(false))
   }, [catalogTick])
 
   useEffect(() => {
@@ -263,6 +343,8 @@ export default function Home() {
     }
     setLoading(true)
     setStatus(makeChatStatus("Checking capacity…", "progress"))
+    // Run state hoisted above try: the catch block persists a cancelled
+    // record on mid-stream failure, so it must see these bindings.
     let finalAnswer = ""
     let consensus: number | null = null
     let confidence: "High" | "Moderate" | "Low" | null = null
@@ -283,6 +365,7 @@ export default function Home() {
     const questionForRun = question.trim() || "Analyze the attached files and summarize their key contents, important claims, and uncertainties."
     try {
       const keys = await globalVault.allKeys()
+      // The Tavily search key travels separately; it is never a model key.
       const { tavily, ...providerKeys } = keys
       const searchKeys = tavily ? { tavily } : undefined
       const usage: UsageEntry[] = await storage.getUsage()
@@ -348,6 +431,9 @@ export default function Home() {
           }
         },
       )
+      // Explicit terminal handling: only a completed run with a non-empty
+      // final answer is presentable. Failed/incomplete runs keep their
+      // failure history but never navigate to the active-run screen.
       if (!isPresentableRun({ status: result.status, finalAnswer })) {
         const failedStatus = result.status === "completed" ? "failed" : result.status
         await storage.saveHistory({
@@ -408,6 +494,10 @@ export default function Home() {
       })
       router.push(`/executions?id=${runId}`)
     } catch (err) {
+      // Mid-stream failures (abort vs. broken stream) keep distinct states:
+      // a user abort is cancelled; a stream that dies without run.finished
+      // is a failure, never a silent empty run. Pre-stream rejections (no
+      // run started) only show the error.
       const message = err instanceof Error ? err.message : "Run failed"
       const aborted =
         (err instanceof DOMException && err.name === "AbortError") ||
@@ -443,6 +533,8 @@ export default function Home() {
     }
   }
 
+  // Warn before a refresh/tab-close kills a running team (the server
+  // cancels the run on disconnect; there is no resume for web runs).
   useEffect(() => {
     if (!loading) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -663,7 +755,47 @@ export default function Home() {
               </div>
             </form>
           </div>
+
+          <div className="assembly-chat-banners-stack space-y-3">
+            {gate.families_count === 0 && (
+              <div className="assembly-chat-warning-banner flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
+                <p className="text-xs font-medium text-warning">
+                  Set up provider keys in Settings. Two ready model families are the minimum for a normal run; three are recommended. Providers with unverified quota limits do not count toward readiness.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0 assembly-dark-glass-btn">
+                  <Settings className="mr-1.5 size-3.5" />
+                  Add keys
+                </Button>
+              </div>
+            )}
+
+            <div
+              data-testid="diversity-chip"
+              className={`assembly-readiness-chip flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
+                gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
+              }`}
+            >
+              <span className="font-medium">{gateChipText(gate)}</span>
+              {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
+              {gate.level === "DEGRADED" && !degradedConfirmed && (
+                <Button variant="outline" size="sm" className="min-h-8" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
+                  Run anyway
+                </Button>
+              )}
+            </div>
+
+            {catalogFailed && (
+              <div>
+                <ServerStatusBanner url={env.apiUrl} onRetry={() => setCatalogTick((t) => t + 1)} />
+              </div>
+            )}
+          </div>
+
+          {status && (
+            <ChatStatusMessage status={status} />
+          )}
         </div>
+      </div>
       </main>
 
       <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
@@ -676,9 +808,7 @@ export default function Home() {
           </DialogHeader>
           <ModelPicker value={selection} onChange={setSelection} keyedProviderIds={enabledIds} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowModelSettings(false)}>
-              Done
-            </Button>
+            <Button variant="outline" onClick={() => setShowModelSettings(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

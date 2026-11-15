@@ -786,10 +786,89 @@
 
 <!-- coderabbit-ai-generated-section:v1:4c5894da69a596dac768d649d4498050c92e08ca7ea4de1505c4fbb67a827930 -->
 
-## 2026-11-05 — Theme bootstrap and hosted CSP guidance
+## 2026-11-13 — Brand wordmark typography update: [dotted A]ssembly.
 
-- Load the existing theme bootstrap as a synchronous script in the document head, and direct hosted operators to update both backend CSP origins and policy test values.
-- Verified the CSP policy test, production export, layout lint, and two theme browser tests. A live hosted run was not performed; it requires deployment and provider keys.
+- Replaced separate brand mark + "assembly" with integrated `[dotted A]ssembly.` typography across the landing page, header, kinetic intro scene, hero, footer, and sidebar.
+- Converted `BrandDottedAMark` to high-fidelity SVG halftone dotted "A" mark using `fill="currentColor"` so it automatically inherits theme colors (obsidian black on top yellow header, pure luminous white on scrolled glass header, sidebar, and footer).
+- Adjusted wordmark letter kerning (`gap: 1.5px`) so the dotted "A" naturally leads into `ssembly.` as a single, coherent wordmark.
+- Updated canvas kinetic typography in `TextIntroScene` and `gallery-heading.html` to animate `ssembly` beside the dotted "A" mark.
+- Verified visual rendering via Chrome screenshots across header, hero, vortex intro, footer, and sidebar.
+- Validation: ESLint and Vitest test suite pass cleanly (`npm run lint`, `tsc --noEmit`, `npm test`).
+
+
+## 2026-11-14 — Created standalone "/science" architecture page
+
+- Created standalone high-fidelity editorial science page at `/science` ([page.tsx](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/app/science/page.tsx) and [science.css](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/app/science/science.css)) inspired by Zappizo's technical breakdown UI while matching Assembly's Obsidian & Marigold brand theme.
+- Included 4 core sections:
+  1. Header with key empirical metrics (≥3 model families, 100% isolated hypotheses, 0 shared blindspots, p < 0.01).
+  2. Chamfered hypothesis card detailing the Epistemic Diversity Theorem.
+  3. 4-Phase pipeline flow cards (Independent Solve, Adversarial Critique, Live Web Verification, Consensus Engine).
+  4. Deep-dive scientific pillars with syntax-highlighted router/state contracts (Cognitive Diversity, Early Agreement Circuit Breaker, Untrusted Web Research).
+  5. Empirical benchmark comparison table (Single Model vs Assembly Consensus) and live `/chat` CTA.
+- Integrated `/science` into `LandingHeader` navigation and updated `LayoutWrapper` to render `/science` in fullwidth marketing view without app shell sidebar.
+- Converted all 34 internal shader HTML source files across `frontend/src/shaders/**/sources/*.html` into native TypeScript modules (`.ts`), eliminating all raw HTML files.
+- Zero `.html` files remain in `frontend/`.
+- Verified visual fidelity via Chrome screenshots: [science_standalone_fullwidth.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/science_standalone_fullwidth.png), [science_scrolled_pipeline.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/science_scrolled_pipeline.png), [science_scrolled_table_cta.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/science_scrolled_table_cta.png).
+- Validation: ESLint clean (0 errors, 0 warnings), Vitest storage tests pass (15/15), Next.js production build (`npm run build`) passes cleanly for all 15 routes.
+
+## 2026-11-14 — Science page layout refinement: Pitch Black Hero Stage & Marigold Yellow Research Cards
+
+- Restructured `/science` ([page.tsx](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/app/science/page.tsx) and [science.css](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/app/science/science.css)):
+  1. Set the top hero stage (header, title *"The Science of Multi-Agent Consensus."*, and lead description) to pitch black (`#000000`) with high-contrast white typography and Marigold Yellow accent, matching the user's specific screenshot.
+  2. Maintained the published academic research cards grid on the Marigold Yellow (`#eaa221`) background with pitch-black elevated cards featuring real paper abstract headers.
+  3. Preserved the smooth downward curve divider transitioning from Marigold Yellow into the pitch-black CTA section and footer.
+- Captured visual verification screenshots: [science_black_hero_shot.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/science_black_hero_shot.png) and [science_black_hero_full.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/science_black_hero_full.png).
+- Validation: Vitest passed (15/15), ESLint 0 errors, Next.js build passes cleanly.
+
+## 2026-11-14 — Science page header logo visibility and alignment fix
+
+- Fixed the dotted "A" mark visibility in `BrandDottedAMark` ([brand-orb-mark.tsx](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/components/brand-orb-mark.tsx)):
+  1. Guaranteed luminous white dots rendering on `/science` (preventing dark obsidian dots on pitch-black background).
+  2. Increased dot min radius and brightness so the halftone dotted "A" mark is crisp, luminous, and clearly visible.
+  3. Added synchronous initial render before `requestAnimationFrame` for instant display without flicker.
+- Fixed header horizontal alignment in [science.css](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/app/science/science.css):
+  1. Updated `.assembly-science-page .assembly-landing-header` with `padding-inline: max(56px, calc((100% - 1240px) / 2 + 24px))`, shifting the logo ~34px to the right so it is not jammed against the left window border and aligns with the landing page.
+- Visual verification: [science_with_time_crop.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/science_with_time_crop.png), [science_1440_fixed.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/science_1440_fixed.png).
+- Re-aligned `/science` header padding to strictly match the landing page layout (`padding-inline: max(22px, calc((100% - var(--landing-max)) / 2 + 12px))` with `--landing-max: 1440px`), eliminating the 77px position jump between pages. Both headers now share the exact same `x=35px` start position and `y=32..47px` alignment. Verified via side-by-side composite: [logo_side_by_side_verified.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/logo_side_by_side_verified.png).
+- Replaced the static headline *"The Science of Multi-Agent Consensus."* with an animated word rotator: *"What published [research / papers / articles] show."* ([page.tsx](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/app/science/page.tsx) and [science.css](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/app/science/science.css)). The suffix *"show."* remains permanently fixed and static, while the highlighted word (*"research"*, *"papers"*, *"articles"*) animates continuously in Marigold yellow every 2.8s. Verified via stacked frame proof: [fix_show_stacked_proof.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/fix_show_stacked_proof.png).
+- Validation: Vitest passed (15/15), ESLint 0 errors, Next.js build passes cleanly.
+
+## 2026-11-14 — Landing Page Hero Experience & Non-Flickering Sticky Orb Implementation
+
+- **Eliminated Orb Flickering During Scroll**:
+  - Removed dynamic scroll-driven width resizing (`section.style.width = ...`) in `about-hero-section.tsx` that was causing severe layout thrashing and forced reflows on every scroll frame. Container width is now rock-solid at `width: 95%` (`marginInline: auto`).
+  - Added a strict dimension guard in `brand-orbs-orbit-engine.js` so canvas `cv.width` and `cv.height` are only assigned if pixel dimensions actually change, preventing canvas 2D buffer wiping and black-frame flickering.
+  - Added hardware acceleration (`translate3d(0, 0, 0)`, `will-change: transform`, `backface-visibility: hidden`) and `pointer-events: none` on the sticky orbit canvas.
+  - Replaced `overflow: hidden` with `overflow: clip` on ancestor containers so `position: sticky` is never trapped or jitter-clipped.
+- **Sticky Orb Parallel Scrolling & Section 3 Endpoint**:
+  - Configured `.sticky-orbit-box` with `position: sticky` and `top: clamp(32px, calc(50vh - 290px), 160px)`.
+  - The orb stays cleanly fixed on the right side in parallel with the left headings and text as the user scrolls through Section 1 ("WHAT IS ASSEMBLY"), Section 2 ("HOW IT WORKS"), and Section 3 ("OUR APPROACH" / "Cognitive Diversity").
+  - The orb stops sticking at the exact empty space on the right of Section 3 (the end of `.assembly-nova-experience-root`), and does not follow past it into subsequent sections (`#your-control`).
+- **Visual Verification**:
+  - Visual proof captured via headless Chrome screenshots: [sticky_orb_endpoint_comparison.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/sticky_orb_endpoint_comparison.png), [section3_sticky_orb_endpoint_proof.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/section3_sticky_orb_endpoint_proof.png), and [below_section3_proof.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/below_section3_proof.png).
+- **Sticky Trap Bugfix (Missing Orb in Section 2)**:
+  - Identified root cause of missing orb when scrolling to Section 2: `.assembly-hero-yellow-stage` had `overflow: hidden` in `chat-design.css`, which broke the CSS sticky context and caused `.sticky-orbit-box` to scroll offscreen (`top: -752px`) instead of sticking.
+  - Replaced `overflow: hidden` with `overflow: clip` on `.assembly-hero-yellow-stage`.
+  - Verified with live browser automated tests that `.sticky-orbit-box` now sticks rock-solid at `top: 160px` alongside Section 1, Section 2, and Section 3, and stops at Section 3 before `#your-control`.
+  - Visual proof: [orb_sticky_fix_comparison.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/orb_sticky_fix_comparison.png) and [verified_sticky_orb_sections.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/verified_sticky_orb_sections.png).
+- **Section 3 Orb Lockstep Exit Implementation**:
+  - Eliminated the behavior where the left text scrolled up while the orb lingered alone down at the bottom of the card.
+  - Configured `.sticky-orbit-wrapper` with `bottom: clamp(180px, calc(50vh - 100px), 240px)` so the orb stops higher up in Section 3, perfectly parallel to the left quote and paragraphs.
+  - The orb terminates its travel before dipping down toward the yellow notch, ensuring equal parallel alignment with Section 3's text.
+  - When scrolling down, the left text and right orb move up in lockstep together into the next section.
+  - Visual proof: [exact_image2_match_proof.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/exact_image2_match_proof.png) and [compare_user_image2_vs_fixed.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/compare_user_image2_vs_fixed.png).
+- **Hero Intro Section Copy Expansion**:
+  - Added a third paragraph to Section 1 intro copy in [`assembly-hero-experience.tsx`](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/components/assembly-hero-experience.tsx) directly following *"thoroughly verified and transparently cited"*.
+  - Highlights client-side privacy, zero-trust key security, the automated adversarial circuit breaker preventing premature consensus, and audit-ready uncertainty scoring.
+  - Visual verification: [verify_3paragraphs_section1.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/verify_3paragraphs_section1.png).
+- **Header Actions Clean-Up**:
+  - Removed the theme toggle (sun icon button) and the *"Set up keys"* secondary link from [`landing-header.tsx`](file:///Users/piyushbarua/Desktop/Assembly/frontend/src/components/landing-header.tsx).
+  - Header actions now exclusively display the primary CTA button *"Start an investigation"*.
+  - Visual proof: [header_clean_proof.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/header_clean_proof.png).
+- **Validation**:
+  - Vitest passed (15/15)
+  - ESLint 0 errors, 0 warnings
+  - Next.js production build (`npm run build`) passes cleanly for all 15 routes.
 
 <!-- /coderabbit-ai-generated:v1 -->
 
@@ -866,3 +945,31 @@
 - Regenerated the existing artifact to include the backend's already-defined `resolved_disagreement_count` field. Added six command-line regression cases, demonstrated failing before the change and passing afterward.
 - Verification on Python 3.11 and 3.12: `pytest -q` reports 663 passed, 1 skipped; scoped Ruff lint and format checks pass; the committed-artifact check passes. Existing Gemini-package deprecation warning remains. Tests are offline with mock providers. No live-provider or Windows desktop run was performed because this is an offline schema/CI change and no provider credentials are needed.
 - AI-assisted implementation, tests and documentation.
+
+## 2026-11-15 - CodeRabbit review: Tavily disclosure visibility & sidebar state sync
+- **Visible Tavily Transmission Disclosure**:
+  - Replaced `className="sr-only"` on the Tavily Search Key sub-input security disclosure with `className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1"`, matching provider notices so sighted users clearly see transmission behavior before saving keys.
+- **Storage & History Change Broadcast**:
+  - Integrated `notifyHistoryChange` within `BaseStorage` (`saveHistory`, `deleteHistory`, `clearHistory`, `importJSON`) so all history writes immediately sync mounted sidebar instances.
+- **Route Re-Verification on Deletion**:
+  - In `layout-wrapper.tsx`, updated `handleDelete` to check the live route (`window.location.pathname` and `searchParams`) after storage deletion completes, preventing erroneous redirects to `/chat` if the user navigated away during the async operation.
+- **New Chat Draft Reset on /chat**:
+  - Wired `assembly:new-chat` event dispatch from the sidebar's "New chat" button and added an event listener in `chat/page.tsx` to reset `question`, `attachments`, and `status` when already on `/chat`.
+- **Verification**:
+  - Unit & contract tests pass: Vitest 15/15 passed (`storage.test.ts`, `api-client-attachments.test.ts`).
+  - Next.js build: `npm --prefix frontend run build` completed in 845ms with 0 errors.
+  - ESLint: `npm --prefix frontend run lint` passed with 0 warnings/errors.
+  - Playwright E2E: `tests/keys-persist.spec.ts` passed 9/9 in 13.4s without any timeouts or flakes.
+
+## 2026-11-15 - Hero Tagline Update: "Let intelligence challenge itself."
+- **Updated Main Landing Hero Headline**:
+  - Replaced the previous tagline (`What happens / when / AI questions / AI?`) with:
+    - Boxed element: `Let intelligence`
+    - Plain text: `challenge itself.`
+  - Preserved typography, line height, responsive scaling (`clamp(52px, 5.4vw, 74px)`), and container layout.
+  - Updated E2E heading assertion in `frontend/tests/e2e.spec.ts` to match `/Let intelligence/`.
+- **Verification**:
+  - Visual verification: [hero_tagline_closeup.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/hero_tagline_closeup.png) & [hero_tagline_full.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/hero_tagline_full.png).
+  - All tests passing: Playwright landing test (1/1), unit tests (15/15), ESLint (0 errors), Next.js build (clean).
+
+
