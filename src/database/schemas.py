@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.events import ProgressEvent
 from src.providers.router import DiversityGateResponse
+from src.research.attachments import MAX_ATTACHMENT_COUNT, MAX_TOTAL_BYTES
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -36,14 +37,16 @@ class AttachmentInput(BaseModel):
 
     filename: str = Field(..., min_length=1, max_length=120)
     media_type: str = Field(default="text/plain", max_length=100)
-    content: str = Field(..., min_length=1, max_length=262144)
+    content: str = Field(..., max_length=MAX_TOTAL_BYTES)
 
 
 class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: str = Field(..., min_length=1, max_length=2000)
-    attachments: list[AttachmentInput] = Field(default_factory=list, max_length=5)
+    attachments: list[AttachmentInput] = Field(
+        default_factory=list, max_length=MAX_ATTACHMENT_COUNT
+    )
     time_budget_minutes: int = Field(..., ge=3, le=15)
     # Web-mode BYOK keys (provider → key). In-memory for this run only:
     # never written to disk or database, never logged, never returned.

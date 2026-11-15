@@ -10,6 +10,8 @@
 import asyncio
 import json
 import logging
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -444,35 +446,56 @@ def test_run_rejects_unsupported_attachment_without_echoing_content(
 def test_run_rejects_oversized_attachment_before_creating_run(web_mode):
     import src.api.run as run_mod
     from src.main import app
+    from src.research.attachments import MAX_FILE_BYTES
 
     run_count = len(run_mod._runs)
     res = TestClient(app).post(
-        "/api/run",
-        json={
-            "question": "Analyze file",
-            "time_budget_minutes": 3,
-            "attachments": [
-                {
-                    "filename": "big.txt",
-                    "media_type": "text/plain",
-                    "content": "x" * (256 * 1024 + 1),
-                }
-            ],
-        },
-    )
-    assert res.status_code in (413, 422)
+    "/api/run",
+    json={
+        "question": "Analyze file",
+        "time_budget_minutes": 3,
+        "attachments": [
+            {
+                "filename": "big.txt",
+                "media_type": "text/plain",
+                "content": "x" * (MAX_FILE_BYTES + 1),
+            }
+        ],
+    },
+)
+    assert res.status_code == 422
+    assert "per-file limit" in res.json()["detail"].lower()
     assert len(run_mod._runs) == run_count
 
 
-def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(
-    web_mode, monkeypatch, caplog
-):
-    """The uploaded text becomes prompt context, not response/log metadata."""
+def test_run_rejects_combined_over_50_mib_before_creating_run(web_mode):
+    import src.api.run as run_mod
+    from src.main import app
+
+    run_count = len(run_mod._runs)
+    nine_mib = "x" * (9 * 1024 * 1024)
+    attachments = [
+        {"filename": f"chunk-{i}.txt", "media_type": "text/plain", "content": nine_mib}
+        for i in range(6)
+    ]
+    res = TestClient(app).post(
+        "/api/run",
+        json={
+            "question": "Analyze combined attachments",
+            "time_budget_minutes": 3,
+            "attachments": attachments,
+        },
+    )
+    assert res.status_code == 422
+    assert "combined limit" in res.json()["detail"].lower()
+    assert len(run_mod._runs) == run_count
+
+
+def test_run_accepts_empty_and_more_than_five_attachments_within_50_mib(web_mode, monkeypatch):
     import src.orchestration.orchestrator as orch_mod
     from src.main import app
     from src.orchestration.orchestrator import ExecutionResult
 
-    source_marker = "ATTACHMENT-CONTENT-CANARY-7F3C"
     captured = {}
 
     class StubOrch:
@@ -480,6 +503,117 @@ def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(
             self.router = None
 
         async def execute(self, **kwargs):
+            captured["attachment_context"] = kwargs["attachment_context"]
+            return ExecutionResult(
+                answer="Mock answer.",
+                sources=[],
+                consensus_score=0.8,
+                problem_type="general",
+                complexity="simple",
+                agent_count=1,
+                debate_rounds=0,
+                total_tokens=0,
+                status="completed",
+            )
+
+    _mock_filtered_router(monkeypatch)
+    monkeypatch.setattr(orch_mod, "Orchestrator", StubOrch)
+    attachments = [
+        {"filename": "empty.txt", "media_type": "text/plain", "content": ""},
+        *[
+            {
+                "filename": f"batch-{i}.txt",
+                "media_type": "text/plain",
+                "content": "a" * (8 * 1024 * 1024) if i < 6 else "small tail",
+            }
+            for i in range(6)
+        ],
+    ]
+    with TestClient(app).stream(
+        "POST",
+        "/api/run",
+        json={
+            "question": "Analyze seven files under 50 MiB",
+            "time_budget_minutes": 3,
+            "provider_keys": {"groq": CANARY_KEY},
+            "model_selection": {"selected": [], "pins": {}},
+            "usage_snapshot": [],
+            "attachments": attachments,
+        },
+    ) as res:
+        assert res.status_code == 200, res.text
+        for line in res.iter_lines():
+            if line.startswith("data: ") and '"run.finished"' in line:
+                break
+
+    assert "empty.txt" in captured["attachment_context"]
+    assert "batch-0.txt" in captured["attachment_context"]
+
+
+def test_run_rejects_excessive_request_body_over_max_run_body_bytes(
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.api.run import _runs
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "max_run_body_bytes", 128)
+    monkeypatch.setattr(settings, "max_body_bytes", 64)
+    client = TestClient(app)
+
+    # 1. Declared Content-Length exceeding the route limit is rejected with 413.
+    res_declared = client.post(
+        "/api/run",
+        content=b"x" * 200,
+        headers={"content-type": "application/json", "content-length": "200"},
+    )
+    assert res_declared.status_code == 413
+    assert res_declared.json() == {"detail": "Request body too large."}
+    assert len(_runs) == 0
+
+    # 2. Streamed request body without Content-Length exceeding the limit returns 413.
+    def stream_oversized_chunks() -> Iterator[bytes]:
+        for _ in range(4):
+            yield b"x" * 50
+
+    res_streamed = client.post(
+        "/api/run",
+        content=stream_oversized_chunks(),
+        headers={"content-type": "application/json"},
+    )
+    assert res_streamed.status_code == 413
+    assert res_streamed.json() == {"detail": "Request body too large."}
+    assert len(_runs) == 0
+
+    # 3. Streamed request body with understated Content-Length returns 413.
+    res_understated = client.post(
+        "/api/run",
+        content=stream_oversized_chunks(),
+        headers={"content-type": "application/json", "content-length": "50"},
+    )
+    assert res_understated.status_code == 413
+    assert res_understated.json() == {"detail": "Request body too large."}
+    assert len(_runs) == 0
+
+
+def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The uploaded text becomes prompt context, not response/log metadata."""
+    import src.orchestration.orchestrator as orch_mod
+    from src.main import app
+    from src.orchestration.orchestrator import ExecutionResult
+
+    source_marker = "ATTACHMENT-CONTENT-CANARY-7F3C"
+    captured: dict[str, Any] = {}
+
+    class StubOrch:
+        router: Any
+
+        def __init__(self) -> None:
+            self.router = None
+
+        async def execute(self, **kwargs: Any) -> ExecutionResult:
             captured["question"] = kwargs["question"]
             captured["attachment_context"] = kwargs["attachment_context"]
             return ExecutionResult(
@@ -532,3 +666,175 @@ def test_attachment_content_reaches_orchestrator_but_not_sse_or_logs(
     assert source_marker not in caplog.text
     assert CANARY_KEY not in "\\n".join(lines)
     assert CANARY_KEY not in caplog.text
+
+
+def test_run_reports_attachment_truncation_and_bounds_pre_validation_cost(
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SSE run.started reports truncation, and invalid attachments don't spend run quota."""
+    import src.orchestration.orchestrator as orch_mod
+    from src.core.config import settings
+    from src.core.rate_limit import _rate_limit_history
+    from src.main import app
+    from src.orchestration.orchestrator import ExecutionResult
+    from src.research.attachments import MAX_ATTACHMENT_CONTEXT_CHARS
+
+    _rate_limit_history.clear()
+
+    class StubOrch:
+        def __init__(self) -> None:
+            self.router = None
+
+        async def execute(self, **kwargs: object) -> ExecutionResult:
+            return ExecutionResult(
+                answer="Mock answer.",
+                sources=[],
+                consensus_score=0.8,
+                problem_type="general",
+                complexity="simple",
+                agent_count=1,
+                debate_rounds=0,
+                total_tokens=0,
+                status="completed",
+            )
+
+    _mock_filtered_router(monkeypatch)
+    monkeypatch.setattr(orch_mod, "Orchestrator", StubOrch)
+    client = TestClient(app)
+
+    # Rejected attachments must count against invalid/pre-validation limits, not run quota.
+    monkeypatch.setattr(settings, "rate_limit_invalid_per_min_per_ip", 2)
+    monkeypatch.setattr(settings, "rate_limit_run_per_min_per_ip", 5)
+    bad_payload = {
+        "question": "Check attachment",
+        "time_budget_minutes": 3,
+        "provider_keys": {"groq": CANARY_KEY},
+        "model_selection": {"selected": [], "pins": {}},
+        "usage_snapshot": [],
+        "attachments": [
+            {"filename": "bad.exe", "media_type": "text/plain", "content": "x"}
+        ],
+    }
+    first = client.post("/api/run", json=bad_payload)
+    assert first.status_code == 422
+    second = client.post("/api/run", json=bad_payload)
+    assert second.status_code == 422
+    # Third request hits pre-validation 429 before parse/validation, while run budget stays empty.
+    third = client.post("/api/run", json=bad_payload)
+    assert third.status_code == 429
+    assert not any(action == "run" for _, action in _rate_limit_history)
+
+    # Clear pre-validation & invalid counters; verify run budget was untouched (still 0 used)
+    # and run.started signals attachment_truncated when content exceeds 24k chars.
+    _rate_limit_history.clear()
+    with client.stream(
+        "POST",
+        "/api/run",
+        json={
+            "question": "Check truncation reporting",
+            "time_budget_minutes": 3,
+            "provider_keys": {"groq": CANARY_KEY},
+            "model_selection": {"selected": [], "pins": {}},
+            "usage_snapshot": [],
+            "attachments": [
+                {
+                    "filename": "long.txt",
+                    "media_type": "text/plain",
+                    "content": "a" * (MAX_ATTACHMENT_CONTEXT_CHARS + 500),
+                }
+            ],
+        },
+    ) as res:
+        assert res.status_code == 200, res.text
+        started_line = next(
+            line for line in res.iter_lines() if line.startswith("data: ") and '"run.started"' in line
+        )
+    started_event = json.loads(started_line.removeprefix("data: "))
+    assert started_event["attachment_truncated"] is True
+    assert started_event["attachment_included_count"] == 1
+
+
+async def test_attachment_validation_gate_bounds_concurrency_and_waiters() -> None:
+    """AttachmentValidationGate limits concurrent executions and rejects excess waiters."""
+    from src.api.run import AttachmentValidationGate, AttachmentValidationQueueFull
+
+    gate = AttachmentValidationGate(max_concurrent=2, max_waiters=2)
+    started_active: list[int] = []
+    started_waiters: list[int] = []
+    release_active = asyncio.Event()
+
+    async def active_task(idx: int) -> None:
+        async with gate:
+            started_active.append(idx)
+            await release_active.wait()
+
+    async def waiter_task(idx: int) -> None:
+        started_waiters.append(idx)
+        async with gate:
+            pass
+
+    # Launch 2 active tasks that acquire the 2 semaphore slots
+    t1 = asyncio.create_task(active_task(1))
+    t2 = asyncio.create_task(active_task(2))
+    await asyncio.sleep(0.01)
+    assert len(started_active) == 2
+    assert gate.waiters == 0
+
+    # Launch 2 waiter tasks that wait for slots (reaching max_waiters=2)
+    t3 = asyncio.create_task(waiter_task(3))
+    t4 = asyncio.create_task(waiter_task(4))
+    await asyncio.sleep(0.01)
+    assert gate.waiters == 2
+
+    # A 5th task must fail immediately with AttachmentValidationQueueFull
+    with pytest.raises(AttachmentValidationQueueFull):
+        async with gate:
+            pass
+
+    # Release active tasks so waiters can proceed
+    release_active.set()
+    await asyncio.gather(t1, t2, t3, t4)
+    assert gate.waiters == 0
+
+
+def test_run_rejects_with_503_when_attachment_validation_queue_full(
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the attachment validation queue is full, /api/run returns 503 with Retry-After."""
+    import src.api.run as run_mod
+    from src.api.run import AttachmentValidationQueueFull
+    from src.core.rate_limit import _rate_limit_history
+    from src.main import app
+
+    _mock_filtered_router(monkeypatch)
+
+    class FullGate:
+        async def __aenter__(self) -> None:
+            raise AttachmentValidationQueueFull()
+
+        async def __aexit__(self, *args: object) -> None:
+            pass
+
+    monkeypatch.setattr(run_mod, "_ATTACHMENT_VALIDATION_GATE", FullGate())
+    _rate_limit_history.clear()
+
+    client = TestClient(app)
+    resp = client.post(
+        "/api/run",
+        json={
+            "question": "Test waiter threshold",
+            "time_budget_minutes": 3,
+            "provider_keys": {"groq": CANARY_KEY},
+            "model_selection": {"selected": [], "pins": {}},
+            "usage_snapshot": [],
+            "attachments": [
+                {"filename": "test.txt", "media_type": "text/plain", "content": "valid content"}
+            ],
+        },
+    )
+
+    assert resp.status_code == 503
+    assert resp.headers.get("Retry-After") == "5"
+    assert "Server is busy" in resp.json()["detail"]
+    # Rejection at the gate must not consume run rate limit quota
+    assert not any(action == "run" for _, action in _rate_limit_history)
