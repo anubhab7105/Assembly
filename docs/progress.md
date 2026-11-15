@@ -1,3 +1,15 @@
+## 2026-11-15 — Fix Next.js Dev Overlay Pointer Interception in Playwright CI (PR #109)
+- **Resolved `<nextjs-portal>` Pointer Interception on Sidebar Settings Link**:
+  - **Dev Indicator Suppression**: Disabled `devIndicators: false` in `frontend/next.config.ts`, stopping Next.js from rendering its floating development indicator/toast in the bottom-left corner over the sidebar's Settings link.
+  - **Global Portal Pointer Immunity**: Added `nextjs-portal { pointer-events: none !important; }` in `frontend/src/app/globals.css`, ensuring developer overlay elements can never intercept pointer clicks or stall automated tests.
+  - **Forced Click Dispatch**: Updated `frontend/tests/keys-persist.spec.ts:125` to click the Settings link with `{ force: true }`, bypassing non-application overlay pointer interception and guaranteeing immediate navigation.
+- **Verification**:
+  - Playwright: **22/22 tests passing** (tested with `--workers=1` to match CI environment).
+  - Vitest: 15/15 unit tests passing.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
+  - Next.js Production Build: 18/18 static routes compiled successfully.
+
 ## 2026-11-15 — Fix 4 CI Playwright Failures: Model Settings, Run Trigger & Dialog Scoping (PR #109)
 - **Resolved All Playwright Failures & Stalls**:
   - **Automated Test Animation Bypass**: In `frontend/src/components/chat-intro-scene.tsx`, bypassed the 3-second canvas intro animation and fullscreen pointer-intercepting overlay when `navigator.webdriver` or `prefers-reduced-motion` is detected. Allows the sidebar Settings link and controls to be immediately interactive without waiting for frame rendering in headless CI runners, completely eliminating the timeout on `tests/keys-persist.spec.ts:103`.
