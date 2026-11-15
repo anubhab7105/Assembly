@@ -16,6 +16,15 @@ import {
   serializeAssemblyBackup,
 } from "./history-file-limits"
 
+function notifyHistoryChange() {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.dispatchEvent === "function"
+  ) {
+    window.dispatchEvent(new Event("assembly:history-change"))
+  }
+}
+
 /**
  * StorageService: client-owned history, settings and daily usage.
  *
@@ -559,11 +568,11 @@ class BaseStorage implements StorageService {
   }
 
 
-   /**
-   * Validates and imports history without partially updating existing storage.
-   * Rejects external imports over 5 MiB while allowing bounded valid version-1
-   * Assembly backups up to MAX_BACKUP_IMPORT_BYTES.
-   */
+  /**
+ * Validates and imports history without partially updating existing storage.
+ * Rejects external imports over 5 MiB while allowing bounded valid version-1
+ * Assembly backups up to MAX_BACKUP_IMPORT_BYTES.
+ */
   async importJSON(text: string): Promise<void> {
     const size = new TextEncoder().encode(text).byteLength
 
@@ -640,8 +649,8 @@ class BaseStorage implements StorageService {
   }
 }
 
-export class BrowserStorage extends BaseStorage {}
-export class DesktopStorage extends BaseStorage {}
+export class BrowserStorage extends BaseStorage { }
+export class DesktopStorage extends BaseStorage { }
 
 export const storage: StorageService =
   typeof window !== "undefined" && window.ASSEMBLY_APP_MODE === "desktop"

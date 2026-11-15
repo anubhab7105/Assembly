@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type Catalog, type UsageEntry } from "@/lib/api-client"
@@ -25,7 +26,15 @@ import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ArrowUp, Send, SlidersHorizontal, Paperclip, X, FileText } from "lucide-react"
+import {
+  ArrowUp,
+  Send,
+  SlidersHorizontal,
+  Paperclip,
+  X,
+  FileText,
+  Settings,
+} from "lucide-react"
 
 const EXAMPLES = [
   { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
@@ -50,62 +59,8 @@ type DraftAttachment = {
   size: number
 }
 
-let chatIntroHasPlayedInCurrentSession = false
-
-function ChatGreetingHeadline({ isRevealed }: { isRevealed: boolean }) {
-  const [phase, setPhase] = useState<"welcome" | "dissolving" | "assembled">("welcome")
-
-  useEffect(() => {
-    if (!isRevealed) return
-    const dissolveTimer = setTimeout(() => {
-      setPhase("dissolving")
-    }, 2200)
-
-    const assembledTimer = setTimeout(() => {
-      setPhase("assembled")
-    }, 3000)
-
-    return () => {
-      clearTimeout(dissolveTimer)
-      clearTimeout(assembledTimer)
-    }
-  }, [isRevealed])
-
-  return (
-    <div className="assembly-chat-greeting-stage select-none" aria-live="polite">
-      <h1
-        className={`assembly-greeting-welcome ${
-          phase === "welcome"
-            ? "is-visible"
-            : phase === "dissolving"
-              ? "is-dissolving"
-              : "is-hidden"
-        }`}
-        aria-hidden={phase === "assembled"}
-      >
-        Welcome.
-      </h1>
-
-      <h1
-        className={`assembly-greeting-assemble ${
-          phase === "assembled" || phase === "dissolving"
-            ? "is-visible"
-            : "is-hidden"
-        }`}
-      >
-        <span className="assembly-greeting-subtext mr-1.5">
-          Assemble
-        </span>{" "}
-        your thoughts...
-      </h1>
-    </div>
-  )
-}
-
 export default function Home() {
   const router = useRouter()
-
-  const [isIntroComplete, setIsIntroComplete] = useState(() => chatIntroHasPlayedInCurrentSession)
   const [question, setQuestion] = useState("")
   const [attachments, setAttachments] = useState<DraftAttachment[]>([])
   const attachmentsRef = useRef<DraftAttachment[]>([])
@@ -122,6 +77,7 @@ export default function Home() {
   const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [catalogFailed, setCatalogFailed] = useState(false)
+  const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogTick, setCatalogTick] = useState(0)
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
@@ -133,14 +89,34 @@ export default function Home() {
   const budgetMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handleNewChat = () => {
-      setQuestion("")
-      setAttachments([])
-      setStatus(null)
+    let active = true
+
+    ApiClient.catalog()
+      .then((c) => {
+        if (!active) return
+
+        setCatalog(c)
+        setCatalogFailed(false)
+        setCatalogNotes(
+          c.providers
+            .filter((p) => p.enabled)
+            .map((p) => ({ id: p.id, privacy_note: p.privacy_note ?? null })),
+        )
+      })
+      .catch(() => {
+        if (!active) return
+
+        setCatalog(null)
+        setCatalogFailed(true)
+      })
+      .finally(() => {
+        if (active) setCatalogLoading(false)
+      })
+
+    return () => {
+      active = false
     }
-    window.addEventListener("assembly:new-chat", handleNewChat)
-    return () => window.removeEventListener("assembly:new-chat", handleNewChat)
-  }, [])
+  }, [catalogTick])
 
   useEffect(() => {
     if (!showContextPopover && !showBudgetDropdown) return
@@ -194,7 +170,14 @@ export default function Home() {
     pins: selection.pins,
   })
   const degradedConfirmed = confirmedGateSignature === gateSignature
+  const missingQuestion = !question.trim() && attachments.length === 0
 
+  const runHint =
+    gate.level === "BLOCKED"
+      ? gate.reasons[0] ?? "No model families are ready."
+      : gate.level === "DEGRADED"
+        ? "Only one model family is ready. Confirm before launching."
+        : null
   useEffect(() => {
     const refreshKeys = () => {
       globalVault.allKeys().then((k) => {
@@ -256,6 +239,20 @@ export default function Home() {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`
     }
   }, [question])
+
+  useEffect(() => {
+    const handleNewChat = () => {
+      setQuestion("")
+      setAttachments([])
+      setStatus(null)
+    }
+
+    window.addEventListener("assembly:new-chat", handleNewChat)
+
+    return () => {
+      window.removeEventListener("assembly:new-chat", handleNewChat)
+    }
+  }, [])
 
   const handleAcknowledge = async () => {
     await storage.setSetting(
@@ -569,7 +566,13 @@ export default function Home() {
               ) : catalogFailed ? (
                 <span className="mn-meta-warn">
                   Provider status unavailable ·{" "}
-                  <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCatalogLoading(true)
+                      setCatalogTick((t) => t + 1)
+                    }}
+                  >
                     Retry
                   </button>
                 </span>
@@ -606,7 +609,13 @@ export default function Home() {
                 <span>
                   Can&apos;t reach the Assembly server at {env.apiUrl}. Check that the backend is running.
                 </span>
-                <button type="button" onClick={() => setCatalogTick((t) => t + 1)}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCatalogLoading(true)
+                    setCatalogTick((t) => t + 1)
+                  }}
+                >
                   Retry
                 </button>
               </div>
@@ -771,9 +780,8 @@ export default function Home() {
 
             <div
               data-testid="diversity-chip"
-              className={`assembly-readiness-chip flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
-                gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
-              }`}
+              className={`assembly-readiness-chip flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
+                }`}
             >
               <span className="font-medium">{gateChipText(gate)}</span>
               {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
@@ -795,7 +803,6 @@ export default function Home() {
             <ChatStatusMessage status={status} />
           )}
         </div>
-      </div>
       </main>
 
       <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
