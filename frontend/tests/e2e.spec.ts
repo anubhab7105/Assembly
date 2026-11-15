@@ -90,7 +90,12 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.getByRole("button", { name: /Switch to (light|dark) mode/ })).toHaveCount(0)
     await expect(page.locator(".cin-landing")).toHaveCSS("color-scheme", "dark")
 
-    await page.getByRole("link", { name: "Start an investigation" }).first().click()
+    // The floating site header reveals when the user scrolls down
+    const scroller = page.locator(".assembly-app-shell .overflow-y-auto").or(page.locator(".overflow-y-auto")).first()
+    await scroller.evaluate((el) => el.scrollTo({ top: 200 }))
+    const cta = page.getByRole("link", { name: "Start an investigation" }).first()
+    await expect(cta).toBeVisible({ timeout: 5000 })
+    await cta.click()
     await expect(page).toHaveURL(/\/chat$/)
   })
 
@@ -133,7 +138,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     // via landing like a user would.
     await page.locator('a[href="/"]').first().click()
     await expect(page).toHaveURL(/\/$/)
-    await page.locator('a[href="/chat"]').first().click()
+    await page.locator('a[href="/chat"]:visible').first().click()
     await expect(page).toHaveURL(/\/chat/)
 
     // Privacy gate blocks interacting until acknowledged (fresh contexts

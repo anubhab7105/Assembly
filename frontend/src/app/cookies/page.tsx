@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import Link from "next/link"
+import { LegalPageLayout } from "@/components/legal-page-layout"
 
 export const metadata: Metadata = {
   title: "Cookie policy",
@@ -17,73 +17,77 @@ const ROWS: [string, string, string][] = [
 
 export default function CookiesPage() {
   return (
-    <main id="main-content" tabIndex={-1} className="asm-legal mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
-      <span className="asm-index">[ 10 / Cookies ]</span>
-      <h1 className="text-4xl font-bold tracking-tight">Cookie policy</h1>
-      <p className="asm-legal-meta mt-2 text-sm text-muted-foreground">
-        Last updated: 12 October 2026. Contact:{" "}
-        <a
-          href="mailto:anubhab7105@gmail.com"
-          className="font-medium text-foreground underline decoration-brand/50 underline-offset-4 hover:text-brand"
-        >
-          anubhab7105@gmail.com
-        </a>
-      </p>
-
-      <div className="mt-8 space-y-8 text-left">
-        <section>
-          <h2 className="text-xl font-semibold">No cookies, no analytics</h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Assembly sets zero cookies: no login cookies (there are no accounts), no consent-tracking cookies,
-            and no third-party advertising or analytics cookies. There is no Google Analytics, no Meta Pixel, no
-            Hotjar, and no social-media trackers on this site. Fonts are self-hosted, so loading a page does
-            not call Google Fonts servers. Because there are no non-essential cookies, there is nothing for a
-            consent banner to switch off: the banner&apos;s Accept and Reject buttons record your choice on your
-            own device, and both choices leave the site cookie-free and behave identically.
+    <LegalPageLayout title="Cookie Policy">
+      {/* No cookies, no analytics */}
+      <section className="space-y-4">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground border-b border-border/30 pb-3">
+          No cookies, no analytics
+        </h2>
+        <div className="rounded-xl border border-border/40 bg-card/30 p-6 space-y-3">
+          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+            Assembly sets zero cookies: no session cookies (there are no accounts), no consent-tracking cookies, and no third-party advertising or analytics cookies.
           </p>
-        </section>
+          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+            There is no Google Analytics, no Meta Pixel, no Hotjar, and no social tracking beacons on this site. Fonts are fully self-hosted, ensuring loading a page never calls external font CDNs. Both the &ldquo;Accept&rdquo; and &ldquo;Reject&rdquo; options in the bottom notice leave the site 100% cookie-free.
+          </p>
+        </div>
+      </section>
 
-        <section>
-          <h2 className="text-xl font-semibold">What is stored instead</h2>
-          <div className="mt-3 overflow-x-auto rounded-xl border border-border">
-            <table className="w-full min-w-132 text-left text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3 font-semibold">Storage</th>
-                  <th className="px-4 py-3 font-semibold">Purpose</th>
-                  <th className="px-4 py-3 font-semibold">Control</th>
+      {/* What is stored instead table */}
+      <section className="space-y-4">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground border-b border-border/30 pb-3">
+          What is stored instead
+        </h2>
+        <div className="overflow-hidden rounded-xl border border-border/40 bg-card/20">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-border/40 bg-muted/40 font-semibold text-foreground">
+                <tr>
+                  <th scope="col" className="p-4 sm:px-6">Storage mechanism</th>
+                  <th scope="col" className="p-4 sm:px-6">What is stored &amp; why</th>
+                  <th scope="col" className="p-4 sm:px-6">How to remove</th>
                 </tr>
               </thead>
-              <tbody className="text-muted-foreground">
-                {ROWS.map(([name, purpose, control]) => (
-                  <tr key={name} className="border-b border-border/50 last:border-0">
-                    <td className="px-4 py-3 font-mono text-xs text-foreground">{name}</td>
-                    <td className="px-4 py-3">{purpose}</td>
-                    <td className="px-4 py-3">{control}</td>
+              <tbody className="divide-y divide-border/30">
+                {ROWS.map(([name, purpose, optOut]) => (
+                  <tr key={name} className="hover:bg-muted/10 transition-colors">
+                    <td className="p-4 sm:px-6 font-mono text-xs sm:text-sm font-medium text-foreground whitespace-nowrap align-top">
+                      {name}
+                    </td>
+                    <td className="p-4 sm:px-6 text-muted-foreground leading-relaxed align-top">
+                      {purpose}
+                    </td>
+                    <td className="p-4 sm:px-6 text-muted-foreground leading-relaxed align-top">
+                      {optOut}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section>
-          <h2 className="text-xl font-semibold">Do-not-track and consent</h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            With no analytics or advertising, there is no behavioral tracking to opt out of. The one consent
-            that matters is the in-app privacy notice: a run cannot start until you tick the acknowledgment
-            checkbox confirming your question goes to your chosen providers. Withdrawing that consent is the
-            same as stopping use: remove your keys and clear site data.
+      {/* How to inspect and clear your data */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <section className="space-y-3 rounded-xl border border-border/40 bg-card/20 p-6">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground border-b border-border/30 pb-2">
+            Inspect &amp; clear your data
+          </h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            You can verify Assembly&apos;s storage yourself by pressing F12 in your browser, opening Developer Tools, and navigating to the Application / Storage tab. There are zero entries under Cookies. To wipe all local research data, click &ldquo;Clear site data&rdquo; or delete keys in Settings.
           </p>
         </section>
 
-        <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border pt-6 text-sm">
-          <Link href="/privacy" className="text-brand hover:underline">Privacy policy</Link>
-          <Link href="/terms" className="text-brand hover:underline">Terms</Link>
-          <Link href="/refunds" className="text-brand hover:underline">Refund policy</Link>
-          <Link href="/" className="text-brand hover:underline">Home</Link>
-        </nav>
+        <section className="space-y-3 rounded-xl border border-border/40 bg-card/20 p-6">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground border-b border-border/30 pb-2">
+            Changes to storage practice
+          </h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            If we ever introduce local caching mechanisms or alter our storage architecture, this document will be updated immediately with explicit disclosure and opt-out instructions.
+          </p>
+        </section>
       </div>
-    </main>
+    </LegalPageLayout>
   )
 }
