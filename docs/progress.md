@@ -3091,3 +3091,15 @@
   - ESLint: `npm --prefix frontend run lint` passed with 0 warnings/errors.
   - Playwright E2E: `tests/keys-persist.spec.ts` passed 9/9 in 13.4s without any timeouts or flakes.
 
+## 2026-11-15 - Hero Tagline Update: "Let intelligence challenge itself."
+- **Updated Main Landing Hero Headline**:
+  - Replaced the previous tagline (`What happens / when / AI questions / AI?`) with:
+    - Boxed element: `Let intelligence`
+    - Plain text: `challenge itself.`
+  - Preserved typography, line height, responsive scaling (`clamp(52px, 5.4vw, 74px)`), and container layout.
+  - Updated E2E heading assertion in `frontend/tests/e2e.spec.ts` to match `/Let intelligence/`.
+- **Verification**:
+  - Visual verification: [hero_tagline_closeup.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/hero_tagline_closeup.png) & [hero_tagline_full.png](file:///Users/piyushbarua/.gemini/antigravity/brain/d036e3e4-a343-4053-81b1-37ae212eec82/hero_tagline_full.png).
+  - All tests passing: Playwright landing test (1/1), unit tests (15/15), ESLint (0 errors), Next.js build (clean).
+
+

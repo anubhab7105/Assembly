@@ -82,7 +82,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
   test("landing page explains the research workflow and stays dark in a light system theme", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light" })
     await page.goto("/")
-    await expect(page.getByRole("heading", { name: /What happens|convene many minds/i })).toBeVisible()
+    await expect(page.getByRole("heading", { name: /Let intelligence|What happens|convene many minds/i })).toBeVisible()
     await expect(page.getByRole("link", { name: /Start an investigation|Launch the Assembly app/i }).first()).toHaveAttribute("href", "/chat")
 
     // Dark-only: the landing has no theme control and keeps its dark palette

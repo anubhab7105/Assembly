@@ -63,11 +63,10 @@ export function AssemblyHeroExperience() {
               <div className="intro-unleash">Multi-Agent AI Orchestration Platform</div>
               <div className="headline-boxes">
                 <h1 className="hero-slogan-title">
-                  <span className="headline-box machines">What happens</span>
+                  <span className="headline-box machines">Let intelligence</span>
                   <span className="headline-plain-text">
-                    when<br />
-                    AI questions<br />
-                    AI?
+                    challenge<br />
+                    itself.
                   </span>
                 </h1>
               </div>
