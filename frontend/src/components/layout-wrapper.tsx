@@ -416,14 +416,21 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     }
   }, [mobileMenuOpen])
 
-  // Public marketing/editorial pages render their own nav; hide the app sidebar there.
-  const isLandingPage = pathname === "/" || pathname === "/science"
+  // Public marketing/editorial/legal pages render full-width without the app sidebar.
+  const isPublicPage =
+    pathname === "/" ||
+    pathname === "/science" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname === "/cookies" ||
+    pathname === "/refunds" ||
+    pathname === "/references"
 
-  // Enforce dark theme permanently on landing/editorial pages (/, /science).
+  // Enforce dark theme permanently on public/editorial/legal pages.
   // Day/night theme preference applies exclusively to the chat workspace and app shell.
   useEffect(() => {
     if (typeof document === "undefined") return;
-    if (isLandingPage) {
+    if (isPublicPage) {
       document.documentElement.classList.add("dark");
     } else {
       const current = getThemeSnapshot();
@@ -433,7 +440,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         document.documentElement.classList.add("dark");
       }
     }
-  }, [pathname, isLandingPage]);
+  }, [pathname, isPublicPage]);
 
   useEffect(() => {
     if (pathname === "/") {
@@ -456,7 +463,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
       <div className="assembly-app-shell flex h-screen overflow-hidden bg-background">
-        {!isLandingPage && (
+        {!isPublicPage && (
           <aside className="assembly-sidebar-shell hidden md:block w-[264px] shrink-0 h-full relative z-20">
             <Suspense fallback={<div className="p-4">Loading menu...</div>}>
               <SidebarContent />
@@ -495,7 +502,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         )}
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          {!isLandingPage && (
+          {!isPublicPage && (
             <header className="assembly-mobile-header md:hidden sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3">
               <Link
                 href="/"

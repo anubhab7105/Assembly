@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { BrandOrbsOrbitCanvas } from "./brand-orbs-orbit-canvas";
 import "../app/assembly-hero-experience.css";
 
@@ -74,6 +76,15 @@ export function AssemblyHeroExperience() {
                 <p>
                   Assembly brings multiple AI agents together to solve your questions independently, challenge conflicting perspectives, and verify evidence. Through collaborative reasoning and intelligent research, it turns diverse insights into one carefully synthesized answer, within a time budget you control.
                 </p>
+                <div className="intro-cta-wrapper">
+                  <Link
+                    href="/chat"
+                    className="assembly-hero-cta-btn"
+                  >
+                    <span>Start an investigation</span>
+                    <ArrowUpRight className="size-4" />
+                  </Link>
+                </div>
               </div>
             </div>
 

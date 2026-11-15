@@ -3,7 +3,7 @@ import { LandingFooter } from "@/components/landing-footer"
 import { AboutHeroSection } from "@/components/about-hero-section"
 import { TextIntroScene } from "@/components/text-intro-scene"
 import { AssemblyControlDraggableList } from "@/components/assembly-control-draggable-list"
-import { ArrowRight } from "lucide-react"
+import { LandingFaqAccordion } from "@/components/landing-faq-accordion"
 
 const faqs = [
   {
@@ -77,14 +77,7 @@ export default function LandingPage() {
               </div>
               <p>Clear answers about what Assembly does, what it uses, and what stays in your control.</p>
             </div>
-            <div className="assembly-faq-list">
-              {faqs.map((faq) => (
-                <details className="assembly-faq-item" key={faq.question}>
-                  <summary>{faq.question}<span><ArrowDownIcon /></span></summary>
-                  <p>{faq.answer}</p>
-                </details>
-              ))}
-            </div>
+            <LandingFaqAccordion items={faqs} />
           </section>
 
           <section id="get-started" className="assembly-section assembly-intro-text-section" aria-label="Assembly intro animation">
@@ -97,8 +90,4 @@ export default function LandingPage() {
         </main>
     </div>
   )
-}
-
-function ArrowDownIcon() {
-  return <ArrowRight className="size-4" aria-hidden="true" />
 }

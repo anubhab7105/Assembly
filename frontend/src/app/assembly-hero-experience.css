@@ -161,6 +161,41 @@
   margin: 0;
 }
 
+.assembly-nova-experience-root .intro-cta-wrapper {
+  margin-top: 29px;
+}
+
+.assembly-nova-experience-root .assembly-hero-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  width: fit-content;
+  padding: 0 24px;
+  border-radius: 9999px;
+  background: #eaa221;
+  color: #000000;
+  border: 1px solid #eaa221;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'Schibsted Grotesk', var(--font-inter), sans-serif;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.2s ease,
+              box-shadow 0.2s ease;
+  box-shadow: 0 4px 16px rgba(234, 162, 33, 0.25);
+}
+
+.assembly-nova-experience-root .assembly-hero-cta-btn:hover {
+  transform: translateY(-2px);
+  background: #ffb75f;
+  border-color: #ffb75f;
+  box-shadow: 0 8px 24px rgba(234, 162, 33, 0.4);
+}
+
 /* Orbiting Models on Right (Scrolls up naturally with Section 1) */
 .assembly-nova-experience-root .intro-orbit-box {
   position: absolute;

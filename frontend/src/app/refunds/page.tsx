@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import Link from "next/link"
+import { LegalPageLayout } from "@/components/legal-page-layout"
 
 export const metadata: Metadata = {
   title: "Refund policy",
@@ -10,63 +10,59 @@ export const metadata: Metadata = {
 
 export default function RefundsPage() {
   return (
-    <main id="main-content" tabIndex={-1} className="asm-legal mx-auto w-full max-w-3xl px-6 py-12 lg:py-16">
-      <span className="asm-index">[ 11 / Refunds ]</span>
-      <h1 className="text-4xl font-bold tracking-tight">Refund policy</h1>
-      <p className="asm-legal-meta mt-2 text-sm text-muted-foreground">Last updated: 12 October 2026.</p>
-
-      <div className="mt-8 space-y-8 text-left">
-        <section>
-          <h2 className="text-xl font-semibold">There is nothing to refund</h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Assembly charges nothing. There are no subscriptions, no one-time fees, no in-app purchases, and no
-            payment method is ever collected. Because no money changes hands with us, no refund can arise from us.
+    <LegalPageLayout title="Refund Policy">
+      {/* There is nothing to refund */}
+      <section className="space-y-4">
+        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground border-b border-border/30 pb-3">
+          There is nothing to refund
+        </h2>
+        <div className="rounded-xl border border-border/40 bg-card/30 p-6">
+          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+            Assembly charges absolutely nothing. There are no subscriptions, no paywalls, no one-time unlocking fees, no in-app token purchases, and no payment card information is ever solicited or stored. Because no monetary transactions occur through Assembly, no refunds can or will arise from us.
           </p>
+        </div>
+      </section>
+
+      {/* Upstream costs and Failed runs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <section className="space-y-3 rounded-xl border border-border/40 bg-card/20 p-6">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground border-b border-border/30 pb-2">
+            Third-party provider costs
+          </h2>
+          <div className="text-sm text-muted-foreground leading-relaxed space-y-2">
+            <p>
+              Your model providers (Google, Groq, OpenRouter, Cerebras) have free-tier allocations. If a provider modifies their tier rules or you exceed your free quota, any billing is governed exclusively by your agreement with that third-party provider.
+            </p>
+            <p>
+              Assembly recommends using keys specifically restricted to zero-cost or developer free tiers.
+            </p>
+          </div>
         </section>
 
-        <section>
-          <h2 className="text-xl font-semibold">Costs that can still appear (not ours)</h2>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-            <li>
-              Your model providers&apos; free tiers have quotas. If a key exceeds quota or a provider starts
-              billing on its side, that is between you and the provider. Check each provider&apos;s pricing
-              before pasting a key.
-            </li>
-            <li>
-              The setup screen warns you off any provider that asks for payment during signup. Assembly is
-              free-tier only by design.
-            </li>
-          </ul>
+        <section className="space-y-3 rounded-xl border border-border/40 bg-card/20 p-6">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground border-b border-border/30 pb-2">
+            Failed investigations
+          </h2>
+          <div className="text-sm text-muted-foreground leading-relaxed space-y-2">
+            <p>
+              An aborted or failed investigation costs you zero dollars from Assembly. Quota tokens consumed upstream during reasoning or synthesis are governed by that provider&apos;s API policies.
+            </p>
+            <p>
+              If you suspect an erroneous charge from an upstream provider, contact that provider directly with your run timestamps. Never share your secret API key with anyone.
+            </p>
+          </div>
         </section>
-
-        <section>
-          <h2 className="text-xl font-semibold">Failed runs</h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            A failed run costs you nothing from Assembly. Provider-side quota consumed by a failed run is
-            governed by that provider&apos;s policy, not ours. If you believe a charge from a provider is
-            wrong, contact that provider with the run time and key name (never share the key itself).
-          </p>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold">Questions</h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            <a
-              href="mailto:anubhab7105@gmail.com"
-              className="font-medium text-foreground underline decoration-brand/50 underline-offset-4 hover:text-brand"
-            >
-              anubhab7105@gmail.com
-            </a>
-          </p>
-        </section>
-
-        <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border pt-6 text-sm">
-          <Link href="/privacy" className="text-brand hover:underline">Privacy policy</Link>
-          <Link href="/terms" className="text-brand hover:underline">Terms</Link>
-          <Link href="/cookies" className="text-brand hover:underline">Cookie policy</Link>
-          <Link href="/" className="text-brand hover:underline">Home</Link>
-        </nav>
       </div>
-    </main>
+
+      {/* Changes */}
+      <section className="space-y-3 rounded-xl border border-border/40 bg-card/20 p-6">
+        <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground border-b border-border/30 pb-2">
+          Changes to this policy
+        </h2>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          Assembly was founded on the principle of bringing your own free-tier keys to open-source and free API tiers. If our architectural model ever evolves, this statement will be updated transparently in advance.
+        </p>
+      </section>
+    </LegalPageLayout>
   )
 }
