@@ -714,8 +714,19 @@ export default function Home() {
               required
             />
 
-            {/* Right: Actions group (Time Budget Dropdown button + Run pill button) */}
+            {/* Right: Actions group (Model settings + Time Budget Dropdown button + Run pill button) */}
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowModelSettings(true)}
+                className="assembly-composer-budget-btn"
+                aria-label="Open model and role settings"
+                aria-haspopup="dialog"
+                title="Open model and role settings"
+              >
+                <SlidersHorizontal className="size-5 transition-colors" />
+              </button>
+
               <div className="relative" ref={budgetMenuRef}>
                 <button
                   type="button"
@@ -756,7 +767,7 @@ export default function Home() {
                 onClick={handleLaunch}
                 disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
                 className="assembly-composer-run-pill shrink-0"
-                aria-label="Run investigation"
+                aria-label={loading ? "Running" : "Start run"}
               >
                 {loading ? (
                   <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />

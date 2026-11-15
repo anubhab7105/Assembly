@@ -283,7 +283,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             ref={importInputRef}
             type="file"
             accept="application/json,.json"
-            aria-label="Import Assembly history JSON"
+            aria-label="Import history JSON file"
             className="hidden"
             onChange={(e) => {
               const input = e.currentTarget
@@ -370,33 +370,35 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
           </aside>
         )}
 
-        <Dialog open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <DialogContent
-            showCloseButton={false}
-            aria-modal="true"
-            aria-describedby="mobile-menu-description"
-            className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 rounded-none border-r border-border bg-card p-0 sm:max-w-sm"
-          >
-            <DialogTitle className="sr-only">Navigation menu</DialogTitle>
-            <DialogDescription id="mobile-menu-description" className="sr-only">
-              Navigate between Assembly pages and manage your investigation history.
-            </DialogDescription>
-            <div id="mobile-menu" className="relative h-full min-h-0">
-              <Suspense fallback={<div className="p-4">Loading menu...</div>}>
-                <SidebarContent onClose={() => setMobileMenuOpen(false)} />
-              </Suspense>
-              <button
-                ref={menuCloseRef}
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                aria-label="Close menu"
-                className="absolute right-3 top-3 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-background/80 hover:bg-muted"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {mobileMenuOpen && (
+          <Dialog open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <DialogContent
+              showCloseButton={false}
+              aria-modal="true"
+              aria-describedby="mobile-menu-description"
+              className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 rounded-none border-r border-border bg-card p-0 sm:max-w-sm"
+            >
+              <DialogTitle className="sr-only">Navigation menu</DialogTitle>
+              <DialogDescription id="mobile-menu-description" className="sr-only">
+                Navigate between Assembly pages and manage your investigation history.
+              </DialogDescription>
+              <div id="mobile-menu" className="relative h-full min-h-0">
+                <Suspense fallback={<div className="p-4">Loading menu...</div>}>
+                  <SidebarContent onClose={() => setMobileMenuOpen(false)} />
+                </Suspense>
+                <button
+                  ref={menuCloseRef}
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Close menu"
+                  className="absolute right-3 top-3 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-background/80 hover:bg-muted"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
           {!isLandingPage && (
