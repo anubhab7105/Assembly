@@ -328,7 +328,7 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  color: #eaa221 !important;
+  color: #eaa221;
   font-size: .7rem;
   font-weight: 760;
   letter-spacing: .14em;
@@ -3009,16 +3009,16 @@ html:not(.dark) .assembly-context-popover-item-badge {
   background: #e8e8e5;
 }
 
-html:not(.dark) .assembly-budget-item {
+html:not(.dark) .assembly-budget-dropdown-item {
   color: #202124;
 }
 
-html:not(.dark) .assembly-budget-item:hover {
+html:not(.dark) .assembly-budget-dropdown-item:hover {
   background: #f0f0ee;
   color: #111215;
 }
 
-html:not(.dark) .assembly-budget-item.is-selected {
+html:not(.dark) .assembly-budget-dropdown-item.is-selected {
   background: #fbf3e4;
   color: #885315;
 }

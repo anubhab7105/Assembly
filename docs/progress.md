@@ -1,3 +1,20 @@
+## 2026-11-15 — Fix CodeRabbit Major/Minor Reviews & Playwright CI Stalls (PR #109)
+- **Resolved CodeRabbit Major & Minor Review Findings**:
+  - **Major 1 (CSP Three.js Origin)**: Avoided external `unpkg.com` script in `orb-gallery.ts`. Downloaded and pinned Three.js to `frontend/public/vendor/three.min.js`, satisfying `'self'` in deployed CSP. Added `public/vendor/**` to ESLint global ignores.
+  - **Major 2 (Neuform Isolated Effect Stubs)**: Converted all 28 placeholder stub files in `src/shaders/neuform-isolated/sources/` into valid HTML5 documents with proper `<head>`, `<body>`, and target component wrappers. Hardened `buildFocusedDocument` to dynamically ensure `<head>` and `<body>` tags exist before injecting focus styles/scripts.
+  - **Sidebar History Synchronization**: Added `assembly:history-change` event broadcasting and listeners in `layout-wrapper.tsx` to keep desktop sidebar and mobile drawer histories perfectly in sync upon deletion or import.
+  - **In-Memory Theme Fallback**: Preserved `memoryTheme` snapshot across navigation when browser storage is unavailable or throws.
+  - **Color Contrast (WCAG AAA)**: Updated light-mode `--primary-foreground`, `--brand-foreground`, and `--sidebar-primary-foreground` to `#121310`, ensuring high contrast on marigold `#eaa221`.
+  - **Duplicate Section ID & Navigation**: Renamed outer section in `about-hero-section.tsx` to `id="about-assembly"`, root-anchored footer fragment links (`/#how-it-works`, `/#your-control`), and guarded modifier clicks in `landing-header.tsx`.
+  - **Reduced Motion & Wrap Threshold**: Added `prefers-reduced-motion` check and fixed one-set wrapping threshold (`scrollHeight / 3`) in `assembly-control-draggable-list.tsx`; cleaned up event listeners in `brand-orbs-orbit-engine.js`.
+  - **Playwright Test 4 Flakiness**: Added `data-testid="sidebar-settings-link"` to the sidebar Settings link and updated `tests/keys-persist.spec.ts:125` to target it without colliding with composer warning links.
+- **Verification**:
+  - Playwright: **22/22 tests passing** (tested across all suites, including `keys-persist.spec.ts:103`).
+  - Vitest: 15/15 storage tests and 41/41 component tests passing.
+  - CSP tests: 6/6 tests passing.
+  - ESLint: 0 errors, 0 warnings.
+  - Next.js Production Build: 18/18 static routes compiled successfully.
+
 ## 2026-11-15 — Fix Next.js Dev Overlay Pointer Interception in Playwright CI (PR #109)
 - **Resolved `<nextjs-portal>` Pointer Interception on Sidebar Settings Link**:
   - **Dev Indicator Suppression**: Disabled `devIndicators: false` in `frontend/next.config.ts`, stopping Next.js from rendering its floating development indicator/toast in the bottom-left corner over the sidebar's Settings link.

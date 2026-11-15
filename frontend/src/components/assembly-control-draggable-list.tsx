@@ -43,6 +43,9 @@ export function AssemblyControlDraggableList() {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
 
     let animationFrameId: number;
     let lastTime = performance.now();
@@ -56,9 +59,9 @@ export function AssemblyControlDraggableList() {
         const scrollSpeed = 0.032;
         el.scrollTop += scrollSpeed * dt;
 
-        const halfHeight = el.scrollHeight / 2;
-        if (el.scrollTop >= halfHeight) {
-          el.scrollTop -= halfHeight;
+        const oneSetHeight = el.scrollHeight / 3;
+        if (el.scrollTop >= oneSetHeight) {
+          el.scrollTop -= oneSetHeight;
         }
       }
 

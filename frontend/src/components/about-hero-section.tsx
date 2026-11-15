@@ -63,7 +63,7 @@ export function AboutHeroSection() {
   return (
     <section
       ref={sectionRef}
-      id="how-it-works"
+      id="about-assembly"
       className="assembly-bezel-frame assembly-nova-section"
       aria-label="About Assembly Multi-Agent Experience"
       style={{ width: "95%", marginInline: "auto" }}

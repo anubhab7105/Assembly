@@ -22,6 +22,7 @@ export function LandingHeader() {
   }, []);
 
   const handleNavClick = (sectionId: string, e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (isHome) {
       e.preventDefault();
       scrollToSection(sectionId);
@@ -35,10 +36,12 @@ export function LandingHeader() {
   useEffect(() => {
     if (typeof window === "undefined" || !isHome) return;
 
+    let timerId: ReturnType<typeof setTimeout> | null = null;
     const handleHash = () => {
       const hash = window.location.hash.replace("#", "");
       if (hash) {
-        setTimeout(() => {
+        if (timerId) clearTimeout(timerId);
+        timerId = setTimeout(() => {
           scrollToSection(hash);
         }, 150);
       }
@@ -46,7 +49,10 @@ export function LandingHeader() {
 
     handleHash();
     window.addEventListener("hashchange", handleHash);
-    return () => window.removeEventListener("hashchange", handleHash);
+    return () => {
+      if (timerId) clearTimeout(timerId);
+      window.removeEventListener("hashchange", handleHash);
+    };
   }, [isHome, scrollToSection]);
 
   // Scroll detection for homepage header appearance

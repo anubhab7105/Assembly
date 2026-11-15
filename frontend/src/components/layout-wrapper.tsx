@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import {
   Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload, ChevronDown,
 } from "lucide-react"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { ThemeToggle, getThemeSnapshot } from "@/components/theme-toggle"
 import { BrandOrbMark } from "@/components/brand-orb-mark"
 
 const OFFLINE_MESSAGE = "You are currently offline. Some features may not work."
@@ -68,19 +68,24 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
   useEffect(() => {
     let cancelled = false
-    storage
-      .listHistory()
-      .then((items) => {
-        if (!cancelled) setExecutions(items)
-      })
-      .catch((error: unknown) => {
-        if (!cancelled && process.env.NODE_ENV !== "production") console.error(error)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+    const sync = () => {
+      storage
+        .listHistory()
+        .then((items) => {
+          if (!cancelled) setExecutions(items)
+        })
+        .catch((error: unknown) => {
+          if (!cancelled && process.env.NODE_ENV !== "production") console.error(error)
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }
+    sync()
+    window.addEventListener("assembly:history-change", sync)
     return () => {
       cancelled = true
+      window.removeEventListener("assembly:history-change", sync)
     }
   }, [pathname])
 
@@ -90,6 +95,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
     if (!confirm("Delete this execution?")) return
     await storage.deleteHistory(id)
     setExecutions((prev) => prev.filter((x) => x.id !== id))
+    window.dispatchEvent(new CustomEvent("assembly:history-change"))
     toast({ title: "Deleted", description: "Execution removed from history." })
     if (pathname === `/executions` && searchParams?.get("id") === id) {
       router.push("/chat")
@@ -115,6 +121,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       const text = await file.text()
       await storage.importJSON(text)
       await loadExecutions()
+      window.dispatchEvent(new CustomEvent("assembly:history-change"))
       toast({ title: "Import complete", description: "History and usage were imported successfully.", variant: "success" })
     } catch (error) {
       const message = error instanceof Error
@@ -255,6 +262,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               onClick={onClose}
               aria-label="Settings"
               title="Settings"
+              data-testid="sidebar-settings-link"
               className="assembly-sidebar-icon-btn"
             >
               <Settings className="size-4" />
@@ -328,14 +336,10 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     if (isLandingPage) {
       document.documentElement.classList.add("dark");
     } else {
-      try {
-        const stored = window.localStorage.getItem("assembly:theme");
-        if (stored === "light") {
-          document.documentElement.classList.remove("dark");
-        } else {
-          document.documentElement.classList.add("dark");
-        }
-      } catch {
+      const current = getThemeSnapshot();
+      if (current === "light") {
+        document.documentElement.classList.remove("dark");
+      } else {
         document.documentElement.classList.add("dark");
       }
     }

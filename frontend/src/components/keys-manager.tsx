@@ -599,12 +599,12 @@ export function KeysManager() {
       </div>
 
       <Card className="flex flex-col" data-testid="provider-card-tavily">
-        <CardHeader className="sr-only">
+        <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Key className="size-4 text-brand" />
             tavily <Badge variant="secondary">search · optional</Badge>
           </CardTitle>
-          <CardDescription className="sr-only">
+          <CardDescription className="text-xs mt-1">
             Why this provider: web search for researchers. Without it
             Assembly uses keyless sources (Wikipedia, arXiv, Semantic
             Scholar, DuckDuckGo) on a best-effort basis. They are rate

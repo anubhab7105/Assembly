@@ -81,7 +81,7 @@
   --ring: #eaa221;
   --radius: 0.75rem;
   --primary: #eaa221;
-  --primary-foreground: #ffffff;
+  --primary-foreground: #121310;
   --secondary: #f4efe6;
   --accent: #fbf3e4;
   --accent-foreground: #a4530b;
@@ -89,7 +89,7 @@
   --brand: #eaa221;
   --brand-subtle: #fbf3e4;
   --brand-hover: #d98810;
-  --brand-foreground: #ffffff;
+  --brand-foreground: #121310;
   --success: #2c7a54;
   --success-subtle: #e5f1e9;
   --warning: #a5680e;
@@ -101,7 +101,7 @@
   --sidebar: #f8f6f0;
   --sidebar-foreground: #121310;
   --sidebar-primary: #eaa221;
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary-foreground: #121310;
   --sidebar-accent: #f0ebe0;
   --sidebar-accent-foreground: #a4530b;
   --sidebar-border: #e2dbce;

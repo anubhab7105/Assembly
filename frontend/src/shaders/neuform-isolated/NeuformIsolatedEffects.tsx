@@ -1783,9 +1783,18 @@ ${introWordmarkStyle}
   window.addEventListener('load', isolate, { once: true });
 })();
 </script>`;
-  return source
-    .replace(/<\/head>/i, `${focusStyle}</head>`)
-    .replace(/<\/body>/i, `${focusScript}</body>`);
+  let doc = source;
+  if (/<\/head>/i.test(doc)) {
+    doc = doc.replace(/<\/head>/i, `${focusStyle}</head>`);
+  } else {
+    doc = `<head>${focusStyle}</head>${doc}`;
+  }
+  if (/<\/body>/i.test(doc)) {
+    doc = doc.replace(/<\/body>/i, `${focusScript}</body>`);
+  } else {
+    doc = `${doc}<body>${focusScript}</body>`;
+  }
+  return doc;
 }
 
 function NeuformIsolatedEffect({

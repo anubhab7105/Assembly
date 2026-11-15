@@ -122,7 +122,9 @@ test.describe("Keys survive refresh (P0)", () => {
     await cookieNotice.getByRole("button", { name: /Accept/i }).click()
     await expect(cookieNotice).toBeHidden()
 
-    await page.getByRole("link", { name: /Settings/i }).click({ force: true })
+    const settingsLink = page.getByTestId("sidebar-settings-link").or(page.getByRole("link", { name: /^Settings$/i })).first()
+    await expect(settingsLink).toBeVisible({ timeout: 10000 })
+    await settingsLink.click()
     await expect(page).toHaveURL(/\/settings/)
     await expect(page.getByTestId("readiness-chip")).toContainText("gpt-oss", { timeout: 10000 })
   })

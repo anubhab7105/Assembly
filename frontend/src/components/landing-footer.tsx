@@ -69,17 +69,17 @@ export function LandingFooter() {
             <h4 className="assembly-rich-footer-heading">Architecture</h4>
             <ul className="assembly-rich-footer-list">
               <li>
-                <Link href="#how-it-works" className="assembly-rich-footer-link">
+                <Link href="/#how-it-works" className="assembly-rich-footer-link">
                   Consensus Engine
                 </Link>
               </li>
               <li>
-                <Link href="#how-it-works" className="assembly-rich-footer-link">
+                <Link href="/#how-it-works" className="assembly-rich-footer-link">
                   Cross-Examination
                 </Link>
               </li>
               <li>
-                <Link href="#your-control" className="assembly-rich-footer-link">
+                <Link href="/#your-control" className="assembly-rich-footer-link">
                   Diversity Gate (7 Families)
                 </Link>
               </li>

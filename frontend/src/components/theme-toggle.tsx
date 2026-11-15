@@ -9,7 +9,7 @@ const STORAGE_KEY = "assembly:theme"
 const THEME_EVENT = "assembly:theme-change"
 let memoryTheme: Theme | null = null
 
-function getThemeSnapshot(): Theme {
+export function getThemeSnapshot(): Theme {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
     if (stored === "light" || stored === "dark") return stored

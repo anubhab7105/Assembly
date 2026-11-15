@@ -1751,23 +1751,32 @@ export function initBrandOrbsOrbit(canvas) {
       introActive = false;
     }
 
-    window.addEventListener("message", function (e) {
+    var onMessage = function (e) {
       if (e.data && (e.data.playIntro || e.data.type === "playIntro")) {
         playIntro();
       }
       if (e.data && (e.data.resetIntro || e.data.type === "resetIntro")) {
         resetIntro();
       }
-    });
+    };
+    window.addEventListener("message", onMessage);
 
     try {
       window.parent?.postMessage({ type: "headingReady" }, "*");
     } catch { }
 
+    var isReducedMotion = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (isReducedMotion) {
+      introCompleted = true;
+      introT = 3.6;
+    }
+
     function frame(now) {
       if (playing) {
         var dt = (now - last) / 1000;
-        tNow += dt;
+        if (!isReducedMotion) {
+          tNow += dt;
+        }
         if (introActive) {
           introT += dt;
           if (introT >= 3.6) {
@@ -1779,7 +1788,9 @@ export function initBrandOrbsOrbit(canvas) {
       }
       last = now;
       render(tNow, introCompleted ? 3.6 : introT);
-      animId = requestAnimationFrame(frame);
+      if (!isReducedMotion) {
+        animId = requestAnimationFrame(frame);
+      }
     }
 
     const onResize = function () { if (isDisposed) return; resize(); render(tNow, introT); }; window.addEventListener("resize", onResize);
@@ -1793,5 +1804,6 @@ export function initBrandOrbsOrbit(canvas) {
     if (typeof onResize === "function") {
       window.removeEventListener("resize", onResize);
     }
+    window.removeEventListener("message", onMessage);
   };
 }

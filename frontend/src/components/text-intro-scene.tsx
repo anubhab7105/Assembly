@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import { TypographyVortexCanvas, TextPathStudies, RectangleButtons } from "@designcodeio/threeui";
 import "@designcodeio/threeui/style.css";
 
@@ -284,6 +284,7 @@ function KineticAssemblyWordmark({
 }
 
 export function TextIntroScene() {
+  const router = useRouter();
   const isClient = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isTriggered, setIsTriggered] = useState(false);
@@ -408,16 +409,16 @@ export function TextIntroScene() {
         />
 
         <div className={`assembly-intro-button-container ${isSettled ? "is-visible" : "is-hidden"}`}>
-          <Link href="/chat" className="assembly-intro-button-link" aria-label="Start an investigation">
-            <div className="assembly-intro-button-wrap">
-              <RectangleButtons
-                variant="dark-pill"
-                mode="dark"
-              >
-                Start an investigation
-              </RectangleButtons>
-            </div>
-          </Link>
+          <div className="assembly-intro-button-wrap">
+            <RectangleButtons
+              variant="dark-pill"
+              mode="dark"
+              onClick={() => router.push("/chat")}
+              aria-label="Start an investigation"
+            >
+              Start an investigation
+            </RectangleButtons>
+          </div>
         </div>
       </div>
     </div>
