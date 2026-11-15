@@ -366,7 +366,7 @@ def test_validate_attachment_catches_csv_error(monkeypatch: pytest.MonkeyPatch) 
     raw_content = b"header1,header2\nval1,val2\n"
 
     class FailingReader:
-        def __iter__(self) -> FailingReader:
+        def __iter__(self):
             return self
 
         def __next__(self) -> list[str]:
