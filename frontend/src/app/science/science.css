@@ -1,0 +1,466 @@
+/* The Science of Assembly - Scientific Editorial UI Design */
+
+.assembly-science-page {
+  --landing-max: 1440px;
+  --sci-bg: #000000;
+  --sci-yellow: #eaa221;
+  --sci-surface: #0a0b0d;
+  --sci-border: rgba(255, 255, 255, 0.1);
+  --sci-border-highlight: rgba(255, 255, 255, 0.2);
+  --sci-text: #f0ede6;
+  --sci-dim: rgba(240, 237, 230, 0.68);
+  --sci-faint: rgba(240, 237, 230, 0.45);
+  --sci-marigold: #eaa221;
+  --sci-marigold-glow: rgba(234, 162, 33, 0.22);
+  
+  min-height: 100vh;
+  background-color: #000000;
+  color: var(--sci-text);
+  font-family: 'Schibsted Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Header Wordmark Contrast on Black Hero Stage */
+.assembly-science-page .assembly-landing-header:not(.is-scrolled) .assembly-wordmark {
+  color: #ffffff !important;
+}
+
+.assembly-science-page .assembly-landing-header:not(.is-scrolled) .assembly-wordmark .assembly-wordmark-dotted-a {
+  color: #ffffff !important;
+}
+
+.assembly-science-page .assembly-landing-header:not(.is-scrolled) .assembly-wordmark .assembly-wordmark-dot {
+  color: var(--sci-marigold, #eaa221) !important;
+}
+
+/* ─── Hero Stage: Pure Pitch Black Background (Matches User Screenshot) ─────── */
+.assembly-science-hero-stage {
+  background-color: #000000;
+  color: var(--sci-text);
+  position: relative;
+  width: 100%;
+  padding-top: 108px;
+  padding-bottom: 56px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.assembly-science-hero-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("/idea-network-banner.jpg");
+  background-size: cover;
+  background-position: center right;
+  opacity: 0.32;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Content Container */
+.assembly-science-container {
+  position: relative;
+  z-index: 1;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Hero Container: aligns headline and lead text directly beneath the header logo */
+.assembly-science-hero-stage .assembly-science-container {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding-inline: max(22px, calc((100% - var(--landing-max, 1440px)) / 2 + 12px));
+}
+
+/* Hero Typography on Pitch Black */
+.assembly-science-hero {
+  padding: 16px 0 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  transform: none;
+}
+
+@media (max-width: 1080px) {
+  .assembly-science-hero {
+    transform: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .assembly-science-hero {
+    transform: none;
+  }
+}
+
+.assembly-science-hero h1 {
+  font-size: clamp(2.5rem, 5.5vw, 4.4rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  margin: 0 0 24px 0;
+  color: #ffffff;
+  text-align: left;
+  max-width: 980px;
+}
+
+.assembly-science-hero h1 em {
+  font-style: italic;
+  color: var(--sci-marigold);
+  text-decoration: none;
+}
+
+/* Animated Word Rotator in Hero Headline */
+.assembly-science-rotator-wrap {
+  display: inline-block;
+  vertical-align: baseline;
+  position: relative;
+}
+
+.assembly-science-rotating-word {
+  display: inline-block;
+  color: var(--sci-marigold);
+  font-style: italic;
+  text-decoration: underline;
+  text-decoration-color: rgba(234, 162, 33, 0.45);
+  text-underline-offset: 6px;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.35s ease;
+  will-change: transform, opacity, filter;
+}
+
+.assembly-science-rotating-word.is-idle {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0px);
+}
+
+.assembly-science-rotating-word.is-exiting {
+  opacity: 0;
+  transform: translateY(-14px);
+  filter: blur(3px);
+}
+
+.assembly-science-rotating-word.is-entering {
+  opacity: 0;
+  transform: translateY(14px);
+  filter: blur(3px);
+  transition: none !important;
+}
+
+.assembly-science-lead {
+  font-size: clamp(1.15rem, 2.2vw, 1.42rem);
+  line-height: 1.62;
+  color: var(--sci-dim);
+  max-width: 860px;
+  font-weight: 400;
+  text-align: left;
+  margin: 0;
+}
+
+/* ─── Academic Research Stage: Marigold Yellow Background ─────────────────── */
+.assembly-science-yellow-stage {
+  background-color: var(--sci-yellow);
+  color: #0b0c0e;
+  position: relative;
+  width: 100%;
+  padding-top: 64px;
+  padding-bottom: 40px;
+}
+
+/* Yellow Stage Header (Above Research Grid) */
+.assembly-science-yellow-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 48px;
+}
+
+.assembly-science-yellow-header h2 {
+  font-size: clamp(2.3rem, 4.6vw, 3.6rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  margin: 0 auto 18px;
+  color: #0b0c0e;
+  text-align: center;
+  max-width: 980px;
+}
+
+.assembly-science-yellow-header .assembly-science-rotating-word {
+  color: #000000;
+  font-style: italic;
+  text-decoration: underline;
+  text-decoration-color: rgba(0, 0, 0, 0.4);
+  text-underline-offset: 6px;
+}
+
+.assembly-science-yellow-subhead {
+  font-size: clamp(1.05rem, 1.9vw, 1.22rem);
+  line-height: 1.62;
+  color: rgba(11, 12, 14, 0.82);
+  max-width: 820px;
+  font-weight: 400;
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* Published Academic Research Grid (3-Column Rich Card Layout) */
+.assembly-research-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  margin: 0 0 20px;
+}
+
+@media (max-width: 1080px) {
+  .assembly-research-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+}
+
+@media (max-width: 680px) {
+  .assembly-research-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+/* Academic Card on Marigold Yellow (Pure Pitch Black Elevation) */
+.assembly-press-card {
+  background: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.assembly-press-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+}
+
+.assembly-press-thumb-wrap {
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+  position: relative;
+  background: #ffffff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.assembly-press-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  transition: transform 0.4s ease;
+}
+
+.assembly-press-card:hover .assembly-press-thumb {
+  transform: scale(1.03);
+}
+
+.assembly-press-body {
+  padding: 22px 24px 22px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.assembly-press-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: rgba(240, 237, 230, 0.75);
+  font-family: var(--font-sans, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+
+.assembly-press-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(240, 237, 230, 0.75);
+  font-weight: 500;
+}
+
+.assembly-press-bullet {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 11px;
+}
+
+.assembly-press-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sci-marigold);
+  font-weight: 500;
+}
+
+.assembly-press-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #ffffff;
+  margin: 0 0 12px;
+  letter-spacing: -0.015em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.assembly-press-desc {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--sci-dim);
+  margin: 0 0 20px;
+  flex-grow: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.assembly-press-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.assembly-press-source {
+  font-size: 12px;
+  color: var(--sci-faint);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+.assembly-press-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: rgba(255, 255, 255, 0.35);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.assembly-press-link:hover {
+  color: var(--sci-marigold);
+  text-decoration-color: var(--sci-marigold);
+  transform: translateX(2px);
+}
+
+/* ─── Downward Curve Transition Divider (At exact spot of Image 3) ──────────── */
+.assembly-science-curve-divider {
+  width: 100%;
+  height: 90px;
+  line-height: 0;
+  overflow: hidden;
+  background-color: #000000;
+  margin-top: -1px;
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.assembly-science-curve-divider svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ─── Bottom Stage: Pure Pitch Black ────────────────────────────────────────── */
+.assembly-science-black-stage {
+  background-color: #000000;
+  color: var(--sci-text);
+  position: relative;
+  width: 100%;
+  padding-top: 24px;
+  padding-bottom: 20px;
+}
+
+/* ─── 2-Column Side-by-Side Editorial Layout (No Boxed Cards) ─────────────── */
+.assembly-science-editorial-wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+.assembly-science-editorial-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+}
+
+@media (max-width: 860px) {
+  .assembly-science-editorial-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+}
+
+.assembly-science-editorial-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.assembly-science-eyebrow {
+  display: inline-block;
+  font-family: var(--font-sans, 'Inter', -apple-system, sans-serif);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sci-marigold);
+  margin-bottom: 14px;
+}
+
+.assembly-science-editorial-col h2 {
+  font-size: clamp(1.85rem, 2.5vw, 2.4rem);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+  color: #ffffff;
+  margin: 0 0 14px;
+}
+
+.assembly-science-subhead {
+  font-size: clamp(1.05rem, 1.6vw, 1.18rem);
+  font-weight: 400;
+  color: rgba(240, 237, 230, 0.9);
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+.assembly-science-body {
+  font-size: 15.5px;
+  line-height: 1.76;
+  color: var(--sci-dim);
+  font-weight: 400;
+  margin: 0;
+}

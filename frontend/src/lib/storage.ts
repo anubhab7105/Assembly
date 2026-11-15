@@ -416,6 +416,16 @@ function parseImport(text: string): { history: HistoryRecord[]; usage: UsageReco
   }
 }
 
+function notifyHistoryChange(): void {
+  if (typeof window !== "undefined") {
+    try {
+      window.dispatchEvent(new CustomEvent("assembly:history-change"))
+    } catch {
+      // Ignore in headless/test environments where CustomEvent dispatch is unhandled
+    }
+  }
+}
+
 class BaseStorage implements StorageService {
   async listHistory(): Promise<HistoryRecord[]> {
     const items = (await idbGet<unknown>("history")) ?? []
@@ -436,16 +446,19 @@ class BaseStorage implements StorageService {
     const existing = Array.isArray(items) ? items.map(normalizeHistory).filter((item): item is HistoryRecord => item !== null) : []
     const next = [normalized, ...existing.filter((h) => h.id !== normalized.id)].slice(0, MAX_HISTORY)
     await idbSet("history", next)
+    notifyHistoryChange()
   }
 
   async deleteHistory(id: string): Promise<void> {
     const items = (await idbGet<unknown>("history")) ?? []
     const existing = Array.isArray(items) ? items.map(normalizeHistory).filter((item): item is HistoryRecord => item !== null) : []
     await idbSet("history", existing.filter((h) => h.id !== id))
+    notifyHistoryChange()
   }
 
   async clearHistory(): Promise<void> {
     await idbDel("history")
+    notifyHistoryChange()
   }
 
   async getSetting(key: string): Promise<string | null> {
@@ -503,6 +516,7 @@ class BaseStorage implements StorageService {
       [...mergedHistory.values()].slice(0, MAX_HISTORY),
       [...mergedUsage.values()].slice(0, MAX_USAGE),
     )
+    notifyHistoryChange()
   }
 }
 

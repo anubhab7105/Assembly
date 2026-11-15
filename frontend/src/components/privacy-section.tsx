@@ -11,6 +11,7 @@ import {
 import { storage } from "@/lib/storage";
 import { env } from "@/lib/env";
 import { Button } from "@/components/ui/button";
+import { Shield } from "lucide-react";
 
 export function PrivacySection({
   providers,
@@ -42,9 +43,17 @@ export function PrivacySection({
   return (
     <section
       data-testid="privacy-section"
-      className="rounded-xl border border-border bg-card p-4 space-y-3"
+      className="rounded-xl border border-border bg-card p-4 space-y-4"
     >
       <h3 className="text-sm font-semibold">Privacy</h3>
+
+      <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3.5 text-xs text-white/80 leading-relaxed flex items-start gap-2.5">
+        <Shield className="size-4 text-brand shrink-0 mt-0.5" />
+        <p>
+          Saved keys stay in this browser across refreshes and can be removed here or cleared with site data. Keys are stored unencrypted in local browser storage, not protected by the OS.
+        </p>
+      </div>
+
       <div className="space-y-2 text-sm text-muted-foreground">
         {paragraphs.map((p, i) =>
           p === "Each model provider handles your inputs under its own policy:" ? (
