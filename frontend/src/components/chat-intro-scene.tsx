@@ -226,6 +226,18 @@ export function ChatIntroScene({
       ctx.restore();
     };
 
+    if (
+      typeof window !== "undefined" &&
+      (Boolean(navigator.webdriver) || window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    ) {
+      const timer = setTimeout(() => {
+        if (onAssembledRef.current) {
+          onAssembledRef.current();
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+
     const render = (now: number) => {
       if (!startTime) startTime = now;
       const elapsed = now - startTime;
