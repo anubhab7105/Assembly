@@ -1,6 +1,7 @@
 ## 2026-11-17 — Universal Smart Key Bar refactor on /settings
 
-- Compact [+] checklist toggle: tucked the provider selector, model checklist, and specialty roles checklist cleanly inside an interactive `+` toggle button inside the universal paste bar, keeping the default Settings view completely clean and minimal.
+- Dedicated "Models and roles" modal dialog: moved the provider selector, model checklist, and specialty roles checklist inside a clean modal popup dialog matching the chat's Model Picker design (centered backdrop overlay, title/description, checklist tiles, top-right `✕` close, and bottom `Done` button).
+- Compact [+] modal trigger: the universal paste bar features an intuitive `+` button and configuration link to open the dialog, leaving the main Settings page 100% minimal and clutter-free.
 - Redundant UI removed: eliminated the duplicate "Available Providers (Click to Configure)" grid of separate input cards and the redundant top "Team Diversity & Readiness" banner, as well as the external "Get free key" link.
 - Streamlined Settings architecture:
   - Single Universal Key Ingestion Bar at the top with auto-detection by prefix (`AIza...`, `gsk_...`, `csk-...`, `sk-or-...`, `hf_...`, `nvapi-...`, `tvly-...`) and collapsible provider pill/checkbox selector.
