@@ -4,6 +4,14 @@ import React, { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { globalVault } from "@/lib/key-vault"
 import { env } from "@/lib/env"
 import { ApiClient, type Catalog } from "@/lib/api-client"
@@ -137,7 +145,7 @@ export function KeysManager() {
   const [universalInput, setUniversalInput] = useState("")
   const [selectedProviderId, setSelectedProviderId] = useState<string>("gemini")
   const [isSubmittingUniversal, setIsSubmittingUniversal] = useState(false)
-  const [showConfig, setShowConfig] = useState(false)
+  const [showConfigModal, setShowConfigModal] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -434,19 +442,15 @@ export function KeysManager() {
         </CardHeader>
 
         <CardContent className="space-y-4 pt-4">
-          {/* Single Universal Paste Bar with [+] Configuration Toggle */}
+          {/* Single Universal Paste Bar with [+] Modal Trigger */}
           <div className="space-y-2">
             <div className="relative flex items-center">
               <button
                 type="button"
-                onClick={() => setShowConfig((prev) => !prev)}
-                className={`absolute left-2.5 z-10 p-1.5 rounded-lg transition-all duration-200 flex items-center justify-center ${
-                  showConfig
-                    ? "bg-brand text-brand-foreground rotate-45 shadow-sm"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                }`}
-                title={showConfig ? "Hide provider options & models" : "Configure provider, models & roles (+)"}
-                aria-expanded={showConfig}
+                onClick={() => setShowConfigModal(true)}
+                className="absolute left-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-brand hover:bg-muted/80 transition-all flex items-center justify-center"
+                title="Configure provider, models & roles (+)"
+                aria-label="Open provider, models and roles settings"
               >
                 <Plus className="size-4" />
               </button>
@@ -491,86 +495,78 @@ export function KeysManager() {
               </p>
               <button
                 type="button"
-                onClick={() => setShowConfig((prev) => !prev)}
+                onClick={() => setShowConfigModal(true)}
                 className="inline-flex items-center gap-1 text-brand hover:underline self-start sm:self-auto font-medium transition-colors"
               >
-                <Plus className={`size-3 transition-transform duration-200 ${showConfig ? "rotate-45" : ""}`} />
+                <Plus className="size-3" />
                 <span>
-                  {showConfig
-                    ? "Hide options & models"
-                    : `Configure provider & models (${ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name})`}
+                  Configure provider &amp; models ({ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name})
                 </span>
               </button>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Collapsible Checklist - Reveals when [+] button is toggled */}
-          {showConfig && (
-            <div className="space-y-4 pt-3 border-t border-border/30 animate-in fade-in-50 duration-200">
-              {/* Quick Select Provider - Checkbox Card Style (matching Model Picker) */}
-              <div className="space-y-2">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Select Provider:
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {ALL_SELECTABLE_PROVIDERS.map((p) => {
-                    const isSelected = selectedProviderId === p.id
-                    const isSaved = !!savedKeys[p.id]
-                    return (
-                      <label
-                        key={p.id}
-                        onClick={() => setSelectedProviderId(p.id)}
-                        className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
-                          isSelected
-                            ? "border-brand bg-brand/10 text-foreground font-semibold"
-                            : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="provider-selector"
-                          checked={isSelected}
-                          onChange={() => setSelectedProviderId(p.id)}
-                          className="accent-brand size-3.5"
-                        />
-                        <span>{p.name}</span>
-                        {isSaved && (
-                          <span className="text-[10px] text-emerald-400 font-sans font-medium">(active)</span>
-                        )}
-                      </label>
-                    )
-                  })}
-                </div>
+      {/* Models & Roles Modal Dialog (matching 2nd image) */}
+      <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl bg-[#121316] border border-border/80 text-foreground p-6 rounded-2xl shadow-2xl">
+          <DialogHeader className="pb-3 border-b border-border/30">
+            <DialogTitle className="text-lg font-bold text-foreground">Models and roles</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Select a provider to preview its available models, architecture family, and multi-agent roles.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-4">
+            {/* Quick Select Provider - Checkbox Card Style */}
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Select Provider:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {ALL_SELECTABLE_PROVIDERS.map((p) => {
+                  const isSelected = selectedProviderId === p.id
+                  const isSaved = !!savedKeys[p.id]
+                  return (
+                    <label
+                      key={p.id}
+                      onClick={() => setSelectedProviderId(p.id)}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
+                        isSelected
+                          ? "border-brand bg-brand/10 text-foreground font-semibold"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="modal-provider-selector"
+                        checked={isSelected}
+                        onChange={() => setSelectedProviderId(p.id)}
+                        className="accent-brand size-3.5"
+                      />
+                      <span>{p.name}</span>
+                      {isSaved && (
+                        <span className="text-[10px] text-emerald-400 font-sans font-medium">(active)</span>
+                      )}
+                    </label>
+                  )
+                })}
               </div>
+            </div>
 
-              {/* Models checklist */}
-              <div className="space-y-2 pt-1 border-t border-border/20">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  {ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} Models
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {catalog?.providers.find((p) => p.id === selectedProviderId)?.models?.length ? (
-                    catalog.providers
-                      .find((p) => p.id === selectedProviderId)!
-                      .models.map((m) => (
-                        <label
-                          key={m.id}
-                          className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
-                        >
-                          <input
-                            type="checkbox"
-                            checked
-                            readOnly
-                            className="accent-brand size-3.5 rounded"
-                          />
-                          <span>{m.id}</span>
-                          <span className="text-[10px] opacity-60 font-sans">{m.family}</span>
-                        </label>
-                      ))
-                  ) : (
-                    activeSpecialtyMeta?.models.split(", ").map((modelName) => (
+            {/* Models checklist */}
+            <div className="space-y-2 pt-2 border-t border-border/20">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} Models
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {catalog?.providers.find((p) => p.id === selectedProviderId)?.models?.length ? (
+                  catalog.providers
+                    .find((p) => p.id === selectedProviderId)!
+                    .models.map((m) => (
                       <label
-                        key={modelName}
+                        key={m.id}
                         className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
                       >
                         <input
@@ -579,22 +575,14 @@ export function KeysManager() {
                           readOnly
                           className="accent-brand size-3.5 rounded"
                         />
-                        <span>{modelName}</span>
+                        <span>{m.id}</span>
+                        <span className="text-[10px] opacity-60 font-sans">{m.family}</span>
                       </label>
                     ))
-                  )}
-                </div>
-              </div>
-
-              {/* Specialties & Roles checklist */}
-              <div className="space-y-2 pt-1 border-t border-border/20">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Specialties &amp; Roles Unlocked
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {activeSpecialtyMeta?.roles.map((role) => (
+                ) : (
+                  activeSpecialtyMeta?.models.split(", ").map((modelName) => (
                     <label
-                      key={role}
+                      key={modelName}
                       className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
                     >
                       <input
@@ -603,15 +591,48 @@ export function KeysManager() {
                         readOnly
                         className="accent-brand size-3.5 rounded"
                       />
-                      <span className="capitalize">{role}</span>
+                      <span>{modelName}</span>
                     </label>
-                  ))}
-                </div>
+                  ))
+                )}
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+
+            {/* Specialties & Roles checklist */}
+            <div className="space-y-2 pt-2 border-t border-border/20">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Specialties &amp; Roles Unlocked
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {activeSpecialtyMeta?.roles.map((role) => (
+                  <label
+                    key={role}
+                    className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
+                  >
+                    <input
+                      type="checkbox"
+                      checked
+                      readOnly
+                      className="accent-brand size-3.5 rounded"
+                    />
+                    <span className="capitalize">{role}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-border/30 flex justify-end">
+            <Button
+              type="button"
+              onClick={() => setShowConfigModal(false)}
+              className="rounded-lg px-5 bg-muted hover:bg-muted/80 text-foreground font-medium text-xs h-9"
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── ACTIVE TEAM ROSTER (Configured Providers) ─── */}
       <div className="space-y-4">
