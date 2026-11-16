@@ -21,7 +21,6 @@ import {
   Shield,
   Key,
   Trash2,
-  Check,
   Plus,
   Layers,
   RefreshCw,
@@ -433,34 +432,38 @@ export function KeysManager() {
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4 pt-4">
-          {/* Quick Select Provider Pill Tabs */}
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-semibold tracking-wider uppercase text-muted-foreground">Select Provider:</span>
-            <div className="flex flex-wrap gap-1.5">
+        <CardContent className="space-y-5 pt-4">
+          {/* Quick Select Provider - Checkbox Card Style (matching Model Picker) */}
+          <div className="space-y-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Select Provider:
+            </span>
+            <div className="flex flex-wrap gap-2">
               {ALL_SELECTABLE_PROVIDERS.map((p) => {
                 const isSelected = selectedProviderId === p.id
                 const isSaved = !!savedKeys[p.id]
                 return (
-                  <button
+                  <label
                     key={p.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedProviderId(p.id)
-                      const hint = keyPrefixHint(p.id)
-                      void hint
-                    }}
-                    className={`px-3 py-1 text-xs rounded-lg font-medium transition-all flex items-center gap-1.5 border ${
+                    onClick={() => setSelectedProviderId(p.id)}
+                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
                       isSelected
-                        ? "bg-brand text-brand-foreground border-brand font-semibold shadow-sm"
-                        : "bg-muted/40 hover:bg-muted text-foreground border-border/60"
+                        ? "border-brand bg-brand/10 text-foreground font-semibold"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
                     }`}
                   >
+                    <input
+                      type="radio"
+                      name="provider-selector"
+                      checked={isSelected}
+                      onChange={() => setSelectedProviderId(p.id)}
+                      className="accent-brand size-3.5"
+                    />
                     <span>{p.name}</span>
                     {isSaved && (
-                      <span className="size-1.5 rounded-full bg-emerald-400" title="Configured" />
+                      <span className="text-[10px] text-emerald-400 font-sans font-medium">(active)</span>
                     )}
-                  </button>
+                  </label>
                 )
               })}
             </div>
@@ -507,35 +510,69 @@ export function KeysManager() {
             </p>
           </div>
 
-          {/* Model & Specialty / Role Checkbox Preview */}
-          <div className="rounded-xl border border-border/50 bg-card/40 p-4 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-border/30 pb-2.5">
-              <div>
-                <span className="text-xs font-bold text-foreground">
-                  {ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} Models &amp; Capabilities
-                </span>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {activeSpecialtyMeta?.highlight}
-                </p>
+          {/* Models & Specialties Checklist (matching 3rd image style) */}
+          <div className="space-y-4 pt-1 border-t border-border/30">
+            {/* Models checklist */}
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                {ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} Models
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {catalog?.providers.find((p) => p.id === selectedProviderId)?.models?.length ? (
+                  catalog.providers
+                    .find((p) => p.id === selectedProviderId)!
+                    .models.map((m) => (
+                      <label
+                        key={m.id}
+                        className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
+                      >
+                        <input
+                          type="checkbox"
+                          checked
+                          readOnly
+                          className="accent-brand size-3.5 rounded"
+                        />
+                        <span>{m.id}</span>
+                        <span className="text-[10px] opacity-60 font-sans">{m.family}</span>
+                      </label>
+                    ))
+                ) : (
+                  activeSpecialtyMeta?.models.split(", ").map((modelName) => (
+                    <label
+                      key={modelName}
+                      className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
+                    >
+                      <input
+                        type="checkbox"
+                        checked
+                        readOnly
+                        className="accent-brand size-3.5 rounded"
+                      />
+                      <span>{modelName}</span>
+                    </label>
+                  ))
+                )}
               </div>
-              <span className="text-[11px] font-mono text-brand font-medium">
-                {activeSpecialtyMeta?.models}
-              </span>
             </div>
 
-            {/* Specialties as Active Role Checkboxes/Chips */}
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Specialties unlocked for multi-agent reasoning:
-              </span>
-              <div className="flex flex-wrap gap-2 pt-1">
+            {/* Specialties & Roles checklist */}
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                Specialties &amp; Roles Unlocked
+              </p>
+              <div className="flex flex-wrap gap-2">
                 {activeSpecialtyMeta?.roles.map((role) => (
                   <label
                     key={role}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1 text-xs font-medium text-foreground cursor-default hover:bg-muted/60 transition-colors"
+                    className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
                   >
-                    <Check className="size-3 text-emerald-400" />
-                    <span>{role}</span>
+                    <input
+                      type="checkbox"
+                      checked
+                      readOnly
+                      className="accent-brand size-3.5 rounded"
+                    />
+                    <span className="capitalize">{role}</span>
                   </label>
                 ))}
               </div>
