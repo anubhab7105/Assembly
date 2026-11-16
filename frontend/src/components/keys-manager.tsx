@@ -17,6 +17,15 @@ import {
   whyProviderLine,
 } from "@/lib/key-setup"
 import { useToast } from "@/components/ui/toast"
+import { ModelPicker, type ModelSelection } from "@/components/model-picker"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Shield,
   Key,
@@ -25,6 +34,7 @@ import {
   Layers,
   RefreshCw,
   Globe,
+  SlidersHorizontal,
 } from "lucide-react"
 
 type KeyStatus = "unknown" | "valid" | "invalid" | "rate_limited" | "model_unavailable" | "unreachable" | "testing"
@@ -137,6 +147,8 @@ export function KeysManager() {
   const [universalInput, setUniversalInput] = useState("")
   const [selectedProviderId, setSelectedProviderId] = useState<string>("gemini")
   const [isSubmittingUniversal, setIsSubmittingUniversal] = useState(false)
+  const [showModelSettings, setShowModelSettings] = useState(false)
+  const [selection, setSelection] = useState<ModelSelection>({ selected: [], pins: {} })
 
   useEffect(() => {
     async function load() {
@@ -401,7 +413,6 @@ export function KeysManager() {
   const banner = minimumToStartBanner(readyFamilies.size, recommendedOrder)
 
   const activeProviderCount = Object.keys(savedKeys).filter((k) => k !== "tavily").length
-  const activeSpecialtyMeta = PROVIDER_METADATA[selectedProviderId] || PROVIDER_METADATA.gemini
 
   return (
     <div className="w-full space-y-8">
@@ -421,19 +432,33 @@ export function KeysManager() {
       {/* ─── THE CORE USER REQUEST: Universal Smart Key Ingestion Bar ─── */}
       <Card className="border border-border/80 bg-card/90 shadow-2xl overflow-hidden">
         <CardHeader className="pb-3 border-b border-border/40">
-          <div>
-            <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              <Plus className="size-4 text-brand" />
-              Add Provider API Key
-            </CardTitle>
-            <CardDescription className="text-xs text-muted-foreground mt-1">
-              Paste any API key — Assembly automatically detects the provider, displays its models and roles, and adds it to your active team.
-            </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                <Plus className="size-4 text-brand" />
+                Add Provider API Key
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-1">
+                Paste any API key — Assembly automatically detects the provider and adds it to your active team.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowModelSettings(true)}
+              className="h-8 gap-1.5 text-xs border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+              title="Open models and roles"
+              aria-label="Open model and role settings"
+            >
+              <SlidersHorizontal className="size-3.5" />
+              <span>Models &amp; Roles</span>
+            </Button>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-5 pt-4">
-          {/* Quick Select Provider - Checkbox Card Style (matching Model Picker) */}
+        <CardContent className="space-y-4 pt-4">
+          {/* Quick Select Provider - Checkbox Card Style */}
           <div className="space-y-2">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Select Provider:
@@ -446,7 +471,7 @@ export function KeysManager() {
                   <label
                     key={p.id}
                     onClick={() => setSelectedProviderId(p.id)}
-                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
+                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-mono transition-colors ${
                       isSelected
                         ? "border-brand bg-brand/10 text-foreground font-semibold"
                         : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
@@ -488,98 +513,64 @@ export function KeysManager() {
                 }}
                 autoComplete="off"
                 spellCheck="false"
-                className="w-full rounded-xl border border-border bg-muted/60 pl-4 pr-32 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand shadow-inner"
+                className="w-full rounded-xl border border-border bg-muted/60 pl-4 pr-36 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand shadow-inner"
               />
-              <Button
-                type="button"
-                size="sm"
-                disabled={!universalInput.trim() || isSubmittingUniversal}
-                onClick={() => void handleUniversalSave()}
-                className="absolute right-2 px-4 rounded-lg bg-brand text-brand-foreground hover:opacity-90 font-semibold text-xs tracking-wide shadow-sm"
-              >
-                {isSubmittingUniversal ? (
-                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <span>Add to Team</span>
-                )}
-              </Button>
+              <div className="absolute right-2 flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowModelSettings(true)}
+                  title="Open model and role settings"
+                  aria-label="Open model and role settings"
+                  className="size-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg"
+                >
+                  <SlidersHorizontal className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={!universalInput.trim() || isSubmittingUniversal}
+                  onClick={() => void handleUniversalSave()}
+                  className="px-4 rounded-lg bg-brand text-brand-foreground hover:opacity-90 font-semibold text-xs tracking-wide shadow-sm h-8"
+                >
+                  {isSubmittingUniversal ? (
+                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <span>Add to Team</span>
+                  )}
+                </Button>
+              </div>
             </div>
             <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
               <Shield className="size-3 text-emerald-400 shrink-0" />
               <span>Keys never leave your machine — stored securely in your browser vault (IndexedDB).</span>
             </p>
           </div>
-
-          {/* Models & Specialties Checklist (matching 3rd image style) */}
-          <div className="space-y-4 pt-1 border-t border-border/30">
-            {/* Models checklist */}
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                {ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} Models
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {catalog?.providers.find((p) => p.id === selectedProviderId)?.models?.length ? (
-                  catalog.providers
-                    .find((p) => p.id === selectedProviderId)!
-                    .models.map((m) => (
-                      <label
-                        key={m.id}
-                        className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
-                      >
-                        <input
-                          type="checkbox"
-                          checked
-                          readOnly
-                          className="accent-brand size-3.5 rounded"
-                        />
-                        <span>{m.id}</span>
-                        <span className="text-[10px] opacity-60 font-sans">{m.family}</span>
-                      </label>
-                    ))
-                ) : (
-                  activeSpecialtyMeta?.models.split(", ").map((modelName) => (
-                    <label
-                      key={modelName}
-                      className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
-                    >
-                      <input
-                        type="checkbox"
-                        checked
-                        readOnly
-                        className="accent-brand size-3.5 rounded"
-                      />
-                      <span>{modelName}</span>
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Specialties & Roles checklist */}
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                Specialties &amp; Roles Unlocked
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {activeSpecialtyMeta?.roles.map((role) => (
-                  <label
-                    key={role}
-                    className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
-                  >
-                    <input
-                      type="checkbox"
-                      checked
-                      readOnly
-                      className="accent-brand size-3.5 rounded"
-                    />
-                    <span className="capitalize">{role}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
+
+      {/* Models and roles Modal Dialog (matching 2nd image) */}
+      <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Models and roles</DialogTitle>
+            <DialogDescription>
+              Auto selection by default. Optional model overrides and role pins.
+            </DialogDescription>
+          </DialogHeader>
+          <ModelPicker
+            value={selection}
+            onChange={setSelection}
+            keyedProviderIds={Object.keys(savedKeys).filter((k) => k !== "tavily" && statuses[k] !== "invalid")}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowModelSettings(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── ACTIVE TEAM ROSTER (Configured Providers) ─── */}
       <div className="space-y-4">
