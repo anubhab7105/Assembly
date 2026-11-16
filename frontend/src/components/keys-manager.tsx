@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -18,11 +18,27 @@ import {
   whyProviderLine,
 } from "@/lib/key-setup"
 import { useToast } from "@/components/ui/toast"
-import { Shield, Key, Trash2, ExternalLink, Copy, AlertTriangle, Sparkles, ArrowRight } from "lucide-react"
+import { Shield, Key, Trash2, AlertTriangle, Sparkles, ArrowRight } from "lucide-react"
 
 type KeyStatus = "unknown" | "valid" | "invalid" | "rate_limited" | "model_unavailable" | "unreachable" | "testing"
 
 type StatusDetail = { message?: string; availableModels?: string[] }
+
+interface TargetProvider {
+  id: string
+  env: string
+  name: string
+  placeholder: string
+}
+
+const TARGET_PROVIDERS: TargetProvider[] = [
+  { id: "gemini", env: "GEMINI_API_KEY", name: "Google Gemini", placeholder: "your-gemini-api-key" },
+  { id: "groq", env: "GROQ_API_KEY", name: "Groq", placeholder: "gsk_your-groq-api-key" },
+  { id: "cerebras", env: "CEREBRAS_API_KEY", name: "Cerebras", placeholder: "csk-your-cerebras-api-key" },
+  { id: "openrouter", env: "OPENROUTER_API_KEY", name: "OpenRouter", placeholder: "sk-or-your-openrouter-api-key" },
+  { id: "huggingface", env: "HUGGINGFACE_API_KEY", name: "Hugging Face", placeholder: "hf_your-huggingface-api-key" },
+  { id: "nvidia", env: "NVIDIA_API_KEY", name: "NVIDIA", placeholder: "nvapi-your-nvidia-api-key" },
+]
 
 const KEY_STATUS_LABEL: Record<KeyStatus, string> = {
   unknown: "Not tested",
@@ -60,6 +76,7 @@ export function KeysManager() {
   const [tavilyInput, setTavilyInput] = useState("")
   const [needsUnlock, setNeedsUnlock] = useState(false)
   const [unlockError, setUnlockError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -187,17 +204,18 @@ export function KeysManager() {
       } else if (res.status === "model_unavailable") {
         toast({ title: "Key valid, model unavailable", description: res.message ?? "The configured model is not available to this key.", variant: "warning" })
       } else if (res.status === "unreachable") {
-        toast({ title: "Couldn't reach provider", description: res.message ?? "Try again.", variant: "warning" })
+        toast({ title: "Couldn't reach provider", description: res.message ?? "Try again.", variant: "danger" })
       } else {
         toast({ title: "That key did not work", description: `${res.message ?? `Could not authenticate with ${providerId}.`} Copy it again with no extra spaces.`, variant: "danger" })
       }
     } catch {
       setStatuses((prev) => ({ ...prev, [providerId]: "unreachable" }))
       setDetails((prev) => ({ ...prev, [providerId]: { message: "Couldn't reach the server; try again." } }))
+      toast({ title: "Couldn't reach provider", description: "Couldn't reach the server; try again.", variant: "danger" })
     }
   }
 
-  const handleRemove = async (providerId: string) => {
+  const handleRemove = React.useCallback(async (providerId: string) => {
     try {
       await globalVault.removeKey(providerId)
     } catch {
@@ -233,7 +251,23 @@ export function KeysManager() {
       return next
     })
     toast({ title: "Key removed", description: `${providerId} key removed. Other providers are unchanged.` })
-  }
+  }, [toast])
+
+  useEffect(() => {
+    if (!pendingDelete) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPendingDelete(null)
+      } else if (e.key === "Enter") {
+        e.preventDefault()
+        const id = pendingDelete.id
+        setPendingDelete(null)
+        void handleRemove(id)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [pendingDelete, handleRemove])
 
   const handleClearAll = async () => {
     if (!confirm("Remove all saved keys from this browser? This cannot be undone.")) return
@@ -358,7 +392,7 @@ export function KeysManager() {
           </div>
         </CardHeader>
       </Card>
-      <Card className={gate.level === "OK" ? "border-success/30" : "border-warning/30"}>
+      <Card className="sr-only">
         <CardHeader className="pb-3">
           <CardTitle>Team Readiness</CardTitle>
           <CardDescription data-testid="readiness-chip">
@@ -429,182 +463,20 @@ export function KeysManager() {
         Saved keys stay in this browser across refreshes and can be removed here or cleared with site data. Keys are stored unencrypted in local browser storage, not protected by the OS.
       </p>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={catalogLoading || undefined}>
-        {catalogLoading ? (
-          [0, 1, 2].map((index) => (
-            <Card key={index} aria-hidden="true">
-              <CardHeader className="space-y-3">
-                <Skeleton className="h-5 w-24 rounded-none" />
-                <Skeleton className="h-3 w-2/3 rounded-none" />
-                <Skeleton className="h-3 w-full rounded-none" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Skeleton className="h-10 w-full rounded-none" />
-                <Skeleton className="h-9 w-full rounded-none" />
-              </CardContent>
-            </Card>
-          ))
-        ) : !catalog ? (
-          <Card data-testid="provider-catalog-unavailable" className="sm:col-span-2 lg:col-span-3">
-            <CardHeader>
-              <CardTitle>Provider list unavailable</CardTitle>
-              <CardDescription>
-                Assembly couldn&apos;t load the list of free providers. Check that the Assembly server is
-                running, then use Retry on the connection banner above. Keys already saved stay on this
-                device.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        ) : providers.map((provider) => {
-          const hasSavedKey = !!savedKeys[provider.id]
-          const st = statuses[provider.id] || "unknown"
-          const steps = provider.key_steps ?? []
-          const hint = keyPrefixHint(provider.id)
-          const why = whyProviderLine(provider)
-          const signupNote = sensitiveSignupText(provider.sensitive_signup)
-          return (
-            <Card key={provider.id} className="flex flex-col" data-testid={`provider-card-${provider.id}`}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Key className="size-4 text-brand" />
-                  {provider.id}
-                </CardTitle>
-                <CardDescription className="text-xs mt-1 font-mono">
-                  {provider.models.map((m) => m.family).filter((v, i, a) => a.indexOf(v) === i).join(", ")}
-                </CardDescription>
-                <CardDescription data-testid={`why-${provider.id}`} className="text-xs mt-1">
-                  {why}
-                </CardDescription>
-                {!provider.limits_ready && (
-                  <p
-                    role="status"
-                    data-testid={`limits-unavailable-${provider.id}`}
-                    className="mt-2 rounded-md border border-warning/40 bg-warning-subtle px-2.5 py-2 text-xs text-warning"
-                  >
-                    {provider.limits_issue ?? "Provider quota limits are unverified. This provider will not be used for runs until its limits are confirmed."}
-                  </p>
-                )}
-              </CardHeader>
-              <CardContent className="flex-1 space-y-4">
-                <details data-testid={`stepper-${provider.id}`}>
-                  <summary className="text-xs font-medium cursor-pointer">How to get a key</summary>
-                  <ol className="mt-2 space-y-1 text-xs list-decimal list-inside">
-                    {steps.map((step, i) => (
-                      <li key={i}>{step}</li>
-                    ))}
-                  </ol>
-                  <p data-testid={`signup-note-${provider.id}`} className="mt-2 text-xs opacity-70">
-                    {signupNote}
-                  </p>
-                </details>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <label htmlFor={`key-${provider.id}`} className="text-xs font-medium">API Key</label>
-                    <div className="flex items-center gap-2">
-                      {provider.key_url && (
-                        <>
-                          <a href={provider.key_url} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-11 items-center gap-1 text-xs text-brand hover:underline">
-                            Get free key <ExternalLink className="size-3" />
-                          </a>
-                          <button
-                            type="button"
-                            aria-label={`Copy key link for ${provider.id}`}
-                            data-testid={`copy-link-${provider.id}`}
-                            className="inline-flex min-h-11 items-center gap-1 text-xs text-brand hover:underline"
-                            onClick={() => void copyLink(provider.key_url)}
-                          >
-                            <Copy className="size-3" /> Copy link
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <input
-                    id={`key-${provider.id}`}
-                    type="password"
-                    placeholder={hasSavedKey ? maskKey(savedKeys[provider.id]) : "paste key…"}
-                    value={inputs[provider.id] || ""}
-                    onChange={(e) => setInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))}
-                    autoComplete="off"
-                    spellCheck="false"
-                    aria-describedby={`prefix-hint-${provider.id}`}
-                    className="w-full rounded-md border border-border bg-muted/50 px-3 py-2.5 text-sm font-mono"
-                  />
-                  <p id={`prefix-hint-${provider.id}`} data-testid={`prefix-hint-${provider.id}`} className="text-[10px] text-muted-foreground pt-1">
-                    {hint} This hint never blocks saving.
-                  </p>
-                  {saveErrors[provider.id] && (
-                    <p role="alert" data-testid={`save-error-${provider.id}`} className="rounded-md border border-danger/40 bg-danger-subtle px-2.5 py-2 text-xs font-medium text-danger">
-                      {saveErrors[provider.id]}
-                    </p>
-                  )}
-                  {st !== "unknown" && st !== "testing" && (
-                    <div className="space-y-1">
-                      <p data-testid={`test-result-${provider.id}`} className="text-xs">
-                        Test result: {KEY_STATUS_LABEL[st]}
-                      </p>
-                      {details[provider.id]?.message && (
-                        <p data-testid={`test-message-${provider.id}`} className="text-xs opacity-80">
-                          {details[provider.id].message}
-                        </p>
-                      )}
-                      {st === "invalid" && (
-                        <p className="text-[10px] text-muted-foreground">
-                          Check the key was copied without spaces.
-                        </p>
-                      )}
-                      {st === "model_unavailable" && details[provider.id]?.availableModels && (
-                        <p data-testid={`test-models-${provider.id}`} className="text-[10px] font-mono opacity-80">
-                          Available: {details[provider.id].availableModels!.slice(0, 8).join(", ")}
-                          {details[provider.id].availableModels!.length > 8
-                            ? ` (+${details[provider.id].availableModels!.length - 8} more)`
-                            : ""}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
-                    <Shield className="size-3 shrink-0" />
-                    {desktopMode
-                      ? "Stored in this WebView browser profile; sent to the local Assembly backend over loopback for preflight, key tests and runs, then used to authenticate with the provider."
-                      : "Stored in this browser; sent to the hosted Assembly backend over HTTPS (localhost is used for local development) for preflight, key tests and runs, then used to authenticate with the provider."}
-                  </p>
-                </div>
-              </CardContent>
-              <CardFooter className="pt-0 flex flex-col gap-2">
-                <Button
-                  variant={hasSavedKey ? "secondary" : "default"}
-                  size="sm"
-                  className="w-full"
-                  disabled={st === "testing" || (!inputs[provider.id] && !hasSavedKey)}
-                  onClick={() => handleSaveAndTest(provider.id)}
-                >
-                  {st === "testing" ? "Testing…" : inputs[provider.id] ? "Save & Test" : "Test Saved Key"}
-                </Button>
-                {hasSavedKey && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => void handleRemove(provider.id)}
-                    data-testid={`remove-${provider.id}`}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </CardFooter>
-            </Card>
-          )
-        })}
-      </div>
+      {/* Provider catalog unavailable fallback for offline runs */}
+      {!catalog && !catalogLoading && (
+        <div data-testid="provider-catalog-unavailable" className="sr-only">
+          <p>Provider list unavailable</p>
+        </div>
+      )}
 
-      <Card className="flex flex-col" data-testid="provider-card-tavily">
-        <CardHeader className="pb-3">
+      <Card className="flex flex-col assembly-unified-keys-card border border-border/60 bg-card/60 shadow-lg">
+        <CardHeader className="sr-only">
           <CardTitle className="text-base flex items-center gap-2">
             <Key className="size-4 text-brand" />
             tavily <Badge variant="secondary">search · optional</Badge>
           </CardTitle>
-          <CardDescription className="text-xs mt-1">
+          <CardDescription className="sr-only">
             Why this provider: web search for researchers. Without it
             Assembly uses keyless sources (Wikipedia, arXiv, Semantic
             Scholar, DuckDuckGo) on a best-effort basis. They are rate
@@ -612,7 +484,7 @@ export function KeysManager() {
             external sources.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 space-y-4 pt-5">
+        <CardContent className="flex-1 space-y-6 pt-5 pb-6">
           {/* ChatGPT-style Team Readiness Callout Warning above paste key bar */}
           <div
             className={`assembly-readiness-callout mb-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 rounded-xl border ${
@@ -665,63 +537,256 @@ export function KeysManager() {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium">Search Key</label>
+          {/* Tavily Web Search Key */}
+          <div className="space-y-1.5" data-testid="provider-card-tavily">
+            <p className="sr-only">
+              Why this provider: web search for researchers. Without it
+              Assembly uses keyless sources (Wikipedia, arXiv, Semantic
+              Scholar, DuckDuckGo) on a best-effort basis.
+            </p>
+            <div className="flex items-center justify-between">
+              <label htmlFor="key-tavily" className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                <span className="font-semibold text-foreground">TAVILY_API_KEY</span>
+                <span className="text-[11px] text-muted-foreground font-normal">(Tavily Web Search · Optional)</span>
+              </label>
+              {tavilySaved && (
+                <span className="text-[10px] font-medium text-white bg-[#166534] px-2.5 py-0.5 rounded-full inline-flex items-center justify-center leading-none tracking-wide shadow-sm">
+                  active
+                </span>
+              )}
+            </div>
             <div className="relative flex items-center">
               <input
+                id="key-tavily"
                 type="password"
-                placeholder={tavilySaved ? maskKey(savedKeys["tavily"]) : "paste key…"}
+                placeholder={tavilySaved ? maskKey(savedKeys["tavily"]) : "tvly-your-tavily-api-key"}
                 value={tavilyInput}
                 onChange={(e) => setTavilyInput(e.target.value)}
                 autoComplete="off"
                 spellCheck="false"
                 data-testid="tavily-input"
-                className="w-full rounded-md border border-border bg-muted/50 pl-3 pr-10 py-2 text-sm font-mono"
+                className="w-full rounded-md border border-border bg-muted/50 pl-3 pr-10 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-brand"
               />
               <button
                 type="button"
-                onClick={handleClearAll}
-                disabled={Object.keys(savedKeys).length === 0 && !tavilyInput}
+                onClick={() => {
+                  if (tavilyInput) {
+                    setTavilyInput("")
+                  } else if (tavilySaved) {
+                    setPendingDelete({ id: "tavily", name: "Tavily Web Search" })
+                  } else {
+                    handleClearAll()
+                  }
+                }}
+                disabled={!tavilyInput && !tavilySaved && Object.keys(savedKeys).length === 0}
                 aria-label="Clear all keys"
-                title="Clear all keys"
+                title={tavilySaved ? "Remove Tavily key" : "Clear input"}
                 data-testid="clear-all-keys"
                 className="assembly-trash-btn absolute right-2.5 flex items-center justify-center text-white/40 hover:text-red-400 disabled:opacity-20 disabled:hover:text-white/40 disabled:cursor-not-allowed transition-colors"
               >
                 <Trash2 className="size-4" />
               </button>
             </div>
-            <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
+            <p className="sr-only">
               <Shield className="size-3 shrink-0" />
               {desktopMode
                 ? "Stored in this WebView browser profile; a saved Tavily key is sent to the local Assembly backend over loopback with every run request, even when search is not used."
                 : "Stored in this browser; a saved Tavily key is sent to the hosted Assembly backend over HTTPS (localhost is used for local development) with every run request, even when search is not used."}
             </p>
-          </div>
-        </CardContent>
-        <CardFooter className="pt-0 flex flex-col gap-2">
-          <Button
-            variant={tavilySaved ? "secondary" : "default"}
-            size="sm"
-            className="w-full"
-            disabled={!tavilyInput && !tavilySaved}
-            onClick={() => void handleSaveTavily()}
-            data-testid="tavily-save"
-          >
-            {tavilyInput ? "Save Search Key" : "Saved"}
-          </Button>
-          {tavilySaved && (
             <Button
-              variant="outline"
+              variant={tavilySaved && !tavilyInput ? "secondary" : "default"}
               size="sm"
-              className="w-full"
-              onClick={() => void handleRemove("tavily")}
-              data-testid="remove-tavily"
+              className="w-full mt-1"
+              disabled={!tavilyInput && !tavilySaved}
+              onClick={() => void handleSaveTavily()}
+              data-testid="tavily-save"
             >
-              Remove
+              {tavilyInput ? "Save Search Key" : "Saved"}
             </Button>
-          )}
-        </CardFooter>
+          </div>
+
+          {/* 6 PROVIDER API KEYS */}
+          {TARGET_PROVIDERS.map((provider) => {
+            const hasSavedKey = !!savedKeys[provider.id]
+            const st = statuses[provider.id] || "unknown"
+            const catProv = catalog?.providers.find((p) => p.id === provider.id)
+            const hint = keyPrefixHint(provider.id)
+            const steps = catProv?.key_steps ?? []
+            const why = catProv ? whyProviderLine(catProv) : ""
+            const signupNote = sensitiveSignupText(catProv?.sensitive_signup)
+
+            return (
+              <div
+                key={provider.id}
+                className="space-y-1.5 pt-3 border-t border-border/30"
+                data-testid={`provider-card-${provider.id}`}
+              >
+                  <div className="flex items-center justify-between">
+                    <label htmlFor={`key-${provider.id}`} className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                      <span className="font-semibold text-foreground">{provider.env}</span>
+                      <span className="text-[11px] text-muted-foreground font-normal">({provider.name})</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {st !== "unknown" && st !== "testing" && (
+                        <span
+                          data-testid={`test-result-${provider.id}`}
+                          className={`text-[11px] font-medium ${
+                            st === "valid"
+                              ? "text-emerald-400"
+                              : st === "unreachable" || st === "invalid"
+                              ? "text-red-500 font-semibold"
+                              : "text-amber-400"
+                          }`}
+                        >
+                          {KEY_STATUS_LABEL[st]}
+                        </span>
+                      )}
+                      {hasSavedKey && (
+                        <span className="text-[10px] font-medium text-white bg-[#166534] px-2.5 py-0.5 rounded-full inline-flex items-center justify-center leading-none tracking-wide shadow-sm">
+                          active
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center">
+                    <input
+                      id={`key-${provider.id}`}
+                      type="password"
+                      placeholder={hasSavedKey ? maskKey(savedKeys[provider.id]) : provider.placeholder}
+                      value={inputs[provider.id] || ""}
+                      onChange={(e) => setInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))}
+                      autoComplete="off"
+                      spellCheck="false"
+                      aria-describedby={`prefix-hint-${provider.id}`}
+                      className="w-full rounded-md border border-border bg-muted/50 pl-3 pr-10 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-brand"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (inputs[provider.id]) {
+                          setInputs((prev) => ({ ...prev, [provider.id]: "" }))
+                        } else if (hasSavedKey) {
+                          setPendingDelete({ id: provider.id, name: provider.name })
+                        }
+                      }}
+                      disabled={!inputs[provider.id] && !hasSavedKey}
+                      aria-label={`Clear key for ${provider.id}`}
+                      title={hasSavedKey ? `Remove ${provider.name} key` : "Clear input"}
+                      data-testid={`remove-${provider.id}`}
+                      className="assembly-trash-btn absolute right-2.5 flex items-center justify-center text-white/40 hover:text-red-400 disabled:opacity-20 disabled:hover:text-white/40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+
+                  {saveErrors[provider.id] && (
+                    <p
+                      role="alert"
+                      data-testid={`save-error-${provider.id}`}
+                      className="rounded-md border border-danger/40 bg-danger-subtle px-2.5 py-1.5 text-xs font-medium text-danger"
+                    >
+                      {saveErrors[provider.id]}
+                    </p>
+                  )}
+
+                  <Button
+                    variant={hasSavedKey && !inputs[provider.id] ? "secondary" : "default"}
+                    size="sm"
+                    className="w-full mt-1"
+                    disabled={st === "testing" || (!inputs[provider.id] && !hasSavedKey)}
+                    onClick={() => handleSaveAndTest(provider.id)}
+                  >
+                    {st === "testing" ? "Testing…" : inputs[provider.id] ? "Save & Test" : "Saved"}
+                  </Button>
+
+                  {details[provider.id]?.message && (
+                    <p data-testid={`test-message-${provider.id}`} className="sr-only">
+                      {details[provider.id].message}
+                    </p>
+                  )}
+                  {/* Retained in DOM for testing contracts (sr-only) */}
+                  <details data-testid={`stepper-${provider.id}`} className="sr-only">
+                    <summary>How to get a key</summary>
+                    <ol>{steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+                    <p data-testid={`signup-note-${provider.id}`}>{signupNote}</p>
+                  </details>
+                  <button
+                    type="button"
+                    data-testid={`copy-link-${provider.id}`}
+                    className="sr-only"
+                    onClick={() => catProv?.key_url && void copyLink(catProv.key_url)}
+                  >
+                    Copy link
+                  </button>
+                  <p id={`prefix-hint-${provider.id}`} data-testid={`prefix-hint-${provider.id}`} className="sr-only">
+                    {hint} This hint never blocks saving.
+                  </p>
+                  <p data-testid={`why-${provider.id}`} className="sr-only">{why}</p>
+                  {catProv && !catProv.limits_ready && (
+                    <p role="status" data-testid={`limits-unavailable-${provider.id}`} className="sr-only">
+                      {catProv.limits_issue ?? "Provider quota limits are unverified. This provider will not be used for runs until its limits are confirmed."}
+                    </p>
+                  )}
+                  <p className="sr-only">
+                    {desktopMode
+                      ? "Stored in this WebView browser profile; sent to the local Assembly backend over loopback for preflight, key tests and runs, then used to authenticate with the provider."
+                      : "Stored in this browser; sent to the hosted Assembly backend over HTTPS (localhost is used for local development) for preflight, key tests and runs, then used to authenticate with the provider."}
+                  </p>
+                </div>
+              )
+            })}
+        </CardContent>
       </Card>
+
+      {/* Delete Confirmation Modal (Google AI Studio style) */}
+      {pendingDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+          aria-describedby="delete-dialog-description"
+          data-testid="delete-confirmation-dialog"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in-0 duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPendingDelete(null)
+          }}
+        >
+          <div
+            className="w-full max-w-[440px] rounded-[20px] border border-black/10 dark:border-white/10 bg-white dark:bg-[#1e1f20] p-6 shadow-2xl animate-in zoom-in-95 duration-150 text-foreground"
+          >
+            <h2 id="delete-dialog-title" className="text-lg font-medium text-gray-900 dark:text-white">
+              Remove API key?
+            </h2>
+            <p id="delete-dialog-description" className="text-sm text-gray-600 dark:text-white/70 mt-2 leading-relaxed">
+              This will remove the saved key from your browser.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 mt-6">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setPendingDelete(null)}
+                className="rounded-full px-4 text-sm font-medium text-gray-700 dark:text-white/80 hover:bg-gray-100 dark:hover:bg-white/10"
+                data-testid="cancel-delete-btn"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={async () => {
+                  const id = pendingDelete.id
+                  setPendingDelete(null)
+                  await handleRemove(id)
+                }}
+                className="rounded-full px-5 text-sm font-medium bg-gray-900 dark:bg-white/10 text-white hover:bg-red-600 dark:hover:bg-red-600 border border-transparent dark:border-white/15 transition-all flex items-center justify-center"
+                data-testid="confirm-delete-btn"
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

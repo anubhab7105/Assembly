@@ -1,9 +1,7 @@
 "use client"
 
 import React from "react"
-import Link from "next/link"
-import { ArrowUpRight } from "lucide-react"
-import { BrandOrbMark } from "@/components/brand-orb-mark"
+import { LandingHeader } from "@/components/landing-header"
 import { LandingFooter } from "@/components/landing-footer"
 
 interface LegalPageLayoutProps {
@@ -20,38 +18,9 @@ export function LegalPageLayout({
   children,
 }: LegalPageLayoutProps) {
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Top Site Header */}
-      <header className="border-b border-border/40 bg-background/90 backdrop-blur-md sticky top-0 z-30 w-full">
-        <div className="w-full flex h-16 sm:h-20 items-center justify-between px-6 sm:px-10 lg:px-12">
-          <Link href="/" className="assembly-wordmark flex items-center" aria-label="Assembly Home">
-            <BrandOrbMark className="assembly-wordmark-mark--header" />
-            <span>ssembly</span>
-          </Link>
-
-          <nav className="flex items-center gap-6 sm:gap-8 text-sm" aria-label="Legal header navigation">
-            <Link
-              href="/"
-              className="text-muted-foreground hover:text-foreground transition-colors font-medium text-sm"
-            >
-              Home
-            </Link>
-            <Link
-              href="/science"
-              className="text-muted-foreground hover:text-foreground transition-colors font-medium text-sm"
-            >
-              Idea
-            </Link>
-            <Link
-              href="/chat"
-              className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-brand-foreground shadow-sm hover:opacity-90 transition-opacity"
-            >
-              <span>Start an investigation</span>
-              <ArrowUpRight className="size-3.5" />
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background text-foreground flex flex-col pt-20">
+      {/* Top Site Header - Complete Landing Header */}
+      <LandingHeader />
 
       {/* Main Content Stage */}
       <main id="main-content" tabIndex={-1} className="flex-1 w-full max-w-6xl mx-auto px-6 sm:px-10 lg:px-16 py-12 sm:py-16">

@@ -51,8 +51,7 @@ export default function PrivacyPage() {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
           <div className="space-y-2 rounded-xl border border-border/40 bg-card/20 p-6">
-            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span className="size-2 rounded-full bg-brand" />
+            <h3 className="text-base font-semibold text-foreground">
               Saved in your browser
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -61,8 +60,7 @@ export default function PrivacyPage() {
           </div>
 
           <div className="space-y-2 rounded-xl border border-border/40 bg-card/20 p-6">
-            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span className="size-2 rounded-full bg-brand" />
+            <h3 className="text-base font-semibold text-foreground">
               On the hosted Assembly backend (transiently)
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -71,8 +69,7 @@ export default function PrivacyPage() {
           </div>
 
           <div className="space-y-2 rounded-xl border border-border/40 bg-card/20 p-6">
-            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span className="size-2 rounded-full bg-brand" />
+            <h3 className="text-base font-semibold text-foreground">
               Application logs &amp; rate limits
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -81,8 +78,7 @@ export default function PrivacyPage() {
           </div>
 
           <div className="space-y-2 rounded-xl border border-border/40 bg-card/20 p-6">
-            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span className="size-2 rounded-full bg-brand" />
+            <h3 className="text-base font-semibold text-foreground">
               What we never collect
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">

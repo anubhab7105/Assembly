@@ -89,8 +89,8 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
       "skip this provider",
     );
     // Snapshot: stable rendered structure for the setup page
-    // (2 catalog providers + the standalone Tavily search-key card).
-    expect(container.querySelectorAll("[data-testid^='provider-card-']").length).toBe(3);
+    // (6 model providers + the standalone Tavily search-key card).
+    expect(container.querySelectorAll("[data-testid^='provider-card-']").length).toBe(7);
     expect(await screen.findByTestId("provider-card-tavily")).toBeDefined();
     expect((await screen.findByTestId("provider-card-tavily")).textContent).toContain(
       "keyless sources",
@@ -102,7 +102,7 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
     expect((await screen.findByTestId("persisted-banner")).textContent).toContain(
       "across refreshes",
     );
-    expect(screen.getAllByText(/sent to the hosted Assembly backend over HTTPS.*preflight, key tests and runs/i)).toHaveLength(2);
+    expect(screen.getAllByText(/sent to the hosted Assembly backend over HTTPS.*preflight, key tests and runs/i)).toHaveLength(6);
     expect(screen.getByText(/saved Tavily key is sent to the hosted Assembly backend over HTTPS.*every run request, even when search is not used/i)).toBeDefined();
     expect(screen.queryByTestId("memory-only-banner")).toBeNull();
     expect(screen.queryByTestId("unlock-prompt")).toBeNull();

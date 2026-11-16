@@ -67,21 +67,24 @@
   padding: 0 24px;
 }
 
-/* Hero Container: aligns headline and lead text directly beneath the header logo */
+/* Hero Container */
 .assembly-science-hero-stage .assembly-science-container {
-  max-width: none;
+  max-width: 1240px;
   width: 100%;
-  margin: 0;
-  padding-inline: max(22px, calc((100% - var(--landing-max, 1440px)) / 2 + 12px));
+  margin: 0 auto;
+  padding-inline: 24px;
+  display: flex;
+  justify-content: center;
 }
 
 /* Hero Typography on Pitch Black */
 .assembly-science-hero {
   padding: 16px 0 0;
-  text-align: left;
+  text-align: center;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  margin-inline: auto;
   transform: none;
 }
 
@@ -104,7 +107,7 @@
   letter-spacing: -0.035em;
   margin: 0 0 24px 0;
   color: #ffffff;
-  text-align: left;
+  text-align: center;
   max-width: 980px;
 }
 
@@ -159,8 +162,8 @@
   color: var(--sci-dim);
   max-width: 860px;
   font-weight: 400;
-  text-align: left;
-  margin: 0;
+  text-align: center;
+  margin: 0 auto;
 }
 
 /* ─── Academic Research Stage: Marigold Yellow Background ─────────────────── */

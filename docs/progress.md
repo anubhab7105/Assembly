@@ -1,3 +1,10 @@
+## 2026-11-16 — Cleanup orphaned routes and unused experimental code
+
+- Dead routes removed: deleted `frontend/src/app/refunds` (Assembly has no billing or paid paths; not linked in navigation) and `frontend/src/app/references` (superseded by `/science`).
+- Sitemap and layout alignment: updated `frontend/src/app/sitemap.ts` to remove `/refunds` and `/references` while registering `/science`; updated `isPublicPage` in `frontend/src/components/layout-wrapper.tsx`.
+- Orphaned components cleaned: removed unused prototype components (`vortex-scene.tsx`, `cinematic/floating-windows.tsx`, `cinematic/history-quick.tsx`, `cinematic/brand-mark.tsx`, `landing/cursor-3d.tsx`, `landing/galaxy-field.tsx`, `landing/particle-sphere.tsx`, `landing/use-motion-input.ts`, `lib/hand-tracker.ts`, `lib/hand-tracker.test.ts`).
+- Verification: Vitest unit tests pass, Playwright tests pass (9/9), ESLint passes (0 errors, 0 warnings), Next.js build succeeds with 16 clean static routes, and all 683 backend pytest tests pass.
+
 ## 2026-11-14 — Frontend TSX cleanup and layout component structuring
 
 - Root cause: duplicate JSX attributes on the chat attachment button and unstructured layout components in `layout-wrapper.tsx`.

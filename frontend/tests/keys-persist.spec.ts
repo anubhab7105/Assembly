@@ -148,6 +148,10 @@ test.describe("Keys survive refresh (P0)", () => {
     await saveKey(page, "groq", CANARY_GROQ)
     await saveKey(page, "gemini", CANARY_GEMINI)
     await page.getByTestId("remove-groq").click()
+    const confirmBtn = page.getByTestId("confirm-delete-btn")
+    if (await confirmBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await confirmBtn.click()
+    }
     await expect(page.getByTestId("limits-unavailable-gemini")).toContainText("rpm, rpd, tpm", { timeout: 10000 })
     await expect(page.getByTestId("readiness-chip")).not.toContainText("gpt-oss")
 
