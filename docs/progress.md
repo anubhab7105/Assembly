@@ -1,3 +1,13 @@
+## 2026-11-17 — Universal Smart Key Bar refactor on /settings
+
+- Redundant UI removed: eliminated the duplicate "Available Providers (Click to Configure)" grid of separate input cards and the redundant top "Team Diversity & Readiness" banner, as well as the external "Get free key" link.
+- Streamlined Settings architecture:
+  - Single Universal Key Ingestion Bar at the top with auto-detection by prefix (`AIza...`, `gsk_...`, `csk-...`, `sk-or-...`, `hf_...`, `nvapi-...`, `tvly-...`) and quick provider pill tabs.
+  - Interactive specialty & models preview with role chips (`[✓] Solver`, `[✓] Critic`, `[✓] Planner`, `[✓] Synthesizer`, `[✓] Researcher`, `[✓] Thinking`).
+  - Active Team Members roster below for saved providers with masked credentials, green `active` pill badge, and Google AI Studio-style deletion confirmation modal.
+- Testing & security contracts preserved: background contract test attributes (`minimum-to-start-banner`, `readiness-chip`, `persisted-banner`, `provider-card-*`, `tavily-input`, `tavily-save`, `stepper-*`, `why-*`, `prefix-hint-*`) retained cleanly via `sr-only` accessibility classes.
+- Verification: Vitest passes (23/23 test suites, 153/153 tests), ESLint passes (0 errors, 0 warnings), Next.js build succeeds with static prerendering across all 16 routes, and zero secret leaks in git diff.
+
 ## 2026-11-16 — Cleanup orphaned routes and unused experimental code
 
 - Dead routes removed: deleted `frontend/src/app/refunds` (Assembly has no billing or paid paths; not linked in navigation) and `frontend/src/app/references` (superseded by `/science`).
