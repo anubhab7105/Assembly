@@ -1,5 +1,6 @@
 ## 2026-11-17 — Universal Smart Key Bar refactor on /settings
 
+- Sliders modal integration: integrated the `SlidersHorizontal` icon button into the Universal Key Bar and header, opening the exact "Models and roles" checklist dialog on demand and keeping the main Settings page ultra-clean.
 - Redundant UI removed: eliminated the duplicate "Available Providers (Click to Configure)" grid of separate input cards and the redundant top "Team Diversity & Readiness" banner, as well as the external "Get free key" link.
 - Streamlined Settings architecture:
   - Single Universal Key Ingestion Bar at the top with auto-detection by prefix (`AIza...`, `gsk_...`, `csk-...`, `sk-or-...`, `hf_...`, `nvapi-...`, `tvly-...`) and quick provider pill tabs.
