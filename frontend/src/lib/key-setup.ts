@@ -63,3 +63,18 @@ export function minimumToStartBanner(
   }
   return `Minimum to start: add keys for at least 3 model families (2 works with a warning). Recommended order: ${order}.`;
 }
+
+/**
+ * Detect provider ID from key prefix.
+ */
+export function detectProviderByPrefix(key: string): string | null {
+  const clean = key.trim();
+  if (clean.startsWith("AIza")) return "gemini";
+  if (clean.startsWith("gsk_") || clean.startsWith("gsk-")) return "groq";
+  if (clean.startsWith("csk-") || clean.startsWith("csk_")) return "cerebras";
+  if (clean.startsWith("sk-or-") || clean.startsWith("sk-or_")) return "openrouter";
+  if (clean.startsWith("hf_")) return "huggingface";
+  if (clean.startsWith("nvapi-")) return "nvidia";
+  if (clean.startsWith("tvly-") || clean.startsWith("tvly_")) return "tavily";
+  return null;
+}

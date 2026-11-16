@@ -55,7 +55,7 @@ export default function PrivacyPage() {
               Saved in your browser
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Provider API keys, run history (questions, answers, sources, scores), settings, usage counters, and your privacy notice acknowledgment. Keys are stored as readable values in IndexedDB with a localStorage fallback; they are not encrypted at rest or stored in an OS-protected credential vault. Remove keys in Settings or clear browser site data to delete the browser copy.
+              Provider API keys, run history (questions, answers, sources, scores), settings, usage counters, and your privacy notice acknowledgment. Keys are stored as readable values in IndexedDB with a localStorage fallback (or WebView browser profile in desktop mode); they are not encrypted at rest or stored in an OS-protected credential vault, and same-origin JavaScript can read them while available to the app. Remove keys in Settings or clear browser site data to delete the browser copy. If browser storage fails during removal, a key may remain saved.
             </p>
           </div>
 
@@ -64,7 +64,7 @@ export default function PrivacyPage() {
               On the hosted Assembly backend (transiently)
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Capacity preflight sends saved model-provider keys over HTTPS to check quota readiness; every run request sends provider keys and questions transiently to contact model APIs. The backend uses submitted keys only for that active request and never writes them to the database or disk. Application logs scrub all key-like values.
+              For capacity preflight, the browser sends all saved model-provider keys to the hosted Assembly backend over HTTPS to check quota readiness; a key-test request sends only the provider key being tested. Every run request sends all saved model-provider keys and any saved Tavily key, even when search is not used. When research runs, questions may be searched via Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo depending on the search fallback path; Tavily receives it only when available and selected by that path, while the other listed services do not require a Tavily key. The backend uses submitted keys only for that active request and never writes them to the database or disk. Application logs scrub all key-like values. Hosting providers may process network traffic under their own policies.
             </p>
           </div>
 
