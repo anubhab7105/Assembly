@@ -29,8 +29,6 @@ import {
   Trash2,
   Plus,
   RefreshCw,
-  Lightbulb,
-  AlertTriangle,
 } from "lucide-react"
 
 type KeyStatus = "unknown" | "valid" | "invalid" | "rate_limited" | "model_unavailable" | "unreachable" | "testing"
@@ -142,20 +140,6 @@ export function KeysManager() {
   const [selectedProviderId, setSelectedProviderId] = useState<string>("gemini")
   const [isSubmittingUniversal, setIsSubmittingUniversal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
-  const [showRoleWarning, setShowRoleWarning] = useState(false)
-  const [userSelectedRoles, setUserSelectedRoles] = useState<Record<string, string[]>>({})
-
-  const toggleRole = (providerId: string, role: string) => {
-    setUserSelectedRoles((prev) => {
-      const current = prev[providerId] ?? []
-      const exists = current.includes(role)
-      const updated = exists ? current.filter((r) => r !== role) : [...current, role]
-      if (updated.length > 0) {
-        setShowRoleWarning(false)
-      }
-      return { ...prev, [providerId]: updated }
-    })
-  }
 
   useEffect(() => {
     async function load() {
@@ -298,16 +282,6 @@ export function KeysManager() {
   const handleUniversalSave = async () => {
     if (!universalInput.trim()) return
 
-    // Show warning if user tries to save without choosing roles for this provider
-    if (
-      selectedProviderId !== "tavily" &&
-      (!userSelectedRoles[selectedProviderId] || userSelectedRoles[selectedProviderId].length === 0)
-    ) {
-      setShowRoleWarning(true)
-      return
-    }
-
-    setShowRoleWarning(false)
     setIsSubmittingUniversal(true)
     try {
       if (selectedProviderId === "tavily") {
@@ -438,7 +412,6 @@ export function KeysManager() {
   const banner = minimumToStartBanner(readyFamilies.size, recommendedOrder)
 
   const activeProviderCount = Object.keys(savedKeys).filter((k) => k !== "tavily").length
-  const activeSpecialtyMeta = PROVIDER_METADATA[selectedProviderId] || PROVIDER_METADATA.gemini
 
   return (
     <div className="w-full space-y-6">
@@ -472,10 +445,134 @@ export function KeysManager() {
         </CardHeader>
       </Card>
 
+      {/* ─── THE CORE USER REQUEST: Universal Smart Key Ingestion Bar ─── */}
+      <Card className="border border-border/80 bg-card/90 shadow-2xl overflow-hidden gap-2.5 py-4">
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                <Plus className="size-4 text-brand" />
+                Add API Key
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-1">
+                Paste any API key — Assembly automatically detects the provider, displays its models and roles, and adds it to your active team.
+              </CardDescription>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowConfigModal(true)}
+              aria-label="Add Provider"
+              title="Add Provider"
+              className="px-3.5 py-1.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-white font-semibold text-xs tracking-wide shadow-md flex items-center gap-1.5 transition-all shrink-0 active:scale-95"
+            >
+              <Plus className="size-3.5 text-white" />
+              <span>Add Provider</span>
+            </button>
+          </div>
+        </CardHeader>
+
+        <CardContent className="pt-0 space-y-3">
+          {/* Single Universal Paste Bar */}
+          <div className="relative flex items-center">
+              <input
+                id="universal-key-input"
+                type="password"
+                placeholder={`Paste ${ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} key`}
+                value={universalInput}
+                onChange={(e) => handleUniversalInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    void handleUniversalSave()
+                  }
+                }}
+                autoComplete="off"
+                spellCheck="false"
+                className="w-full rounded-xl border border-border bg-muted/60 pl-4 pr-24 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand shadow-inner"
+              />
+
+              <div className="absolute right-2 flex items-center">
+                <Button
+                  type="button"
+                  size="sm"
+                  data-testid="universal-save"
+                  disabled={!universalInput.trim() || isSubmittingUniversal}
+                  onClick={() => void handleUniversalSave()}
+                  className="px-4 rounded-lg bg-brand text-brand-foreground hover:opacity-90 font-semibold text-xs tracking-wide shadow-sm"
+                >
+                  {isSubmittingUniversal ? (
+                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <span>Save</span>
+                  )}
+                </Button>
+              </div>
+            </div>
+        </CardContent>
+      </Card>
+
+      {/* Provider & Roles Modal Dialog */}
+      <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl bg-[#121316] border border-border/80 text-foreground p-6 rounded-2xl shadow-2xl">
+          <DialogHeader className="pb-3 border-b border-border/30">
+            <DialogTitle className="text-lg font-bold text-foreground">Select Provider</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Choose which provider you want to configure and add to your team.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            {/* Quick Select Provider - Checkbox Card Style */}
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Select Provider:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {ALL_SELECTABLE_PROVIDERS.map((p) => {
+                  const isSelected = selectedProviderId === p.id
+                  const isSaved = !!savedKeys[p.id]
+                  return (
+                    <label
+                      key={p.id}
+                      onClick={() => setSelectedProviderId(p.id)}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${isSelected
+                        ? "border-brand bg-brand/10 text-foreground font-semibold"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                        }`}
+                    >
+                      <input
+                        type="radio"
+                        name="modal-provider-selector"
+                        checked={isSelected}
+                        onChange={() => setSelectedProviderId(p.id)}
+                        className="accent-brand size-3.5"
+                      />
+                      <span>{p.name}</span>
+                      {isSaved && (
+                        <span className="text-[10px] text-white bg-[#15803d] font-medium px-2 py-0.5 rounded-full shadow-sm">Active</span>
+                      )}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-border/30 flex justify-end">
+            <Button
+              type="button"
+              onClick={() => setShowConfigModal(false)}
+              className="rounded-lg px-5 bg-muted hover:bg-muted/80 text-foreground font-medium text-xs h-9"
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ─── TAVILY (SEARCH) API KEY BAR ─── */}
       <Card
         data-testid="provider-card-tavily"
-        style={{ marginTop: "96px" }}
         className="border border-border/80 bg-card/90 shadow-2xl overflow-hidden gap-2.5 py-4 rounded-2xl"
       >
         <CardHeader className="pb-0">
@@ -546,174 +643,6 @@ export function KeysManager() {
           </p>
         </CardContent>
       </Card>
-
-      {/* ─── THE CORE USER REQUEST: Universal Smart Key Ingestion Bar ─── */}
-      <Card className="border border-border/80 bg-card/90 shadow-2xl overflow-hidden gap-2.5 py-4">
-        <CardHeader className="pb-0">
-          <div>
-            <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              <Plus className="size-4 text-brand" />
-              Add Provider API Key
-            </CardTitle>
-            <CardDescription className="text-xs text-muted-foreground mt-1">
-              Paste any API key — Assembly automatically detects the provider, displays its models and roles, and adds it to your active team.
-            </CardDescription>
-          </div>
-        </CardHeader>
-
-        <CardContent className="pt-0 space-y-3">
-          {/* Warning banner - only shows when user tries to save without selecting roles */}
-          {showRoleWarning && (
-            <div
-              role="alert"
-              onClick={() => setShowConfigModal(true)}
-              className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-400 font-medium transition-colors cursor-pointer hover:bg-red-500/15 animate-in fade-in slide-in-from-top-1 duration-200"
-              title="Click to select provider and roles"
-            >
-              <AlertTriangle className="size-4 shrink-0 text-red-400" />
-              <span>
-                Please select provider and roles before pasting an API key.
-              </span>
-            </div>
-          )}
-
-          {/* Single Universal Paste Bar with Lightbulb Modal Trigger */}
-          <div className="relative flex items-center">
-              <input
-                id="universal-key-input"
-                type="password"
-                placeholder={`Paste ${ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} key`}
-                value={universalInput}
-                onChange={(e) => handleUniversalInputChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    void handleUniversalSave()
-                  }
-                }}
-                autoComplete="off"
-                spellCheck="false"
-                className="w-full rounded-xl border border-border bg-muted/60 pl-4 pr-44 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand shadow-inner"
-              />
-
-              <div className="absolute right-2 flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setShowConfigModal(true)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center justify-center"
-                  title="Configure provider, models & roles"
-                  aria-label="Open provider, models and roles settings"
-                >
-                  <Lightbulb className="size-4" />
-                </button>
-
-                <Button
-                  type="button"
-                  size="sm"
-                  data-testid="universal-save"
-                  disabled={!universalInput.trim() || isSubmittingUniversal}
-                  onClick={() => void handleUniversalSave()}
-                  className="px-4 rounded-lg bg-brand text-brand-foreground hover:opacity-90 font-semibold text-xs tracking-wide shadow-sm"
-                >
-                  {isSubmittingUniversal ? (
-                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    <span>Save</span>
-                  )}
-                </Button>
-              </div>
-            </div>
-        </CardContent>
-      </Card>
-
-      {/* Provider & Roles Modal Dialog */}
-      <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl bg-[#121316] border border-border/80 text-foreground p-6 rounded-2xl shadow-2xl">
-          <DialogHeader className="pb-3 border-b border-border/30">
-            <DialogTitle className="text-lg font-bold text-foreground">Provider and roles</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Select a provider to preview its multi-agent roles and capabilities.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5 py-4">
-            {/* Quick Select Provider - Checkbox Card Style */}
-            <div className="space-y-2">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Select Provider:
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {ALL_SELECTABLE_PROVIDERS.map((p) => {
-                  const isSelected = selectedProviderId === p.id
-                  const isSaved = !!savedKeys[p.id]
-                  return (
-                    <label
-                      key={p.id}
-                      onClick={() => setSelectedProviderId(p.id)}
-                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${isSelected
-                        ? "border-brand bg-brand/10 text-foreground font-semibold"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
-                        }`}
-                    >
-                      <input
-                        type="radio"
-                        name="modal-provider-selector"
-                        checked={isSelected}
-                        onChange={() => setSelectedProviderId(p.id)}
-                        className="accent-brand size-3.5"
-                      />
-                      <span>{p.name}</span>
-                      {isSaved && (
-                        <span className="text-[10px] text-white bg-[#15803d] font-medium px-2 py-0.5 rounded-full shadow-sm">Active</span>
-                      )}
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Specialties & Roles checklist */}
-            <div className="space-y-2 pt-2 border-t border-border/20">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Specialties &amp; Roles Unlocked ({ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name})
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {activeSpecialtyMeta?.roles.map((role) => {
-                  const isChecked = (userSelectedRoles[selectedProviderId] || []).includes(role)
-                  return (
-                    <label
-                      key={role}
-                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors select-none ${
-                        isChecked
-                          ? "border-brand bg-brand/10 text-foreground font-semibold"
-                          : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleRole(selectedProviderId, role)}
-                        className="accent-brand size-3.5 rounded cursor-pointer"
-                      />
-                      <span className="capitalize">{role}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="pt-3 border-t border-border/30 flex justify-end">
-            <Button
-              type="button"
-              onClick={() => setShowConfigModal(false)}
-              className="rounded-lg px-5 bg-muted hover:bg-muted/80 text-foreground font-medium text-xs h-9"
-            >
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* ─── ACTIVE TEAM ROSTER (Configured Providers) ─── */}
       <div className="space-y-4">

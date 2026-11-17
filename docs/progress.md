@@ -1,3 +1,11 @@
+## 2026-11-17 — Settings layout refinement: reposition Tavily bar, marigold Add Provider button, and simplified modal
+
+- Repositioned Tavily key bar: moved the Tavily Search API Key card directly beneath the Add API Key card and above Active Team Members, with clean spacing and no margin hacks.
+- Marigold `+ Add Provider` button: replaced the inside-bar bulb icon with a dedicated header action button styled in marigold yellow (`bg-[#f59e0b] hover:bg-[#d97706]`) and white font, positioned directly above the Save button.
+- Streamlined Provider Modal: removed the "Specialties & Roles Unlocked" checklist from the modal dialog to keep the flow lightweight, intuitive, and focused on provider selection without blocker warnings.
+- Header title update: changed the heading from "Add Provider API Key" to "Add API Key".
+- Verification: all 22 Playwright end-to-end tests pass (22/22 green), all 23 Vitest test suites pass (153/153 tests), and frontend linter is clean (0 errors, 0 warnings).
+
 ## 2026-11-17 — Resolve Playwright CI test suite timeouts and restore test contracts
 
 - Unblock `saveKey` Playwright test helper: adjusted the DOM container holding unconfigured provider test cards from clipped `.sr-only` to an accessible off-screen container with dimensions, enabling Playwright's click automation to interact with individual provider cards without timing out.
