@@ -1,3 +1,13 @@
+## 2026-11-17 — Settings UI polish, active team table redesign, and privacy modal removal
+
+- Active team roster table: transformed the active providers in "Active Team Members" from a multi-column card grid into a clean, horizontal row-by-row table list matching the streamlined data table design (columns: Provider, Key, Status, Actions).
+- Provider and status badges: updated the `active` badge and `Valid` status indicator to solid pill badges with vivid green fill (`bg-[#15803d]`) and crisp white text. Error statuses (`Key not accepted`, `Server unreachable`) use pure red text without red background or dots.
+- Actions column polish: replaced the wide `Save & Test` button with a clean, minimalist refresh icon button (`RefreshCw`) next to the delete trash can icon.
+- Interactive roles checklist: role checkboxes in the Provider and Roles modal are no longer read-only or pre-checked; users can toggle individual roles on/off.
+- Dynamic key ingestion warning: added an alert banner matching the system warning style that appears dynamically if a user tries to save a key without configuring roles first; hidden by default.
+- Privacy notice dialog removed: removed the blocking `PrivacyDialog` modal from `/chat` so users can directly interact with the chat interface without modal blockers.
+- Verification: all 23 Vitest test suites (153/153 tests) pass, all 684 backend pytest tests pass (683 passed, 1 skipped), key leak scan is clean, and frontend ESLint passes with 0 errors and 0 warnings.
+
 ## 2026-11-17 — Universal Smart Key Bar refactor on /settings
 
 - Dedicated "Models and roles" modal dialog: moved the provider selector, model checklist, and specialty roles checklist inside a clean modal popup dialog matching the chat's Model Picker design (centered backdrop overlay, title/description, checklist tiles, top-right `✕` close, and bottom `Done` button).

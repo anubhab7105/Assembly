@@ -26,13 +26,11 @@ import {
 } from "@/lib/key-setup"
 import { useToast } from "@/components/ui/toast"
 import {
-  Shield,
-  Key,
   Trash2,
   Plus,
-  Layers,
   RefreshCw,
-  Globe,
+  Lightbulb,
+  AlertTriangle,
 } from "lucide-react"
 
 type KeyStatus = "unknown" | "valid" | "invalid" | "rate_limited" | "model_unavailable" | "unreachable" | "testing"
@@ -53,10 +51,7 @@ const TARGET_PROVIDERS: TargetProvider[] = [
   { id: "nvidia", env: "NVIDIA_API_KEY", name: "NVIDIA", placeholder: "nvapi-your-nvidia-api-key" },
 ]
 
-const ALL_SELECTABLE_PROVIDERS = [
-  ...TARGET_PROVIDERS,
-  { id: "tavily", env: "TAVILY_API_KEY", name: "Tavily (Search)", placeholder: "tvly-your-tavily-api-key" },
-]
+const ALL_SELECTABLE_PROVIDERS = TARGET_PROVIDERS
 
 const PROVIDER_METADATA: Record<
   string,
@@ -146,6 +141,20 @@ export function KeysManager() {
   const [selectedProviderId, setSelectedProviderId] = useState<string>("gemini")
   const [isSubmittingUniversal, setIsSubmittingUniversal] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
+  const [showRoleWarning, setShowRoleWarning] = useState(false)
+  const [userSelectedRoles, setUserSelectedRoles] = useState<Record<string, string[]>>({})
+
+  const toggleRole = (providerId: string, role: string) => {
+    setUserSelectedRoles((prev) => {
+      const current = prev[providerId] ?? []
+      const exists = current.includes(role)
+      const updated = exists ? current.filter((r) => r !== role) : [...current, role]
+      if (updated.length > 0) {
+        setShowRoleWarning(false)
+      }
+      return { ...prev, [providerId]: updated }
+    })
+  }
 
   useEffect(() => {
     async function load() {
@@ -280,6 +289,17 @@ export function KeysManager() {
   // Universal Bar Save Handler
   const handleUniversalSave = async () => {
     if (!universalInput.trim()) return
+
+    // Show warning if user tries to save without choosing roles for this provider
+    if (
+      selectedProviderId !== "tavily" &&
+      (!userSelectedRoles[selectedProviderId] || userSelectedRoles[selectedProviderId].length === 0)
+    ) {
+      setShowRoleWarning(true)
+      return
+    }
+
+    setShowRoleWarning(false)
     setIsSubmittingUniversal(true)
     try {
       if (selectedProviderId === "tavily") {
@@ -413,23 +433,115 @@ export function KeysManager() {
   const activeSpecialtyMeta = PROVIDER_METADATA[selectedProviderId] || PROVIDER_METADATA.gemini
 
   return (
-    <div className="w-full space-y-8">
-      {/* Retained in DOM for testing contract (hidden from user view) */}
-      <div data-testid="minimum-to-start-banner" className="sr-only">
-        <span data-testid="readiness-chip">
-          {catalog ? gateChipText(gate) : "Loading providers..."}
-        </span>
-        <p data-testid="minimum-to-start-text">{banner}</p>
-      </div>
+    <div className="w-full space-y-6">
+      {/* Minimum to start card */}
+      <Card data-testid="minimum-to-start-banner" className="border border-border/80 bg-card/90 shadow-xl rounded-2xl">
+        <CardHeader className="p-5 pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-bold text-foreground">Minimum to start</CardTitle>
+            <span data-testid="readiness-chip" className="sr-only">
+              {catalog ? gateChipText(gate) : "Loading providers..."}
+            </span>
+          </div>
+          <CardDescription data-testid="minimum-to-start-text" className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            {banner}
+          </CardDescription>
+          <div className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
+            <p className="font-semibold text-foreground">Quick setup</p>
+            <ol className="list-decimal space-y-1 pl-4">
+              <li>Save a free key for each provider you want to use.</li>
+              <li>Press <b className="font-medium text-foreground">Save &amp; Test</b> and check the result.</li>
+              <li>Return to Run and start an investigation.</li>
+            </ol>
+            <p className="text-muted-foreground/80">
+              Three distinct model families are recommended; two can run with a warning. The readiness status below counts only configured providers whose quota metadata is ready.
+            </p>
+          </div>
+          {/* Retained in DOM for persistent vault test contract */}
+          <p data-testid="persisted-banner" className="sr-only">
+            Saved keys stay in this browser across refreshes and can be removed here or cleared with site data. Keys are stored unencrypted in local browser storage, not protected by the OS.
+          </p>
+        </CardHeader>
+      </Card>
 
-      {/* Retained in DOM for persistent vault test contract */}
-      <p data-testid="persisted-banner" className="sr-only">
-        Saved keys stay in this browser across refreshes and can be removed here or cleared with site data. Keys are stored unencrypted in local browser storage, not protected by the OS.
-      </p>
+      {/* ─── TAVILY (SEARCH) API KEY BAR ─── */}
+      <Card
+        data-testid="provider-card-tavily"
+        style={{ marginTop: "96px" }}
+        className="border border-border/80 bg-card/90 shadow-2xl overflow-hidden gap-2.5 py-4 rounded-2xl"
+      >
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                Tavily Search API Key <span className="text-xs font-normal text-muted-foreground">(Optional)</span>
+              </CardTitle>
+              <p className="sr-only">
+                Without a Tavily key, research falls back to keyless sources.
+              </p>
+            </div>
+            {tavilySaved && (
+              <span className="text-xs text-white bg-[#15803d] font-medium px-2.5 py-0.5 rounded-full shadow-sm">
+                Active
+              </span>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="pt-0">
+          <div className="relative flex items-center">
+            <input
+              id="key-tavily"
+              data-testid="tavily-input"
+              type="password"
+              placeholder={tavilySaved ? maskKey(savedKeys["tavily"]) : "Paste Tavily key"}
+              value={tavilyInput}
+              onChange={(e) => setTavilyInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  void handleSaveTavily()
+                }
+              }}
+              autoComplete="off"
+              spellCheck="false"
+              className="w-full rounded-xl border border-border bg-muted/60 pl-4 pr-24 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand shadow-inner"
+            />
+            <div className="absolute right-2 flex items-center gap-1.5">
+              {tavilySaved && !tavilyInput && (
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete({ id: "tavily", name: "Tavily Web Search" })}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors flex items-center justify-center"
+                  title="Remove Tavily key"
+                  aria-label="Remove Tavily key"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                data-testid="tavily-save"
+                disabled={!tavilyInput.trim()}
+                onClick={() => void handleSaveTavily()}
+                className="px-4 rounded-lg bg-brand text-brand-foreground hover:opacity-90 font-semibold text-xs tracking-wide shadow-sm"
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+          <p className="sr-only">
+            {desktopMode
+              ? "Stored in this WebView browser profile; a saved Tavily key is sent to the local Assembly backend over loopback with every run request, even when search is not used."
+              : "Stored in this browser; a saved Tavily key is sent to the hosted Assembly backend over HTTPS (localhost is used for local development) with every run request, even when search is not used."}
+          </p>
+        </CardContent>
+      </Card>
 
       {/* ─── THE CORE USER REQUEST: Universal Smart Key Ingestion Bar ─── */}
-      <Card className="border border-border/80 bg-card/90 shadow-2xl overflow-hidden">
-        <CardHeader className="pb-3 border-b border-border/40">
+      <Card className="border border-border/80 bg-card/90 shadow-2xl overflow-hidden gap-2.5 py-4">
+        <CardHeader className="pb-0">
           <div>
             <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
               <Plus className="size-4 text-brand" />
@@ -441,26 +553,28 @@ export function KeysManager() {
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4 pt-4">
-          {/* Single Universal Paste Bar with [+] Modal Trigger */}
-          <div className="space-y-2">
-            <div className="relative flex items-center">
-              <button
-                type="button"
-                onClick={() => setShowConfigModal(true)}
-                className="absolute left-2.5 z-10 p-1.5 rounded-lg text-muted-foreground hover:text-brand hover:bg-muted/80 transition-all flex items-center justify-center"
-                title="Configure provider, models & roles (+)"
-                aria-label="Open provider, models and roles settings"
-              >
-                <Plus className="size-4" />
-              </button>
+        <CardContent className="pt-0 space-y-3">
+          {/* Warning banner - only shows when user tries to save without selecting roles */}
+          {showRoleWarning && (
+            <div
+              role="alert"
+              onClick={() => setShowConfigModal(true)}
+              className="flex items-center gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-400 font-medium transition-colors cursor-pointer hover:bg-red-500/15 animate-in fade-in slide-in-from-top-1 duration-200"
+              title="Click to select provider and roles"
+            >
+              <AlertTriangle className="size-4 shrink-0 text-red-400" />
+              <span>
+                Please select provider and roles before pasting an API key.
+              </span>
+            </div>
+          )}
 
+          {/* Single Universal Paste Bar with Lightbulb Modal Trigger */}
+          <div className="relative flex items-center">
               <input
                 id="universal-key-input"
                 type="password"
-                placeholder={`Paste ${ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} key (e.g. ${
-                  ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.placeholder
-                })`}
+                placeholder={`Paste ${ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} key`}
                 value={universalInput}
                 onChange={(e) => handleUniversalInputChange(e.target.value)}
                 onKeyDown={(e) => {
@@ -471,50 +585,46 @@ export function KeysManager() {
                 }}
                 autoComplete="off"
                 spellCheck="false"
-                className="w-full rounded-xl border border-border bg-muted/60 pl-11 pr-32 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand shadow-inner"
+                className="w-full rounded-xl border border-border bg-muted/60 pl-4 pr-44 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand shadow-inner"
               />
-              <Button
-                type="button"
-                size="sm"
-                disabled={!universalInput.trim() || isSubmittingUniversal}
-                onClick={() => void handleUniversalSave()}
-                className="absolute right-2 px-4 rounded-lg bg-brand text-brand-foreground hover:opacity-90 font-semibold text-xs tracking-wide shadow-sm"
-              >
-                {isSubmittingUniversal ? (
-                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <span>Add to Team</span>
-                )}
-              </Button>
-            </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] text-muted-foreground">
-              <p className="flex items-center gap-1.5">
-                <Shield className="size-3 text-emerald-400 shrink-0" />
-                <span>Keys never leave your machine — stored securely in your browser vault (IndexedDB).</span>
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowConfigModal(true)}
-                className="inline-flex items-center gap-1 text-brand hover:underline self-start sm:self-auto font-medium transition-colors"
-              >
-                <Plus className="size-3" />
-                <span>
-                  Configure provider &amp; models ({ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name})
-                </span>
-              </button>
+              <div className="absolute right-2 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(true)}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-400 hover:bg-amber-400/10 transition-colors flex items-center justify-center"
+                  title="Configure provider, models & roles"
+                  aria-label="Open provider, models and roles settings"
+                >
+                  <Lightbulb className="size-4" />
+                </button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  data-testid="universal-save"
+                  disabled={!universalInput.trim() || isSubmittingUniversal}
+                  onClick={() => void handleUniversalSave()}
+                  className="px-4 rounded-lg bg-brand text-brand-foreground hover:opacity-90 font-semibold text-xs tracking-wide shadow-sm"
+                >
+                  {isSubmittingUniversal ? (
+                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <span>Save</span>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
         </CardContent>
       </Card>
 
-      {/* Models & Roles Modal Dialog (matching 2nd image) */}
+      {/* Provider & Roles Modal Dialog */}
       <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl bg-[#121316] border border-border/80 text-foreground p-6 rounded-2xl shadow-2xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl bg-[#121316] border border-border/80 text-foreground p-6 rounded-2xl shadow-2xl">
           <DialogHeader className="pb-3 border-b border-border/30">
-            <DialogTitle className="text-lg font-bold text-foreground">Models and roles</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-foreground">Provider and roles</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Select a provider to preview its available models, architecture family, and multi-agent roles.
+              Select a provider to preview its multi-agent roles and capabilities.
             </DialogDescription>
           </DialogHeader>
 
@@ -532,11 +642,10 @@ export function KeysManager() {
                     <label
                       key={p.id}
                       onClick={() => setSelectedProviderId(p.id)}
-                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
-                        isSelected
-                          ? "border-brand bg-brand/10 text-foreground font-semibold"
-                          : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
-                      }`}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${isSelected
+                        ? "border-brand bg-brand/10 text-foreground font-semibold"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                        }`}
                     >
                       <input
                         type="radio"
@@ -547,7 +656,7 @@ export function KeysManager() {
                       />
                       <span>{p.name}</span>
                       {isSaved && (
-                        <span className="text-[10px] text-emerald-400 font-sans font-medium">(active)</span>
+                        <span className="text-[10px] text-white bg-[#15803d] font-medium px-2 py-0.5 rounded-full shadow-sm">Active</span>
                       )}
                     </label>
                   )
@@ -555,69 +664,33 @@ export function KeysManager() {
               </div>
             </div>
 
-            {/* Models checklist */}
-            <div className="space-y-2 pt-2 border-t border-border/20">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                {ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} Models
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {catalog?.providers.find((p) => p.id === selectedProviderId)?.models?.length ? (
-                  catalog.providers
-                    .find((p) => p.id === selectedProviderId)!
-                    .models.map((m) => (
-                      <label
-                        key={m.id}
-                        className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
-                      >
-                        <input
-                          type="checkbox"
-                          checked
-                          readOnly
-                          className="accent-brand size-3.5 rounded"
-                        />
-                        <span>{m.id}</span>
-                        <span className="text-[10px] opacity-60 font-sans">{m.family}</span>
-                      </label>
-                    ))
-                ) : (
-                  activeSpecialtyMeta?.models.split(", ").map((modelName) => (
-                    <label
-                      key={modelName}
-                      className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
-                    >
-                      <input
-                        type="checkbox"
-                        checked
-                        readOnly
-                        className="accent-brand size-3.5 rounded"
-                      />
-                      <span>{modelName}</span>
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-
             {/* Specialties & Roles checklist */}
             <div className="space-y-2 pt-2 border-t border-border/20">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Specialties &amp; Roles Unlocked
+                Specialties &amp; Roles Unlocked ({ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name})
               </span>
               <div className="flex flex-wrap gap-2">
-                {activeSpecialtyMeta?.roles.map((role) => (
-                  <label
-                    key={role}
-                    className="flex cursor-default items-center gap-2 rounded-md border border-brand bg-brand/10 text-foreground px-2.5 py-2 text-xs font-mono"
-                  >
-                    <input
-                      type="checkbox"
-                      checked
-                      readOnly
-                      className="accent-brand size-3.5 rounded"
-                    />
-                    <span className="capitalize">{role}</span>
-                  </label>
-                ))}
+                {activeSpecialtyMeta?.roles.map((role) => {
+                  const isChecked = (userSelectedRoles[selectedProviderId] || []).includes(role)
+                  return (
+                    <label
+                      key={role}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors select-none ${
+                        isChecked
+                          ? "border-brand bg-brand/10 text-foreground font-semibold"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleRole(selectedProviderId, role)}
+                        className="accent-brand size-3.5 rounded cursor-pointer"
+                      />
+                      <span className="capitalize">{role}</span>
+                    </label>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -638,9 +711,8 @@ export function KeysManager() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Layers className="size-4 text-brand" />
             <h3 className="text-base font-bold text-foreground">Active Team Members</h3>
-            <span className="text-xs bg-muted px-2 py-0.5 rounded-full font-mono text-muted-foreground">
+            <span className="text-xs bg-muted px-2.5 py-0.5 rounded-full font-medium text-muted-foreground">
               {activeProviderCount + (tavilySaved ? 1 : 0)} Active
             </span>
           </div>
@@ -659,19 +731,25 @@ export function KeysManager() {
 
         {activeProviderCount === 0 && !tavilySaved ? (
           <div className="rounded-xl border border-dashed border-border/70 p-8 text-center space-y-2">
-            <Key className="size-8 text-muted-foreground/40 mx-auto" />
             <p className="text-sm font-semibold text-foreground">No providers added yet</p>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
               Paste your first provider key into the box above to build your multi-agent research team.
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* Active Provider Cards */}
+          <div className="rounded-2xl border border-border/80 bg-card/80 overflow-hidden shadow-xl divide-y divide-border/40">
+            {/* Table / List Header */}
+            <div className="hidden sm:grid sm:grid-cols-12 gap-4 px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40 border-b border-border/40">
+              <div className="col-span-5">Provider</div>
+              <div className="col-span-3">Key</div>
+              <div className="col-span-2">Status</div>
+              <div className="col-span-2 text-right">Actions</div>
+            </div>
+
+            {/* List Rows - stacked one after another */}
             {TARGET_PROVIDERS.filter((p) => !!savedKeys[p.id]).map((provider) => {
               const st = statuses[provider.id] || "unknown"
               const catProv = catalog?.providers.find((p) => p.id === provider.id)
-              const meta = PROVIDER_METADATA[provider.id]
               const hint = keyPrefixHint(provider.id)
               const steps = catProv?.key_steps ?? []
               const why = catProv ? whyProviderLine(catProv) : ""
@@ -680,81 +758,71 @@ export function KeysManager() {
               return (
                 <div
                   key={provider.id}
-                  className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-3 shadow-md flex flex-col justify-between"
                   data-testid={`provider-card-${provider.id}`}
+                  className="flex flex-col sm:grid sm:grid-cols-12 gap-3 sm:gap-4 items-start sm:items-center px-5 py-3.5 hover:bg-muted/20 transition-colors"
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-foreground">{provider.name}</span>
-                        <span className="text-[10px] font-medium text-white bg-[#166534] px-2.5 py-0.5 rounded-full inline-flex items-center leading-none tracking-wide shadow-sm">
-                          active
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setPendingDelete({ id: provider.id, name: provider.name })}
-                        aria-label={`Clear key for ${provider.id}`}
-                        title={`Remove ${provider.name} key`}
-                        data-testid={`remove-${provider.id}`}
-                        className="assembly-trash-btn text-muted-foreground hover:text-red-400 transition-colors p-1"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </div>
-
-                    <p className="text-xs text-muted-foreground line-clamp-1">
-                      {meta?.models ?? catProv?.models.map((m) => m.id).join(", ")}
-                    </p>
-
-                    {/* Masked Password Field */}
-                    <div className="relative flex items-center">
-                      <input
-                        id={`key-${provider.id}`}
-                        type="password"
-                        placeholder={maskKey(savedKeys[provider.id])}
-                        value={inputs[provider.id] || ""}
-                        onChange={(e) => setInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))}
-                        autoComplete="off"
-                        spellCheck="false"
-                        className="w-full rounded-md border border-border bg-muted/40 pl-3 pr-8 py-1.5 text-xs font-mono"
-                      />
-                    </div>
-
-                    {/* Specialties Badges */}
-                    <div className="flex flex-wrap gap-1">
-                      {meta?.roles.slice(0, 4).map((r) => (
-                        <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground font-medium">
-                          {r}
-                        </span>
-                      ))}
+                  {/* Provider Name & Active Badge */}
+                  <div className="col-span-5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-foreground">{provider.name}</span>
+                      <span className="text-[11px] font-medium text-white bg-[#15803d] px-2.5 py-0.5 rounded-full shadow-sm inline-flex items-center">
+                        Active
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-border/30">
+                  {/* Masked Key */}
+                  <div className="col-span-3">
+                    <span className="font-mono text-xs text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-md border border-border/40 inline-block">
+                      {maskKey(savedKeys[provider.id])}
+                    </span>
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-2 flex items-center">
                     <span
                       data-testid={`test-result-${provider.id}`}
-                      className={`text-[11px] font-medium ${
+                      className={`text-xs font-medium inline-flex items-center ${
                         st === "valid"
-                          ? "text-emerald-400"
+                          ? "bg-[#15803d] text-white px-2.5 py-0.5 rounded-full shadow-sm justify-center"
                           : st === "unreachable" || st === "invalid"
-                          ? "text-red-500 font-semibold"
-                          : "text-muted-foreground"
+                            ? "text-red-400 font-medium"
+                            : st === "rate_limited" || st === "model_unavailable"
+                              ? "text-amber-400 font-medium"
+                              : st === "testing"
+                                ? "text-blue-400 font-medium gap-1.5"
+                                : "text-muted-foreground"
                       }`}
                     >
+                      {st === "testing" && <RefreshCw className="size-3 animate-spin text-blue-400" />}
                       {KEY_STATUS_LABEL[st]}
                     </span>
+                  </div>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs px-2.5"
+                  {/* Action buttons: Refresh & Trash */}
+                  <div className="col-span-2 flex items-center justify-end gap-1.5 w-full sm:w-auto">
+                    <button
+                      type="button"
                       disabled={st === "testing"}
                       onClick={() => handleSaveAndTest(provider.id)}
+                      aria-label={`Test ${provider.name} key`}
+                      title={`Test ${provider.name} key`}
+                      className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-lg hover:bg-muted/60 disabled:opacity-50 flex items-center justify-center"
                     >
-                      <RefreshCw className={`mr-1 size-3 ${st === "testing" ? "animate-spin" : ""}`} />
-                      {st === "testing" ? "Testing…" : "Save & Test"}
-                    </Button>
+                      <RefreshCw className={`size-4 ${st === "testing" ? "animate-spin" : ""}`} />
+                      <span className="sr-only">Save &amp; Test</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPendingDelete({ id: provider.id, name: provider.name })}
+                      aria-label={`Clear key for ${provider.id}`}
+                      title={`Remove ${provider.name} key`}
+                      data-testid={`remove-${provider.id}`}
+                      className="assembly-trash-btn text-muted-foreground hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-400/10"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
                   </div>
 
                   {/* Retained in DOM for contract & testing specifications */}
@@ -788,68 +856,6 @@ export function KeysManager() {
                 </div>
               )
             })}
-
-            {/* Active Tavily Card if configured */}
-            {tavilySaved && (
-              <div
-                className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-3 shadow-md flex flex-col justify-between"
-                data-testid="provider-card-tavily"
-              >
-                <p className="sr-only">
-                  Why this provider: web search for researchers. Without it
-                  Assembly uses keyless sources (Wikipedia, arXiv, Semantic
-                  Scholar, DuckDuckGo) on a best-effort basis.
-                </p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-foreground">Tavily Search</span>
-                      <span className="text-[10px] font-medium text-white bg-[#166534] px-2.5 py-0.5 rounded-full inline-flex items-center leading-none tracking-wide shadow-sm">
-                        active
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPendingDelete({ id: "tavily", name: "Tavily Web Search" })}
-                      aria-label="Remove Tavily key"
-                      data-testid="remove-tavily"
-                      className="assembly-trash-btn text-muted-foreground hover:text-red-400 transition-colors p-1"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Web Search &amp; Source Verification</p>
-                  <input
-                    id="key-tavily"
-                    type="password"
-                    data-testid="tavily-input"
-                    placeholder={maskKey(savedKeys["tavily"])}
-                    value={tavilyInput}
-                    onChange={(e) => setTavilyInput(e.target.value)}
-                    autoComplete="off"
-                    spellCheck="false"
-                    className="w-full rounded-md border border-border bg-muted/40 px-3 py-1.5 text-xs font-mono"
-                  />
-                </div>
-                <div className="pt-2 border-t border-border/30 flex justify-between items-center text-xs text-muted-foreground">
-                  <span>Search key verified</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs px-2.5"
-                    data-testid="tavily-save"
-                    onClick={() => void handleSaveTavily()}
-                  >
-                    {tavilyInput ? "Save Search Key" : "Saved"}
-                  </Button>
-                </div>
-                <p className="sr-only">
-                  {desktopMode
-                    ? "Stored in this WebView browser profile; a saved Tavily key is sent to the local Assembly backend over loopback with every run request, even when search is not used."
-                    : "Stored in this browser; a saved Tavily key is sent to the hosted Assembly backend over HTTPS (localhost is used for local development) with every run request, even when search is not used."}
-                </p>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -909,13 +915,12 @@ export function KeysManager() {
                 <div className="flex items-center justify-between pt-1">
                   <span
                     data-testid={`test-result-${provider.id}`}
-                    className={`text-[11px] font-medium ${
-                      st === "valid"
-                        ? "text-emerald-400"
-                        : st === "unreachable" || st === "invalid"
+                    className={`text-[11px] font-medium ${st === "valid"
+                      ? "text-emerald-400"
+                      : st === "unreachable" || st === "invalid"
                         ? "text-red-500 font-semibold"
                         : "text-muted-foreground"
-                    }`}
+                      }`}
                   >
                     {KEY_STATUS_LABEL[st]}
                   </span>
@@ -961,77 +966,6 @@ export function KeysManager() {
               </div>
             )
           })}
-
-          {/* Unconfigured Tavily Search Card */}
-          {!tavilySaved && (
-            <div
-              className="rounded-xl border border-border/50 bg-card/30 p-3.5 space-y-2.5 hover:border-border transition-colors flex flex-col justify-between"
-              data-testid="provider-card-tavily"
-            >
-              <p className="sr-only">
-                Why this provider: web search for researchers. Without it
-                Assembly uses keyless sources (Wikipedia, arXiv, Semantic
-                Scholar, DuckDuckGo) on a best-effort basis.
-              </p>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Globe className="size-3.5 text-brand" />
-                    <span className="font-semibold text-xs text-foreground">Tavily Web Search</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedProviderId("tavily")
-                      const el = document.getElementById("universal-key-input")
-                      el?.focus()
-                    }}
-                    className="text-[11px] text-brand hover:underline flex items-center gap-1 font-medium"
-                  >
-                    <span>+ Add</span>
-                  </button>
-                </div>
-
-                <div className="relative flex items-center">
-                  <input
-                    id="key-tavily"
-                    type="password"
-                    data-testid="tavily-input"
-                    placeholder="tvly-your-tavily-api-key"
-                    value={tavilyInput}
-                    onChange={(e) => setTavilyInput(e.target.value)}
-                    autoComplete="off"
-                    spellCheck="false"
-                    className="w-full rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-mono"
-                  />
-                </div>
-
-                <p className="text-[11px] text-muted-foreground line-clamp-1">
-                  Web Search · Fact verification &amp; source validation
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] text-muted-foreground">Optional Search</span>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-6 text-[11px] px-2.5"
-                  disabled={!tavilyInput}
-                  onClick={() => void handleSaveTavily()}
-                  data-testid="tavily-save"
-                >
-                  Save Search Key
-                </Button>
-              </div>
-
-              <p className="sr-only">
-                {desktopMode
-                  ? "Stored in this WebView browser profile; a saved Tavily key is sent to the local Assembly backend over loopback with every run request, even when search is not used."
-                  : "Stored in this browser; a saved Tavily key is sent to the hosted Assembly backend over HTTPS (localhost is used for local development) with every run request, even when search is not used."}
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
