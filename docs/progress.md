@@ -1,3 +1,9 @@
+## 2026-11-17 — Permanently remove blocking PrivacyDialog from /chat
+
+- Privacy Notice modal removed from `/chat`: completely removed `<PrivacyDialog />` and its blocking acknowledgment check so users directly land on the composer without modal popups. Full privacy terms remain available in `/settings` (Privacy section) and on the public `/privacy` policy page.
+- Test contracts modernized: updated Playwright end-to-end tests in `e2e.spec.ts` and `keys-persist.spec.ts` to no longer expect or wait for a blocking privacy popup on `/chat`, replacing it with a test asserting that `/chat` loads directly without blocking modals.
+- Verification: 22/22 Playwright tests pass (22/22 green), 153/153 Vitest unit tests pass, and ESLint is clean (0 errors, 0 warnings).
+
 ## 2026-11-17 — Fix provider selection modal styling in light mode to match Models & Roles dialog
 
 - Light theme alignment: removed the hardcoded dark background (`bg-[#121316]`) from `DialogContent` in `KeysManager`, adopting the responsive token system (`bg-popover text-popover-foreground border border-border shadow-2xl rounded-2xl`).

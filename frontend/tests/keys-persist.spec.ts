@@ -107,11 +107,6 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page).toHaveURL(/\/$/)
     await page.locator('a[href="/chat"]:visible').first().click()
     await expect(page).toHaveURL(/\/chat/)
-    // First visit shows the blocking privacy dialog: wait for it, then
-    // acknowledge before using sidebar navigation.
-    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
-    await page.getByLabel(/my question is sent to the model providers/i).check()
-    await page.getByTestId("privacy-acknowledge").click()
 
     // The informational cookie notice is fixed to the viewport bottom and can
     // overlap the sidebar's bottom Settings link in browser automation.
@@ -184,10 +179,6 @@ test.describe("Keys survive refresh (P0)", () => {
     await page.locator('a[href="/"]').first().click()
     await page.locator('a[href="/chat"]:visible').first().click()
     await expect(page.getByTestId("diversity-chip")).toContainText("gpt-oss", { timeout: 10000 })
-
-    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
-    await page.getByLabel(/my question is sent to the model providers/i).check()
-    await page.getByTestId("privacy-acknowledge").click()
 
     // Model selection is advanced configuration, so inspect it in its dialog.
     await page.getByRole("button", { name: /Open model and role settings/i }).click()
