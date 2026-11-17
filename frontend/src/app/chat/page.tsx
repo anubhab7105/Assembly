@@ -118,6 +118,7 @@ export default function Home() {
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [showBudgetDropdown, setShowBudgetDropdown] = useState(false)
   const budgetMenuRef = useRef<HTMLDivElement>(null)
+  const [webSourcesActive, setWebSourcesActive] = useState(false)
 
   useEffect(() => {
     const handleNewChat = () => {
@@ -188,6 +189,9 @@ export default function Home() {
         // Tavily is an optional search credential, not a runnable model provider.
         const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
         setEnabledIds(modelProviderIds)
+        if (!k.tavily?.trim()) {
+          setWebSourcesActive(false)
+        }
       }).catch(() => {})
     }
     refreshKeys()
@@ -386,7 +390,7 @@ export default function Home() {
       const keys = await globalVault.allKeys()
       // The Tavily search key travels separately; it is never a model key.
       const { tavily, ...providerKeys } = keys
-      const searchKeys = tavily ? { tavily } : undefined
+      const searchKeys = (webSourcesActive && tavily) ? { tavily } : undefined
       const usage: UsageEntry[] = await storage.getUsage()
       const preflight = await ApiClient.preflight(
         questionForRun,
@@ -676,27 +680,34 @@ export default function Home() {
                     type="button"
                     role="menuitem"
                     className="assembly-context-popover-item"
-                    onClick={() => {
+                    onClick={async () => {
                       setShowContextPopover(false)
-                      setStatus(makeChatStatus("Web sources active: Assembly will query live web evidence during debate rounds.", "info"))
+                      try {
+                        const keys = await globalVault.allKeys()
+                        const hasTavily = Boolean(keys.tavily?.trim())
+                        if (!hasTavily) {
+                          setWebSourcesActive(false)
+                          setStatus(makeChatStatus("Add a Tavily key in Settings to activate web sources.", "error"))
+                        } else {
+                          const nextState = !webSourcesActive
+                          setWebSourcesActive(nextState)
+                          if (nextState) {
+                            setStatus(makeChatStatus("Web sources active: Assembly will query live web evidence during debate rounds.", "info"))
+                          } else {
+                            setStatus(makeChatStatus("Web sources deactivated.", "info"))
+                          }
+                        }
+                      } catch {
+                        setWebSourcesActive(false)
+                        setStatus(makeChatStatus("Add a Tavily key in Settings to activate web sources.", "error"))
+                      }
                     }}
                   >
                     <Globe className="size-4" />
                     <span>Web Sources</span>
-                    <span className="assembly-context-popover-item-badge">Live</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="assembly-context-popover-item"
-                    onClick={() => {
-                      setShowContextPopover(false)
-                      setShowModelSettings(true)
-                    }}
-                  >
-                    <SlidersHorizontal className="size-4" />
-                    <span>Models & Roles</span>
+                    <span className="assembly-context-popover-item-badge">
+                      {webSourcesActive ? "Active" : "Live"}
+                    </span>
                   </button>
                 </div>
               )}

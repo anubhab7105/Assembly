@@ -1,3 +1,12 @@
+## 2026-11-17 — Fix provider selection modal styling in light mode to match Models & Roles dialog
+
+- Light theme alignment: removed the hardcoded dark background (`bg-[#121316]`) from `DialogContent` in `KeysManager`, adopting the responsive token system (`bg-popover text-popover-foreground border border-border shadow-2xl rounded-2xl`).
+- Unified dialog aesthetics: removed harsh header dividers and styled unselected provider chips with `bg-background border-border text-muted-foreground hover:text-foreground` and selected chips with `border-brand bg-brand/10 text-foreground font-semibold`.
+- Clean outline Done button: updated `DialogFooter` to remove the tinted footer bar and rendered an outline button (`variant="outline"`) on the bottom-right, matching the Models & Roles dialog in Image 2.
+- Composer cleanup: removed the redundant "Models & Roles" item from the `+` Context menu in `chat/page.tsx` (the dedicated sliders button remains accessible on the right side of the composer).
+- Web Sources Tavily activation & red alert: clicking "Web Sources" without a saved Tavily search API key displays a red alert banner (`bg-danger-subtle text-danger border-danger/40`) above the composer stating "Add a Tavily key in Settings to activate web sources." Web sources only activate (`searchKeys`) when a valid Tavily key is present.
+- Verification: 22/22 Playwright tests green, 153/153 Vitest tests green, ESLint clean (0 errors, 0 warnings). Changes kept local (not pushed per instruction).
+
 ## 2026-11-17 — Settings layout refinement: reposition Tavily bar, marigold Add Provider button, and simplified modal
 
 - Repositioned Tavily key bar: moved the Tavily Search API Key card directly beneath the Add API Key card and above Active Team Members, with clean spacing and no margin hacks.

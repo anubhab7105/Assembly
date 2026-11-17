@@ -513,8 +513,8 @@ export function KeysManager() {
 
       {/* Provider & Roles Modal Dialog */}
       <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl bg-[#121316] border border-border/80 text-foreground p-6 rounded-2xl shadow-2xl">
-          <DialogHeader className="pb-3 border-b border-border/30">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl rounded-2xl border border-border bg-popover text-popover-foreground p-6 shadow-2xl">
+          <DialogHeader>
             <DialogTitle className="text-lg font-bold text-foreground">Select Provider</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Choose which provider you want to configure and add to your team.
@@ -535,10 +535,11 @@ export function KeysManager() {
                     <label
                       key={p.id}
                       onClick={() => setSelectedProviderId(p.id)}
-                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${isSelected
-                        ? "border-brand bg-brand/10 text-foreground font-semibold"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
-                        }`}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
+                        isSelected
+                          ? "border-brand bg-brand/10 text-foreground font-semibold"
+                          : "border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                      }`}
                     >
                       <input
                         type="radio"
@@ -558,11 +559,12 @@ export function KeysManager() {
             </div>
           </div>
 
-          <DialogFooter className="pt-3 border-t border-border/30 flex justify-end">
+          <DialogFooter className="bg-transparent border-0 p-0 m-0 pt-4 flex justify-end">
             <Button
               type="button"
+              variant="outline"
               onClick={() => setShowConfigModal(false)}
-              className="rounded-lg px-5 bg-muted hover:bg-muted/80 text-foreground font-medium text-xs h-9"
+              className="rounded-xl px-5 font-semibold text-xs h-9 bg-background hover:bg-muted"
             >
               Done
             </Button>
