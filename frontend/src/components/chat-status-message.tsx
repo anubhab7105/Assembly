@@ -21,9 +21,10 @@ import {
  * assistive technologies are notified of changes without nested live regions
  * or duplicated announcements.
  */
-export function ChatStatusMessage({ status }: { status: ChatStatus }) {
+export function ChatStatusMessage({ status, id = "question-status" }: { status: ChatStatus; id?: string }) {
   return (
     <p
+      id={id}
       role={chatStatusRole(status.type)}
       aria-live={chatStatusAriaLive(status.type)}
       className={`rounded-lg border px-3 py-2 text-xs font-medium ${chatStatusClass(status.type)}`}

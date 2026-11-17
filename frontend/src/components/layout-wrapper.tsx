@@ -2,22 +2,14 @@
 
 import React, { useState, useEffect, useSyncExternalStore, Suspense } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ToastProvider, useToast } from "@/components/ui/toast"
 import { storage, type HistoryRecord } from "@/lib/storage"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import {
-  Settings,
-  Menu,
-  X,
-  WifiOff,
-  Trash2,
-  Download,
-  SquarePen,
-  SlidersHorizontal,
-  ShieldCheck,
-  type LucideIcon,
-  Zap,
+  Settings, Menu, X, WifiOff, Plus, History, Trash2, Search, MessageSquare, Download, Upload, ChevronDown,
 } from "lucide-react"
 import { ThemeToggle, getThemeSnapshot } from "@/components/theme-toggle"
 import { BrandOrbMark } from "@/components/brand-orb-mark"
@@ -25,7 +17,7 @@ import { BrandOrbMark } from "@/components/brand-orb-mark"
 const OFFLINE_MESSAGE = "You are currently offline. Some features may not work."
 
 function subscribeOnlineStatus(onStoreChange: () => void) {
-  if (typeof window === "undefined") return () => { }
+  if (typeof window === "undefined") return () => {}
   window.addEventListener("online", onStoreChange)
   window.addEventListener("offline", onStoreChange)
   return () => {
@@ -50,323 +42,278 @@ function useOfflineStatus() {
   )
 }
 
-const NAV_ITEMS: Array<{ href: string; label: string; icon: LucideIcon }> = [
-  { href: "/chat", label: "Workspace", icon: SquarePen },
-  { href: "/models", label: "Models", icon: SlidersHorizontal },
-  { href: "/settings", label: "Settings", icon: Settings },
-]
-
 function SidebarContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const { toast } = useToast()
 
-  const [records, setRecords] = useState<HistoryRecord[]>([])
+  const [executions, setExecutions] = useState<HistoryRecord[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [showHistory, setShowHistory] = useState(pathname === "/executions")
+  const importInputRef = React.useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+
+  const loadExecutions = async () => {
+    setLoading(true)
+    try {
+      setExecutions(await storage.listHistory())
+    } catch (e) {
+      if (process.env.NODE_ENV !== "production") console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let active = true
-
-    const load = () => {
+    let cancelled = false
+    const sync = () => {
       storage
         .listHistory()
         .then((items) => {
-          if (active) setRecords(items.slice(0, 12))
+          if (!cancelled) setExecutions(items)
         })
-        .catch(() => {
-          if (active) setRecords([])
+        .catch((error: unknown) => {
+          if (!cancelled && process.env.NODE_ENV !== "production") console.error(error)
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
         })
     }
-
-    load()
-    window.addEventListener("focus", load)
-    window.addEventListener("assembly:history-change", load)
-
+    sync()
+    window.addEventListener("assembly:history-change", sync)
     return () => {
-      active = false
-      window.removeEventListener("focus", load)
-      window.removeEventListener("assembly:history-change", load)
+      cancelled = true
+      window.removeEventListener("assembly:history-change", sync)
     }
   }, [pathname])
 
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (!confirm("Delete this execution?")) return
+    await storage.deleteHistory(id)
+    setExecutions((prev) => prev.filter((x) => x.id !== id))
+    window.dispatchEvent(new CustomEvent("assembly:history-change"))
+    toast({ title: "Deleted", description: "Execution removed from history." })
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname
+    const currentSearch = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : searchParams
+    if (currentPath === `/executions` && currentSearch?.get("id") === id) {
+      router.push("/chat")
+      if (onClose) onClose()
+    }
+  }
+
   const handleExport = async () => {
+    const text = await storage.exportJSON()
+    const blob = new Blob([text], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "assembly-history.json"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImport = async (file: File, input: HTMLInputElement) => {
+    if (importing) return
+    setImporting(true)
     try {
-      const text = await storage.exportJSON()
-      const blob = new Blob([text], { type: "application/json" })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement("a")
-
-      anchor.href = url
-      anchor.download = "assembly-history.json"
-      anchor.click()
-
-      URL.revokeObjectURL(url)
+      const text = await file.text()
+      await storage.importJSON(text)
+      await loadExecutions()
+      window.dispatchEvent(new CustomEvent("assembly:history-change"))
+      toast({ title: "Import complete", description: "History and usage were imported successfully.", variant: "success" })
     } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Couldn't import this file. Check that it is a valid Assembly history export and try again."
       toast({
-        title: "History export failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Couldn't export history. Please try again.",
+        title: "History import failed",
+        description: message,
         variant: "danger",
         duration: 7000,
       })
+    } finally {
+      // File inputs do not fire change again when the same file is selected.
+      // Clearing it on both success and failure allows an immediate retry.
+      input.value = ""
+      setImporting(false)
     }
   }
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    if (!confirm("Delete this execution?")) return
-
-    await storage.deleteHistory(id)
-
-    setRecords((previous) => previous.filter((record) => record.id !== id))
-
-    window.dispatchEvent(new CustomEvent("assembly:history-change"))
-
-    toast({
-      title: "Deleted",
-      description: "Execution removed from history.",
-    })
-
-    const currentSearch = new URLSearchParams(window.location.search)
-
-    if (
-      window.location.pathname === "/executions" &&
-      currentSearch.get("id") === id
-    ) {
-      router.push("/chat")
-      onClose?.()
-    }
-  }
-
-  const filteredRecords = records.filter((record) =>
-    record.question.toLowerCase().includes(search.toLowerCase()),
+  const filtered = executions.filter((e) =>
+    e.question.toLowerCase().includes(search.toLowerCase()),
   )
 
   return (
-    <aside className="mn-sidebar">
-      <div className="mn-sidebar-top">
+    <div className="assembly-sidebar flex h-full flex-col">
+      <div className="assembly-sidebar-header">
         <Link
           href="/"
-          className="mn-brand"
+          className="assembly-sidebar-brand assembly-wordmark flex items-center text-white cursor-pointer"
+          onClick={() => {
+            if (onClose) onClose()
+            router.push("/")
+            if (typeof document !== "undefined") {
+              const scrollContainers = document.querySelectorAll(".overflow-y-auto")
+              scrollContainers.forEach((el) => {
+                el.scrollTo({ top: 0, behavior: "instant" })
+              })
+              window.scrollTo({ top: 0, behavior: "instant" })
+            }
+          }}
           aria-label="Assembly home"
         >
-          <BrandOrbMark />
-          <span>Assembly</span>
+          <BrandOrbMark className="assembly-wordmark-mark--sidebar" style={{ width: "32px", height: "32px" }} />
+          <span>ssembly</span>
         </Link>
-
-        <button
-          type="button"
-          className="mn-new-chat"
+        <Button
+          variant="default"
+          className="assembly-new-investigation w-full justify-start"
           onClick={() => {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("assembly:new-chat"))
+            }
             router.push("/chat")
-            onClose?.()
+            if (onClose) onClose()
           }}
         >
-          <SquarePen className="size-4" aria-hidden />
+          <Plus className="size-4 mr-2" />
           New chat
-        </button>
+        </Button>
       </div>
 
-      <nav className="mn-nav" aria-label="Primary">
-        {NAV_ITEMS.map((item) => {
-          const active = isNavActive(pathname, item.href)
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="mn-nav-link"
-              data-active={active}
-              aria-current={active ? "page" : undefined}
-              onClick={onClose}
-            >
-              <item.icon aria-hidden />
-              <span>{item.label}</span>
-            </Link>
-          )
-        })}
-      </nav>
-
-      <div className="mn-recents">
-        <span className="mn-recents-label">Recents</span>
-
-        <div className="px-3 py-2">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search history..."
-            aria-label="Search execution history"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          />
+      <div className="assembly-sidebar-scroll flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-2">
+        <div className="px-1">
+          <Button
+            variant="default"
+            className="assembly-new-investigation w-full justify-between flex items-center"
+            onClick={() => setShowHistory((prev) => !prev)}
+            aria-expanded={showHistory}
+          >
+            <div className="flex items-center">
+              <History className="size-4 mr-2 opacity-85" />
+              <span>History</span>
+              {executions.length > 0 && (
+                <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/80 font-normal">
+                  {executions.length}
+                </span>
+              )}
+            </div>
+            <ChevronDown className={`size-3.5 text-muted-foreground transition-transform duration-200 ${showHistory ? "rotate-180" : ""}`} />
+          </Button>
         </div>
 
-        {filteredRecords.length === 0 ? (
-          <p className="mn-recents-empty">
-            Your runs will show up here.
-          </p>
-        ) : (
-          filteredRecords.map((record) => (
-            <div key={record.id} className="group relative">
-              <Link
-                href={`/executions?id=${record.id}`}
-                className="mn-recent"
-                title={record.question}
-                onClick={onClose}
-              >
-                <span className="mn-recent-title">{record.question}</span>
-              </Link>
+        {showHistory && (
+          <div className="flex flex-col gap-2 pt-1">
+            {executions.length > 0 && (
+              <div className="px-1">
+                <div className="relative">
+                  <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" aria-hidden />
+                  <label htmlFor="history-search" className="sr-only">Search history</label>
+                  <input
+                    id="history-search"
+                    type="text"
+                    placeholder="Search investigations"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="assembly-sidebar-search w-full rounded-md border border-border bg-muted/30 pl-8 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
+                  />
+                </div>
+              </div>
+            )}
 
-              <button
-                type="button"
-                aria-label={`Delete ${record.question}`}
-                onClick={(e) => void handleDelete(e, record.id)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            </div>
-          ))
+            {loading ? (
+              <div className="space-y-2 px-1">
+                <Skeleton className="h-10 w-full rounded-full" />
+                <Skeleton className="h-10 w-full rounded-full" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                {search ? "No matching runs" : "No saved investigations"}
+              </p>
+            ) : (
+              filtered.map((ex) => {
+                const isActive = pathname === `/executions` && searchParams?.get("id") === ex.id
+                return (
+                  <div key={ex.id} className="relative group px-1">
+                    <Link
+                      href={`/executions?id=${ex.id}`}
+                      prefetch={false}
+                      onClick={onClose}
+                      className={`assembly-new-investigation w-full justify-start flex items-center px-4 pr-10 ${
+                        isActive ? "border-brand/60 bg-brand/10 text-brand" : ""
+                      }`}
+                    >
+                      <MessageSquare className="size-4 mr-2 shrink-0 opacity-80" />
+                      <span className="truncate text-xs font-semibold text-white/95">{ex.question}</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(e, ex.id)}
+                      aria-label={`Delete run: ${ex.question.slice(0, 60)}`}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-danger hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                      title="Delete execution"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                )
+              })
+            )}
+          </div>
         )}
       </div>
 
-      <div className="mn-sidebar-foot">
-        <button
-          type="button"
-          className="mn-nav-link"
-          onClick={() => void handleExport()}
-        >
-          <Download aria-hidden />
-          <span>Export</span>
-        </button>
-
-        <p className="mn-key-note">
-          <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
-          Keys stay on this device
-        </p>
-
-        <div className="mn-foot-row">
-          <span>Appearance</span>
-          <ThemeToggle className="cin-icon-button" />
-        </div>
-      </div>
-    </aside>
-  )
-}
-
-function isNavActive(pathname: string, href: string) {
-  if (href === "/chat") return pathname === "/chat" || pathname.startsWith("/executions")
-  return pathname === href || pathname.startsWith(`${href}/`)
-}
-
-
-
-export function MobileMenu({
-  open,
-  onOpenChange,
-  menuCloseRef,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  menuCloseRef: React.RefObject<HTMLButtonElement | null>
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        aria-modal="true"
-        aria-describedby="mobile-menu-description"
-        className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 rounded-none border-r border-border bg-card p-0 sm:max-w-sm"
-      >
-        <DialogTitle className="sr-only">Navigation menu</DialogTitle>
-        <DialogDescription id="mobile-menu-description" className="sr-only">
-          Navigate between Assembly pages and manage your investigation history.
-        </DialogDescription>
-        <div id="mobile-menu" className="relative h-full min-h-0">
-          <Suspense fallback={<div className="p-4">Loading menu...</div>}>
-            <SidebarContent onClose={() => onOpenChange(false)} />
-          </Suspense>
-          <button
-            ref={menuCloseRef}
-            type="button"
-            onClick={() => onOpenChange(false)}
-            aria-label="Close menu"
-            className="absolute right-3 top-3 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-background/80 hover:bg-muted"
-          >
-            <X className="size-5" />
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-export function AppSidebar() {
-  return (
-    <aside className="assembly-sidebar-shell hidden md:block w-[264px] shrink-0 h-full relative z-20">
-      <Suspense fallback={<div className="p-4">Loading menu...</div>}>
-        <SidebarContent />
-      </Suspense>
-    </aside>
-  )
-}
-
-export function AppChrome({
-  children,
-  isLandingPage,
-  isOffline,
-  mobileMenuOpen,
-  onOpenMobileMenu,
-  menuTriggerRef,
-}: {
-  children: React.ReactNode
-  isLandingPage: boolean
-  isOffline: boolean
-  mobileMenuOpen: boolean
-  onOpenMobileMenu: () => void
-  menuTriggerRef: React.RefObject<HTMLButtonElement | null>
-}) {
-  return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-      {!isLandingPage && (
-        <header className="assembly-mobile-header md:hidden sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Zap className="size-5 text-brand" />
-            <span className="font-bold tracking-tight">assembly<span className="text-brand">.</span></span>
+      <div className="assembly-sidebar-footer p-3 border-t border-border mt-auto">
+        <div className="assembly-sidebar-preferences flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/settings"
+              onClick={onClose}
+              aria-label="Settings"
+              title="Settings"
+              data-testid="sidebar-settings-link"
+              className="assembly-sidebar-icon-btn"
+            >
+              <Settings className="size-4" />
+            </Link>
+            <button
+              type="button"
+              aria-label="Export"
+              title="Export history"
+              onClick={handleExport}
+              className="assembly-sidebar-icon-btn"
+            >
+              <Download className="size-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Import history"
+              title={importing ? "Importing…" : "Import history"}
+              disabled={importing}
+              onClick={() => importInputRef.current?.click()}
+              className="assembly-sidebar-icon-btn disabled:opacity-50"
+            >
+              <Upload className="size-4" />
+            </button>
           </div>
-          <button
-            ref={menuTriggerRef}
-            onClick={onOpenMobileMenu}
-            aria-label="Open menu"
-            aria-expanded={mobileMenuOpen}
-            aria-controls={mobileMenuOpen ? "mobile-menu" : undefined}
-            className="p-3 -mr-1 min-h-11 min-w-11 rounded hover:bg-muted"
-          >
-            <Menu className="size-6" />
-          </button>
-        </header>
-      )}
-
-      <div role="status" aria-live="polite" className="sr-only">
-        {isOffline ? OFFLINE_MESSAGE : ""}
-      </div>
-
-      {isOffline && (
-        <div
-          data-testid="offline-banner"
-          className="bg-danger/90 text-white px-4 py-1.5 text-center text-sm font-medium flex items-center justify-center gap-2"
-        >
-          <WifiOff className="size-4" />
-          {OFFLINE_MESSAGE}
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            aria-label="Import history JSON file"
+            className="hidden"
+            onChange={(e) => {
+              const input = e.currentTarget
+              const file = input.files?.[0]
+              if (file) void handleImport(file, input)
+            }}
+          />
+          <ThemeToggle className="assembly-theme-toggle" />
         </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
-        {children}
       </div>
     </div>
   )
@@ -376,7 +323,6 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const isOffline = useOfflineStatus()
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
   const menuTriggerRef = React.useRef<HTMLButtonElement>(null)
   const menuCloseRef = React.useRef<HTMLButtonElement>(null)
   const wasMenuOpen = React.useRef(false)
@@ -387,49 +333,45 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       menuCloseRef.current?.focus()
       return
     }
-
     if (wasMenuOpen.current) {
       wasMenuOpen.current = false
       menuTriggerRef.current?.focus()
     }
   }, [mobileMenuOpen])
 
-  // Public marketing/editorial/legal pages render full-width.
+  // Public marketing/editorial/legal pages render full-width without the app sidebar.
   const isPublicPage =
     pathname === "/" ||
     pathname === "/science" ||
     pathname === "/privacy" ||
     pathname === "/terms" ||
-    pathname === "/cookies" ||
-    pathname === "/refunds" ||
-    pathname === "/references"
+    pathname === "/cookies"
 
-  // Public pages always use dark theme.
+  // Enforce dark theme permanently on public/editorial/legal pages.
+  // Day/night theme preference applies exclusively to the chat workspace and app shell.
   useEffect(() => {
-    if (typeof document === "undefined") return
-
+    if (typeof document === "undefined") return;
     if (isPublicPage) {
-      document.documentElement.classList.add("dark")
+      document.documentElement.classList.add("dark");
     } else {
-      const current = getThemeSnapshot()
-
+      const current = getThemeSnapshot();
       if (current === "light") {
-        document.documentElement.classList.remove("dark")
+        document.documentElement.classList.remove("dark");
       } else {
-        document.documentElement.classList.add("dark")
+        document.documentElement.classList.add("dark");
       }
     }
-  }, [pathname, isPublicPage])
+  }, [pathname, isPublicPage]);
 
   useEffect(() => {
     if (pathname === "/") {
-      const scrollContainers = document.querySelectorAll(".overflow-y-auto")
-
-      scrollContainers.forEach((el) => {
-        el.scrollTo({ top: 0, behavior: "instant" })
-      })
-
-      window.scrollTo({ top: 0, behavior: "instant" })
+      if (typeof document !== "undefined") {
+        const scrollContainers = document.querySelectorAll(".overflow-y-auto")
+        scrollContainers.forEach((el) => {
+          el.scrollTo({ top: 0, behavior: "instant" })
+        })
+        window.scrollTo({ top: 0, behavior: "instant" })
+      }
     }
   }, [pathname])
 
@@ -441,7 +383,6 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       >
         Skip to content
       </a>
-
       <div className="assembly-app-shell flex h-screen overflow-hidden bg-background">
         {!isPublicPage && (
           <aside className="assembly-sidebar-shell hidden md:block w-[264px] shrink-0 h-full relative z-20">
@@ -459,24 +400,14 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
               aria-describedby="mobile-menu-description"
               className="fixed inset-y-0 left-0 right-auto top-0 h-dvh w-4/5 max-w-sm translate-x-0 translate-y-0 rounded-none border-r border-border bg-card p-0 sm:max-w-sm"
             >
-              <DialogTitle className="sr-only">
-                Navigation menu
-              </DialogTitle>
-
-              <DialogDescription
-                id="mobile-menu-description"
-                className="sr-only"
-              >
+              <DialogTitle className="sr-only">Navigation menu</DialogTitle>
+              <DialogDescription id="mobile-menu-description" className="sr-only">
                 Navigate between Assembly pages and manage your investigation history.
               </DialogDescription>
-
               <div id="mobile-menu" className="relative h-full min-h-0">
                 <Suspense fallback={<div className="p-4">Loading menu...</div>}>
-                  <SidebarContent
-                    onClose={() => setMobileMenuOpen(false)}
-                  />
+                  <SidebarContent onClose={() => setMobileMenuOpen(false)} />
                 </Suspense>
-
                 <button
                   ref={menuCloseRef}
                   type="button"
@@ -499,23 +430,17 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                 className="assembly-wordmark flex items-center text-foreground"
                 aria-label="Assembly home"
                 onClick={() => {
-                  const scrollContainers =
-                    document.querySelectorAll(".overflow-y-auto")
-
-                  scrollContainers.forEach((el) => {
-                    el.scrollTo({ top: 0, behavior: "instant" })
-                  })
-
-                  window.scrollTo({ top: 0, behavior: "instant" })
+                  if (typeof document !== "undefined") {
+                    const scrollContainers = document.querySelectorAll(".overflow-y-auto")
+                    scrollContainers.forEach((el) => {
+                      el.scrollTo({ top: 0, behavior: "instant" })
+                    })
+                    window.scrollTo({ top: 0, behavior: "instant" })
+                  }
                 }}
               >
-                <BrandOrbMark
-                  className="assembly-wordmark-mark--mobile"
-                  style={{ width: "28px", height: "28px" }}
-                />
-                <span>ssembly</span>
+                <BrandOrbMark className="assembly-wordmark-mark--mobile" style={{ width: "28px", height: "28px" }} /><span>ssembly</span>
               </Link>
-
               <button
                 ref={menuTriggerRef}
                 onClick={() => setMobileMenuOpen(true)}

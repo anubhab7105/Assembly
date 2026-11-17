@@ -23,7 +23,9 @@ export function keyPrefixHint(providerId: string): string {
     groq: "Keys usually start with gsk_. Paste the full value.",
     gemini: "Keys usually start with AIza. Paste the full value.",
     openrouter: "Keys usually start with sk-or-. Paste the full value.",
+    cerebras: "Keys usually start with csk-. Paste the full value.",
     huggingface: "Keys usually start with hf_. Paste the full value.",
+    nvidia: "Keys usually start with nvapi-. Paste the full value.",
   };
   return hints[providerId] ?? "Paste the full key value as shown by the provider.";
 }
@@ -60,4 +62,19 @@ export function minimumToStartBanner(
     return `Minimum to start: add keys for at least 3 model families (2 works with a warning). Recommended order: ${order}.`;
   }
   return `Minimum to start: add keys for at least 3 model families (2 works with a warning). Recommended order: ${order}.`;
+}
+
+/**
+ * Detect provider ID from key prefix.
+ */
+export function detectProviderByPrefix(key: string): string | null {
+  const clean = key.trim();
+  if (clean.startsWith("AIza")) return "gemini";
+  if (clean.startsWith("gsk_") || clean.startsWith("gsk-")) return "groq";
+  if (clean.startsWith("csk-") || clean.startsWith("csk_")) return "cerebras";
+  if (clean.startsWith("sk-or-") || clean.startsWith("sk-or_")) return "openrouter";
+  if (clean.startsWith("hf_")) return "huggingface";
+  if (clean.startsWith("nvapi-")) return "nvidia";
+  if (clean.startsWith("tvly-") || clean.startsWith("tvly_")) return "tavily";
+  return null;
 }

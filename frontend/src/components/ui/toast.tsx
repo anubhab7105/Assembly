@@ -8,17 +8,17 @@ import { cn } from "@/lib/utils"
 /* ─── Variants ────────────────────────────────────────────────────────────── */
 const toastVariants = cva(
   [
-    "relative flex w-[360px] max-w-[90vw] items-start gap-3 rounded-none border p-4 shadow-lg",
+    "pointer-events-auto relative flex w-full max-w-[1080px] items-center justify-between gap-4 rounded-xl border p-4 shadow-2xl backdrop-blur-md",
     "animate-toast-in",
   ].join(" "),
   {
     variants: {
       variant: {
-        default: "border-border bg-card text-foreground",
-        success: "border-success/30 bg-success-subtle text-success",
-        warning: "border-warning/30 bg-warning-subtle text-warning",
-        danger: "border-danger/30 bg-danger-subtle text-danger",
-        info: "border-info/30 bg-info-subtle text-info",
+        default: "border-border bg-card/95 text-foreground",
+        success: "border-emerald-500/40 bg-emerald-950/90 text-emerald-200 dark:bg-emerald-950/90 dark:text-emerald-200",
+        warning: "border-amber-500/40 bg-[#1e190e]/95 text-amber-300 dark:bg-[#1e190e]/95 dark:text-amber-200",
+        danger: "border-red-500/50 bg-[#1a0c0e]/95 text-red-500 dark:bg-[#1a0c0e]/95 dark:text-red-400",
+        info: "border-sky-500/40 bg-sky-950/90 text-sky-200 dark:bg-sky-950/90 dark:text-sky-200",
       },
     },
     defaultVariants: { variant: "default" },
@@ -85,9 +85,9 @@ export function Toast({
       onMouseLeave={startTimer}
       className={cn(toastVariants({ variant }), exiting && "animate-toast-out", className)}
     >
-      <div className="flex-1 space-y-0.5">
-        <p className="text-sm font-semibold leading-none">{title}</p>
-        {description && <p className="text-sm opacity-80">{description}</p>}
+      <div className="flex-1 min-w-0 pr-2">
+        <p className="text-sm font-semibold">{title}</p>
+        {description && <p className="text-xs sm:text-sm opacity-90 mt-0.5 leading-snug">{description}</p>}
       </div>
       <DismissButton onClick={dismiss} />
     </div>
@@ -120,10 +120,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast: addToast }}>
       {children}
-      {/* Toast stack — bottom-right */}
+      {/* Toast stack — full-width bottom matching main content / cards */}
       <div
         aria-label="Notifications"
-        className="fixed bottom-4 right-4 z-50 flex flex-col gap-2"
+        className="fixed bottom-5 left-0 md:left-[264px] right-0 z-50 flex flex-col items-center pointer-events-none px-4 sm:px-7 gap-2.5"
       >
         {toasts.map((t) => (
           <Toast key={t.id} {...t} onDismiss={() => removeToast(t.id)} />

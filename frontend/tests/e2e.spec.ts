@@ -141,12 +141,6 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await page.locator('a[href="/chat"]:visible').first().click()
     await expect(page).toHaveURL(/\/chat/)
 
-    // Privacy gate blocks interacting until acknowledged (fresh contexts
-    // always prompt; wait for the async storage read instead of racing it).
-    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
-    await page.getByLabel(/my question is sent to the model providers/i).check()
-    await page.getByTestId("privacy-acknowledge").click()
-
     // Advanced model controls are intentionally tucked into a dialog.
     await page.getByRole("button", { name: /Open model and role settings/i }).click()
     await expect(page.getByRole("dialog")).toBeVisible()
@@ -174,10 +168,6 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
   test("3. History export/import round-trips without server storage", async ({ page }) => {
     await page.goto("/chat")
-    // The privacy gate replaces the workspace chrome until acknowledged.
-    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
-    await page.getByLabel(/my question is sent to the model providers/i).check()
-    await page.getByTestId("privacy-acknowledge").click()
 
     // The workspace sidebar exports the local run history as JSON. A cold dev
     // compile can lag the first paint, so allow for that.
@@ -192,9 +182,6 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
   test("supported attachments show a removable chip before a run", async ({ page }) => {
     await page.goto("/chat")
-    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
-    await page.getByLabel(/my question is sent to the model providers/i).check()
-    await page.getByTestId("privacy-acknowledge").click()
 
     await page.locator('input[aria-label="Choose investigation attachments"]').setInputFiles({
       name: "analysis-notes.txt",
@@ -212,9 +199,6 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
   test("unsupported attachment types produce a clear validation error", async ({ page }) => {
     await page.goto("/chat")
-    await expect(page.getByTestId("privacy-dialog")).toBeVisible({ timeout: 10000 })
-    await page.getByLabel(/my question is sent to the model providers/i).check()
-    await page.getByTestId("privacy-acknowledge").click()
 
     await page.locator('input[aria-label="Choose investigation attachments"]').setInputFiles({
       name: "scan.pdf",
@@ -229,14 +213,6 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
   test("each application route exposes exactly one primary main landmark", async ({ page }) => {
     for (const route of ["/", "/chat", "/settings", "/executions"]) {
       await page.goto(route)
-
-      if (route === "/chat") {
-        const privacyDialog = page.getByTestId("privacy-dialog")
-        await expect(privacyDialog).toBeVisible({ timeout: 10000 })
-        await page.getByLabel(/my question is sent to the model providers/i).check()
-        await page.getByTestId("privacy-acknowledge").click()
-        await expect(privacyDialog).toBeHidden()
-      }
 
       await expect(page.getByRole("main")).toHaveCount(1)
       await expect(page.locator("#main-content")).toHaveJSProperty("tagName", "MAIN")
@@ -302,20 +278,10 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(trigger).not.toHaveAttribute("aria-controls")
   })
 
-  test("privacy notice has accessible naming and remains until acknowledged", async ({ page }) => {
+  test("chat loads directly without blocking privacy modal dialogs", async ({ page }) => {
     await page.goto("/chat")
     const dialog = page.getByRole("dialog", { name: "Privacy notice" })
-    await expect(dialog).toBeVisible()
-    await expect(dialog).toHaveAttribute("aria-modal", "true")
-    await expect(dialog).toHaveAttribute("aria-describedby", "privacy-dialog-description")
-    await expect.poll(() =>
-      dialog.evaluate((element) => element.contains(document.activeElement)),
-    ).toBe(true)
-
-    await page.keyboard.press("Escape")
-    await expect(dialog).toBeVisible()
-    await page.getByLabel(/my question is sent to the model providers/i).check()
-    await page.getByTestId("privacy-acknowledge").click()
     await expect(dialog).toBeHidden()
+    await expect(page.locator("#research-question")).toBeAttached()
   })
 })

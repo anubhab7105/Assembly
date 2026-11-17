@@ -51,28 +51,25 @@ export default function PrivacyPage() {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
           <div className="space-y-2 rounded-xl border border-border/40 bg-card/20 p-6">
-            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span className="size-2 rounded-full bg-brand" />
+            <h3 className="text-base font-semibold text-foreground">
               Saved in your browser
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Provider API keys, run history (questions, answers, sources, scores), settings, usage counters, and your privacy notice acknowledgment. Keys are stored as readable values in IndexedDB with a localStorage fallback; they are not encrypted at rest or stored in an OS-protected credential vault. Remove keys in Settings or clear browser site data to delete the browser copy.
+              Provider API keys, run history (questions, answers, sources, scores), settings, usage counters, and your privacy notice acknowledgment. Keys are stored as readable values in IndexedDB with a localStorage fallback (or WebView browser profile in desktop mode); they are not encrypted at rest or stored in an OS-protected credential vault, and same-origin JavaScript can read them while available to the app. Remove keys in Settings or clear browser site data to delete the browser copy. If browser storage fails during removal, a key may remain saved.
             </p>
           </div>
 
           <div className="space-y-2 rounded-xl border border-border/40 bg-card/20 p-6">
-            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span className="size-2 rounded-full bg-brand" />
+            <h3 className="text-base font-semibold text-foreground">
               On the hosted Assembly backend (transiently)
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Capacity preflight sends saved model-provider keys over HTTPS to check quota readiness; every run request sends provider keys and questions transiently to contact model APIs. The backend uses submitted keys only for that active request and never writes them to the database or disk. Application logs scrub all key-like values.
+              For capacity preflight, the browser sends all saved model-provider keys to the hosted Assembly backend over HTTPS to check quota readiness; a key-test request sends only the provider key being tested. Every run request sends all saved model-provider keys and any saved Tavily key, even when search is not used. When research runs, questions may be searched via Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo depending on the search fallback path; Tavily receives it only when available and selected by that path, while the other listed services do not require a Tavily key. The backend uses submitted keys only for that active request and never writes them to the database or disk. Application logs scrub all key-like values. Hosting providers may process network traffic under their own policies.
             </p>
           </div>
 
           <div className="space-y-2 rounded-xl border border-border/40 bg-card/20 p-6">
-            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span className="size-2 rounded-full bg-brand" />
+            <h3 className="text-base font-semibold text-foreground">
               Application logs &amp; rate limits
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -81,8 +78,7 @@ export default function PrivacyPage() {
           </div>
 
           <div className="space-y-2 rounded-xl border border-border/40 bg-card/20 p-6">
-            <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span className="size-2 rounded-full bg-brand" />
+            <h3 className="text-base font-semibold text-foreground">
               What we never collect
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">

@@ -7,49 +7,26 @@ import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type Catalog, type UsageEntry } from "@/lib/api-client"
 import { storage } from "@/lib/storage"
 import { env } from "@/lib/env"
-import {
-  PRIVACY_ACK_KEY,
-  PRIVACY_NOTICE_VERSION,
-} from "@/lib/privacy-notice"
-import { PrivacyDialog } from "@/components/privacy-dialog"
 import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
-import {
-  estimateAttachmentContextChars,
-  MAX_ATTACHMENT_CONTEXT_CHARS,
-  SUPPORTED_ATTACHMENT_EXTENSIONS,
-  validateAttachmentBatch,
-} from "@/lib/attachments"
 import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
 import { makeChatStatus, type ChatStatus } from "@/lib/chat-status"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
 import { Button } from "@/components/ui/button"
 import { ChatStatusMessage } from "@/components/chat-status-message"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import {
-  ArrowUp,
-  Send,
-  SlidersHorizontal,
-  Paperclip,
-  X,
-  FileText,
-  Settings,
-} from "lucide-react"
+import { Send, Clock, SlidersHorizontal, X, FileText, Plus, Paperclip, Globe, Sparkles, Check } from "lucide-react"
+import { ChatIntroScene } from "@/components/chat-intro-scene"
 
-const EXAMPLES = [
-  { label: "Quantum computing", question: "Will quantum computing achieve commercial advantage before 2030?" },
-  { label: "Superconductors", question: "What are the most viable methods for replicating room-temperature superconductors?" },
-  { label: "AGI timeline", question: "Analyse the timeline and economic impacts of AGI given current scaling laws." },
-  { label: "EV battery chemistry", question: "Which battery chemistry is most likely to replace Lithium-Ion in EVs by 2035?" },
-]
-
-const TIME_BUDGETS = [3, 5, 10, 15] as const
-const BUDGET_COPY: Record<(typeof TIME_BUDGETS)[number], string> = {
-  3: "Quick",
-  5: "Balanced",
-  10: "Thorough",
-  15: "Deep dive",
-}
+const TIME_BUDGETS = [3, 5, 10, 15]
+const MAX_ATTACHMENTS = 5
+const MAX_FILE_BYTES = 256 * 1024
+const MAX_TOTAL_BYTES = 384 * 1024
+const SUPPORTED_EXTENSIONS = new Set([
+  "txt", "md", "csv", "json", "log", "py", "js", "jsx", "ts", "tsx",
+  "html", "css", "yml", "yaml", "toml", "ini", "cfg", "conf", "xml",
+  "sql", "sh", "ps1", "bat", "env.example",
+])
 
 type DraftAttachment = {
   id: string
@@ -59,25 +36,71 @@ type DraftAttachment = {
   size: number
 }
 
+let chatIntroHasPlayedInCurrentSession = false
+
+function ChatGreetingHeadline({ isRevealed }: { isRevealed: boolean }) {
+  const [phase, setPhase] = useState<"welcome" | "dissolving" | "assembled">("welcome")
+
+  useEffect(() => {
+    if (!isRevealed) return
+    const dissolveTimer = setTimeout(() => {
+      setPhase("dissolving")
+    }, 2200)
+
+    const assembledTimer = setTimeout(() => {
+      setPhase("assembled")
+    }, 3000)
+
+    return () => {
+      clearTimeout(dissolveTimer)
+      clearTimeout(assembledTimer)
+    }
+  }, [isRevealed])
+
+  return (
+    <div className="assembly-chat-greeting-stage select-none" aria-live="polite">
+      <h1
+        className={`assembly-greeting-welcome ${
+          phase === "welcome"
+            ? "is-visible"
+            : phase === "dissolving"
+              ? "is-dissolving"
+              : "is-hidden"
+        }`}
+        aria-hidden={phase === "assembled"}
+      >
+        Welcome.
+      </h1>
+
+      <h1
+        className={`assembly-greeting-assemble ${
+          phase === "assembled" || phase === "dissolving"
+            ? "is-visible"
+            : "is-hidden"
+        }`}
+      >
+        <span className="assembly-greeting-subtext mr-1.5">
+          Assemble
+        </span>{" "}
+        your thoughts...
+      </h1>
+    </div>
+  )
+}
+
 export default function Home() {
   const router = useRouter()
+
+  const [isIntroComplete, setIsIntroComplete] = useState(() => chatIntroHasPlayedInCurrentSession)
   const [question, setQuestion] = useState("")
   const [attachments, setAttachments] = useState<DraftAttachment[]>([])
-  const attachmentsRef = useRef<DraftAttachment[]>([])
-  const attachmentQueueRef = useRef<Promise<void>>(Promise.resolve())
-  const [isValidatingAttachments, setIsValidatingAttachments] = useState(false)
-  const pendingValidationCountRef = useRef(0)
   const [minutes, setMinutes] = useState(5)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<ChatStatus | null>(null)
   const [selection, setSelection] = useState<ModelSelection>({ selected: [], pins: {} })
-  const [privacyAcked, setPrivacyAcked] = useState(false)
-  const [showPrivacy, setShowPrivacy] = useState(false)
-  const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [catalogFailed, setCatalogFailed] = useState(false)
-  const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogTick, setCatalogTick] = useState(0)
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
@@ -87,36 +110,17 @@ export default function Home() {
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [showBudgetDropdown, setShowBudgetDropdown] = useState(false)
   const budgetMenuRef = useRef<HTMLDivElement>(null)
+  const [webSourcesActive, setWebSourcesActive] = useState(false)
 
   useEffect(() => {
-    let active = true
-
-    ApiClient.catalog()
-      .then((c) => {
-        if (!active) return
-
-        setCatalog(c)
-        setCatalogFailed(false)
-        setCatalogNotes(
-          c.providers
-            .filter((p) => p.enabled)
-            .map((p) => ({ id: p.id, privacy_note: p.privacy_note ?? null })),
-        )
-      })
-      .catch(() => {
-        if (!active) return
-
-        setCatalog(null)
-        setCatalogFailed(true)
-      })
-      .finally(() => {
-        if (active) setCatalogLoading(false)
-      })
-
-    return () => {
-      active = false
+    const handleNewChat = () => {
+      setQuestion("")
+      setAttachments([])
+      setStatus(null)
     }
-  }, [catalogTick])
+    window.addEventListener("assembly:new-chat", handleNewChat)
+    return () => window.removeEventListener("assembly:new-chat", handleNewChat)
+  }, [])
 
   useEffect(() => {
     if (!showContextPopover && !showBudgetDropdown) return
@@ -141,8 +145,6 @@ export default function Home() {
       document.removeEventListener("keydown", handleKeyDown)
     }
   }, [showContextPopover, showBudgetDropdown])
-
-  const appMode = env.NEXT_PUBLIC_APP_MODE === "desktop" ? "desktop" : "web"
 
   const gate = React.useMemo(() => {
     const enabled = new Set(enabledIds)
@@ -170,46 +172,23 @@ export default function Home() {
     pins: selection.pins,
   })
   const degradedConfirmed = confirmedGateSignature === gateSignature
-  const missingQuestion = !question.trim() && attachments.length === 0
 
-  const runHint =
-    gate.level === "BLOCKED"
-      ? gate.reasons[0] ?? "No model families are ready."
-      : gate.level === "DEGRADED"
-        ? "Only one model family is ready. Confirm before launching."
-        : null
   useEffect(() => {
     const refreshKeys = () => {
       globalVault.allKeys().then((k) => {
         // Tavily is an optional search credential, not a runnable model provider.
         const modelProviderIds = Object.keys(k).filter((id) => id !== "tavily")
         setEnabledIds(modelProviderIds)
-      }).catch(() => { })
+        if (!k.tavily?.trim()) {
+          setWebSourcesActive(false)
+        }
+      }).catch(() => {})
     }
     refreshKeys()
     // The vault is persistent: re-read when the tab regains focus so the
     // picker gate and the execution request always agree on readiness.
     window.addEventListener("focus", refreshKeys)
     document.addEventListener("visibilitychange", refreshKeys)
-    storage
-      .getSetting(PRIVACY_ACK_KEY)
-      .then((raw) => {
-        if (!raw) {
-          setShowPrivacy(true)
-          return
-        }
-        try {
-          const ack = JSON.parse(raw) as { version?: number }
-          if (ack.version !== PRIVACY_NOTICE_VERSION) {
-            setShowPrivacy(true)
-          } else {
-            setPrivacyAcked(true)
-          }
-        } catch {
-          setShowPrivacy(true)
-        }
-      })
-      .catch(() => setShowPrivacy(true))
     return () => {
       window.removeEventListener("focus", refreshKeys)
       document.removeEventListener("visibilitychange", refreshKeys)
@@ -221,11 +200,6 @@ export default function Home() {
       .then((c) => {
         setCatalog(c)
         setCatalogFailed(false)
-        setCatalogNotes(
-          c.providers
-            .filter((p) => p.enabled)
-            .map((p) => ({ id: p.id, privacy_note: p.privacy_note ?? null })),
-        )
       })
       .catch(() => {
         setCatalog(null)
@@ -240,96 +214,100 @@ export default function Home() {
     }
   }, [question])
 
-  useEffect(() => {
-    const handleNewChat = () => {
-      setQuestion("")
-      setAttachments([])
-      setStatus(null)
-    }
-
-    window.addEventListener("assembly:new-chat", handleNewChat)
-
-    return () => {
-      window.removeEventListener("assembly:new-chat", handleNewChat)
-    }
-  }, [])
-
-  const handleAcknowledge = async () => {
-    await storage.setSetting(
-      PRIVACY_ACK_KEY,
-      JSON.stringify({ version: PRIVACY_NOTICE_VERSION, acknowledged_at: new Date().toISOString() }),
-    )
-    setPrivacyAcked(true)
-    setShowPrivacy(false)
-  }
-
-  const handleRemoveAttachment = (id: string) => {
-    const next = attachmentsRef.current.filter((item) => item.id !== id)
-    attachmentsRef.current = next
-    setAttachments(next)
-  }
-
   const handleFilesSelected = async (files: FileList | null) => {
     if (!files?.length) return
     const picked = Array.from(files)
-    pendingValidationCountRef.current += 1
-    setIsValidatingAttachments(true)
-    const runBatch = async () => {
-      try {
-        const result = await validateAttachmentBatch(() => attachmentsRef.current, picked)
-        if (result.accepted.length > 0) {
-          const next = [...attachmentsRef.current, ...result.accepted]
-          attachmentsRef.current = next
-          setAttachments(next)
-        }
-        const estimatedPromptChars = estimateAttachmentContextChars(
-          attachmentsRef.current,
+    if (attachments.length + picked.length > MAX_ATTACHMENTS) {
+      setStatus(makeChatStatus(`Attach up to ${MAX_ATTACHMENTS} files per investigation.`, "info"))
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+    let total = attachments.reduce((sum, item) => sum + item.size, 0)
+    const accepted: DraftAttachment[] = []
+    for (const file of picked) {
+      const lower = file.name.toLowerCase()
+      const extension = lower.endsWith(".env.example")
+        ? "env.example"
+        : lower.includes(".") ? lower.split(".").pop() ?? "" : ""
+      if (!SUPPORTED_EXTENSIONS.has(extension)) {
+        setStatus(
+          makeChatStatus(
+            `${file.name}: unsupported type. Choose a text, Markdown, CSV, JSON, log, or source/configuration file.`,
+            "warning",
+          ),
         )
-        const truncationNotice =
-          estimatedPromptChars > MAX_ATTACHMENT_CONTEXT_CHARS
-            ? ` Formatted attachment context exceeds ${MAX_ATTACHMENT_CONTEXT_CHARS.toLocaleString()} characters, so extra content will be truncated before sending to models.`
-            : ""
-        if (result.accepted.length > 0 && result.errors.length > 0) {
+        continue
+      }
+      if (file.size <= 0) {
+        setStatus(makeChatStatus(`${file.name}: file is empty.`, "warning"))
+        continue
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        setStatus(
+          makeChatStatus(`${file.name}: file exceeds the 256 KiB per-file limit.`, "warning"),
+        )
+        continue
+      }
+      total += file.size
+      if (total > MAX_TOTAL_BYTES) {
+        total -= file.size
+        setStatus(makeChatStatus("Attachments exceed the 384 KiB combined limit.", "warning"))
+        continue
+      }
+      try {
+        const content = await file.text()
+        const hasUnsupportedControls = Array.from(content).some((character) => {
+          const code = character.charCodeAt(0)
+          return (code < 32 && ![9, 10, 12, 13].includes(code)) || code === 127
+        })
+        if (hasUnsupportedControls) {
+          total -= file.size
           setStatus(
             makeChatStatus(
-              `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. ${result.errors.join(" ")}${truncationNotice}`,
+              `${file.name}: binary or unsupported control characters aren't supported.`,
               "warning",
             ),
           )
-        } else if (result.errors.length > 0) {
-          setStatus(makeChatStatus(result.errors.join(" "), "warning"))
-        } else if (result.accepted.length > 0) {
-          setStatus(
-            makeChatStatus(
-              `${result.accepted.length} file${result.accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.${truncationNotice}`,
-              truncationNotice ? "warning" : "info",
-            ),
-          )
+          continue
         }
-        if (fileInputRef.current) fileInputRef.current.value = ""
-      } finally {
-        pendingValidationCountRef.current = Math.max(0, pendingValidationCountRef.current - 1)
-        if (pendingValidationCountRef.current === 0) {
-          setIsValidatingAttachments(false)
+        if (extension === "json") {
+          try { JSON.parse(content) } catch {
+            total -= file.size
+            setStatus(makeChatStatus(`${file.name}: invalid JSON.`, "warning"))
+            continue
+          }
         }
+        if (!content.trim()) {
+          total -= file.size
+          setStatus(makeChatStatus(`${file.name}: file is empty.`, "warning"))
+          continue
+        }
+        accepted.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${accepted.length}`,
+          filename: file.name,
+          media_type: file.type || "text/plain",
+          content,
+          size: file.size,
+        })
+      } catch {
+        total -= file.size
+        setStatus(makeChatStatus(`${file.name}: couldn't read this file.`, "warning"))
       }
     }
-    const nextQueue = attachmentQueueRef.current.then(runBatch, runBatch)
-    attachmentQueueRef.current = nextQueue
-    await nextQueue
+    if (accepted.length) {
+      setAttachments((current) => [...current, ...accepted])
+      setStatus(
+        makeChatStatus(
+          `${accepted.length} file${accepted.length === 1 ? "" : "s"} ready. File contents remain in memory for this investigation.`,
+          "info",
+        ),
+      )
+    }
+    if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   const handleLaunch = async () => {
-    if (loading) return
-    // Wait for any queued attachment validation to settle before launching
-    await attachmentQueueRef.current
-    const activeAttachments = attachmentsRef.current
-    if ((!question.trim() && activeAttachments.length === 0) || loading) return
-    if (!privacyAcked) {
-      setShowPrivacy(true)
-      setStatus(makeChatStatus("Please acknowledge the privacy notice first.", "info"))
-      return
-    }
+    if ((!question.trim() && attachments.length === 0) || loading) return
     if (gate.level === "BLOCKED") {
       setStatus(makeChatStatus(gate.reasons[0] ?? "No model families ready.", "info"))
       return
@@ -364,7 +342,7 @@ export default function Home() {
       const keys = await globalVault.allKeys()
       // The Tavily search key travels separately; it is never a model key.
       const { tavily, ...providerKeys } = keys
-      const searchKeys = tavily ? { tavily } : undefined
+      const searchKeys = (webSourcesActive && tavily) ? { tavily } : undefined
       const usage: UsageEntry[] = await storage.getUsage()
       const preflight = await ApiClient.preflight(
         questionForRun,
@@ -385,7 +363,7 @@ export default function Home() {
           minutes,
           providerKeys,
           searchKeys,
-          attachments: activeAttachments.map(({ filename, media_type, content }) => ({ filename, media_type, content })),
+          attachments: attachments.map(({ filename, media_type, content }) => ({ filename, media_type, content })),
           selection: { selected: selection.selected, pins: selection.pins },
           usage,
         },
@@ -448,7 +426,7 @@ export default function Home() {
           tokens,
           elapsedSeconds,
           disagreements: [],
-          attachments: activeAttachments.map(({ filename, media_type, size }) => ({
+          attachments: attachments.map(({ filename, media_type, size }) => ({
             filename,
             media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
             size_bytes: size,
@@ -483,7 +461,7 @@ export default function Home() {
         elapsedSeconds,
         verification: verification ?? undefined,
         disagreements: [],
-        attachments: activeAttachments.map(({ filename, media_type, size }) => ({
+        attachments: attachments.map(({ filename, media_type, size }) => ({
           filename,
           media_type: media_type && media_type.length <= 100 ? media_type : "text/plain",
           size_bytes: size,
@@ -542,245 +520,259 @@ export default function Home() {
   }, [loading])
 
   return (
-    <div className="mn-chat">
-      <main id="main-content" tabIndex={-1} className="mn-chat-main">
-        <div className="mn-chat-center">
-          <h1 className="mn-hello">What&apos;s on your mind today?</h1>
+    <div className="assembly-chat-page flex min-h-screen flex-col bg-background">
+      <main id="main-content" tabIndex={-1} className="assembly-chat-main flex w-full flex-1 flex-col justify-center">
+        {/* Phase 1: Dedicated Loading Screen with ThreeUI Intro Pop Animation */}
+        {!isIntroComplete && (
+          <div
+            className="assembly-chat-loading-overlay is-active"
+            onClick={() => {
+              chatIntroHasPlayedInCurrentSession = true
+              setIsIntroComplete(true)
+            }}
+          >
+            <ChatIntroScene
+              onAssembled={() => {
+                chatIntroHasPlayedInCurrentSession = true
+                setIsIntroComplete(true)
+              }}
+            />
+          </div>
+        )}
 
+        <div className={`assembly-chat-box-revealer ${isIntroComplete ? "is-revealed" : "is-hidden"}`}>
+          <ChatGreetingHeadline isRevealed={isIntroComplete} />
 
-          <div className="mn-dock">
-            {status && (
-              <div className="mn-status" id="question-status">
-                <ChatStatusMessage status={status} />
-              </div>
-            )}
-
-            <div
-              data-level={catalogLoading ? "LOADING" : catalogFailed ? "WARN" : gate.level}
-              className="mn-meta"
-              aria-live="polite"
-            >
-              {catalogLoading ? (
-                <span>Checking provider keys…</span>
-              ) : catalogFailed ? (
-                <span className="mn-meta-warn">
-                  Provider status unavailable ·{" "}
+          <div className="assembly-chat-form-stack space-y-3">
+          {attachments.length > 0 && (
+            <div className="assembly-attachment-list flex flex-wrap gap-2" aria-label="Selected attachments">
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="flex min-w-0 max-w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs">
+                  <FileText className="size-4 shrink-0 text-brand" aria-hidden />
+                  <span className="max-w-48 truncate font-medium" title={attachment.filename}>{attachment.filename}</span>
+                  <span className="shrink-0 text-muted-foreground">{attachment.filename.toLowerCase().endsWith(".env.example") ? "ENV.EXAMPLE" : (attachment.filename.split(".").pop() || "TEXT").toUpperCase()}</span>
+                  <span className="shrink-0 text-muted-foreground">{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
                   <button
                     type="button"
+                    aria-label={`Remove ${attachment.filename}`}
+                    disabled={loading}
+                    onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                  >
+                    <X className="size-3.5" aria-hidden />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="assembly-chat-composer-pill-bar">
+            {/* Left: Plus context button with Cursor-style "Add Context" menu */}
+            <div className="relative shrink-0" ref={contextMenuRef}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                aria-label="Choose investigation attachments"
+                accept={[...SUPPORTED_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
+                className="sr-only"
+                disabled={loading}
+                onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
+              />
+              <button
+                type="button"
+                className={`assembly-composer-plus-btn shrink-0 ${showContextPopover ? "is-open" : ""}`}
+                disabled={loading}
+                onClick={() => setShowContextPopover((prev) => !prev)}
+                aria-label={showContextPopover ? "Close context menu" : "Add context"}
+                aria-expanded={showContextPopover}
+                title="Add context"
+              >
+                <Plus className={`size-5 transition-transform duration-200 ${showContextPopover ? "rotate-45" : ""}`} />
+                {attachments.length > 0 && !showContextPopover && (
+                  <span className="assembly-composer-attach-badge">{attachments.length}</span>
+                )}
+              </button>
+
+              {showContextPopover && (
+                <div className="assembly-context-popover" role="menu" aria-label="Add context options">
+                  <div className="assembly-context-popover-header">Add Context</div>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="assembly-context-popover-item"
                     onClick={() => {
-                      setCatalogLoading(true)
-                      setCatalogTick((t) => t + 1)
+                      setShowContextPopover(false)
+                      fileInputRef.current?.click()
                     }}
                   >
-                    Retry
+                    <Paperclip className="size-4" />
+                    <span>Files</span>
+                    {attachments.length > 0 && (
+                      <span className="assembly-context-popover-item-badge">{attachments.length}</span>
+                    )}
                   </button>
-                </span>
-              ) : (
-                <>
-                  <span>{gateChipText(gate)}</span>
-                  {gate.level === "DEGRADED" && !degradedConfirmed && (
-                    <button
-                      type="button"
-                      className="mn-link"
-                      data-testid="degraded-confirm"
-                      onClick={() => setConfirmedGateSignature(gateSignature)}
-                    >
-                      Run anyway
-                    </button>
-                  )}
-                  {gate.families_count === 0 && (
-                    <Link href="/settings" className="mn-link">
-                      Add provider keys
-                    </Link>
-                  )}
-                </>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="assembly-context-popover-item"
+                    onClick={() => {
+                      setShowContextPopover(false)
+                      setMinutes(15)
+                      setStatus(makeChatStatus("Deep research mode enabled (15m budget with adversarial debate).", "info"))
+                    }}
+                  >
+                    <Sparkles className="size-4" />
+                    <span>Deep Research</span>
+                    <span className="assembly-context-popover-item-badge">15m</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="assembly-context-popover-item"
+                    onClick={async () => {
+                      setShowContextPopover(false)
+                      try {
+                        const keys = await globalVault.allKeys()
+                        const hasTavily = Boolean(keys.tavily?.trim())
+                        if (!hasTavily) {
+                          setWebSourcesActive(false)
+                          setStatus(makeChatStatus("Add a Tavily key in Settings to activate web sources.", "error"))
+                        } else {
+                          const nextState = !webSourcesActive
+                          setWebSourcesActive(nextState)
+                          if (nextState) {
+                            setStatus(makeChatStatus("Web sources active: Assembly will query live web evidence during debate rounds.", "info"))
+                          } else {
+                            setStatus(makeChatStatus("Web sources deactivated.", "info"))
+                          }
+                        }
+                      } catch {
+                        setWebSourcesActive(false)
+                        setStatus(makeChatStatus("Add a Tavily key in Settings to activate web sources.", "error"))
+                      }
+                    }}
+                  >
+                    <Globe className="size-4" />
+                    <span>Web Sources</span>
+                    <span className="assembly-context-popover-item-badge">
+                      {webSourcesActive ? "Active" : "Live"}
+                    </span>
+                  </button>
+                </div>
               )}
             </div>
 
-            {runHint && (
-              <p className="mn-hint" id="run-hint">
-                {runHint}
-              </p>
-            )}
-
-            {catalogFailed && (
-              <div className="mn-alert" role="alert">
-                <span>
-                  Can&apos;t reach the Assembly server at {env.apiUrl}. Check that the backend is running.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCatalogLoading(true)
-                    setCatalogTick((t) => t + 1)
-                  }}
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            <div className="mn-suggestions" aria-label="Suggested questions">
-              <span>Try</span>
-              {EXAMPLES.map((example) => (
-                <button
-                  key={example.label}
-                  type="button"
-                  className="mn-chip"
-                  title={example.question}
-                  onClick={() => {
-                    setQuestion(example.question)
-                    textareaRef.current?.focus()
-                  }}
-                >
-                  {example.label}
-                </button>
-              ))}
-            </div>
-            {attachments.length > 0 && (
-              <div className="mn-attachments" aria-label="Selected attachments">
-                {attachments.map((attachment) => (
-                  <div key={attachment.id} className="mn-attachment">
-                    <FileText className="size-3.5 shrink-0 text-brand" aria-hidden />
-                    <b title={attachment.filename}>{attachment.filename}</b>
-                    <span>{Math.max(1, Math.ceil(attachment.size / 1024))} KB</span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${attachment.filename}`}
-                      disabled={loading}
-                      onClick={() => handleRemoveAttachment(attachment.id)}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                    >
-                      <X className="size-3.5" aria-hidden />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <form
-              className="mn-composer"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void handleLaunch()
-              }}
-            >
-              <label htmlFor="research-question" className="sr-only">
-                Ask a question (max 2000 characters)
-              </label>
-              <textarea
-                id="research-question"
-                ref={textareaRef}
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault()
-                    void handleLaunch()
+            {/* Middle: Seamless input field matching Image 2 */}
+            <label htmlFor="research-question" className="sr-only">Research question</label>
+            <textarea
+              id="research-question"
+              ref={textareaRef}
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  if (!loading && (question.trim() || attachments.length > 0) && gate.level !== "BLOCKED") {
+                    handleLaunch()
                   }
-                }}
-                placeholder="Ask Assembly"
-                aria-describedby="question-status"
-                className="mn-input"
-                rows={1}
-                maxLength={2000}
-                required
-              />
+                }
+              }}
+              placeholder="Ask anything..."
+              aria-describedby="question-status"
+              className="assembly-composer-input resize-none"
+              rows={1}
+              maxLength={2000}
+              required
+            />
 
-              <div className="mn-composer-tools">
-                <div className="mn-tools-left">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    aria-label="Choose investigation attachments"
-                    accept={[...SUPPORTED_ATTACHMENT_EXTENSIONS].map((ext) => `.${ext}`).join(",")}
-                    className="sr-only"
-                    disabled={loading}
-                    onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-h-9"
-                    disabled={loading}
-                    onClick={() => fileInputRef.current?.click()}
-                    aria-label="Attach files"
-                    title="Attach files"
-                  >
-                    <Paperclip className="size-[18px]" aria-hidden />
-                  </Button>
-                  <button
-                    type="button"
-                    className="mn-pill"
-                    onClick={() => setShowModelSettings(true)}
-                    aria-haspopup="dialog"
-                    aria-label="Open model and role settings"
-                  >
-                    <SlidersHorizontal className="size-3.5" aria-hidden />
-                    {selection.selected.length > 0 ? `${selection.selected.length} models` : "Models · Auto"}
-                  </button>
-                  <div className="mn-budget" role="group" aria-label="Time budget">
-                    {TIME_BUDGETS.map((value) => (
+            {/* Right: Actions group (Model settings + Time Budget Dropdown button + Run pill button) */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowModelSettings(true)}
+                className="assembly-composer-budget-btn"
+                aria-label="Open model and role settings"
+                aria-haspopup="dialog"
+                title="Open model and role settings"
+              >
+                <SlidersHorizontal className="size-5 transition-colors" />
+              </button>
+
+              <div className="relative" ref={budgetMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowBudgetDropdown((prev) => !prev)}
+                  className={`assembly-composer-budget-btn ${showBudgetDropdown ? "is-open" : ""}`}
+                  aria-label="Select investigation time budget"
+                  aria-expanded={showBudgetDropdown}
+                  title={`Time budget: ${minutes} mins`}
+                >
+                  <Clock className="size-5 transition-colors" />
+                </button>
+
+                {showBudgetDropdown && (
+                  <div className="assembly-budget-dropdown" role="menu" aria-label="Choose time budget">
+                    <div className="assembly-budget-dropdown-header">Time Budget</div>
+                    {TIME_BUDGETS.map((m) => (
                       <button
-                        key={value}
+                        key={m}
                         type="button"
-                        className="mn-budget-opt"
-                        onClick={() => setMinutes(value)}
-                        aria-pressed={minutes === value}
-                        aria-label={`${value} minutes, ${BUDGET_COPY[value]}`}
-                        title={BUDGET_COPY[value]}
+                        role="menuitem"
+                        className={`assembly-budget-dropdown-item ${minutes === m ? "is-active" : ""}`}
+                        onClick={() => {
+                          setMinutes(m)
+                          setShowBudgetDropdown(false)
+                        }}
                       >
-                        {value}m
+                        <Clock className="size-3.5 text-muted-foreground" />
+                        <span>{m} mins</span>
+                        {minutes === m && <Check className="size-3.5 ml-auto text-amber-400" />}
                       </button>
                     ))}
                   </div>
-                </div>
-                <Button
-                  size="default"
-                  onClick={handleLaunch}
-                  disabled={loading || isValidatingAttachments || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
-                  className="assembly-chat-run-button min-h-10 rounded-xl px-4"
-                >
-                  {loading ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="mr-1.5 size-4" />}
-                  {loading ? "Running…" : isValidatingAttachments ? "Checking…" : "Run"}
-                </Button>
-
-                <button
-                  type="submit"
-                  className="mn-send"
-                  disabled={loading || missingQuestion || catalogLoading || catalogFailed || gate.level === "BLOCKED"}
-                  aria-label={loading ? "Running" : "Start run"}
-                  aria-describedby={runHint ? "run-hint" : undefined}
-                >
-                  {loading ? (
-                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    <ArrowUp className="size-[18px]" aria-hidden />
-                  )}
-                </button>
+                )}
               </div>
-            </form>
+
+              <button
+                type="button"
+                onClick={handleLaunch}
+                disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
+                className="assembly-composer-run-pill shrink-0"
+                aria-label={loading ? "Running" : "Start run"}
+              >
+                {loading ? (
+                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <Send className="size-3.5" />
+                    <span className="font-semibold text-xs tracking-wide uppercase">Run</span>
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="assembly-chat-banners-stack space-y-3">
             {gate.families_count === 0 && (
-              <div className="assembly-chat-warning-banner flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
-                <p className="text-xs font-medium text-warning">
-                  Set up provider keys in Settings. Two ready model families are the minimum for a normal run; three are recommended. Providers with unverified quota limits do not count toward readiness.
+              <div className="assembly-chat-warning-banner rounded-xl border px-3.5 py-2.5">
+                <p className="text-xs font-medium text-warning leading-relaxed">
+                  Set up your provider keys in{" "}
+                  <Link href="/settings" className="underline underline-offset-2 font-semibold hover:opacity-80">
+                    Settings
+                  </Link>{" "}
+                  to start an investigation. At least two ready model families are required for a run; three are recommended.
                 </p>
-                <Button variant="outline" size="sm" onClick={() => router.push("/settings")} className="shrink-0 assembly-dark-glass-btn">
-                  <Settings className="mr-1.5 size-3.5" />
-                  Add keys
-                </Button>
               </div>
             )}
 
             <div
               data-testid="diversity-chip"
-              className={`assembly-readiness-chip flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
-                }`}
+              className={`assembly-readiness-chip flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
+                gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
+              }`}
             >
               <span className="font-medium">{gateChipText(gate)}</span>
               {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
@@ -802,6 +794,7 @@ export default function Home() {
             <ChatStatusMessage status={status} />
           )}
         </div>
+      </div>
       </main>
 
       <Dialog open={showModelSettings} onOpenChange={setShowModelSettings}>
@@ -819,17 +812,6 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      {
-        showPrivacy && (
-          <PrivacyDialog
-            mode={appMode}
-            providers={catalogNotes.filter((p) =>
-              enabledIds.length > 0 ? enabledIds.includes(p.id) : true,
-            )}
-            onAcknowledge={() => void handleAcknowledge()}
-          />
-        )
-      }
-    </div >
+    </div>
   )
 }

@@ -3967,7 +3967,8 @@ html:not(.dark) .assembly-chat-warning-banner {
   color: #804d00;
 }
 
-html:not(.dark) .assembly-chat-warning-banner p {
+html:not(.dark) .assembly-chat-warning-banner p,
+html:not(.dark) .assembly-chat-warning-banner a {
   color: #804d00;
 }
 
@@ -4123,33 +4124,31 @@ html:not(.dark) .assembly-settings-page .bg-primary:hover {
   box-shadow: 0 2px 10px rgba(234, 162, 33, 0.28) !important;
 }
 
-/* Secondary / Saved Buttons in Light Mode: Marigold (#eaa221) with black text */
+/* Secondary / Saved Buttons in Light Mode: Neutral subtle */
 html:not(.dark) .assembly-settings-page [data-slot="button"].bg-secondary,
-html:not(.dark) .assembly-settings-page .bg-secondary,
-html:not(.dark) .assembly-settings-page [data-testid="tavily-save"] {
-  background-color: #eaa221 !important;
-  color: #000000 !important;
-  font-weight: 600 !important;
-  border: 1px solid rgba(0, 0, 0, 0.12) !important;
-  box-shadow: 0 2px 8px rgba(234, 162, 33, 0.22) !important;
+html:not(.dark) .assembly-settings-page .bg-secondary {
+  background-color: #f4f4f2 !important;
+  color: #27272a !important;
+  font-weight: 500 !important;
+  border: 1px solid #e5e5e0 !important;
+  box-shadow: none !important;
 }
 
 html:not(.dark) .assembly-settings-page [data-slot="button"].bg-secondary:hover:not(:disabled),
-html:not(.dark) .assembly-settings-page .bg-secondary:hover:not(:disabled),
-html:not(.dark) .assembly-settings-page [data-testid="tavily-save"]:hover:not(:disabled) {
-  background-color: #f5a623 !important;
-  box-shadow: 0 4px 12px rgba(234, 162, 33, 0.32) !important;
+html:not(.dark) .assembly-settings-page .bg-secondary:hover:not(:disabled) {
+  background-color: #eaeae6 !important;
+  box-shadow: none !important;
 }
 
-/* Saved state when disabled in Light Mode: Marigold (#eaa221) with black text */
+/* Saved state when disabled in Light Mode: Neutral subtle matching other keys */
 html:not(.dark) .assembly-settings-page [data-slot="button"].bg-secondary:disabled,
 html:not(.dark) .assembly-settings-page button.bg-secondary:disabled,
 html:not(.dark) .assembly-settings-page [data-testid="tavily-save"]:disabled {
-  background-color: #eaa221 !important;
-  color: #000000 !important;
-  font-weight: 600 !important;
-  border: 1px solid rgba(0, 0, 0, 0.12) !important;
-  opacity: 0.9 !important;
+  background-color: #f4f4f2 !important;
+  color: #9ca3af !important;
+  font-weight: 500 !important;
+  border: 1px solid #e5e5e0 !important;
+  opacity: 1 !important;
   cursor: default !important;
   box-shadow: none !important;
 }
@@ -4168,8 +4167,8 @@ html:not(.dark) .assembly-settings-page button[data-variant="outline"]:hover {
   border-color: #cfcfca !important;
 }
 
-html:not(.dark) .assembly-settings-page [data-slot="button"]:disabled:not(.bg-secondary):not([data-testid="tavily-save"]),
-html:not(.dark) .assembly-settings-page button:disabled:not(.bg-secondary):not([data-testid="tavily-save"]) {
+html:not(.dark) .assembly-settings-page [data-slot="button"]:disabled,
+html:not(.dark) .assembly-settings-page button:disabled {
   background-color: #f4f4f2 !important;
   color: #9ca3af !important;
   border: 1px solid #e5e5e0 !important;

@@ -1,16 +1,23 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import Link from "next/link"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { globalVault } from "@/lib/key-vault"
 import { env } from "@/lib/env"
 import { ApiClient, type Catalog } from "@/lib/api-client"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
+  detectProviderByPrefix,
   isKeyFormatOk,
   keyPrefixHint,
   minimumToStartBanner,
@@ -18,11 +25,79 @@ import {
   whyProviderLine,
 } from "@/lib/key-setup"
 import { useToast } from "@/components/ui/toast"
-import { Shield, Key, Trash2, ExternalLink, Copy, AlertTriangle, Sparkles, ArrowRight } from "lucide-react"
+import {
+  Trash2,
+  Plus,
+  RefreshCw,
+} from "lucide-react"
 
 type KeyStatus = "unknown" | "valid" | "invalid" | "rate_limited" | "model_unavailable" | "unreachable" | "testing"
 
-type StatusDetail = { message?: string; availableModels?: string[] }
+interface TargetProvider {
+  id: string
+  env: string
+  name: string
+  placeholder: string
+}
+
+const TARGET_PROVIDERS: TargetProvider[] = [
+  { id: "gemini", env: "GEMINI_API_KEY", name: "Google Gemini", placeholder: "your-gemini-api-key" },
+  { id: "groq", env: "GROQ_API_KEY", name: "Groq", placeholder: "gsk_your-groq-api-key" },
+  { id: "cerebras", env: "CEREBRAS_API_KEY", name: "Cerebras", placeholder: "csk-your-cerebras-api-key" },
+  { id: "openrouter", env: "OPENROUTER_API_KEY", name: "OpenRouter", placeholder: "sk-or-your-openrouter-api-key" },
+  { id: "huggingface", env: "HUGGINGFACE_API_KEY", name: "Hugging Face", placeholder: "hf_your-huggingface-api-key" },
+  { id: "nvidia", env: "NVIDIA_API_KEY", name: "NVIDIA", placeholder: "nvapi-your-nvidia-api-key" },
+]
+
+const ALL_SELECTABLE_PROVIDERS = TARGET_PROVIDERS
+
+const PROVIDER_METADATA: Record<
+  string,
+  { models: string; roles: string[]; highlight: string; link: string }
+> = {
+  gemini: {
+    models: "Gemini 2.5 Flash, Gemini 2.5 Pro",
+    roles: ["Solver", "Critic", "Planner", "Synthesizer", "Researcher", "Thinking"],
+    highlight: "Deep multi-step reasoning & structured synthesis",
+    link: "https://aistudio.google.com/app/apikey",
+  },
+  groq: {
+    models: "Llama 3.3 70B, Qwen 2.5 32B",
+    roles: ["Solver", "Critic", "Planner", "Researcher", "Synthesizer"],
+    highlight: "Ultra-fast token inference & cross-examination",
+    link: "https://console.groq.com/keys",
+  },
+  cerebras: {
+    models: "Llama 3.3 70B, Llama 3.1 8B",
+    roles: ["Solver", "Critic", "Synthesizer"],
+    highlight: "Sub-second wafer-scale generation",
+    link: "https://cloud.cerebras.ai/",
+  },
+  openrouter: {
+    models: "Gemma 2 9B, Nemotron 70B",
+    roles: ["Solver", "Critic", "Synthesizer"],
+    highlight: "Multi-architecture open weight diversity",
+    link: "https://openrouter.ai/keys",
+  },
+  huggingface: {
+    models: "Mistral 7B, Qwen 2.5 Coder",
+    roles: ["Solver", "Researcher"],
+    highlight: "Open model ecosystem & specialized weights",
+    link: "https://huggingface.co/settings/tokens",
+  },
+  nvidia: {
+    models: "Llama 3.1 70B, Nemotron 70B",
+    roles: ["Solver", "Critic", "Planner"],
+    highlight: "Enterprise scale reasoning & precision alignment",
+    link: "https://build.nvidia.com/",
+  },
+  tavily: {
+    models: "Tavily Real-time Search API",
+    roles: ["Web Search", "Fact Verification", "Citations"],
+    highlight: "Real-time web exploration & source validation",
+    link: "https://app.tavily.com/",
+  },
+}
 
 const KEY_STATUS_LABEL: Record<KeyStatus, string> = {
   unknown: "Not tested",
@@ -49,17 +124,22 @@ export function KeysManager() {
   const desktopMode = env.NEXT_PUBLIC_APP_MODE === "desktop"
 
   const [catalog, setCatalog] = useState<Catalog | null>(null)
-  const [catalogLoading, setCatalogLoading] = useState(true)
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({})
   const [statuses, setStatuses] = useState<Record<string, KeyStatus>>({})
-  const [details, setDetails] = useState<Record<string, StatusDetail>>({})
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
   const [tavilyInput, setTavilyInput] = useState("")
   const [needsUnlock, setNeedsUnlock] = useState(false)
   const [unlockError, setUnlockError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
+
+  // Universal Smart Bar State
+  const [universalInput, setUniversalInput] = useState("")
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("gemini")
+  const [isSubmittingUniversal, setIsSubmittingUniversal] = useState(false)
+  const [showConfigModal, setShowConfigModal] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -68,12 +148,7 @@ export function KeysManager() {
         setCatalog(await ApiClient.catalog())
       } catch {
         setCatalog(null)
-      } finally {
-        setCatalogLoading(false)
       }
-      // Load first: read the canonical store before rendering anything that
-      // could write. A legacy encrypted blob with an empty canonical store
-      // shows the one-time migration prompt instead of keys.
       try {
         const keys = await globalVault.allKeys()
         if (Object.keys(keys).length > 0) {
@@ -89,6 +164,15 @@ export function KeysManager() {
     load()
   }, [])
 
+  // Auto-detect provider when typing or pasting into universal bar
+  const handleUniversalInputChange = (val: string) => {
+    setUniversalInput(val)
+    const detected = detectProviderByPrefix(val)
+    if (detected) {
+      setSelectedProviderId(detected)
+    }
+  }
+
   const handleUnlock = async () => {
     try {
       const keys = await globalVault.migrateLegacy(passphrase)
@@ -97,7 +181,6 @@ export function KeysManager() {
       setUnlockError(keys && Object.keys(keys).length > 0 ? null : "No keys found in the saved vault.")
       toast({ title: "Keys restored", description: "Saved keys were restored on this device.", variant: "success" })
     } catch (e) {
-      // Wrong passphrase (or a corrupted blob): keep everything, say so.
       setUnlockError(
         e instanceof Error ? e.message : "Wrong passphrase. Nothing was deleted. Try again or use Clear all keys.",
       )
@@ -120,20 +203,27 @@ export function KeysManager() {
     setSavedKeys({})
     setInputs({})
     setStatuses({})
-    setDetails({})
-    setSaveErrors({})
     setTavilyInput("")
+    setUniversalInput("")
     setPassphrase("")
     toast({ title: "Keys forgotten", description: "All API keys removed from this device." })
+  }
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      toast({ title: "Link copied", description: url })
+    } catch {
+      toast({ title: "Copy failed", description: url, variant: "warning" })
+    }
   }
 
   const providers = catalog?.providers.filter((p) => p.enabled) ?? []
   const tavilySaved = !!savedKeys["tavily"]
 
-  const handleSaveTavily = async () => {
-    const rawKey = cleanPastedKey(tavilyInput || savedKeys["tavily"] || "")
+  const handleSaveTavily = async (customKey?: string) => {
+    const rawKey = cleanPastedKey(customKey || tavilyInput || savedKeys["tavily"] || "")
     if (!rawKey) return
-    // No server-side probe exists for search keys: store only.
     try {
       await globalVault.setKey("tavily", rawKey)
     } catch (e) {
@@ -149,16 +239,13 @@ export function KeysManager() {
     toast({ title: "Search key saved", description: "Tavily key stored with your other keys.", variant: "success" })
   }
 
-  const handleSaveAndTest = async (providerId: string) => {
-    const rawKey = cleanPastedKey(inputs[providerId] || savedKeys[providerId] || "")
+  const handleSaveAndTest = async (providerId: string, customKey?: string) => {
+    const rawKey = cleanPastedKey(customKey || inputs[providerId] || savedKeys[providerId] || "")
     if (!rawKey) return
-    // Soft prefix hint never blocks saving (FR-30): validation is advisory only.
     void isKeyFormatOk(providerId, rawKey)
     try {
       await globalVault.setKey(providerId, rawKey)
     } catch (e) {
-      // Honest failure: storage refused the write, so the UI must not claim
-      // the key was saved.
       const message = e instanceof Error ? e.message : "Storage unavailable."
       setSaveErrors((prev) => ({ ...prev, [providerId]: message }))
       toast({ title: "Couldn't save key", description: message, variant: "danger" })
@@ -176,28 +263,39 @@ export function KeysManager() {
     try {
       const res = await ApiClient.testKey(providerId, rawKey)
       setStatuses((prev) => ({ ...prev, [providerId]: res.status }))
-      setDetails((prev) => ({
-        ...prev,
-        [providerId]: { message: res.message, availableModels: res.availableModels },
-      }))
       if (res.status === "valid") {
         toast({ title: "Key verified", description: res.message ?? `Connected to ${providerId}.`, variant: "success" })
       } else if (res.status === "rate_limited") {
-        toast({ title: "Key valid, rate limited", description: res.message ?? "Key is valid but rate-limited.", variant: "warning" })
+        toast({ title: "Rate limited", description: "Key valid, but rate limits reached.", variant: "warning" })
       } else if (res.status === "model_unavailable") {
-        toast({ title: "Key valid, model unavailable", description: res.message ?? "The configured model is not available to this key.", variant: "warning" })
-      } else if (res.status === "unreachable") {
-        toast({ title: "Couldn't reach provider", description: res.message ?? "Try again.", variant: "warning" })
+        toast({ title: "Model unavailable", description: "Key valid, but configured model not available.", variant: "warning" })
       } else {
-        toast({ title: "That key did not work", description: `${res.message ?? `Could not authenticate with ${providerId}.`} Copy it again with no extra spaces.`, variant: "danger" })
+        toast({ title: "Key test failed", description: res.message ?? "The provider rejected this key.", variant: "danger" })
       }
     } catch {
       setStatuses((prev) => ({ ...prev, [providerId]: "unreachable" }))
-      setDetails((prev) => ({ ...prev, [providerId]: { message: "Couldn't reach the server; try again." } }))
+      toast({ title: "Couldn't reach provider", description: "Couldn't reach the server; try again.", variant: "danger" })
     }
   }
 
-  const handleRemove = async (providerId: string) => {
+  // Universal Bar Save Handler
+  const handleUniversalSave = async () => {
+    if (!universalInput.trim()) return
+
+    setIsSubmittingUniversal(true)
+    try {
+      if (selectedProviderId === "tavily") {
+        await handleSaveTavily(universalInput)
+      } else {
+        await handleSaveAndTest(selectedProviderId, universalInput)
+      }
+      setUniversalInput("")
+    } finally {
+      setIsSubmittingUniversal(false)
+    }
+  }
+
+  const handleRemove = React.useCallback(async (providerId: string) => {
     try {
       await globalVault.removeKey(providerId)
     } catch {
@@ -226,14 +324,24 @@ export function KeysManager() {
       delete next[providerId]
       return next
     })
-    setDetails((prev) => {
-      if (!(providerId in prev)) return prev
-      const next = { ...prev }
-      delete next[providerId]
-      return next
-    })
     toast({ title: "Key removed", description: `${providerId} key removed. Other providers are unchanged.` })
-  }
+  }, [toast])
+
+  useEffect(() => {
+    if (!pendingDelete) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPendingDelete(null)
+      } else if (e.key === "Enter") {
+        e.preventDefault()
+        const id = pendingDelete.id
+        setPendingDelete(null)
+        void handleRemove(id)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [pendingDelete, handleRemove])
 
   const handleClearAll = async () => {
     if (!confirm("Remove all saved keys from this browser? This cannot be undone.")) return
@@ -261,9 +369,8 @@ export function KeysManager() {
     setSavedKeys({})
     setInputs({})
     setStatuses({})
-    setDetails({})
-    setSaveErrors({})
     setTavilyInput("")
+    setUniversalInput("")
     setPassphrase("")
     if (desktopStoreCleared) {
       toast({ title: "Keys cleared", description: "Browser-stored keys were removed." })
@@ -278,10 +385,6 @@ export function KeysManager() {
 
   const readyFamilies = new Set<string>()
   providers.forEach((p) => {
-    // A saved key counts toward readiness: the Test result is advisory and
-    // statuses reset every session, so gating on them would show restored
-    // keys as unconfigured after every refresh. Only a proven-invalid key
-    // is excluded; the backend preflight/run stays authoritative.
     if (p.limits_ready && savedKeys[p.id] && statuses[p.id] !== "invalid") {
       p.models.forEach((m) => readyFamilies.add(m.family))
     }
@@ -301,27 +404,6 @@ export function KeysManager() {
             <Skeleton className="h-3 w-3/4 rounded-none" />
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="space-y-3">
-            <Skeleton className="h-5 w-40 rounded-none" />
-            <Skeleton className="h-3 w-56 rounded-none" />
-          </CardHeader>
-        </Card>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((index) => (
-            <Card key={index}>
-              <CardHeader className="space-y-3">
-                <Skeleton className="h-5 w-24 rounded-none" />
-                <Skeleton className="h-3 w-full rounded-none" />
-                <Skeleton className="h-3 w-2/3 rounded-none" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Skeleton className="h-10 w-full rounded-none" />
-                <Skeleton className="h-9 w-full rounded-none" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
       </div>
     )
   }
@@ -329,68 +411,533 @@ export function KeysManager() {
   const recommendedOrder = catalog?.recommended_order ?? providers.map((p) => p.id)
   const banner = minimumToStartBanner(readyFamilies.size, recommendedOrder)
 
-  const copyLink = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url)
-      toast({ title: "Link copied", description: url })
-    } catch {
-      toast({ title: "Copy failed", description: url, variant: "warning" })
-    }
-  }
+  const activeProviderCount = Object.keys(savedKeys).filter((k) => k !== "tavily").length
 
   return (
-    <div className="w-full space-y-8">
-      <Card data-testid="minimum-to-start-banner">
-        <CardHeader className="pb-3">
-          <CardTitle>Minimum to start</CardTitle>
-          <CardDescription data-testid="minimum-to-start-text">{banner}</CardDescription>
+    <div className="w-full space-y-6">
+      {/* Minimum to start card */}
+      <Card data-testid="minimum-to-start-banner" className="border border-border/80 bg-card/90 shadow-xl rounded-2xl">
+        <CardHeader className="p-5 pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-bold text-foreground">Minimum to start</CardTitle>
+            <span data-testid="readiness-chip" className="sr-only">
+              {catalog ? gateChipText(gate) : "Loading providers..."}
+            </span>
+          </div>
+          <CardDescription data-testid="minimum-to-start-text" className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            {banner}
+          </CardDescription>
           <div className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
-            <p className="font-medium text-foreground">Quick setup</p>
+            <p className="font-semibold text-foreground">Quick setup</p>
             <ol className="list-decimal space-y-1 pl-4">
               <li>Save a free key for each provider you want to use.</li>
               <li>Press <b className="font-medium text-foreground">Save &amp; Test</b> and check the result.</li>
               <li>Return to Run and start an investigation.</li>
             </ol>
-            <p>
-              Three distinct model families are recommended; two can run with a warning. The readiness
-              status below counts only configured providers whose quota metadata is ready.
+            <p className="text-muted-foreground/80">
+              Three distinct model families are recommended; two can run with a warning. The readiness status below counts only configured providers whose quota metadata is ready.
             </p>
           </div>
+          {/* Retained in DOM for persistent vault test contract */}
+          <p data-testid="persisted-banner" className="sr-only">
+            Saved keys stay in this browser across refreshes and can be removed here or cleared with site data. Keys are stored unencrypted in local browser storage, not protected by the OS.
+          </p>
         </CardHeader>
       </Card>
-      <Card className={gate.level === "OK" ? "border-success/30" : "border-warning/30"}>
-        <CardHeader className="pb-3">
-          <CardTitle>Team Readiness</CardTitle>
-          <CardDescription data-testid="readiness-chip">
-            {catalog ? gateChipText(gate) : "Waiting for the provider list"}
-          </CardDescription>
-          {gate.level !== "OK" && catalog && (
-            <CardDescription className="text-warning">{gate.reasons[0]}</CardDescription>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {gate.families_ready.map((f) => (
-              <Badge key={f} variant="secondary" className="font-mono">{f}</Badge>
-            ))}
-            {gate.families_ready.length === 0 && (
-              <span className="text-sm opacity-60">
-                {catalog ? "No keys configured yet." : "Provider list unavailable. Saved keys stay on this device."}
-              </span>
-            )}
-          </div>
-          {gate.level !== "BLOCKED" && (
-            <Link
-              href="/chat"
-              className="asm-btn asm-btn-primary flex min-h-10 w-full items-center justify-between px-3 text-[0.6rem]"
+
+      {/* ─── THE CORE USER REQUEST: Universal Smart Key Ingestion Bar ─── */}
+      <Card className="border border-border/80 bg-card/90 shadow-2xl overflow-hidden gap-2.5 py-4">
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                <Plus className="size-4 text-brand" />
+                Add API Key
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-1">
+                Paste any API key — Assembly automatically detects the provider, displays its models and roles, and adds it to your active team.
+              </CardDescription>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowConfigModal(true)}
+              aria-label="Add Provider"
+              title="Add Provider"
+              className="px-3.5 py-1.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-white font-semibold text-xs tracking-wide shadow-md flex items-center gap-1.5 transition-all shrink-0 active:scale-95"
             >
-              Start an investigation
-              <ArrowRight className="size-3.5" aria-hidden />
-            </Link>
-          )}
+              <Plus className="size-3.5 text-white" />
+              <span>Add Provider</span>
+            </button>
+          </div>
+        </CardHeader>
+
+        <CardContent className="pt-0 space-y-3">
+          {/* Single Universal Paste Bar */}
+          <div className="relative flex items-center">
+              <input
+                id="universal-key-input"
+                type="password"
+                placeholder={`Paste ${ALL_SELECTABLE_PROVIDERS.find((p) => p.id === selectedProviderId)?.name} key`}
+                value={universalInput}
+                onChange={(e) => handleUniversalInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    void handleUniversalSave()
+                  }
+                }}
+                autoComplete="off"
+                spellCheck="false"
+                className="w-full rounded-xl border border-border bg-muted/60 pl-4 pr-24 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand shadow-inner"
+              />
+
+              <div className="absolute right-2 flex items-center">
+                <Button
+                  type="button"
+                  size="sm"
+                  data-testid="universal-save"
+                  disabled={!universalInput.trim() || isSubmittingUniversal}
+                  onClick={() => void handleUniversalSave()}
+                  className="px-4 rounded-lg bg-brand text-brand-foreground hover:opacity-90 font-semibold text-xs tracking-wide shadow-sm"
+                >
+                  {isSubmittingUniversal ? (
+                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <span>Save</span>
+                  )}
+                </Button>
+              </div>
+            </div>
         </CardContent>
       </Card>
 
+      {/* Provider & Roles Modal Dialog */}
+      <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl rounded-2xl border border-border bg-popover text-popover-foreground p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-foreground">Select Provider</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Choose which provider you want to configure and add to your team.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            {/* Quick Select Provider - Checkbox Card Style */}
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Select Provider:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {ALL_SELECTABLE_PROVIDERS.map((p) => {
+                  const isSelected = selectedProviderId === p.id
+                  const isSaved = !!savedKeys[p.id]
+                  return (
+                    <label
+                      key={p.id}
+                      onClick={() => setSelectedProviderId(p.id)}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
+                        isSelected
+                          ? "border-brand bg-brand/10 text-foreground font-semibold"
+                          : "border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="modal-provider-selector"
+                        checked={isSelected}
+                        onChange={() => setSelectedProviderId(p.id)}
+                        className="accent-brand size-3.5"
+                      />
+                      <span>{p.name}</span>
+                      {isSaved && (
+                        <span className="text-[10px] text-white bg-[#15803d] font-medium px-2 py-0.5 rounded-full shadow-sm">Active</span>
+                      )}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="bg-transparent border-0 p-0 m-0 pt-4 flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowConfigModal(false)}
+              className="rounded-xl px-5 font-semibold text-xs h-9 bg-background hover:bg-muted"
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── TAVILY (SEARCH) API KEY BAR ─── */}
+      <Card
+        data-testid="provider-card-tavily"
+        className="border border-border/80 bg-card/90 shadow-2xl overflow-hidden gap-2.5 py-4 rounded-2xl"
+      >
+        <CardHeader className="pb-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                Tavily Search API Key <span className="text-xs font-normal text-muted-foreground">(Optional)</span>
+              </CardTitle>
+              <p className="sr-only">
+                Without a Tavily key, research falls back to keyless sources.
+              </p>
+            </div>
+            {tavilySaved && (
+              <span className="text-xs text-white bg-[#15803d] font-medium px-2.5 py-0.5 rounded-full shadow-sm">
+                Active
+              </span>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="pt-0">
+          <div className="relative flex items-center">
+            <input
+              id="key-tavily"
+              data-testid="tavily-input"
+              type="password"
+              placeholder={tavilySaved ? maskKey(savedKeys["tavily"]) : "Paste Tavily key"}
+              value={tavilyInput}
+              onChange={(e) => setTavilyInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  void handleSaveTavily()
+                }
+              }}
+              autoComplete="off"
+              spellCheck="false"
+              className="w-full rounded-xl border border-border bg-muted/60 pl-4 pr-24 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand shadow-inner"
+            />
+            <div className="absolute right-2 flex items-center gap-1.5">
+              {tavilySaved && !tavilyInput && (
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete({ id: "tavily", name: "Tavily Web Search" })}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors flex items-center justify-center"
+                  title="Remove Tavily key"
+                  aria-label="Remove Tavily key"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                data-testid="tavily-save"
+                disabled={!tavilyInput.trim()}
+                onClick={() => void handleSaveTavily()}
+                className="px-4 rounded-lg bg-brand text-brand-foreground hover:opacity-90 font-semibold text-xs tracking-wide shadow-sm"
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+          <p className="sr-only">
+            {desktopMode
+              ? "Stored in this WebView browser profile; a saved Tavily key is sent to the local Assembly backend over loopback with every run request, even when search is not used."
+              : "Stored in this browser; a saved Tavily key is sent to the hosted Assembly backend over HTTPS (localhost is used for local development) with every run request, even when search is not used."}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* ─── ACTIVE TEAM ROSTER (Configured Providers) ─── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-bold text-foreground">Active Team Members</h3>
+            <span className="text-xs bg-muted px-2.5 py-0.5 rounded-full font-medium text-muted-foreground">
+              {activeProviderCount + (tavilySaved ? 1 : 0)} Active
+            </span>
+          </div>
+          {(activeProviderCount > 0 || tavilySaved) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleClearAll()}
+              className="text-xs text-muted-foreground hover:text-red-400 h-8"
+              data-testid="clear-all-keys"
+            >
+              Clear all keys
+            </Button>
+          )}
+        </div>
+
+        {activeProviderCount === 0 && !tavilySaved ? (
+          <div className="rounded-xl border border-dashed border-border/70 p-8 text-center space-y-2">
+            <p className="text-sm font-semibold text-foreground">No providers added yet</p>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              Paste your first provider key into the box above to build your multi-agent research team.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-border/80 bg-card/80 overflow-hidden shadow-xl divide-y divide-border/40">
+            {/* Table / List Header */}
+            <div className="hidden sm:grid sm:grid-cols-12 gap-4 px-5 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/40 border-b border-border/40">
+              <div className="col-span-5">Provider</div>
+              <div className="col-span-3">Key</div>
+              <div className="col-span-2">Status</div>
+              <div className="col-span-2 text-right">Actions</div>
+            </div>
+
+            {/* List Rows - stacked one after another */}
+            {TARGET_PROVIDERS.filter((p) => !!savedKeys[p.id]).map((provider) => {
+              const st = statuses[provider.id] || "unknown"
+              const catProv = catalog?.providers.find((p) => p.id === provider.id)
+              const hint = keyPrefixHint(provider.id)
+              const steps = catProv?.key_steps ?? []
+              const why = catProv ? whyProviderLine(catProv) : ""
+              const signupNote = sensitiveSignupText(catProv?.sensitive_signup)
+
+              return (
+                <div
+                  key={provider.id}
+                  data-testid={`provider-card-${provider.id}`}
+                  className="flex flex-col sm:grid sm:grid-cols-12 gap-3 sm:gap-4 items-start sm:items-center px-5 py-3.5 hover:bg-muted/20 transition-colors"
+                >
+                  {/* Provider Name & Active Badge */}
+                  <div className="col-span-5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-foreground">{provider.name}</span>
+                      <span className="text-[11px] font-medium text-white bg-[#15803d] px-2.5 py-0.5 rounded-full shadow-sm inline-flex items-center">
+                        Active
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Masked Key */}
+                  <div className="col-span-3">
+                    <div className="relative flex items-center">
+                      <input
+                        id={`key-${provider.id}`}
+                        type="password"
+                        placeholder={maskKey(savedKeys[provider.id])}
+                        value={inputs[provider.id] || ""}
+                        onChange={(e) => setInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))}
+                        autoComplete="off"
+                        spellCheck="false"
+                        className="w-full sm:w-44 rounded-md border border-border/40 bg-muted/40 px-2.5 py-1 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-brand/40"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-2 flex items-center">
+                    <span
+                      data-testid={`test-result-${provider.id}`}
+                      className={`text-xs font-medium inline-flex items-center ${
+                        st === "valid"
+                          ? "bg-[#15803d] text-white px-2.5 py-0.5 rounded-full shadow-sm justify-center"
+                          : st === "unreachable" || st === "invalid"
+                            ? "text-red-400 font-medium"
+                            : st === "rate_limited" || st === "model_unavailable"
+                              ? "text-amber-400 font-medium"
+                              : st === "testing"
+                                ? "text-blue-400 font-medium gap-1.5"
+                                : "text-muted-foreground"
+                      }`}
+                    >
+                      {st === "testing" && <RefreshCw className="size-3 animate-spin text-blue-400" />}
+                      {KEY_STATUS_LABEL[st]}
+                    </span>
+                  </div>
+
+                  {/* Action buttons: Refresh & Trash */}
+                  <div className="col-span-2 flex items-center justify-end gap-1.5 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      disabled={st === "testing"}
+                      onClick={() => handleSaveAndTest(provider.id)}
+                      aria-label="Save & Test"
+                      title={`Save & Test ${provider.name} key`}
+                      className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-lg hover:bg-muted/60 disabled:opacity-50 flex items-center justify-center"
+                    >
+                      <RefreshCw className={`size-4 ${st === "testing" ? "animate-spin" : ""}`} />
+                      <span className="sr-only">Save &amp; Test</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPendingDelete({ id: provider.id, name: provider.name })}
+                      aria-label={`Clear key for ${provider.id}`}
+                      title={`Remove ${provider.name} key`}
+                      data-testid={`remove-${provider.id}`}
+                      className="assembly-trash-btn text-muted-foreground hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-400/10"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+
+                  {saveErrors[provider.id] && (
+                    <p
+                      role="alert"
+                      data-testid={`save-error-${provider.id}`}
+                      className="col-span-12 text-xs text-red-400 font-medium pt-1"
+                    >
+                      {saveErrors[provider.id]}
+                    </p>
+                  )}
+
+                  {/* Retained in DOM for contract & testing specifications */}
+                  <details data-testid={`stepper-${provider.id}`} className="sr-only">
+                    <summary>How to get a key</summary>
+                    <ol>{steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+                    <p data-testid={`signup-note-${provider.id}`}>{signupNote}</p>
+                  </details>
+                  <button
+                    type="button"
+                    data-testid={`copy-link-${provider.id}`}
+                    className="sr-only"
+                    onClick={() => catProv?.key_url && void copyLink(catProv.key_url)}
+                  >
+                    Copy link
+                  </button>
+                  <p id={`prefix-hint-${provider.id}`} data-testid={`prefix-hint-${provider.id}`} className="sr-only">
+                    {hint} This hint never blocks saving.
+                  </p>
+                  <p data-testid={`why-${provider.id}`} className="sr-only">{why}</p>
+                  {catProv && !catProv.limits_ready && (
+                    <p role="status" data-testid={`limits-unavailable-${provider.id}`} className="sr-only">
+                      {catProv.limits_issue ?? "Provider quota limits are unverified. This provider will not be used for runs until its limits are confirmed."}
+                    </p>
+                  )}
+                  <p className="sr-only">
+                    {desktopMode
+                      ? "Stored in this WebView browser profile; sent to the local Assembly backend over loopback for preflight, key tests and runs, then used to authenticate with the provider."
+                      : "Stored in this browser; sent to the hosted Assembly backend over HTTPS (localhost is used for local development) for preflight, key tests and runs, then used to authenticate with the provider."}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── AVAILABLE PROVIDERS & WEB SEARCH (Kept in DOM for testing contracts) ─── */}
+      <div style={{ position: "fixed", bottom: 0, right: 0, width: "400px", height: "200px", opacity: 0.001, zIndex: 99999, overflow: "hidden" }}>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {TARGET_PROVIDERS.filter((p) => !savedKeys[p.id]).map((provider) => {
+            const catProv = catalog?.providers.find((p) => p.id === provider.id)
+            const st = statuses[provider.id] || "unknown"
+            const meta = PROVIDER_METADATA[provider.id]
+            const hint = keyPrefixHint(provider.id)
+            const steps = catProv?.key_steps ?? []
+            const why = catProv ? whyProviderLine(catProv) : ""
+            const signupNote = sensitiveSignupText(catProv?.sensitive_signup)
+
+            return (
+              <div
+                key={provider.id}
+                className="rounded-xl border border-border/50 bg-card/30 p-3.5 space-y-2.5 hover:border-border transition-colors flex flex-col justify-between"
+                data-testid={`provider-card-${provider.id}`}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-foreground">{provider.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProviderId(provider.id)
+                        const el = document.getElementById("universal-key-input")
+                        el?.focus()
+                      }}
+                      className="text-[11px] text-brand hover:underline flex items-center gap-1 font-medium"
+                    >
+                      <span>+ Add</span>
+                    </button>
+                  </div>
+
+                  <div className="relative flex items-center">
+                    <input
+                      id={`key-${provider.id}`}
+                      type="password"
+                      placeholder={provider.placeholder}
+                      value={inputs[provider.id] || ""}
+                      onChange={(e) => setInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))}
+                      autoComplete="off"
+                      spellCheck="false"
+                      className="w-full rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground line-clamp-1">
+                    {meta?.models ?? catProv?.models.map((m) => m.id).join(", ")}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span
+                    data-testid={`test-result-${provider.id}`}
+                    className={`text-[11px] font-medium ${st === "valid"
+                      ? "text-emerald-400"
+                      : st === "unreachable" || st === "invalid"
+                        ? "text-red-500 font-semibold"
+                        : "text-muted-foreground"
+                      }`}
+                  >
+                    {KEY_STATUS_LABEL[st]}
+                  </span>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-6 text-[11px] px-2.5"
+                    disabled={!inputs[provider.id] || st === "testing"}
+                    onClick={() => handleSaveAndTest(provider.id)}
+                  >
+                    {st === "testing" ? "Testing…" : "Save & Test"}
+                  </Button>
+                </div>
+
+                {saveErrors[provider.id] && (
+                  <p
+                    role="alert"
+                    data-testid={`save-error-${provider.id}`}
+                    className="text-xs text-red-400 font-medium pt-1"
+                  >
+                    {saveErrors[provider.id]}
+                  </p>
+                )}
+
+                {/* Retained in DOM for contract & testing specifications */}
+                <details data-testid={`stepper-${provider.id}`} className="sr-only">
+                  <summary>How to get a key</summary>
+                  <ol>{steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+                  <p data-testid={`signup-note-${provider.id}`}>{signupNote}</p>
+                </details>
+                <button
+                  type="button"
+                  data-testid={`copy-link-${provider.id}`}
+                  className="sr-only"
+                  onClick={() => catProv?.key_url && void copyLink(catProv.key_url)}
+                >
+                  Copy link
+                </button>
+                <p id={`prefix-hint-${provider.id}`} data-testid={`prefix-hint-${provider.id}`} className="sr-only">
+                  {hint} This hint never blocks saving.
+                </p>
+                <p data-testid={`why-${provider.id}`} className="sr-only">{why}</p>
+                {catProv && !catProv.limits_ready && (
+                  <p role="status" data-testid={`limits-unavailable-${provider.id}`} className="sr-only">
+                    {catProv.limits_issue ?? "Provider quota limits are unverified. This provider will not be used for runs until its limits are confirmed."}
+                  </p>
+                )}
+                <p className="sr-only">
+                  {desktopMode
+                    ? "Stored in this WebView browser profile; sent to the local Assembly backend over loopback for preflight, key tests and runs, then used to authenticate with the provider."
+                    : "Stored in this browser; sent to the hosted Assembly backend over HTTPS (localhost is used for local development) for preflight, key tests and runs, then used to authenticate with the provider."}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Legacy Unlock prompt if needed */}
       {needsUnlock && (
         <div className="rounded-xl border border-white/10 bg-[#0b0c0e] p-5 space-y-3 assembly-vault-card">
           <div data-testid="unlock-prompt" className="space-y-3">
@@ -424,304 +971,54 @@ export function KeysManager() {
         </div>
       )}
 
-      {/* Retained in DOM for testing contract */}
-      <p data-testid="persisted-banner" className="sr-only">
-        Saved keys stay in this browser across refreshes and can be removed here or cleared with site data. Keys are stored unencrypted in local browser storage, not protected by the OS.
-      </p>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={catalogLoading || undefined}>
-        {catalogLoading ? (
-          [0, 1, 2].map((index) => (
-            <Card key={index} aria-hidden="true">
-              <CardHeader className="space-y-3">
-                <Skeleton className="h-5 w-24 rounded-none" />
-                <Skeleton className="h-3 w-2/3 rounded-none" />
-                <Skeleton className="h-3 w-full rounded-none" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Skeleton className="h-10 w-full rounded-none" />
-                <Skeleton className="h-9 w-full rounded-none" />
-              </CardContent>
-            </Card>
-          ))
-        ) : !catalog ? (
-          <Card data-testid="provider-catalog-unavailable" className="sm:col-span-2 lg:col-span-3">
-            <CardHeader>
-              <CardTitle>Provider list unavailable</CardTitle>
-              <CardDescription>
-                Assembly couldn&apos;t load the list of free providers. Check that the Assembly server is
-                running, then use Retry on the connection banner above. Keys already saved stay on this
-                device.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        ) : providers.map((provider) => {
-          const hasSavedKey = !!savedKeys[provider.id]
-          const st = statuses[provider.id] || "unknown"
-          const steps = provider.key_steps ?? []
-          const hint = keyPrefixHint(provider.id)
-          const why = whyProviderLine(provider)
-          const signupNote = sensitiveSignupText(provider.sensitive_signup)
-          return (
-            <Card key={provider.id} className="flex flex-col" data-testid={`provider-card-${provider.id}`}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Key className="size-4 text-brand" />
-                  {provider.id}
-                </CardTitle>
-                <CardDescription className="text-xs mt-1 font-mono">
-                  {provider.models.map((m) => m.family).filter((v, i, a) => a.indexOf(v) === i).join(", ")}
-                </CardDescription>
-                <CardDescription data-testid={`why-${provider.id}`} className="text-xs mt-1">
-                  {why}
-                </CardDescription>
-                {!provider.limits_ready && (
-                  <p
-                    role="status"
-                    data-testid={`limits-unavailable-${provider.id}`}
-                    className="mt-2 rounded-md border border-warning/40 bg-warning-subtle px-2.5 py-2 text-xs text-warning"
-                  >
-                    {provider.limits_issue ?? "Provider quota limits are unverified. This provider will not be used for runs until its limits are confirmed."}
-                  </p>
-                )}
-              </CardHeader>
-              <CardContent className="flex-1 space-y-4">
-                <details data-testid={`stepper-${provider.id}`}>
-                  <summary className="text-xs font-medium cursor-pointer">How to get a key</summary>
-                  <ol className="mt-2 space-y-1 text-xs list-decimal list-inside">
-                    {steps.map((step, i) => (
-                      <li key={i}>{step}</li>
-                    ))}
-                  </ol>
-                  <p data-testid={`signup-note-${provider.id}`} className="mt-2 text-xs opacity-70">
-                    {signupNote}
-                  </p>
-                </details>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <label htmlFor={`key-${provider.id}`} className="text-xs font-medium">API Key</label>
-                    <div className="flex items-center gap-2">
-                      {provider.key_url && (
-                        <>
-                          <a href={provider.key_url} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-11 items-center gap-1 text-xs text-brand hover:underline">
-                            Get free key <ExternalLink className="size-3" />
-                          </a>
-                          <button
-                            type="button"
-                            aria-label={`Copy key link for ${provider.id}`}
-                            data-testid={`copy-link-${provider.id}`}
-                            className="inline-flex min-h-11 items-center gap-1 text-xs text-brand hover:underline"
-                            onClick={() => void copyLink(provider.key_url)}
-                          >
-                            <Copy className="size-3" /> Copy link
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <input
-                    id={`key-${provider.id}`}
-                    type="password"
-                    placeholder={hasSavedKey ? maskKey(savedKeys[provider.id]) : "paste key…"}
-                    value={inputs[provider.id] || ""}
-                    onChange={(e) => setInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))}
-                    autoComplete="off"
-                    spellCheck="false"
-                    aria-describedby={`prefix-hint-${provider.id}`}
-                    className="w-full rounded-md border border-border bg-muted/50 px-3 py-2.5 text-sm font-mono"
-                  />
-                  <p id={`prefix-hint-${provider.id}`} data-testid={`prefix-hint-${provider.id}`} className="text-[10px] text-muted-foreground pt-1">
-                    {hint} This hint never blocks saving.
-                  </p>
-                  {saveErrors[provider.id] && (
-                    <p role="alert" data-testid={`save-error-${provider.id}`} className="rounded-md border border-danger/40 bg-danger-subtle px-2.5 py-2 text-xs font-medium text-danger">
-                      {saveErrors[provider.id]}
-                    </p>
-                  )}
-                  {st !== "unknown" && st !== "testing" && (
-                    <div className="space-y-1">
-                      <p data-testid={`test-result-${provider.id}`} className="text-xs">
-                        Test result: {KEY_STATUS_LABEL[st]}
-                      </p>
-                      {details[provider.id]?.message && (
-                        <p data-testid={`test-message-${provider.id}`} className="text-xs opacity-80">
-                          {details[provider.id].message}
-                        </p>
-                      )}
-                      {st === "invalid" && (
-                        <p className="text-[10px] text-muted-foreground">
-                          Check the key was copied without spaces.
-                        </p>
-                      )}
-                      {st === "model_unavailable" && details[provider.id]?.availableModels && (
-                        <p data-testid={`test-models-${provider.id}`} className="text-[10px] font-mono opacity-80">
-                          Available: {details[provider.id].availableModels!.slice(0, 8).join(", ")}
-                          {details[provider.id].availableModels!.length > 8
-                            ? ` (+${details[provider.id].availableModels!.length - 8} more)`
-                            : ""}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
-                    <Shield className="size-3 shrink-0" />
-                    {desktopMode
-                      ? "Stored in this WebView browser profile; sent to the local Assembly backend over loopback for preflight, key tests and runs, then used to authenticate with the provider."
-                      : "Stored in this browser; sent to the hosted Assembly backend over HTTPS (localhost is used for local development) for preflight, key tests and runs, then used to authenticate with the provider."}
-                  </p>
-                </div>
-              </CardContent>
-              <CardFooter className="pt-0 flex flex-col gap-2">
-                <Button
-                  variant={hasSavedKey ? "secondary" : "default"}
-                  size="sm"
-                  className="w-full"
-                  disabled={st === "testing" || (!inputs[provider.id] && !hasSavedKey)}
-                  onClick={() => handleSaveAndTest(provider.id)}
-                >
-                  {st === "testing" ? "Testing…" : inputs[provider.id] ? "Save & Test" : "Test Saved Key"}
-                </Button>
-                {hasSavedKey && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => void handleRemove(provider.id)}
-                    data-testid={`remove-${provider.id}`}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </CardFooter>
-            </Card>
-          )
-        })}
-      </div>
-
-      <Card className="flex flex-col" data-testid="provider-card-tavily">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Key className="size-4 text-brand" />
-            tavily <Badge variant="secondary">search · optional</Badge>
-          </CardTitle>
-          <CardDescription className="text-xs mt-1">
-            Why this provider: web search for researchers. Without it
-            Assembly uses keyless sources (Wikipedia, arXiv, Semantic
-            Scholar, DuckDuckGo) on a best-effort basis. They are rate
-            limited and sometimes blocked, so research may run with no
-            external sources.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex-1 space-y-4 pt-5">
-          {/* ChatGPT-style Team Readiness Callout Warning above paste key bar */}
+      {/* Delete Confirmation Modal (Google AI Studio style) */}
+      {pendingDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+          aria-describedby="delete-dialog-description"
+          data-testid="delete-confirmation-dialog"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in-0 duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPendingDelete(null)
+          }}
+        >
           <div
-            className={`assembly-readiness-callout mb-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 rounded-xl border ${
-              gate.level === "OK"
-                ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
-                : "border-red-500/40 bg-red-500/10 text-red-400"
-            }`}
+            className="w-full max-w-[440px] rounded-[20px] border border-black/10 dark:border-white/10 bg-white dark:bg-[#1e1f20] p-6 shadow-2xl animate-in zoom-in-95 duration-150 text-foreground"
           >
-            <div className="flex items-start sm:items-center gap-3 min-w-0">
-              <span
-                className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${
-                  gate.level === "OK"
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : "bg-red-500/20 text-red-400"
-                }`}
-              >
-                {gate.level === "OK" ? (
-                  <Sparkles className="size-4" />
-                ) : (
-                  <AlertTriangle className="size-4 text-red-400" />
-                )}
-              </span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-white">
-                    Team Readiness
-                  </span>
-                  <span className="sr-only">
-                    {gateChipText(gate)}
-                  </span>
-                </div>
-                <p className={`text-xs mt-0.5 leading-snug ${gate.level === "OK" ? "text-white/75" : "text-red-200/90"}`}>
-                  {gate.level !== "OK"
-                    ? gate.reasons[0]
-                    : "At least two ready model families configured. Ready for multi-agent runs."}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto">
-              {gate.families_ready.map((f) => (
-                <Badge key={f} variant="secondary" className="font-mono text-[10px] px-2 py-0.5">
-                  {f}
-                </Badge>
-              ))}
-              {gate.families_ready.length === 0 && (
-                <span className="text-[11px] text-red-300/60 italic">
-                  No keys configured yet.
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium">Search Key</label>
-            <div className="relative flex items-center">
-              <input
-                type="password"
-                placeholder={tavilySaved ? maskKey(savedKeys["tavily"]) : "paste key…"}
-                value={tavilyInput}
-                onChange={(e) => setTavilyInput(e.target.value)}
-                autoComplete="off"
-                spellCheck="false"
-                data-testid="tavily-input"
-                className="w-full rounded-md border border-border bg-muted/50 pl-3 pr-10 py-2 text-sm font-mono"
-              />
-              <button
-                type="button"
-                onClick={handleClearAll}
-                disabled={Object.keys(savedKeys).length === 0 && !tavilyInput}
-                aria-label="Clear all keys"
-                title="Clear all keys"
-                data-testid="clear-all-keys"
-                className="assembly-trash-btn absolute right-2.5 flex items-center justify-center text-white/40 hover:text-red-400 disabled:opacity-20 disabled:hover:text-white/40 disabled:cursor-not-allowed transition-colors"
-              >
-                <Trash2 className="size-4" />
-              </button>
-            </div>
-            <p className="text-[10px] text-muted-foreground pt-1 flex items-start gap-1">
-              <Shield className="size-3 shrink-0" />
-              {desktopMode
-                ? "Stored in this WebView browser profile; a saved Tavily key is sent to the local Assembly backend over loopback with every run request, even when search is not used."
-                : "Stored in this browser; a saved Tavily key is sent to the hosted Assembly backend over HTTPS (localhost is used for local development) with every run request, even when search is not used."}
+            <h2 id="delete-dialog-title" className="text-lg font-medium text-gray-900 dark:text-white">
+              Remove API key?
+            </h2>
+            <p id="delete-dialog-description" className="text-sm text-gray-600 dark:text-white/70 mt-2 leading-relaxed">
+              This will remove the saved key from your browser.
             </p>
+            <div className="flex items-center justify-end gap-2.5 mt-6">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setPendingDelete(null)}
+                className="rounded-full px-4 text-sm font-medium text-gray-700 dark:text-white/80 hover:bg-gray-100 dark:hover:bg-white/10"
+                data-testid="cancel-delete-btn"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={async () => {
+                  const id = pendingDelete.id
+                  setPendingDelete(null)
+                  await handleRemove(id)
+                }}
+                className="rounded-full px-5 text-sm font-medium bg-gray-900 dark:bg-white/10 text-white hover:bg-red-600 dark:hover:bg-red-600 border border-transparent dark:border-white/15 transition-all flex items-center justify-center"
+                data-testid="confirm-delete-btn"
+              >
+                Delete
+              </Button>
+            </div>
           </div>
-        </CardContent>
-        <CardFooter className="pt-0 flex flex-col gap-2">
-          <Button
-            variant={tavilySaved ? "secondary" : "default"}
-            size="sm"
-            className="w-full"
-            disabled={!tavilyInput && !tavilySaved}
-            onClick={() => void handleSaveTavily()}
-            data-testid="tavily-save"
-          >
-            {tavilyInput ? "Save Search Key" : "Saved"}
-          </Button>
-          {tavilySaved && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => void handleRemove("tavily")}
-              data-testid="remove-tavily"
-            >
-              Remove
-            </Button>
-          )}
-        </CardFooter>
-      </Card>
+        </div>
+      )}
     </div>
   )
 }

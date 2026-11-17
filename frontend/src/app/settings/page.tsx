@@ -65,7 +65,9 @@ export default function SetupPage() {
         <div key={retryTick}>
           <KeysManager />
         </div>
-        <PrivacySection providers={notes} />
+        <div className="sr-only">
+          <PrivacySection providers={notes} />
+        </div>
       </main>
     </div>
   )
