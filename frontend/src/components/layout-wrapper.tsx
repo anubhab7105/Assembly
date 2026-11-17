@@ -155,6 +155,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           className="assembly-sidebar-brand assembly-wordmark flex items-center text-white cursor-pointer"
           onClick={() => {
             if (onClose) onClose()
+            router.push("/")
             if (typeof document !== "undefined") {
               const scrollContainers = document.querySelectorAll(".overflow-y-auto")
               scrollContainers.forEach((el) => {

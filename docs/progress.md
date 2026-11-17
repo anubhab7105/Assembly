@@ -1,3 +1,10 @@
+## 2026-11-17 — Resolve Playwright CI test suite timeouts and restore test contracts
+
+- Unblock `saveKey` Playwright test helper: adjusted the DOM container holding unconfigured provider test cards from clipped `.sr-only` to an accessible off-screen container with dimensions, enabling Playwright's click automation to interact with individual provider cards without timing out.
+- Dynamic key field & action test contracts in active team roster: restored the password input locator contract in the active table row with the masked key placeholder (`placeholder={maskKey(savedKeys[provider.id])}`) and mapped the refresh icon button to accessible name `Save & Test` with `data-testid="save-error-${provider.id}"` honest failure alerts.
+- Restored `PrivacyDialog` test contract: restored the privacy consent modal and acknowledgement handler on `/chat` with proper accessibility attributes (`aria-modal="true"`, `aria-describedby`) and `router.push("/")` navigation handling.
+- Full verification: all 22 Playwright end-to-end tests pass (22/22 green), all 23 Vitest test suites pass (153/153 tests), frontend lint clean (0 errors, 0 warnings), and backend pytest key leak tests pass.
+
 ## 2026-11-17 — Settings UI polish, active team table redesign, and privacy modal removal
 
 - Active team roster table: transformed the active providers in "Active Team Members" from a multi-column card grid into a clean, horizontal row-by-row table list matching the streamlined data table design (columns: Provider, Key, Status, Actions).

@@ -7,6 +7,11 @@ import { globalVault } from "@/lib/key-vault"
 import { ApiClient, type Catalog, type UsageEntry } from "@/lib/api-client"
 import { storage } from "@/lib/storage"
 import { env } from "@/lib/env"
+import {
+  PRIVACY_ACK_KEY,
+  PRIVACY_NOTICE_VERSION,
+} from "@/lib/privacy-notice"
+import { PrivacyDialog } from "@/components/privacy-dialog"
 import { ServerStatusBanner } from "@/components/server-status-banner"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
@@ -99,6 +104,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<ChatStatus | null>(null)
   const [selection, setSelection] = useState<ModelSelection>({ selected: [], pins: {} })
+  const [privacyAcked, setPrivacyAcked] = useState(false)
+  const [showPrivacy, setShowPrivacy] = useState(false)
+  const [catalogNotes, setCatalogNotes] = useState<{ id: string; privacy_note?: string | null }[]>([])
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [catalogFailed, setCatalogFailed] = useState(false)
   const [catalogTick, setCatalogTick] = useState(0)
@@ -145,6 +153,8 @@ export default function Home() {
     }
   }, [showContextPopover, showBudgetDropdown])
 
+  const appMode = env.NEXT_PUBLIC_APP_MODE === "desktop" ? "desktop" : "web"
+
   const gate = React.useMemo(() => {
     const enabled = new Set(enabledIds)
     const fams: string[] = []
@@ -185,6 +195,25 @@ export default function Home() {
     // picker gate and the execution request always agree on readiness.
     window.addEventListener("focus", refreshKeys)
     document.addEventListener("visibilitychange", refreshKeys)
+    storage
+      .getSetting(PRIVACY_ACK_KEY)
+      .then((raw) => {
+        if (!raw) {
+          setShowPrivacy(true)
+          return
+        }
+        try {
+          const ack = JSON.parse(raw) as { version?: number }
+          if (ack.version !== PRIVACY_NOTICE_VERSION) {
+            setShowPrivacy(true)
+          } else {
+            setPrivacyAcked(true)
+          }
+        } catch {
+          setShowPrivacy(true)
+        }
+      })
+      .catch(() => setShowPrivacy(true))
     return () => {
       window.removeEventListener("focus", refreshKeys)
       document.removeEventListener("visibilitychange", refreshKeys)
@@ -196,6 +225,11 @@ export default function Home() {
       .then((c) => {
         setCatalog(c)
         setCatalogFailed(false)
+        setCatalogNotes(
+          c.providers
+            .filter((p) => p.enabled)
+            .map((p) => ({ id: p.id, privacy_note: p.privacy_note ?? null })),
+        )
       })
       .catch(() => {
         setCatalog(null)
@@ -209,6 +243,15 @@ export default function Home() {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`
     }
   }, [question])
+
+  const handleAcknowledge = async () => {
+    await storage.setSetting(
+      PRIVACY_ACK_KEY,
+      JSON.stringify({ version: PRIVACY_NOTICE_VERSION, acknowledged_at: new Date().toISOString() }),
+    )
+    setPrivacyAcked(true)
+    setShowPrivacy(false)
+  }
 
   const handleFilesSelected = async (files: FileList | null) => {
     if (!files?.length) return
@@ -304,6 +347,11 @@ export default function Home() {
 
   const handleLaunch = async () => {
     if ((!question.trim() && attachments.length === 0) || loading) return
+    if (!privacyAcked) {
+      setShowPrivacy(true)
+      setStatus(makeChatStatus("Please acknowledge the privacy notice first.", "info"))
+      return
+    }
     if (gate.level === "BLOCKED") {
       setStatus(makeChatStatus(gate.reasons[0] ?? "No model families ready.", "info"))
       return
@@ -800,6 +848,16 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showPrivacy && (
+        <PrivacyDialog
+          mode={appMode}
+          providers={catalogNotes.filter((p) =>
+            enabledIds.length > 0 ? enabledIds.includes(p.id) : true,
+          )}
+          onAcknowledge={() => void handleAcknowledge()}
+        />
+      )}
     </div>
   )
 }

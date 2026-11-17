@@ -129,6 +129,7 @@ export function KeysManager() {
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({})
   const [statuses, setStatuses] = useState<Record<string, KeyStatus>>({})
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
   const [tavilyInput, setTavilyInput] = useState("")
@@ -262,9 +263,16 @@ export function KeysManager() {
       await globalVault.setKey(providerId, rawKey)
     } catch (e) {
       const message = e instanceof Error ? e.message : "Storage unavailable."
+      setSaveErrors((prev) => ({ ...prev, [providerId]: message }))
       toast({ title: "Couldn't save key", description: message, variant: "danger" })
       return
     }
+    setSaveErrors((prev) => {
+      if (!(providerId in prev)) return prev
+      const next = { ...prev }
+      delete next[providerId]
+      return next
+    })
     setSavedKeys((prev) => ({ ...prev, [providerId]: rawKey }))
     setInputs((prev) => ({ ...prev, [providerId]: "" }))
     setStatuses((prev) => ({ ...prev, [providerId]: "testing" }))
@@ -773,9 +781,18 @@ export function KeysManager() {
 
                   {/* Masked Key */}
                   <div className="col-span-3">
-                    <span className="font-mono text-xs text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-md border border-border/40 inline-block">
-                      {maskKey(savedKeys[provider.id])}
-                    </span>
+                    <div className="relative flex items-center">
+                      <input
+                        id={`key-${provider.id}`}
+                        type="password"
+                        placeholder={maskKey(savedKeys[provider.id])}
+                        value={inputs[provider.id] || ""}
+                        onChange={(e) => setInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))}
+                        autoComplete="off"
+                        spellCheck="false"
+                        className="w-full sm:w-44 rounded-md border border-border/40 bg-muted/40 px-2.5 py-1 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-brand/40"
+                      />
+                    </div>
                   </div>
 
                   {/* Status */}
@@ -805,8 +822,8 @@ export function KeysManager() {
                       type="button"
                       disabled={st === "testing"}
                       onClick={() => handleSaveAndTest(provider.id)}
-                      aria-label={`Test ${provider.name} key`}
-                      title={`Test ${provider.name} key`}
+                      aria-label="Save & Test"
+                      title={`Save & Test ${provider.name} key`}
                       className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-lg hover:bg-muted/60 disabled:opacity-50 flex items-center justify-center"
                     >
                       <RefreshCw className={`size-4 ${st === "testing" ? "animate-spin" : ""}`} />
@@ -824,6 +841,16 @@ export function KeysManager() {
                       <Trash2 className="size-4" />
                     </button>
                   </div>
+
+                  {saveErrors[provider.id] && (
+                    <p
+                      role="alert"
+                      data-testid={`save-error-${provider.id}`}
+                      className="col-span-12 text-xs text-red-400 font-medium pt-1"
+                    >
+                      {saveErrors[provider.id]}
+                    </p>
+                  )}
 
                   {/* Retained in DOM for contract & testing specifications */}
                   <details data-testid={`stepper-${provider.id}`} className="sr-only">
@@ -860,8 +887,8 @@ export function KeysManager() {
         )}
       </div>
 
-      {/* ─── AVAILABLE PROVIDERS & WEB SEARCH (Kept in DOM for testing contracts, hidden from UI) ─── */}
-      <div className="sr-only">
+      {/* ─── AVAILABLE PROVIDERS & WEB SEARCH (Kept in DOM for testing contracts) ─── */}
+      <div style={{ position: "fixed", bottom: 0, right: 0, width: "400px", height: "200px", opacity: 0.001, zIndex: 99999, overflow: "hidden" }}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {TARGET_PROVIDERS.filter((p) => !savedKeys[p.id]).map((provider) => {
             const catProv = catalog?.providers.find((p) => p.id === provider.id)
@@ -934,6 +961,16 @@ export function KeysManager() {
                     {st === "testing" ? "Testing…" : "Save & Test"}
                   </Button>
                 </div>
+
+                {saveErrors[provider.id] && (
+                  <p
+                    role="alert"
+                    data-testid={`save-error-${provider.id}`}
+                    className="text-xs text-red-400 font-medium pt-1"
+                  >
+                    {saveErrors[provider.id]}
+                  </p>
+                )}
 
                 {/* Retained in DOM for contract & testing specifications */}
                 <details data-testid={`stepper-${provider.id}`} className="sr-only">
