@@ -133,7 +133,7 @@ cd ..`}</CodeBlock>
           <h2 className="text-2xl font-semibold">Connect your model providers</h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60">Once the local workspace opens, use Settings to add your own provider API keys. Assembly uses bring-your-own-key access; keep keys private and never paste them into source files, issues, or screenshots.</p>
           <p className="mt-5 text-sm text-white/45">Need more detail? The repository README and contributor guide contain the full development and testing instructions.</p>
-          <Link href="/chat" className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-[#eaa221] hover:text-[#f2b94e]">Open the local chat page <ArrowRight className="size-4" /></Link>
+          <a href="http://127.0.0.1:3000/chat" className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-[#eaa221] hover:text-[#f2b94e]">Open the local chat page <ArrowRight className="size-4" /></a>
         </section>
       </div>
     </main>

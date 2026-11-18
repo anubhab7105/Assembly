@@ -1,7 +1,9 @@
 import { defineConfig, devices } from "@playwright/test"
 
 // E2E coverage exercises the locally hosted workspace, not the marketing-only deployment.
+// Use an isolated port and never reuse an existing server: the test server must inherit workspace mode.
 process.env.NEXT_PUBLIC_ASSEMBLY_LOCAL = "true"
+const testServerUrl = "http://127.0.0.1:3100"
 
 export default defineConfig({
   testDir: "./tests",
@@ -11,7 +13,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: testServerUrl,
     trace: "on-first-retry",
   },
   projects: [
@@ -21,9 +23,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
+    url: testServerUrl,
+    reuseExistingServer: false,
     timeout: 120 * 1000,
   },
 })
