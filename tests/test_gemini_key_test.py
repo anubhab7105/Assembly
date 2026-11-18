@@ -47,9 +47,9 @@ def _client(monkeypatch) -> TestClient:
     return TestClient(app)
 
 
-def _stub_list(monkeypatch, status, ids, body=""):
+def _stub_list(monkeypatch, status, ids, body="", metadata=None):
     async def _fake(key: str):
-        return status, ids, body
+        return status, ids, body, metadata or {}
 
     monkeypatch.setattr(keys_mod, "_list_gemini", _fake)
 
@@ -163,7 +163,7 @@ def test_trailing_newline_key_is_trimmed_before_probe(monkeypatch) -> None:
 
     async def _capture(key: str):
         seen["key"] = key
-        return 200, ["gemini-3.8-flash"], ""
+        return 200, ["gemini-3.8-flash"], "", {}
 
     monkeypatch.setattr(keys_mod, "_list_gemini", _capture)
     body = (
@@ -213,3 +213,133 @@ def test_canary_never_in_test_response_or_logs(monkeypatch, caplog) -> None:
     assert res.status_code == 200
     assert CANARY not in res.text
     assert CANARY not in caplog.text
+
+
+def test_gemini_verification_reports_catalog_context_but_not_project_quotas() -> None:
+    from src.providers.config import ProviderSpec
+
+    spec = ProviderSpec.model_validate(
+        {
+            "base": "google-genai",
+            "enabled": True,
+            "quota_source": "https://aistudio.google.com/rate-limit",
+            "quota_last_verified": None,
+            "models": [
+                {
+                    "id": "gemini-3.8-flash",
+                    "family": "gemini",
+                    "roles": ["solver"],
+                    "limits": {
+                        "rpm": None,
+                        "rpd": None,
+                        "tpm": None,
+                        "context_tokens": None,
+                    },
+                }
+            ],
+        }
+    )
+    result = keys_mod._build_key_metadata_verification(
+        "gemini",
+        spec,
+        ["gemini-3.8-flash"],
+        {"gemini-3.8-flash": {"context_tokens": 1_000_000, "output_tokens": 64_000}},
+        {},
+        {},
+    )
+    assert result.models[0].available is True
+    assert result.models[0].context_tokens == 1_000_000
+    assert result.models[0].output_tokens == 64_000
+    assert result.unverified_fields == ["rpm", "rpd", "tpm"]
+    assert result.quota_metadata_ready is False
+    assert "quota_last_verified" in (result.quota_metadata_issue or "")
+    assert "do not change shared models.yaml" in result.note
+
+
+def test_groq_verification_maps_documented_headers_without_inventing_rpm() -> None:
+    from src.providers.config import ProviderSpec
+
+    spec = ProviderSpec.model_validate(
+        {
+            "base": "openai-compatible",
+            "url": "https://api.groq.com/openai/v1",
+            "enabled": True,
+            "quota_source": "https://console.groq.com/docs/rate-limits",
+            "quota_last_verified": "2026-11-17",
+            "models": [
+                {
+                    "id": "openai/gpt-oss-20b",
+                    "family": "gpt-oss",
+                    "roles": ["solver"],
+                    "limits": {
+                        "rpm": 30,
+                        "rpd": 1000,
+                        "tpm": 8000,
+                        "context_tokens": 8000,
+                    },
+                }
+            ],
+        }
+    )
+    result = keys_mod._build_key_metadata_verification(
+        "groq",
+        spec,
+        ["openai/gpt-oss-20b"],
+        {"openai/gpt-oss-20b": {"context_tokens": 131_072}},
+        {
+            "x-ratelimit-limit-requests": "14400",
+            "x-ratelimit-limit-tokens": "18000",
+            "authorization": "Bearer SECRET_CANARY_12345",
+            "x-ratelimit-remaining-requests": "14000",
+        },
+        {},
+    )
+    by_field = {item.field: item for item in result.observed_quotas}
+    assert by_field["rpd"].value == 14400
+    assert by_field["rpd"].scope == "organization"
+    assert by_field["tpm"].value == 18000
+    assert "rpm" in result.unverified_fields
+    assert "rpm" not in by_field
+    assert all("SECRET_CANARY" not in item.source for item in result.observed_quotas)
+    assert result.models[0].context_tokens == 131_072
+
+
+def test_openrouter_verification_keeps_free_daily_cap_distinct_from_rpd() -> None:
+    from src.providers.config import ProviderSpec
+
+    spec = ProviderSpec.model_validate(
+        {
+            "base": "openai-compatible",
+            "url": "https://openrouter.ai/api/v1",
+            "enabled": True,
+            "quota_source": "https://openrouter.ai/pricing",
+            "quota_last_verified": "2026-11-17",
+            "models": [
+                {
+                    "id": "google/gemma-4-26b-a4b-it:free",
+                    "family": "gemma",
+                    "roles": ["solver"],
+                    "scope": "account",
+                    "limits": {
+                        "rpm": 20,
+                        "rpd": 50,
+                        "tpm": "unlimited",
+                        "context_tokens": 262144,
+                    },
+                }
+            ],
+        }
+    )
+    result = keys_mod._build_key_metadata_verification(
+        "openrouter",
+        spec,
+        ["google/gemma-4-26b-a4b-it:free"],
+        {},
+        {},
+        {"free_model_requests_per_day": 50},
+    )
+    assert len(result.observed_quotas) == 1
+    assert result.observed_quotas[0].field == "free_model_requests_per_day"
+    assert result.observed_quotas[0].value == 50
+    assert result.observed_quotas[0].scope == "account (free-model policy)"
+    assert "rpd" in result.unverified_fields
