@@ -342,6 +342,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   // Public marketing/editorial/legal pages render full-width without the app sidebar.
   const isPublicPage =
     pathname === "/" ||
+    pathname === "/get-started" ||
     pathname === "/science" ||
     pathname === "/privacy" ||
     pathname === "/terms" ||
@@ -374,6 +375,28 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       }
     }
   }, [pathname])
+
+  if (!isPublicPage && process.env.NEXT_PUBLIC_ASSEMBLY_LOCAL !== "true") {
+    return (
+      <ToastProvider>
+        <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center bg-[#080808] px-6 py-20 text-[#f4f0e8]">
+          <div className="w-full max-w-2xl">
+            <p className="mb-5 text-xs font-semibold uppercase tracking-[0.24em] text-[#eaa221]">Assembly · Local workspace</p>
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">The investigation workspace runs locally.</h1>
+            <p className="mt-5 max-w-xl text-base leading-7 text-white/65">
+              The hosted site introduces Assembly. To investigate a question, clone the repository and start the local web stack on your own machine.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <Link href="/get-started" className="inline-flex min-h-12 items-center rounded-full bg-[#eaa221] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#f2b94e]">
+                View local setup instructions <span aria-hidden="true" className="ml-2">→</span>
+              </Link>
+              <Link href="/" className="text-sm text-white/65 underline-offset-4 hover:text-white hover:underline">Back to the overview</Link>
+            </div>
+          </div>
+        </main>
+      </ToastProvider>
+    )
+  }
 
   return (
     <ToastProvider>
