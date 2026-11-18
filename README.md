@@ -50,6 +50,10 @@ flowchart LR
 - **Storage and key handling:** hosted web keys persist in IndexedDB (with a localStorage fallback) until removed in Settings or site/browser data is cleared. If browser storage fails during removal, a key may remain saved. They are readable values, not encrypted at rest or protected by an OS credential vault; same-origin JavaScript (including injected code in an XSS incident) can read them. Preflight requests send all saved model-provider keys to the Assembly backend (remote deployments require HTTPS; local development requests to `http://localhost:8000` do not use HTTPS), independently of model selection; a key-test request sends only the provider key being tested; every run request sends all saved model-provider keys and any saved Tavily key, even when search is not used. When research runs, Assembly may send your full question as a search query to Tavily, Wikipedia, arXiv, Semantic Scholar or DuckDuckGo, depending on the search fallback path. Tavily receives it only when available and selected by that path; the other listed services do not require a Tavily key. The application uses submitted keys transiently and does not write them to its database or disk. Application logs record metadata and query lengths, not raw request bodies, search-query text or key values; hosting platforms may keep their own operational logs. Desktop mode uses a local backend and loopback requests, but the current Settings flow also uses the WebView browser vault; the Windows Credential Manager adapter is not yet the primary Settings store. Local SQLite is used for desktop execution history.
 - **Desktop:** Tauri-related code exists in the repository, but the quickest contributor path to verify is the web frontend plus FastAPI backend described below.
 
+## Hosted site and local workspace
+
+The hosted website is the public introduction to Assembly. The interactive investigation workspace is intended to run on the user's own machine. Selecting **Start an investigation** on the hosted site opens the local setup guide rather than starting a hosted run. The local launcher starts the FastAPI backend and frontend together, then opens the chat workspace at `http://127.0.0.1:3000/chat`.
+
 ## Quick start
 
 ### Prerequisites
@@ -114,12 +118,18 @@ Open a second terminal in the cloned repository directory, then run:
 ```bash
 cd frontend
 npm ci --legacy-peer-deps
+
+# macOS / Linux
+NEXT_PUBLIC_ASSEMBLY_LOCAL=true npm run dev
+
+# Windows PowerShell
+$env:NEXT_PUBLIC_ASSEMBLY_LOCAL = "true"
 npm run dev
 ```
 
 If your backend is not at the default `http://localhost:8000`, set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` to the backend base URL (without a trailing slash). The default already targets local FastAPI.
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000/chat](http://localhost:3000/chat). The local workspace is enabled by `NEXT_PUBLIC_ASSEMBLY_LOCAL=true`.
 
 ### 3. Configure model access
 
