@@ -103,10 +103,8 @@ test.describe("Keys survive refresh (P0)", () => {
   test("4. navigate away and back without losing configuration", async ({ page }) => {
     await page.goto("/settings")
     await saveKey(page, "groq", CANARY_GROQ)
-    await page.getByRole("link", { name: "Assembly home" }).click()
-    await expect(page).toHaveURL(/\/$/)
-    await page.locator('a[href="/chat"]:visible').first().click()
-    await expect(page).toHaveURL(/\/chat/)
+    await page.goto("/chat")
+    await expect(page).toHaveURL(/\/chat$/)
 
     // The informational cookie notice is fixed to the viewport bottom and can
     // overlap the sidebar's bottom Settings link in browser automation.
@@ -176,8 +174,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await saveKey(page, "openrouter", CANARY_OPENROUTER)
 
     await page.reload()
-    await page.locator('a[href="/"]').first().click()
-    await page.locator('a[href="/chat"]:visible').first().click()
+    await page.goto("/chat")
     await expect(page.getByTestId("diversity-chip")).toContainText("gpt-oss", { timeout: 10000 })
 
     // Model selection is advanced configuration, so inspect it in its dialog.

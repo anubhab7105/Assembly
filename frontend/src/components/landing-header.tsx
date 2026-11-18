@@ -152,7 +152,7 @@ export function LandingHeader() {
 
       <div className="assembly-landing-actions">
         <Link
-          href="/chat"
+          href="/get-started"
           className="assembly-nav-cta"
           tabIndex={0}
         >

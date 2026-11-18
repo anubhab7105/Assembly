@@ -36,7 +36,7 @@ export function LandingFooter() {
             <h4 className="assembly-rich-footer-heading">Product</h4>
             <ul className="assembly-rich-footer-list">
               <li>
-                <Link href="/chat" className="assembly-rich-footer-link assembly-rich-footer-link--cta">
+                <Link href="/get-started" className="assembly-rich-footer-link assembly-rich-footer-link--cta">
                   <span>Start an investigation</span>
                   <ArrowUpRight className="size-3.5" aria-hidden="true" />
                 </Link>
@@ -79,12 +79,12 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/settings" className="assembly-rich-footer-link">
+                <Link href="/get-started" className="assembly-rich-footer-link">
                   Model Router &amp; Limits
                 </Link>
               </li>
               <li>
-                <Link href="/settings" className="assembly-rich-footer-link">
+                <Link href="/get-started" className="assembly-rich-footer-link">
                   Local Key Vault
                 </Link>
               </li>
@@ -111,7 +111,7 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/settings" className="assembly-rich-footer-link">
+                <Link href="/get-started" className="assembly-rich-footer-link">
                   Key Management
                 </Link>
               </li>

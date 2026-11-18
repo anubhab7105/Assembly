@@ -78,7 +78,7 @@ export function AssemblyHeroExperience() {
                 </p>
                 <div className="intro-cta-wrapper">
                   <Link
-                    href="/chat"
+                    href="/get-started"
                     className="assembly-hero-cta-btn"
                   >
                     <span>Start an investigation</span>

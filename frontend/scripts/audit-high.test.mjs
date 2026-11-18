@@ -146,6 +146,34 @@ describe("audit-high allowlist enforcement", () => {
     assert.equal(collectBlocking(mismatchedPackage).blocking.length, 1);
   });
 
+  it("allows only the reviewed picomatch advisory/package pair", () => {
+    const picomatchAdvisory = {
+      name: "picomatch",
+      url: "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+    };
+    const reviewed = {
+      vulnerabilities: {
+        picomatch: { name: "picomatch", severity: "high", range: "<=4.0.7", via: [picomatchAdvisory] },
+        vite: { name: "vite", severity: "high", range: "*", via: ["picomatch"] },
+      },
+    };
+    const result = collectBlocking(reviewed);
+    assert.equal(result.blocking.length, 0);
+    assert.equal(result.allowlisted.length, 2);
+
+    const wrongPackage = {
+      vulnerabilities: {
+        "other-package": {
+          name: "other-package",
+          severity: "high",
+          range: "*",
+          via: [{ name: "other-package", url: "https://github.com/advisories/GHSA-fc5q-39xc-vjpf" }],
+        },
+      },
+    };
+    assert.equal(collectBlocking(wrongPackage).blocking.length, 1);
+  });
+
   it("blocks a synthetic new high advisory (regression)", () => {
     const report = {
       vulnerabilities: {

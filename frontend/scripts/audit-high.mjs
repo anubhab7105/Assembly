@@ -16,20 +16,28 @@ export const ALLOWLIST = [
       "braces <=3.0.3 has no patched version; transitive via micromatch/fast-glob from shadcn and eslint-config-next dev tooling. npm audit fix is a no-op and --force wants a breaking shadcn 4.x -> 1.0.0 downgrade.",
   },
   {
+    ghsa: "GHSA-fc5q-39xc-vjpf",
+    package: "picomatch",
+    owner: "assembly-maintainers",
+    reviewBy: "2027-01-18",
+    reason:
+      "picomatch <=4.0.7 is affected by GHSA-fc5q-39xc-vjpf and the GitHub Advisory Database lists no patched npm release as of 2026-11-18. The current copies are transitive tooling dependencies (including the shadcn CLI, Vite, and Vitest); shadcn is moved to devDependencies. This is a narrow exception for this exact advisory/package only; re-evaluate on each review date and remove as soon as upstream publishes a fix.",
+  },
+  {
     ghsa: "GHSA-gcqx-w48m-w2h4",
     package: "deepmerge",
     owner: "assembly-maintainers",
-    reviewBy: "2026-11-07",
+    reviewBy: "2027-01-18",
     reason:
-      "deepmerge <=4.3.1 has no patched release yet (upstream issue #273). It is currently transitive only through shadcn/@shadcn/registry CLI scaffolding dependencies, not an Assembly runtime dependency. Temporary exception for maintainer-run CLI tooling; reassess the upstream fix and dependency exposure by the review date.",
+      "deepmerge <=4.3.1 has no patched release yet (upstream issue #273). It remains confined to the shadcn CLI and @shadcn/registry development-tooling tree, not the shipped application runtime. Temporary exception; reassess the upstream fix and remove this entry when a patched CLI dependency is available.",
   },
   {
     ghsa: "GHSA-mrhx-c7xc-m3w5",
     package: "zod",
     owner: "assembly-maintainers",
-    reviewBy: "2026-11-07",
+    reviewBy: "2027-01-18",
     reason:
-      "The root Zod dependency is upgraded to 4.6.7. shadcn 4.21.4 and @shadcn/registry 0.1.3 still pin nested Zod 3.x; forcing Zod 4 into this CLI chain may break its Zod-3-oriented schema tooling. Temporary, scoped exception for the maintainer-run CLI only; remove when upstream ships a compatible patched release.",
+      "The root Zod dependency is upgraded to 4.6.7. shadcn 4.21.4 and @shadcn/registry 0.1.3 still pin nested Zod 3.x; forcing Zod 4 into this CLI chain may break its Zod-3-oriented schema tooling. shadcn is installed as development tooling, not a shipped runtime dependency. Temporary, scoped exception; remove when upstream ships a compatible patched release.",
   },
 ];
 
