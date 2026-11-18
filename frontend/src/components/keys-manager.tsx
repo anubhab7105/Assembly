@@ -128,6 +128,17 @@ export function KeysManager() {
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({})
   const [statuses, setStatuses] = useState<Record<string, KeyStatus>>({})
   const [verifications, setVerifications] = useState<Record<string, KeyMetadataVerification>>({})
+  const verificationGenerations = React.useRef<Record<string, number>>({})
+
+  const nextVerificationGeneration = (providerId: string): number => {
+    const generation = (verificationGenerations.current[providerId] ?? 0) + 1
+    verificationGenerations.current[providerId] = generation
+    return generation
+  }
+
+  const invalidateVerificationGenerations = (providerIds: string[]) => {
+    for (const providerId of providerIds) nextVerificationGeneration(providerId)
+  }
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
@@ -189,6 +200,7 @@ export function KeysManager() {
   }
 
   const handleForget = async () => {
+    invalidateVerificationGenerations(Object.keys({ ...savedKeys, ...verificationGenerations.current }))
     try {
       await globalVault.clearAll()
     } catch {
@@ -244,10 +256,12 @@ export function KeysManager() {
   const handleSaveAndTest = async (providerId: string, customKey?: string) => {
     const rawKey = cleanPastedKey(customKey || inputs[providerId] || savedKeys[providerId] || "")
     if (!rawKey) return
+    const generation = nextVerificationGeneration(providerId)
     void isKeyFormatOk(providerId, rawKey)
     try {
       await globalVault.setKey(providerId, rawKey)
     } catch (e) {
+      if (verificationGenerations.current[providerId] !== generation) return
       const message = e instanceof Error ? e.message : "Storage unavailable."
       setSaveErrors((prev) => ({ ...prev, [providerId]: message }))
       toast({ title: "Couldn't save key", description: message, variant: "danger" })
@@ -270,6 +284,7 @@ export function KeysManager() {
     })
     try {
       const res = await ApiClient.testKey(providerId, rawKey)
+      if (verificationGenerations.current[providerId] !== generation) return
       setStatuses((prev) => ({ ...prev, [providerId]: res.status }))
       if (res.verification) {
         setVerifications((prev) => ({ ...prev, [providerId]: res.verification! }))
@@ -287,6 +302,7 @@ export function KeysManager() {
         toast({ title: "Key test failed", description: res.message ?? "The provider rejected this key.", variant: "danger" })
       }
     } catch {
+      if (verificationGenerations.current[providerId] !== generation) return
       setStatuses((prev) => ({ ...prev, [providerId]: "unreachable" }))
       toast({ title: "Couldn't reach provider", description: "Couldn't reach the server; try again.", variant: "danger" })
     }
@@ -310,9 +326,11 @@ export function KeysManager() {
   }
 
   const handleRemove = React.useCallback(async (providerId: string) => {
+    const generation = nextVerificationGeneration(providerId)
     try {
       await globalVault.removeKey(providerId)
     } catch {
+      if (verificationGenerations.current[providerId] !== generation) return
       toast({
         title: "Unable to remove key",
         description: "Browser storage rejected the deletion, so this key may still be saved. Try again or clear browser/site data.",
@@ -365,6 +383,7 @@ export function KeysManager() {
 
   const handleClearAll = async () => {
     if (!confirm("Remove all saved keys from this browser? This cannot be undone.")) return
+    invalidateVerificationGenerations(Object.keys({ ...savedKeys, ...verificationGenerations.current }))
     try {
       await globalVault.clearAll()
     } catch {
@@ -802,10 +821,22 @@ export function KeysManager() {
                       <p className="font-semibold text-foreground">
                         Automatic metadata check · {new Date(verifications[provider.id].checked_at).toLocaleString()}
                       </p>
-                      <p className="text-muted-foreground">
-                        Model catalogue: {verifications[provider.id].models.filter((model) => model.available).length}/
-                        {verifications[provider.id].models.length} configured models available.
-                      </p>
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground">
+                          Model catalogue: {verifications[provider.id].models.filter((model) => model.available === true).length}/
+                          {verifications[provider.id].models.length} configured models confirmed available.
+                        </p>
+                        <ul className="space-y-1">
+                          {verifications[provider.id].models.map((model) => (
+                            <li key={model.id} className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground">
+                              <code className="text-foreground">{model.id}</code>
+                              <span>{model.available === true ? "Available" : model.available === false ? "Unavailable" : "Not probed"}</span>
+                              <span>Context: {model.context_tokens != null ? model.context_tokens.toLocaleString() : "unverified"}</span>
+                              <span>Output: {model.output_tokens != null ? model.output_tokens.toLocaleString() : "unverified"}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                       {verifications[provider.id].observed_quotas.length > 0 ? (
                         <div className="flex flex-wrap gap-x-3 gap-y-1">
                           {verifications[provider.id].observed_quotas.map((observation) => (

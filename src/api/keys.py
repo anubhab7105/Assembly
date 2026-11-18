@@ -57,7 +57,7 @@ class KeyTestRequest(BaseModel):
 
 class VerifiedModelMetadata(BaseModel):
     id: str
-    available: bool
+    available: bool | None
     context_tokens: int | None = None
     output_tokens: int | None = None
 
@@ -167,8 +167,19 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
     elif spec.base == "huggingface":
         result = await _test_huggingface(req.provider, model, key)
         if result.valid:
+            model_availability: dict[str, bool | None] = {model: result.model_available}
+            for configured in spec.models[1:]:
+                probe = await _test_huggingface(req.provider, configured.id, key)
+                model_availability[configured.id] = (
+                    probe.model_available if probe.valid or probe.error_code == "model_not_found" else None
+                )
+            available_models = [
+                model_id for model_id, available in model_availability.items() if available is True
+            ]
+            result.available_models = available_models
             result.verification = _build_key_metadata_verification(
-                req.provider, spec, [model] if result.model_available else [], {}, {}, {}
+                req.provider, spec, available_models, {}, {}, {},
+                model_availability=model_availability,
             )
         if not spec.enabled and result.valid:
             result.message = (
@@ -322,8 +333,11 @@ def _positive_int(value: object) -> int | None:
         return None
     if isinstance(value, int):
         return value if value > 0 else None
-    if isinstance(value, str) and value.strip().isdigit():
-        parsed = int(value.strip())
+    if isinstance(value, str) and value.strip().isascii() and value.strip().isdecimal():
+        try:
+            parsed = int(value.strip())
+        except ValueError:
+            return None
         return parsed if parsed > 0 else None
     return None
 
@@ -331,21 +345,23 @@ def _positive_int(value: object) -> int | None:
 def _build_key_metadata_verification(
     provider_id: str,
     spec: object,
-    listed: list[str],
+    listed: list[str] | None,
     model_metadata: dict[str, dict[str, int]],
     quota_headers: dict[str, str],
     openrouter_key_info: dict[str, int],
+    *,
+    model_availability: dict[str, bool | None] | None = None,
 ) -> KeyMetadataVerification:
     """Create a redacted, per-key observation; never modify models.yaml."""
     from src.providers.config import ProviderSpec
 
     if not isinstance(spec, ProviderSpec):
         raise TypeError("spec must be a ProviderSpec")
-    listed_set = set(listed)
+    listed_set = set(listed or [])
     models = [
         VerifiedModelMetadata(
             id=model.id,
-            available=model.id in listed_set,
+            available=(model_availability.get(model.id) if model_availability is not None else ((model.id in listed_set) if listed is not None else None)),
             context_tokens=model_metadata.get(model.id, {}).get("context_tokens"),
             output_tokens=model_metadata.get(model.id, {}).get("output_tokens"),
         )

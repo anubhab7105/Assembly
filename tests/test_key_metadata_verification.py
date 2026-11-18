@@ -122,3 +122,32 @@ def test_quota_parser_rejects_non_integer_and_non_positive_values() -> None:
     assert keys_mod._positive_int(True) is None
     assert keys_mod._positive_int("0") is None
     assert keys_mod._positive_int("-1") is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_openrouter_invalid_unicode_digit_limit_stays_unverified(fake_key: str) -> None:
+    respx.get("https://openrouter.ai/api/v1/key").mock(
+        return_value=httpx.Response(
+            200, json={"data": {"free_model_daily_requests": {"limit": "²"}}}
+        )
+    )
+    assert await keys_mod._openrouter_key_info(fake_key) == {}
+
+
+def test_huggingface_verification_preserves_unknown_unprobed_models() -> None:
+    from src.providers.config import ProviderSpec
+
+    spec = ProviderSpec.model_validate({
+        "base": "huggingface",
+        "enabled": False,
+        "models": [
+            {"id": "org/model-a", "family": "llama", "roles": ["solver"]},
+            {"id": "org/model-b", "family": "llama", "roles": ["critic"]},
+        ],
+    })
+    verification = keys_mod._build_key_metadata_verification(
+        "huggingface", spec, ["org/model-a"], {}, {}, {},
+        model_availability={"org/model-a": True, "org/model-b": None},
+    )
+    assert [model.available for model in verification.models] == [True, None]

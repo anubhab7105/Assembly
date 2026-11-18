@@ -7,6 +7,8 @@ pasted-key whitespace never turns a valid key invalid.
 
 import logging
 
+import pytest
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -47,8 +49,14 @@ def _client(monkeypatch) -> TestClient:
     return TestClient(app)
 
 
-def _stub_list(monkeypatch, status, ids, body="", metadata=None):
-    async def _fake(key: str):
+def _stub_list(
+    monkeypatch: pytest.MonkeyPatch,
+    status: int | None,
+    ids: list[str],
+    body: str = "",
+    metadata: dict[str, dict[str, int]] | None = None,
+) -> None:
+    async def _fake(key: str) -> tuple[int | None, list[str], str, dict[str, dict[str, int]]]:
         return status, ids, body, metadata or {}
 
     monkeypatch.setattr(keys_mod, "_list_gemini", _fake)
@@ -77,7 +85,7 @@ def test_list_200_is_valid(monkeypatch, fake_key: str) -> None:
 
 
 def test_list_200_missing_model_is_key_valid_with_alternatives(
-    monkeypatch, fake_key: str
+    monkeypatch: pytest.MonkeyPatch, fake_key: str
 ) -> None:
     _stub_list(monkeypatch, 200, ["gemini-2.0-flash", "gemini-1.5-flash"])
     body = (
@@ -166,10 +174,10 @@ def test_list_timeout_is_unreachable_never_invalid(monkeypatch, fake_key: str) -
     assert "reach" in (body["message"] or "")
 
 
-def test_trailing_newline_key_is_trimmed_before_probe(monkeypatch) -> None:
+def test_trailing_newline_key_is_trimmed_before_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, str] = {}
 
-    async def _capture(key: str):
+    async def _capture(key: str) -> tuple[int, list[str], str, dict[str, dict[str, int]]]:
         seen["key"] = key
         return 200, ["gemini-3.8-flash"], "", {}
 
@@ -212,7 +220,7 @@ def test_max_tokens_empty_generation_is_distinct_non_auth_error() -> None:
     assert not isinstance(err, AuthError)
 
 
-def test_canary_never_in_test_response_or_logs(monkeypatch, caplog) -> None:
+def test_canary_never_in_test_response_or_logs(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     _stub_list(monkeypatch, 401, [], "unauthorized")
     with caplog.at_level(logging.INFO, logger="assembly"):
         res = _client(monkeypatch).post(
