@@ -8,6 +8,8 @@
   rough capacity estimate for the current APP_MODE key set.
 """
 
+from datetime import UTC, datetime
+
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, SecretStr
@@ -15,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, SecretStr
 from src.core.config import settings
 from src.core.keystore import clean_key, get_keystore
 from src.core.rate_limit import check_rate_limit, client_ip
-from src.providers.config import load_models_config
+from src.providers.config import load_models_config, provider_limits_issue
 from src.providers.router import DiversityGateResponse
 
 router = APIRouter(prefix="/api", tags=["keys"])
@@ -53,6 +55,33 @@ class KeyTestRequest(BaseModel):
     key: SecretStr
 
 
+class VerifiedModelMetadata(BaseModel):
+    id: str
+    available: bool
+    context_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+class ObservedQuota(BaseModel):
+    field: str
+    value: int
+    unit: str
+    scope: str
+    source: str
+
+
+class KeyMetadataVerification(BaseModel):
+    checked_at: str
+    provider_enabled: bool
+    model_catalog_checked: bool
+    models: list[VerifiedModelMetadata]
+    observed_quotas: list[ObservedQuota]
+    unverified_fields: list[str]
+    quota_metadata_ready: bool
+    quota_metadata_issue: str | None = None
+    note: str
+
+
 class KeyTestResponse(BaseModel):
     provider: str
     valid: bool
@@ -68,6 +97,7 @@ class KeyTestResponse(BaseModel):
     #: Model ids the key can use (set when the configured model is
     #: unavailable but the key is valid).
     available_models: list[str] | None = None
+    verification: KeyMetadataVerification | None = None
 
 
 class ProviderStatus(BaseModel):
@@ -116,21 +146,36 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
             message="Server catalog is unavailable; try again.",
         )
     spec = catalog.providers.get(req.provider)
-    if spec is None or not spec.enabled:
+    if spec is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unknown or disabled provider: {req.provider}",
+            detail=f"Unknown provider: {req.provider}",
         )
     model = spec.models[0].id if spec.models else ""
     label = "Google" if spec.base == "google-genai" else req.provider
+    model_metadata: dict[str, dict[str, int]] = {}
+    quota_headers: dict[str, str] = {}
+    openrouter_key_info: dict[str, int] = {}
     if spec.base == "google-genai":
-        list_status, listed, list_body = await _list_gemini(key)
+        list_status, listed, list_body, model_metadata = await _list_gemini(key)
     elif spec.base == "openai-compatible":
-        list_status, listed, list_body = await _list_openai(
+        list_status, listed, list_body, model_metadata, quota_headers = await _list_openai(
             spec.url or "", key, dict(spec.headers)
         )
+        if req.provider == "openrouter" and list_status == 200:
+            openrouter_key_info = await _openrouter_key_info(key)
     elif spec.base == "huggingface":
-        return await _test_huggingface(req.provider, model, key)
+        result = await _test_huggingface(req.provider, model, key)
+        if result.valid:
+            result.verification = _build_key_metadata_verification(
+                req.provider, spec, [model] if result.model_available else [], {}, {}, {}
+            )
+        if not spec.enabled and result.valid:
+            result.message = (
+                f"Key verified; {req.provider} is still disabled in models.yaml "
+                "and will not be used for runs."
+            )
+        return result
     else:  # Unreachable: config validation restricts base to known backends.
         return KeyTestResponse(
             provider=req.provider,
@@ -139,16 +184,29 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
             error_code="error",
             message="Server catalog is unavailable; try again.",
         )
-    return _classify_list_result(
+
+    result = _classify_list_result(
         req.provider, label, model, list_status, listed, list_body
     )
+    if list_status == 200:
+        result.verification = _build_key_metadata_verification(
+            req.provider, spec, listed, model_metadata, quota_headers, openrouter_key_info
+        )
+    if not spec.enabled and result.valid:
+        result.message = (
+            f"Key verified; {req.provider} is still disabled in models.yaml "
+            "and will not be used for runs."
+        )
+    return result
 
 
-async def _list_gemini(key: str) -> tuple[int | None, list[str], str]:
-    """GET the Gemini catalog with header auth (key never in the URL).
+async def _list_gemini(
+    key: str,
+) -> tuple[int | None, list[str], str, dict[str, dict[str, int]]]:
+    """List Gemini models and retain documented per-model token limits.
 
-    Returns (http status or None on transport failure, model ids, body).
-    One call, no retries by design.
+    API-key authentication stays in the header. This is a read-only catalogue
+    request: it does not consume generation quota or verify project rate limits.
     """
     try:
         async with httpx.AsyncClient(timeout=_LIST_TIMEOUT_SECONDS) as client:
@@ -157,26 +215,37 @@ async def _list_gemini(key: str) -> tuple[int | None, list[str], str]:
                 headers={"x-goog-api-key": key, "Content-Type": "application/json"},
             )
     except Exception:  # noqa: BLE001 — any transport failure reads as unreachable
-        return None, [], ""
+        return None, [], "", {}
     if response.status_code != 200:
-        return response.status_code, [], response.text[:500]
+        return response.status_code, [], response.text[:500], {}
     try:
         data = response.json()
     except ValueError:
-        return response.status_code, [], ""
+        return response.status_code, [], "", {}
     models = data.get("models", []) if isinstance(data, dict) else []
-    ids = sorted(
-        str(item.get("name", "")).replace("models/", "")
-        for item in models
-        if isinstance(item, dict) and item.get("name")
-    )
-    return response.status_code, ids, ""
-
+    ids: list[str] = []
+    metadata: dict[str, dict[str, int]] = {}
+    for item in models:
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        model_id = str(item["name"]).removeprefix("models/")
+        ids.append(model_id)
+        limits: dict[str, int] = {}
+        for source, target in (
+            ("inputTokenLimit", "context_tokens"),
+            ("outputTokenLimit", "output_tokens"),
+        ):
+            value = _positive_int(item.get(source))
+            if value is not None:
+                limits[target] = value
+        if limits:
+            metadata[model_id] = limits
+    return response.status_code, sorted(ids), "", metadata
 
 async def _list_openai(
     base_url: str, key: str, extra_headers: dict[str, str]
-) -> tuple[int | None, list[str], str]:
-    """GET {base}/models once. Returns (status|None, ids, body)."""
+) -> tuple[int | None, list[str], str, dict[str, dict[str, int]], dict[str, str]]:
+    """GET {base}/models once; retain only safe, allowlisted metadata."""
     try:
         async with httpx.AsyncClient(timeout=_LIST_TIMEOUT_SECONDS) as client:
             response = await client.get(
@@ -184,20 +253,174 @@ async def _list_openai(
                 headers={"Authorization": f"Bearer {key}", **extra_headers},
             )
     except Exception:  # noqa: BLE001 — any transport failure reads as unreachable
-        return None, [], ""
+        return None, [], "", {}, {}
     if response.status_code != 200:
-        return response.status_code, [], response.text[:500]
+        return response.status_code, [], response.text[:500], {}, {}
     try:
         data = response.json()
     except ValueError:
-        return response.status_code, [], ""
-    ids = sorted(
-        str(item.get("id", ""))
-        for item in (data.get("data", []) if isinstance(data, dict) else [])
-        if isinstance(item, dict) and item.get("id")
-    )
-    return response.status_code, ids, ""
+        return response.status_code, [], "", {}, {}
+    items = data.get("data", []) if isinstance(data, dict) else []
+    ids: list[str] = []
+    metadata: dict[str, dict[str, int]] = {}
+    for item in items:
+        if not isinstance(item, dict) or not item.get("id"):
+            continue
+        model_id = str(item["id"])
+        ids.append(model_id)
+        # OpenAI-compatible model APIs may publish a context_window. Do not
+        # infer it from max output tokens or other similarly named fields.
+        context_tokens = _positive_int(item.get("context_window"))
+        if context_tokens is not None:
+            metadata[model_id] = {"context_tokens": context_tokens}
+    # Keep only the two Groq headers whose meanings are documented by Groq.
+    # In particular x-ratelimit-limit-requests is RPD, not RPM.
+    allowed_headers = {
+        "x-ratelimit-limit-requests",
+        "x-ratelimit-limit-tokens",
+    }
+    safe_headers = {
+        name.lower(): value
+        for name, value in response.headers.items()
+        if name.lower() in allowed_headers and _positive_int(value) is not None
+    }
+    return response.status_code, sorted(ids), "", metadata, safe_headers
 
+
+async def _openrouter_key_info(key: str) -> dict[str, int]:
+    """Read OpenRouter's documented per-key free-model daily allowance.
+
+    Credit budgets and the deprecated rate_limit object are intentionally
+    excluded: they are not RPM/RPD/TPM values for the shared model catalogue.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=_LIST_TIMEOUT_SECONDS) as client:
+            response = await client.get(
+                "https://openrouter.ai/api/v1/key",
+                headers={"Authorization": f"Bearer {key}"},
+            )
+        if response.status_code != 200:
+            return {}
+        payload = response.json()
+    except Exception:  # noqa: BLE001 — optional metadata check must not invalidate a good key
+        return {}
+    data = payload.get("data", {}) if isinstance(payload, dict) else {}
+    free_limits = (
+        data.get("free_model_daily_requests", {})
+        if isinstance(data, dict)
+        else {}
+    )
+    if not isinstance(free_limits, dict):
+        return {}
+    limit = _positive_int(free_limits.get("limit"))
+    return {"free_model_requests_per_day": limit} if limit is not None else {}
+
+
+def _positive_int(value: object) -> int | None:
+    """Parse a positive integer from provider metadata without guessing."""
+    if isinstance(value, bool):
+        return None
+    try:
+        parsed = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _build_key_metadata_verification(
+    provider_id: str,
+    spec: object,
+    listed: list[str],
+    model_metadata: dict[str, dict[str, int]],
+    quota_headers: dict[str, str],
+    openrouter_key_info: dict[str, int],
+) -> KeyMetadataVerification:
+    """Create a redacted, per-key observation; never modify models.yaml."""
+    from src.providers.config import ProviderSpec
+
+    if not isinstance(spec, ProviderSpec):
+        raise TypeError("spec must be a ProviderSpec")
+    listed_set = set(listed)
+    models = [
+        VerifiedModelMetadata(
+            id=model.id,
+            available=model.id in listed_set,
+            context_tokens=model_metadata.get(model.id, {}).get("context_tokens"),
+            output_tokens=model_metadata.get(model.id, {}).get("output_tokens"),
+        )
+        for model in spec.models
+    ]
+    observations: list[ObservedQuota] = []
+    if provider_id == "groq":
+        documented = (
+            ("x-ratelimit-limit-requests", "rpd", "requests/day"),
+            ("x-ratelimit-limit-tokens", "tpm", "tokens/minute"),
+        )
+        for header, field, unit in documented:
+            value = _positive_int(quota_headers.get(header))
+            if value is not None:
+                observations.append(
+                    ObservedQuota(
+                        field=field,
+                        value=value,
+                        unit=unit,
+                        scope="organization",
+                        source=f"Groq response header: {header}",
+                    )
+                )
+    if provider_id == "openrouter":
+        value = _positive_int(openrouter_key_info.get("free_model_requests_per_day"))
+        if value is not None:
+            observations.append(
+                ObservedQuota(
+                    field="free_model_requests_per_day",
+                    value=value,
+                    unit="requests/day",
+                    scope="account (free-model policy)",
+                    source="OpenRouter GET /api/v1/key data.free_model_daily_requests.limit",
+                )
+            )
+
+    observed_fields = {item.field for item in observations}
+    context_verified = bool(models) and all(
+        model.context_tokens is not None for model in models if model.available
+    ) and all(model.available for model in models)
+    unverified_fields: list[str] = []
+    if provider_id == "gemini":
+        unverified_fields.extend(["rpm", "rpd", "tpm"])
+    elif provider_id == "groq":
+        if "rpd" not in observed_fields:
+            unverified_fields.append("rpd")
+        if "tpm" not in observed_fields:
+            unverified_fields.append("tpm")
+        unverified_fields.append("rpm")
+    elif provider_id == "openrouter":
+        unverified_fields.extend(["rpm", "rpd", "tpm"])
+    else:
+        unverified_fields.extend(["rpm", "rpd", "tpm"])
+    if not context_verified:
+        unverified_fields.append("context_tokens")
+
+    limits_issue = (
+        provider_limits_issue(provider_id, spec)
+        if spec.enabled
+        else "Provider is disabled in models.yaml; a valid key does not enable routing."
+    )
+    return KeyMetadataVerification(
+        checked_at=datetime.now(UTC).isoformat(),
+        provider_enabled=spec.enabled,
+        model_catalog_checked=True,
+        models=models,
+        observed_quotas=observations,
+        unverified_fields=unverified_fields,
+        quota_metadata_ready=spec.enabled and limits_issue is None,
+        quota_metadata_issue=limits_issue,
+        note=(
+            "These are observations for this API key/account only. They do not "
+            "change shared models.yaml values or refresh quota_last_verified. "
+            "Review the provider dashboard before making a shared configuration change."
+        ),
+    )
 
 async def _test_huggingface(provider: str, model: str, key: str) -> KeyTestResponse:
     """HuggingFace has no key-scoped list endpoint: probe model existence."""
