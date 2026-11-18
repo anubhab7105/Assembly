@@ -55,7 +55,12 @@ def _stub_list(monkeypatch, status, ids, body="", metadata=None):
 
 
 def test_list_200_is_valid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, 200, ["gemini-3.8-flash"])
+    _stub_list(
+        monkeypatch,
+        200,
+        ["gemini-3.8-flash"],
+        metadata={"gemini-3.8-flash": {"context_tokens": 1_000_000, "output_tokens": 64_000}},
+    )
     res = _client(monkeypatch).post(
         "/api/keys/test", json={"provider": "gemini", "key": fake_key}
     )
@@ -65,6 +70,9 @@ def test_list_200_is_valid(monkeypatch, fake_key: str) -> None:
     assert body["rate_limited"] is False
     assert body["error_code"] is None
     assert body["model_available"] is True
+    assert body["verification"]["models"][0]["context_tokens"] == 1_000_000
+    assert body["verification"]["provider_enabled"] is True
+    assert body["verification"]["quota_metadata_ready"] is False
     assert fake_key not in res.text
 
 
