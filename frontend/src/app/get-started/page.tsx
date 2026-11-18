@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, CheckCircle2, Github, Terminal } from "lucide-react"
+import { ArrowRight, CheckCircle2, Terminal } from "lucide-react"
 import { BrandOrbMark } from "@/components/brand-orb-mark"
 
 const requirements = [
@@ -36,7 +36,7 @@ export default function GetStartedPage() {
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
             <a href="https://github.com/anubhab7105/Assembly" target="_blank" rel="noreferrer noopener" className="inline-flex min-h-12 items-center gap-2 rounded-full bg-[#eaa221] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#f2b94e]">
-              <Github className="size-4" /> Open the Assembly repository <ArrowRight className="size-4" />
+              Open the Assembly repository <ArrowRight className="size-4" />
             </a>
             <a href="#installation" className="inline-flex min-h-12 items-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/35">
               <Terminal className="size-4" /> View installation steps
