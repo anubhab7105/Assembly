@@ -338,6 +338,7 @@ export function KeysManager() {
       })
       return
     }
+    if (verificationGenerations.current[providerId] !== generation) return
     setSavedKeys((prev) => {
       if (!(providerId in prev)) return prev
       const next = { ...prev }

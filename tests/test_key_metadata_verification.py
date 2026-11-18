@@ -135,7 +135,11 @@ async def test_openrouter_invalid_unicode_digit_limit_stays_unverified(fake_key:
     assert await keys_mod._openrouter_key_info(fake_key) == {}
 
 
-def test_huggingface_verification_preserves_unknown_unprobed_models() -> None:
+@pytest.mark.asyncio
+@respx.mock
+async def test_huggingface_key_test_probes_each_configured_model(
+    monkeypatch: pytest.MonkeyPatch, fake_key: str
+) -> None:
     from src.providers.config import ProviderSpec
 
     spec = ProviderSpec.model_validate({
@@ -146,8 +150,22 @@ def test_huggingface_verification_preserves_unknown_unprobed_models() -> None:
             {"id": "org/model-b", "family": "llama", "roles": ["critic"]},
         ],
     })
-    verification = keys_mod._build_key_metadata_verification(
-        "huggingface", spec, ["org/model-a"], {}, {}, {},
-        model_availability={"org/model-a": True, "org/model-b": None},
+    monkeypatch.setattr(
+        keys_mod, "load_models_config",
+        lambda: type("Catalog", (), {"providers": {"huggingface": spec}})(),
     )
-    assert [model.available for model in verification.models] == [True, None]
+    respx.get(keys_mod._HF_MODEL_URL.format(model="org/model-a")).mock(return_value=httpx.Response(200))
+    respx.get(keys_mod._HF_MODEL_URL.format(model="org/model-b")).mock(return_value=httpx.Response(404))
+
+    response = await keys_mod.test_key(
+        keys_mod.KeyTestRequest(provider="huggingface", key=fake_key),
+        type("Request", (), {"client": type("Client", (), {"host": "127.0.0.1"})()})(),
+    )
+
+    assert response.valid is True
+    assert response.verification is not None
+    assert [(model.id, model.available) for model in response.verification.models] == [
+        ("org/model-a", True),
+        ("org/model-b", False),
+    ]
+    assert response.available_models == ["org/model-a"]
