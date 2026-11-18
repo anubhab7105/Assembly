@@ -351,3 +351,29 @@ def test_openrouter_verification_keeps_free_daily_cap_distinct_from_rpd() -> Non
     assert result.observed_quotas[0].value == 50
     assert result.observed_quotas[0].scope == "account (free-model policy)"
     assert "rpd" in result.unverified_fields
+
+
+def test_disabled_provider_key_can_be_verified_without_enabling_routing(
+    monkeypatch, fake_key: str
+) -> None:
+    from src.providers.config import load_models_config
+
+    model = load_models_config().providers["cerebras"].models[0].id
+
+    async def _fake_openai(_url: str, _key: str, _headers: dict[str, str]):
+        return 200, [model], "", {}, {}
+
+    monkeypatch.setattr(keys_mod, "_list_openai", _fake_openai)
+    response = _client(monkeypatch).post(
+        "/api/keys/test",
+        json={"provider": "cerebras", "key": fake_key},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["valid"] is True
+    assert body["verification"]["provider_enabled"] is False
+    assert body["verification"]["quota_metadata_ready"] is False
+    assert "disabled" in body["verification"]["quota_metadata_issue"]
+    assert "still disabled" in body["message"]
+    assert fake_key not in response.text
