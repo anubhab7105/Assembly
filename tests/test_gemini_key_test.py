@@ -8,6 +8,7 @@ pasted-key whitespace never turns a valid key invalid.
 import logging
 
 import pytest
+from pytest import LogCaptureFixture
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -220,7 +221,7 @@ def test_max_tokens_empty_generation_is_distinct_non_auth_error() -> None:
     assert not isinstance(err, AuthError)
 
 
-def test_canary_never_in_test_response_or_logs(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+def test_canary_never_in_test_response_or_logs(monkeypatch: pytest.MonkeyPatch, caplog: LogCaptureFixture) -> None:
     _stub_list(monkeypatch, 401, [], "unauthorized")
     with caplog.at_level(logging.INFO, logger="assembly"):
         res = _client(monkeypatch).post(
