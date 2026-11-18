@@ -65,8 +65,8 @@ export default function GetStartedPage() {
             <div>
               <h2 className="text-2xl font-semibold">Clone the repository</h2>
               <p className="mb-4 mt-2 text-sm leading-7 text-white/60">Open a terminal and clone the public repository.</p>
-              <CodeBlock>{"git clone https://github.com/anubhab7105/Assembly.git
-cd Assembly"}</CodeBlock>
+              <CodeBlock>{`git clone https://github.com/anubhab7105/Assembly.git
+cd Assembly`}</CodeBlock>
             </div>
           </div>
 
@@ -75,13 +75,13 @@ cd Assembly"}</CodeBlock>
             <div>
               <h2 className="text-2xl font-semibold">Create the Python environment</h2>
               <p className="mb-4 mt-2 text-sm leading-7 text-white/60">Create and activate a virtual environment from the repository root.</p>
-              <CodeBlock>{"python -m venv .venv
+              <CodeBlock>{`python -m venv .venv
 
 # Windows PowerShell
 .venv\\Scripts\\Activate.ps1
 
 # macOS / Linux
-source .venv/bin/activate"}</CodeBlock>
+source .venv/bin/activate`}</CodeBlock>
             </div>
           </div>
 
@@ -90,8 +90,8 @@ source .venv/bin/activate"}</CodeBlock>
             <div>
               <h2 className="text-2xl font-semibold">Install backend dependencies</h2>
               <p className="mb-4 mt-2 text-sm leading-7 text-white/60">Install the application and development requirements.</p>
-              <CodeBlock>{"python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt"}</CodeBlock>
+              <CodeBlock>{`python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt`}</CodeBlock>
               <p className="mb-3 mt-5 text-sm leading-7 text-white/60">Create the local environment file:</p>
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/45">Windows PowerShell</p>
               <CodeBlock>{"Copy-Item .env.example .env"}</CodeBlock>
@@ -108,9 +108,9 @@ python -m pip install -r requirements-dev.txt"}</CodeBlock>
             <div>
               <h2 className="text-2xl font-semibold">Install frontend dependencies</h2>
               <p className="mb-4 mt-2 text-sm leading-7 text-white/60">From the repository root, install the frontend packages.</p>
-              <CodeBlock>{"cd frontend
+              <CodeBlock>{`cd frontend
 npm ci --legacy-peer-deps
-cd .."}</CodeBlock>
+cd ..`}</CodeBlock>
             </div>
           </div>
 
