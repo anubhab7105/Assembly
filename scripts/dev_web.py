@@ -104,6 +104,7 @@ def _prepare_child_env(
     backend_env["NEXT_PUBLIC_APP_MODE"] = "web"
 
     frontend_env = backend_env.copy()
+    frontend_env["NEXT_PUBLIC_ASSEMBLY_LOCAL"] = "true"
     # Provider credentials must never be inherited by the frontend/npm process.
     for key_name in (
         "GEMINI_API_KEY",
@@ -219,7 +220,7 @@ def main() -> int:
             try:
                 import webbrowser
 
-                webbrowser.open(frontend_url)
+                webbrowser.open(f"{frontend_url}/chat")
             except Exception:  # noqa: BLE001 — optional convenience; the URL is printed above
                 print(
                     "Browser could not be opened automatically; use the frontend URL above.",
