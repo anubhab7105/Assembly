@@ -317,14 +317,15 @@ async def _openrouter_key_info(key: str) -> dict[str, int]:
 
 
 def _positive_int(value: object) -> int | None:
-    """Parse a positive integer from provider metadata without guessing."""
+    """Parse an actual positive integer (or digit-only header) without coercion."""
     if isinstance(value, bool):
         return None
-    try:
-        parsed = int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError, OverflowError):
-        return None
-    return parsed if parsed > 0 else None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str) and value.strip().isdigit():
+        parsed = int(value.strip())
+        return parsed if parsed > 0 else None
+    return None
 
 
 def _build_key_metadata_verification(
