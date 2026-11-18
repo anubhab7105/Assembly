@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test"
 
+// E2E coverage exercises the locally hosted workspace, not the marketing-only deployment.
+process.env.NEXT_PUBLIC_ASSEMBLY_LOCAL = "true"
+
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
