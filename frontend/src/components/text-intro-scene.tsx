@@ -413,7 +413,7 @@ export function TextIntroScene() {
             <RectangleButtons
               variant="dark-pill"
               mode="dark"
-              onClick={() => router.push("/chat")}
+              onClick={() => router.push("/get-started")}
               aria-label="Start an investigation"
             >
               Start an investigation
