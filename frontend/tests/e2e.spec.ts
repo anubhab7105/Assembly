@@ -83,7 +83,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await page.emulateMedia({ colorScheme: "light" })
     await page.goto("/")
     await expect(page.getByRole("heading", { name: /Let intelligence|What happens|convene many minds/i })).toBeVisible()
-    await expect(page.getByRole("link", { name: /Start an investigation|Launch the Assembly app/i }).first()).toHaveAttribute("href", "/chat")
+    await expect(page.getByRole("link", { name: /Start an investigation|Launch the Assembly app/i }).first()).toHaveAttribute("href", "/get-started")
 
     // Dark-only: the landing has no theme control and keeps its dark palette
     // even when the operating system asks for light.
@@ -96,7 +96,16 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     const cta = page.getByRole("link", { name: "Start an investigation" }).first()
     await expect(cta).toBeVisible({ timeout: 5000 })
     await cta.click()
-    await expect(page).toHaveURL(/\/chat$/)
+    await expect(page).toHaveURL(/\/get-started$/)
+    await expect(page.getByRole("heading", { name: /Run Assembly locally/i })).toBeVisible()
+  })
+
+  test("the public setup guide explains how to run the workspace locally", async ({ page }) => {
+    await page.goto("/get-started")
+    await expect(page.getByRole("heading", { name: /Run Assembly locally/i })).toBeVisible()
+    await expect(page.getByText("git clone https://github.com/anubhab7105/Assembly.git")).toBeVisible()
+    await expect(page.getByText("python scripts/dev_web.py")).toBeVisible()
+    await expect(page.getByRole("link", { name: /Open the Assembly repository/i })).toHaveAttribute("href", "https://github.com/anubhab7105/Assembly")
   })
 
   test("New Investigation opens the composer, not the landing page", async ({ page }) => {
@@ -134,11 +143,8 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     }
 
     // Client-side navigation keeps the persistent vault (verified in
-    // keys-persist.spec.ts). The settings sidebar has no chat link, so go
-    // via landing like a user would.
-    await page.locator('a[href="/"]').first().click()
-    await expect(page).toHaveURL(/\/$/)
-    await page.locator('a[href="/chat"]:visible').first().click()
+    // keys-persist.spec.ts). The workspace can be opened directly.
+    await page.goto("/chat")
     await expect(page).toHaveURL(/\/chat/)
 
     // Advanced model controls are intentionally tucked into a dialog.
