@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { globalVault } from "@/lib/key-vault"
 import { env } from "@/lib/env"
-import { ApiClient, type Catalog } from "@/lib/api-client"
+import { ApiClient, type Catalog, type KeyMetadataVerification } from "@/lib/api-client"
 import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
 import {
   detectProviderByPrefix,
@@ -127,6 +127,7 @@ export function KeysManager() {
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({})
   const [statuses, setStatuses] = useState<Record<string, KeyStatus>>({})
+  const [verifications, setVerifications] = useState<Record<string, KeyMetadataVerification>>({})
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
@@ -203,6 +204,7 @@ export function KeysManager() {
     setSavedKeys({})
     setInputs({})
     setStatuses({})
+    setVerifications({})
     setTavilyInput("")
     setUniversalInput("")
     setPassphrase("")
@@ -260,15 +262,27 @@ export function KeysManager() {
     setSavedKeys((prev) => ({ ...prev, [providerId]: rawKey }))
     setInputs((prev) => ({ ...prev, [providerId]: "" }))
     setStatuses((prev) => ({ ...prev, [providerId]: "testing" }))
+    setVerifications((prev) => {
+      if (!(providerId in prev)) return prev
+      const next = { ...prev }
+      delete next[providerId]
+      return next
+    })
     try {
       const res = await ApiClient.testKey(providerId, rawKey)
       setStatuses((prev) => ({ ...prev, [providerId]: res.status }))
+      if (res.verification) {
+        setVerifications((prev) => ({ ...prev, [providerId]: res.verification! }))
+      }
+      const metadataMessage = res.verification
+        ? `Automatic check: ${res.verification.models.filter((model) => model.available).length}/${res.verification.models.length} configured models available. ${res.verification.quota_metadata_ready ? "Shared quota metadata is fresh." : "Shared models.yaml quota limits still need review."}`
+        : undefined
       if (res.status === "valid") {
-        toast({ title: "Key verified", description: res.message ?? `Connected to ${providerId}.`, variant: "success" })
+        toast({ title: "Key verified", description: [res.message ?? `Connected to ${providerId}.`, metadataMessage].filter(Boolean).join(" "), variant: "success" })
       } else if (res.status === "rate_limited") {
-        toast({ title: "Rate limited", description: "Key valid, but rate limits reached.", variant: "warning" })
+        toast({ title: "Rate limited", description: [res.message ?? "Key valid, but rate limits reached.", metadataMessage].filter(Boolean).join(" "), variant: "warning" })
       } else if (res.status === "model_unavailable") {
-        toast({ title: "Model unavailable", description: "Key valid, but configured model not available.", variant: "warning" })
+        toast({ title: "Model unavailable", description: [res.message ?? "Key valid, but configured model not available.", metadataMessage].filter(Boolean).join(" "), variant: "warning" })
       } else {
         toast({ title: "Key test failed", description: res.message ?? "The provider rejected this key.", variant: "danger" })
       }
@@ -319,6 +333,12 @@ export function KeysManager() {
       return next
     })
     setStatuses((prev) => {
+      if (!(providerId in prev)) return prev
+      const next = { ...prev }
+      delete next[providerId]
+      return next
+    })
+    setVerifications((prev) => {
       if (!(providerId in prev)) return prev
       const next = { ...prev }
       delete next[providerId]
@@ -773,6 +793,48 @@ export function KeysManager() {
                     </button>
                   </div>
 
+                  {verifications[provider.id] && (
+                    <div
+                      role="status"
+                      data-testid={`metadata-verification-${provider.id}`}
+                      className="col-span-12 rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5 text-xs space-y-1.5"
+                    >
+                      <p className="font-semibold text-foreground">
+                        Automatic metadata check · {new Date(verifications[provider.id].checked_at).toLocaleString()}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Model catalogue: {verifications[provider.id].models.filter((model) => model.available).length}/
+                        {verifications[provider.id].models.length} configured models available.
+                      </p>
+                      {verifications[provider.id].observed_quotas.length > 0 ? (
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                          {verifications[provider.id].observed_quotas.map((observation) => (
+                            <span key={observation.field} className="text-foreground">
+                              {observation.field}: {observation.value.toLocaleString()} {observation.unit}
+                              <span className="text-muted-foreground"> ({observation.scope})</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          The provider did not expose numeric quota limits in this read-only check.
+                        </p>
+                      )}
+                      <p className="text-muted-foreground">
+                        Still unverified: {verifications[provider.id].unverified_fields.length > 0
+                          ? verifications[provider.id].unverified_fields.join(", ")
+                          : "none reported by this check"}.
+                      </p>
+                      <p className={verifications[provider.id].quota_metadata_ready ? "text-emerald-500" : "text-amber-500"}>
+                        {verifications[provider.id].quota_metadata_ready
+                          ? "Shared models.yaml quota metadata is currently fresh."
+                          : verifications[provider.id].quota_metadata_issue ?? "Shared quota metadata still needs manual review."}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Per-key observations are informational only; they do not update shared models.yaml or refresh quota_last_verified.
+                      </p>
+                    </div>
+                  )}
                   {saveErrors[provider.id] && (
                     <p
                       role="alert"
