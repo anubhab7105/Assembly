@@ -151,11 +151,11 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
     <div className="assembly-sidebar flex h-full flex-col">
       <div className="assembly-sidebar-header">
         <Link
-          href="/"
+          href="/chat"
           className="assembly-sidebar-brand assembly-wordmark flex items-center text-white cursor-pointer"
           onClick={() => {
             if (onClose) onClose()
-            router.push("/")
+            router.push("/chat")
             if (typeof document !== "undefined") {
               const scrollContainers = document.querySelectorAll(".overflow-y-auto")
               scrollContainers.forEach((el) => {
@@ -449,7 +449,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
           {!isPublicPage && (
             <header className="assembly-mobile-header md:hidden sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card px-4 py-3">
               <Link
-                href="/"
+                href="/chat"
                 className="assembly-wordmark flex items-center text-foreground"
                 aria-label="Assembly home"
                 onClick={() => {
