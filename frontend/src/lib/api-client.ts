@@ -29,6 +29,29 @@ export interface Catalog {
   sensitive_signup_fallback?: string
 }
 
+export interface KeyMetadataVerification {
+  checked_at: string
+  provider_enabled: boolean
+  model_catalog_checked: boolean
+  models: Array<{
+    id: string
+    available: boolean
+    context_tokens?: number | null
+    output_tokens?: number | null
+  }>
+  observed_quotas: Array<{
+    field: string
+    value: number
+    unit: string
+    scope: string
+    source: string
+  }>
+  unverified_fields: string[]
+  quota_metadata_ready: boolean
+  quota_metadata_issue?: string | null
+  note: string
+}
+
 export interface UsageEntry {
   provider: string
   model: string
@@ -195,6 +218,7 @@ export class ApiClient {
     status: "valid" | "rate_limited" | "invalid" | "model_unavailable" | "unreachable"
     message?: string
     availableModels?: string[]
+    verification?: KeyMetadataVerification
   }> {
     try {
       const data = await this.request<{
@@ -203,21 +227,23 @@ export class ApiClient {
         error_code?: string | null
         message?: string | null
         available_models?: string[] | null
+        verification?: KeyMetadataVerification | null
       }>(
         "/api/keys/test",
         { method: "POST", body: JSON.stringify({ provider, key }) },
       )
       const message = data.message ?? undefined
       const availableModels = data.available_models ?? undefined
+      const verification = data.verification ?? undefined
       // Order matters: quota and model states ride on valid keys, so they
       // must win over the valid flag. Only an auth failure is "invalid".
-      if (data.rate_limited) return { status: "rate_limited", message, availableModels }
+      if (data.rate_limited) return { status: "rate_limited", message, availableModels, verification }
       if (data.error_code === "model_not_found")
-        return { status: "model_unavailable", message, availableModels }
+        return { status: "model_unavailable", message, availableModels, verification }
       if (data.error_code === "unreachable")
-        return { status: "unreachable", message, availableModels }
-      if (data.valid) return { status: "valid", message, availableModels }
-      return { status: "invalid", message, availableModels }
+        return { status: "unreachable", message, availableModels, verification }
+      if (data.valid) return { status: "valid", message, availableModels, verification }
+      return { status: "invalid", message, availableModels, verification }
     } catch (e: unknown) {
       // The endpoint's own per-IP limiter answers HTTP 429: provider quota,
       // never an invalid key. Anything else means we never got an answer.

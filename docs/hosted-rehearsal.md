@@ -98,3 +98,17 @@ Current audit finding (2026-10-24): Groq and OpenRouter limit notes were checked
 ## 7. What CI can and cannot prove
 
 CI should test launcher argument/port checks and docs/runbook invariants without requiring provider keys or reaching external providers. CI does **not** prove live hosted streaming, provider quota behavior, platform timeout limits, ten successful demo runs, or that a real recorded replay is presentation-ready. Those need an operator rehearsal with real deployments and disposable/controlled keys.
+
+
+## 8. Automatic metadata checks when a user submits a provider key
+
+The Settings **Save & Test** flow performs a read-only provider metadata check after the key is saved locally:
+
+- Gemini: checks the key-scoped model catalogue and records the published input/output token limits for each configured model returned by the API. This does not verify project-specific RPM, RPD, or TPM.
+- Groq: checks the model catalogue, reads `context_window` when published, and only interprets the documented `x-ratelimit-limit-requests` (RPD) and `x-ratelimit-limit-tokens` (TPM) response headers. The request limit header is not RPM; these values are organization-scoped.
+- OpenRouter: checks the model catalogue and reads `free_model_daily_requests.limit` from `GET /api/v1/key`. This is a conditional account free-model allowance, not a general per-model RPD value or an RPM value. Credit budgets and the deprecated `rate_limit` field are not treated as rate limits.
+- Other providers: report model availability and only use explicit model context metadata when the API publishes it. Fields without authoritative values remain unverified.
+
+This check sends no chat/generation prompt and does not spend model-generation tokens. It never writes `models.yaml`, never refreshes `quota_last_verified`, and never enables a disabled provider. Observations are scoped to the API key's account/organization and are shown as evidence for a maintainer review; they are not a replacement for the shared provider dashboard review described above.
+
+A provider remains excluded from routing whenever its shared `models.yaml` source/date/required limit fields are missing or stale, even when the submitted API key is valid. A valid credential, a key-specific quota observation, and globally reviewed provider quota metadata are separate states.
