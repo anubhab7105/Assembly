@@ -9,6 +9,24 @@ Thanks for considering a contribution. Assembly is experimental, and contributio
 3. For a new feature, major refactor, provider integration, or architectural change, open an issue first and describe the problem and intended approach.
 4. Never include real API keys, personal data, production logs, or other secrets in a commit, test fixture, issue, screenshot, or pull request. For a suspected vulnerability, follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
+## Issue Assignment and Claiming
+
+**You must receive a maintainer assignment before starting work on an existing issue.**
+
+For every existing issue you want to implement, follow this process:
+
+1. Comment on the issue asking a maintainer to assign it to you. Briefly describe what you intend to do and mention any relevant experience or questions.
+2. Wait for a maintainer to approve the work and assign the issue to your GitHub account.
+3. **Start implementation only after GitHub shows the issue assigned to you.** Do not begin coding, writing tests or documentation for the task, create a draft pull request, or submit a pull request before the assignment is confirmed.
+4. If the issue is already assigned to someone else, or a pull request is already addressing it, do not start parallel work. Ask the maintainer before doing anything that could overlap.
+5. If you cannot continue, tell the maintainer so the assignment can be released for another contributor.
+
+A comment requesting assignment is not itself approval, and an issue labeled **help wanted** or **good first issue** is not permission to begin. Do not treat an unanswered request, a reaction, or an informal acknowledgement as an assignment.
+
+If an issue does not yet exist, open one and wait for a maintainer to approve the scope and assign it before starting implementation. This is especially important for new features, major refactors, provider integrations, and architectural changes.
+
+Pull requests for issue work started without the required maintainer assignment may be closed without review to prevent duplicated effort and preserve a fair process. Maintainers will review contributions against the same policy; submitting a completed change does not retroactively grant an assignment.
+
 ## Questions and discussions
 
 Use GitHub Discussions (once enabled for this repository) for setup questions, architecture discussions, design ideas, and general contributor conversation. Use GitHub Issues for reproducible bugs and actionable work with a clear scope and acceptance criteria. Search existing issues before opening a new one, and keep security vulnerability reports private by following [SECURITY.md](SECURITY.md).
