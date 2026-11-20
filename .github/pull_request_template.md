@@ -26,6 +26,7 @@
 ## Review checklist
 
 - [ ] The change is focused and has a clear rationale.
+- [ ] If this PR addresses an existing issue, that issue was assigned to me by a maintainer before I began implementation.
 - [ ] I added or updated regression tests when behavior changed.
 - [ ] I updated relevant docs or configuration examples.
 - [ ] I did not add real API keys, tokens, private data, or unsanitized logs.
