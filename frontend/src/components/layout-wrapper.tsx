@@ -42,7 +42,7 @@ function useOfflineStatus() {
   )
 }
 
-function SidebarContent({ onClose }: { onClose?: () => void }) {
+export function SidebarContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -50,16 +50,20 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
   const [executions, setExecutions] = useState<HistoryRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [search, setSearch] = useState("")
   const [showHistory, setShowHistory] = useState(pathname === "/executions")
   const importInputRef = React.useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
 
+  // Read-only: a failed read never clears or rewrites saved history.
   const loadExecutions = async () => {
     setLoading(true)
     try {
       setExecutions(await storage.listHistory())
+      setLoadError(false)
     } catch (e) {
+      setLoadError(true)
       if (process.env.NODE_ENV !== "production") console.error(e)
     } finally {
       setLoading(false)
@@ -72,10 +76,14 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       storage
         .listHistory()
         .then((items) => {
-          if (!cancelled) setExecutions(items)
+          if (cancelled) return
+          setExecutions(items)
+          setLoadError(false)
         })
         .catch((error: unknown) => {
-          if (!cancelled && process.env.NODE_ENV !== "production") console.error(error)
+          if (cancelled) return
+          setLoadError(true)
+          if (process.env.NODE_ENV !== "production") console.error(error)
         })
         .finally(() => {
           if (!cancelled) setLoading(false)
@@ -229,6 +237,19 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               <div className="space-y-2 px-1">
                 <Skeleton className="h-10 w-full rounded-full" />
                 <Skeleton className="h-10 w-full rounded-full" />
+              </div>
+            ) : loadError ? (
+              <div role="alert" data-testid="history-load-error" className="px-3 py-2 text-xs text-muted-foreground">
+                <p>Could not load history. Your saved runs have not been changed.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => void loadExecutions()}
+                >
+                  Retry
+                </Button>
               </div>
             ) : filtered.length === 0 ? (
               <p className="px-3 py-2 text-xs text-muted-foreground">
