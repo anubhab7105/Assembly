@@ -170,7 +170,7 @@ You don't have to build a new agent to make Assembly better. High-impact contrib
 - **Security and privacy:** strengthen key handling, redaction, safe defaults, dependency review, and threat-model documentation.
 - **Docs and developer experience:** make setup clearer, reduce first-run friction, and add small reproducible examples.
 
-The following starter tasks are individually scoped and have acceptance criteria in their issue descriptions. Check that an issue is still open before beginning, and comment before starting substantial work so contributors do not duplicate effort.
+The following starter tasks are individually scoped and have acceptance criteria in their issue descriptions. Before implementing any of them, comment on the issue asking a maintainer to assign it to you, then wait until GitHub shows the issue assigned to your account. Do not begin implementation or open a pull request before that assignment is confirmed. A request for assignment does not reserve the issue, and **help wanted** or **good first issue** labels are not permission to start. See [CONTRIBUTING.md](CONTRIBUTING.md#issue-assignment-and-claiming) for the full process.
 
 - **CI and API contracts:** [#70 — Fail CI when the generated execution event schema is stale](https://github.com/anubhab7105/Assembly/issues/70) — add an offline check that keeps the committed event schema aligned with the backend.
 - **Developer experience:** [#71 — Test dev launcher cleanup when startup fails](https://github.com/anubhab7105/Assembly/issues/71) — add deterministic tests for child-process cleanup in the local web launcher.
@@ -369,7 +369,7 @@ You don't have to build a new agent to make Assembly better. High-impact contrib
 - **Security and privacy:** strengthen key handling, redaction, safe defaults, dependency review, and threat-model documentation.
 - **Docs and developer experience:** make setup clearer, reduce first-run friction, and add small reproducible examples.
 
-The following starter tasks are individually scoped and have acceptance criteria in their issue descriptions. Check that an issue is still open before beginning, and comment before starting substantial work so contributors do not duplicate effort.
+The following starter tasks are individually scoped and have acceptance criteria in their issue descriptions. Before implementing any of them, comment on the issue asking a maintainer to assign it to you, then wait until GitHub shows the issue assigned to your account. Do not begin implementation or open a pull request before that assignment is confirmed. A request for assignment does not reserve the issue, and **help wanted** or **good first issue** labels are not permission to start. See [CONTRIBUTING.md](CONTRIBUTING.md#issue-assignment-and-claiming) for the full process.
 
 - **CI and API contracts:** [#70 — Fail CI when the generated execution event schema is stale](https://github.com/anubhab7105/Assembly/issues/70) — add an offline check that keeps the committed event schema aligned with the backend.
 - **Developer experience:** [#71 — Test dev launcher cleanup when startup fails](https://github.com/anubhab7105/Assembly/issues/71) — add deterministic tests for child-process cleanup in the local web launcher.
