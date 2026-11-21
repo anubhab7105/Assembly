@@ -207,6 +207,75 @@ describe("useExecution hook", () => {
     })
   })
 
+  it("shows only final cited sources after completion, not every retrieved hit", () => {
+    const { result } = renderHook(() => useExecution("exec_citations"))
+    const mockWs = mockSocket()
+
+    act(() => {
+      mockWs.mockMessage({
+        event_type: "source.found",
+        execution_id: "exec_citations",
+        seq: 1,
+        state: "running",
+        timestamp: new Date().toISOString(),
+        data: { title: "Cited source", url: "https://cited.test/article" },
+      })
+      mockWs.mockMessage({
+        event_type: "source.found",
+        execution_id: "exec_citations",
+        seq: 2,
+        state: "running",
+        timestamp: new Date().toISOString(),
+        data: { title: "Retrieved but unused", url: "https://unused.test/article" },
+      })
+      // The backend verification event identifies the source by URL, not ID.
+      mockWs.mockMessage({
+        event_type: "source.verified",
+        execution_id: "exec_citations",
+        seq: 3,
+        state: "running",
+        timestamp: new Date().toISOString(),
+        data: { title: "Cited source", url: "https://cited.test/article" },
+      })
+    })
+
+    expect(result.current.sources).toHaveLength(2)
+    expect(result.current.sources[0].verified).toBe(true)
+    expect(result.current.sources[1].verified).toBeUndefined()
+
+    act(() => {
+      mockWs.mockMessage({
+        event_type: "execution.completed",
+        execution_id: "exec_citations",
+        seq: 4,
+        state: "completed",
+        timestamp: new Date().toISOString(),
+        data: {
+          answer: "A grounded answer [1].",
+          confidence_label: "Moderate",
+          sources: [
+            {
+              title: "Cited source",
+              url: "https://cited.test/article",
+              snippet: "The source excerpt.",
+            },
+          ],
+        },
+      })
+    })
+
+    expect(result.current.sources).toEqual([
+      {
+        id: "search-1",
+        title: "Cited source",
+        url: "https://cited.test/article",
+        snippet: "The source excerpt.",
+        verified: true,
+      },
+    ])
+    expect(result.current.sources.some((source) => source.title === "Retrieved but unused")).toBe(false)
+  })
+
   it("hydrates confidence and summary from device history", async () => {
     vi.useRealTimers()
     const { storage } = await import("@/lib/storage")

@@ -201,12 +201,16 @@ def sanitize_source(
     max_chars: int = MAX_SNIPPET_CHARS,
 ) -> SanitizedSource:
     """Clean one result: strip markup, scan, escape, truncate."""
-    cleaned = strip_markup(f"{title}\n{snippet}")
-    flags = scan_for_injection(cleaned)
-    safe = escape_delimiters(cleaned)
+    raw = f"{title}\n{snippet}"
+    # Scan cleaned text for injection indicators, but neutralize our own
+    # untrusted-content markers before generic HTML stripping. Otherwise
+    # the tag remover can partially consume a hostile delimiter first.
+    flags = scan_for_injection(strip_markup(raw))
+    safe = strip_markup(escape_delimiters(raw))
     text, _ = truncate_to_budget(safe, max_chars)
+    safe_title = strip_markup(escape_delimiters(title))[:200]
     return SanitizedSource(
-        title=strip_markup(title)[:200], url=url or "", text=text, flags=flags
+        title=safe_title, url=url or "", text=text, flags=flags
     )
 
 
