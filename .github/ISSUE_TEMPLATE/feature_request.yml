@@ -3,6 +3,10 @@ description: Propose a focused improvement to Assembly.
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Submitting a feature request does not authorize implementation. If you want to work on this issue, first ask a maintainer to assign it to you and wait until GitHub shows the issue assigned to your account before starting. See CONTRIBUTING.md for the required process.
   - type: textarea
     id: problem
     attributes:
