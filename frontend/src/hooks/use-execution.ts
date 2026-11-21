@@ -173,8 +173,11 @@ export function useExecution(executionId: string | null) {
         }
         case "source.verified": {
           const verifiedData = event.data as SourceData
-          next.sources = prev.sources.map((s) =>
-            s.id === verifiedData.id ? { ...s, verified: true } : s,
+          next.sources = prev.sources.map((source) =>
+            (verifiedData.id && source.id === verifiedData.id) ||
+            (verifiedData.url && source.url === verifiedData.url)
+              ? { ...source, verified: true }
+              : source,
           )
           pushFeed(`Verified source: ${(event.data as SourceData).url}`, "success")
           break
@@ -207,10 +210,22 @@ export function useExecution(executionId: string | null) {
           // Incremental search events are provisional. The completion payload
           // carries the composer-filtered list of sources actually cited.
           if (Array.isArray(compData.sources)) {
-            next.sources = compData.sources.map((source, index) => ({
-              ...source,
-              id: source.id || `source-${index + 1}`,
-            }))
+            const previousSourcesByUrl = new Map(
+              prev.sources.map((source) => [source.url, source]),
+            )
+            next.sources = compData.sources.map((source, index) => {
+              const previous = previousSourcesByUrl.get(source.url)
+              return {
+                ...source,
+                // Keep the provisional ID where possible so list items retain
+                // identity, and carry forward verification emitted before
+                // execution.completed (the backend verified event has no ID).
+                id: source.id || previous?.id || `source-${index + 1}`,
+                ...(source.verified === undefined && previous?.verified !== undefined
+                  ? { verified: previous.verified }
+                  : {}),
+              }
+            })
           }
           next.confidence = compData.confidence_label ?? compData.confidence ?? null
           next.uncertaintyNote = compData.uncertainty_note || null
