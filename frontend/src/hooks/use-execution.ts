@@ -204,7 +204,7 @@ export function useExecution(executionId: string | null) {
           // (e.g. single-family High→Moderate), so the chip always matches
           // the "Confidence:" line the composer writes into the answer.
           next.finalAnswer = compData.answer ?? compData.final_answer ?? null
-          next.confidence = compData.confidence_label ?? compData.confidence ?? null
+          // Incremental search events are provisional. The completion payload\n          // carries the composer-filtered list of sources actually cited.\n          if (Array.isArray(compData.sources)) {\n            next.sources = compData.sources.map((source, index) => ({\n              ...source,\n              id: source.id || `source-${index + 1}`,\n            }))\n          }\n          next.confidence = compData.confidence_label ?? compData.confidence ?? null
           next.uncertaintyNote = compData.uncertainty_note || null
           next.question = compData.question || null
           next.summary = {
