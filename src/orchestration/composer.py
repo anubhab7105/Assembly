@@ -19,6 +19,7 @@ score, and the cited sources, so it is cheap to unit-test.
 
 import re
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 from src.agents.base_agent import AgentOutput, SourceRef
 
@@ -131,11 +132,40 @@ def renumber_citations(
     return CITATION_RE.sub(_replace, text or ""), warnings
 
 
+def safe_source_url(url: str) -> str:
+    """Return a renderable HTTP(S) URL, or an empty string for unsafe input.
+
+    Source metadata can originate in model output. Never turn arbitrary
+    schemes, credential-bearing URLs, malformed ports, or control/space
+    characters into Markdown links.
+    """
+    value = (url or "").strip()
+    if not value or "\\" in value or any(ord(char) <= 0x20 for char in value):
+        return ""
+    try:
+        parts = urlsplit(value)
+        if (
+            parts.scheme.lower() not in {"http", "https"}
+            or not parts.hostname
+            or parts.username is not None
+            or parts.password is not None
+        ):
+            return ""
+        _ = parts.port
+    except ValueError:
+        return ""
+    return value
+
+
 def format_source_entry(number: int, source: SourceRef) -> str:
-    """One numbered Markdown source line."""
-    title = (source.title or "").strip() or "Untitled source"
-    url = (source.url or "").strip()
-    snippet = (source.snippet or "").strip()
+    """One numbered Markdown source line with a safe optional link."""
+    title_text = " ".join((source.title or "").split()) or "Untitled source"
+    # Titles are model-provided text too: escape Markdown link delimiters so
+    # a hostile title cannot replace the destination or inject another link.
+    slash = chr(92)
+    title = title_text.replace(slash, slash * 2).replace("[", slash + "[").replace("]", slash + "]")
+    url = safe_source_url(source.url)
+    snippet = " ".join((source.snippet or "").split())
     if url:
         line = f"{number}. [{title}]({url})"
     else:

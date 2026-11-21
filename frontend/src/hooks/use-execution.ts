@@ -165,14 +165,19 @@ export function useExecution(executionId: string | null) {
           pushFeed("A disagreement was resolved.", "success")
           break
         }
-        case "source.found":
-          next.sources = [...prev.sources, event.data as SourceData]
-          pushFeed(`Searching: ${(event.data as SourceData).url}`, "info")
+        case "source.found": {
+          const source = event.data as SourceData
+          next.sources = [...prev.sources, { ...source, id: source.id || `search-${event.seq}` }]
+          pushFeed(`Searching: ${source.url}`, "info")
           break
+        }
         case "source.verified": {
           const verifiedData = event.data as SourceData
-          next.sources = prev.sources.map((s) =>
-            s.id === verifiedData.id ? { ...s, verified: true } : s,
+          next.sources = prev.sources.map((source) =>
+            (verifiedData.id && source.id === verifiedData.id) ||
+            (verifiedData.url && source.url === verifiedData.url)
+              ? { ...source, verified: true }
+              : source,
           )
           pushFeed(`Verified source: ${(event.data as SourceData).url}`, "success")
           break
@@ -202,6 +207,26 @@ export function useExecution(executionId: string | null) {
           // (e.g. single-family High→Moderate), so the chip always matches
           // the "Confidence:" line the composer writes into the answer.
           next.finalAnswer = compData.answer ?? compData.final_answer ?? null
+          // Incremental search events are provisional. The completion payload
+          // carries the composer-filtered list of sources actually cited.
+          if (Array.isArray(compData.sources)) {
+            const previousSourcesByUrl = new Map(
+              prev.sources.map((source) => [source.url, source]),
+            )
+            next.sources = compData.sources.map((source, index) => {
+              const previous = previousSourcesByUrl.get(source.url)
+              return {
+                ...source,
+                // Keep the provisional ID where possible so list items retain
+                // identity, and carry forward verification emitted before
+                // execution.completed (the backend verified event has no ID).
+                id: source.id || previous?.id || `source-${index + 1}`,
+                ...(source.verified === undefined && previous?.verified !== undefined
+                  ? { verified: previous.verified }
+                  : {}),
+              }
+            })
+          }
           next.confidence = compData.confidence_label ?? compData.confidence ?? null
           next.uncertaintyNote = compData.uncertainty_note || null
           next.question = compData.question || null
