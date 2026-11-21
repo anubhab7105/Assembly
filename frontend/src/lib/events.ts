@@ -42,9 +42,10 @@ export interface DisagreementData {
 }
 
 export interface SourceData {
-  id: string
+  id?: string
   url: string
   title?: string
+  snippet?: string
   verified?: boolean
 }
 
@@ -84,6 +85,7 @@ export interface ActivityFeedEntry {
 export interface ExecutionCompletedData {
   // Wire names sent by the backend (orchestrator execution.completed).
   answer: string
+  sources?: SourceData[]
   confidence_label?: "High" | "Moderate" | "Low"
   consensus_score?: number
   agent_count?: number

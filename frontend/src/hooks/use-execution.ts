@@ -165,10 +165,12 @@ export function useExecution(executionId: string | null) {
           pushFeed("A disagreement was resolved.", "success")
           break
         }
-        case "source.found":
-          next.sources = [...prev.sources, event.data as SourceData]
-          pushFeed(`Searching: ${(event.data as SourceData).url}`, "info")
+        case "source.found": {
+          const source = event.data as SourceData
+          next.sources = [...prev.sources, { ...source, id: source.id || `search-${event.seq}` }]
+          pushFeed(`Searching: ${source.url}`, "info")
           break
+        }
         case "source.verified": {
           const verifiedData = event.data as SourceData
           next.sources = prev.sources.map((s) =>
