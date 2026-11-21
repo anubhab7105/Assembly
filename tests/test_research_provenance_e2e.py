@@ -263,5 +263,5 @@ def test_untrusted_source_title_cannot_rewrite_the_markdown_link_destination():
         "See [1].",
     )
 
-    assert "(javascript:alert(1))" not in result.answer_markdown
-    assert "https://safe.test/source" in result.answer_markdown
+    assert "](javascript:alert(1))" not in result.answer_markdown
+    assert "](https://safe.test/source)" in result.answer_markdown
