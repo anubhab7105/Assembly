@@ -164,7 +164,7 @@ def test_untrusted_search_text_is_delimited_and_cannot_escape_its_block():
     assert bundle.flags
     assert UNTRUSTED_OPEN in bundle.block
     assert bundle.block.count(UNTRUSTED_CLOSE) == 1
-    assert "delimiter removed" in bundle.block
+    assert "[delimiter removed]" in bundle.block
 
 
 def test_title_and_url_remain_paired_in_final_rendering():
@@ -263,5 +263,6 @@ def test_untrusted_source_title_cannot_rewrite_the_markdown_link_destination():
         "See [1].",
     )
 
-    assert "](javascript:alert(1))" not in result.answer_markdown
+    assert "\\](javascript:alert(1))" in result.answer_markdown
+    assert "\\](https://safe.test/source)" not in result.answer_markdown
     assert "](https://safe.test/source)" in result.answer_markdown
