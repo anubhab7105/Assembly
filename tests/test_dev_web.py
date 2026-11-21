@@ -230,6 +230,37 @@ def test_both_children_are_terminated_when_readiness_times_out(
     ]
 
 
+def test_both_children_are_terminated_when_frontend_readiness_times_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    backend = FakeProcess("backend", events=events)
+    frontend = FakeProcess("frontend", events=events)
+    clock = FakeClock()
+    _patch_main(
+        monkeypatch,
+        popen=_popen_sequence(backend, frontend),
+        args=("--ready-timeout", "5"),
+    )
+    monkeypatch.setattr(dev_web, "time", clock)
+
+    def fake_urlopen(url: str, *args: object, **kwargs: object) -> FakeHTTPResponse:
+        if url.endswith("/health"):
+            return FakeHTTPResponse()
+        raise OSError("frontend not ready")
+
+    monkeypatch.setattr(dev_web.urllib.request, "urlopen", fake_urlopen)
+
+    assert dev_web.main() == 1
+    assert clock.now >= 5
+    assert [event for event in events if not event.endswith(".poll")] == [
+        "frontend.terminate",
+        "frontend.wait(timeout=8)",
+        "backend.terminate",
+        "backend.wait(timeout=8)",
+    ]
+
+
 def test_running_child_is_terminated_when_the_other_exits_before_ready(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -245,6 +276,42 @@ def test_running_child_is_terminated_when_the_other_exits_before_ready(
         "frontend.poll",
         "frontend.terminate",
         "frontend.wait(timeout=8)",
+    ]
+
+
+def test_backend_is_terminated_when_frontend_exits_before_backend_is_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    backend = FakeProcess("backend", events=events)
+    frontend = FakeProcess("frontend", events=events)
+    clock = FakeClock()
+    backend_checks = 0
+    _patch_main(
+        monkeypatch,
+        popen=_popen_sequence(backend, frontend),
+        args=("--ready-timeout", "5"),
+    )
+    monkeypatch.setattr(dev_web, "time", clock)
+
+    def fake_urlopen(url: str, *args: object, **kwargs: object) -> FakeHTTPResponse:
+        nonlocal backend_checks
+        if not url.endswith("/health"):
+            raise AssertionError("frontend readiness should not be requested")
+        backend_checks += 1
+        if backend_checks == 1:
+            frontend.returncode = 4
+            raise OSError("backend still starting")
+        return FakeHTTPResponse()
+
+    monkeypatch.setattr(dev_web.urllib.request, "urlopen", fake_urlopen)
+
+    assert dev_web.main() == 1
+    assert backend_checks == 2
+    assert "frontend.terminate" not in events
+    assert [event for event in events if not event.endswith(".poll")] == [
+        "backend.terminate",
+        "backend.wait(timeout=8)",
     ]
 
 
