@@ -228,15 +228,26 @@ describe("useExecution hook", () => {
         timestamp: new Date().toISOString(),
         data: { title: "Retrieved but unused", url: "https://unused.test/article" },
       })
+      // The backend verification event identifies the source by URL, not ID.
+      mockWs.mockMessage({
+        event_type: "source.verified",
+        execution_id: "exec_citations",
+        seq: 3,
+        state: "running",
+        timestamp: new Date().toISOString(),
+        data: { title: "Cited source", url: "https://cited.test/article" },
+      })
     })
 
     expect(result.current.sources).toHaveLength(2)
+    expect(result.current.sources[0].verified).toBe(true)
+    expect(result.current.sources[1].verified).toBeUndefined()
 
     act(() => {
       mockWs.mockMessage({
         event_type: "execution.completed",
         execution_id: "exec_citations",
-        seq: 3,
+        seq: 4,
         state: "completed",
         timestamp: new Date().toISOString(),
         data: {
@@ -255,10 +266,11 @@ describe("useExecution hook", () => {
 
     expect(result.current.sources).toEqual([
       {
-        id: "source-1",
+        id: "search-1",
         title: "Cited source",
         url: "https://cited.test/article",
         snippet: "The source excerpt.",
+        verified: true,
       },
     ])
     expect(result.current.sources.some((source) => source.title === "Retrieved but unused")).toBe(false)
