@@ -79,6 +79,15 @@ describe("BrowserStorage lifecycle contracts", () => {
     expect(await new BrowserStorage().getHistory("run-1")).toEqual(baseRecord)
   })
 
+  it("rejects a history read when IndexedDB fails and no localStorage fallback exists", async () => {
+    const storage = new BrowserStorage()
+
+    // IndexedDB is unavailable in this test environment and no fallback key
+    // has been written. The real BrowserStorage reader must report a failure.
+    expect(local.has("assembly:history")).toBe(false)
+    await expect(storage.listHistory()).rejects.toBeInstanceOf(StorageError)
+  })
+
   it("fails clearly rather than falsely claiming a save when both layers fail", async () => {
     setLocalStorage({ blocked: true })
     const storage = new BrowserStorage()
