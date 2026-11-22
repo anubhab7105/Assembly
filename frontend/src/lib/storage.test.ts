@@ -65,6 +65,31 @@ describe("BrowserStorage lifecycle contracts", () => {
   })
 
   it("represents a fresh profile as empty and exports a complete versioned shape", async () => {
+    // A successful IndexedDB read that has no value is a valid empty profile.
+    const values = new Map<string, unknown>()
+    const db = {
+      objectStoreNames: { contains: () => true },
+      transaction: () => ({
+        objectStore: () => ({
+          get: (key: string) => {
+            const request: { result?: unknown; onsuccess?: () => void } = {}
+            queueMicrotask(() => {
+              request.result = values.get(key)
+              request.onsuccess?.()
+            })
+            return request
+          },
+        }),
+      }),
+    }
+    vi.stubGlobal("indexedDB", {
+      open: () => {
+        const request: { result?: unknown; onsuccess?: () => void } = { result: db }
+        queueMicrotask(() => request.onsuccess?.())
+        return request
+      },
+    })
+
     const storage = new BrowserStorage()
     expect(await storage.listHistory()).toEqual([])
     expect(await storage.getHistory("missing")).toBeNull()
@@ -81,9 +106,19 @@ describe("BrowserStorage lifecycle contracts", () => {
 
   it("rejects a history read when IndexedDB fails and no localStorage fallback exists", async () => {
     const storage = new BrowserStorage()
+    vi.stubGlobal("indexedDB", {
+      open: () => {
+        const request: { error?: Error; onerror?: () => void } = {}
+        queueMicrotask(() => {
+          request.error = new Error("IndexedDB open failed")
+          request.onerror?.()
+        })
+        return request
+      },
+    })
 
-    // IndexedDB is unavailable in this test environment and no fallback key
-    // has been written. The real BrowserStorage reader must report a failure.
+    // Exercise the real BrowserStorage reader with an IndexedDB open failure
+    // and no localStorage history entry.
     expect(local.has("assembly:history")).toBe(false)
     await expect(storage.listHistory()).rejects.toBeInstanceOf(StorageError)
   })
