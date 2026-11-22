@@ -119,7 +119,7 @@ function storageError(operation: string, cause: unknown): StorageError {
   return error
 }
 
-async function idbGet<T>(key: string): Promise<T | null> {
+async function idbGet<T>(key: string, requireFallback = false): Promise<T | null> {
   let idbError: unknown
   try {
     const db = await idb()
@@ -135,12 +135,16 @@ async function idbGet<T>(key: string): Promise<T | null> {
   }
 
   try {
-    if (typeof window === "undefined") return null
+    if (typeof window === "undefined") throw new Error("Browser storage is unavailable")
     const raw = window.localStorage.getItem(`assembly:${key}`)
-    return raw ? (JSON.parse(raw) as T) : null
+    if (raw === null) {
+      if (requireFallback) throw new Error(`No localStorage fallback exists for ${key}`)
+      return null
+    }
+    return JSON.parse(raw) as T
   } catch (fallbackError) {
-    // Both stores failed. Don't let a later mutation overwrite data that
-    // cannot be read reliably.
+    // Both stores failed or no fallback exists. Don't turn an unreadable
+    // history store into a successful empty read that could hide saved data.
     const error = storageError("read saved data", fallbackError)
     error.cause = idbError
     throw error
@@ -238,7 +242,7 @@ async function idbSetImportState(history: HistoryRecord[], usage: UsageRecord[])
   }
 }
 
-async function idbDel(key: string): Promise<void> {
+async function idbDel(key: string, fallbackValue?: unknown): Promise<void> {
   let idbError: unknown
   try {
     const db = await idb()
@@ -256,7 +260,14 @@ async function idbDel(key: string): Promise<void> {
 
   try {
     if (typeof window === "undefined") throw new Error("Browser storage is unavailable")
-    window.localStorage.removeItem(`assembly:${key}`)
+    if (fallbackValue === undefined) {
+      window.localStorage.removeItem(`assembly:${key}`)
+    } else {
+      // Preserve an explicit empty fallback after an intentional history clear.
+      // A later IndexedDB read failure can then distinguish cleared history
+      // from history that was never successfully readable.
+      window.localStorage.setItem(`assembly:${key}`, JSON.stringify(fallbackValue))
+    }
   } catch (fallbackError) {
     const error = storageError("delete data", fallbackError)
     error.cause = idbError
@@ -483,7 +494,7 @@ function parseImport(text: string): { history: HistoryRecord[]; usage: UsageReco
 
 class BaseStorage implements StorageService {
   async listHistory(): Promise<HistoryRecord[]> {
-    const items = (await idbGet<unknown>("history")) ?? []
+    const items = (await idbGet<unknown>("history", true)) ?? []
     if (!Array.isArray(items)) return []
     return items.map((item) => normalizeHistory(item)).filter((item): item is HistoryRecord => item !== null)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -525,7 +536,7 @@ class BaseStorage implements StorageService {
   }
 
   async clearHistory(): Promise<void> {
-    await idbDel("history")
+    await idbDel("history", [])
     notifyHistoryChange()
   }
 

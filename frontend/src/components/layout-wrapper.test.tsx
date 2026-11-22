@@ -71,4 +71,35 @@ describe("SidebarContent history loading", () => {
     expect(deleteHistory).not.toHaveBeenCalled()
     expect(importJSON).not.toHaveBeenCalled()
   })
+
+  it("ignores an older history-change failure after Retry succeeds", async () => {
+    let rejectOlderRead!: (reason: Error) => void
+    let resolveRetryRead!: (items: { id: string; question: string }[]) => void
+
+    listHistory
+      .mockRejectedValueOnce(new Error("Initial read failed"))
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => {
+        rejectOlderRead = reject
+      }))
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveRetryRead = resolve
+      }))
+
+    renderSidebar()
+    expect(await screen.findByTestId("history-load-error")).toBeTruthy()
+
+    // Start an event-driven read, then supersede it with the user's Retry.
+    window.dispatchEvent(new Event("assembly:history-change"))
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }))
+
+    resolveRetryRead([{ id: "r2", question: "Recovered after retry" }])
+    expect(await screen.findByText("Recovered after retry")).toBeTruthy()
+    await waitFor(() => expect(screen.queryByTestId("history-load-error")).toBeNull())
+
+    // The older request fails after Retry has already recovered successfully.
+    rejectOlderRead(new Error("Stale history-change read failed"))
+    await waitFor(() => expect(screen.getByText("Recovered after retry")).toBeTruthy())
+    expect(screen.queryByTestId("history-load-error")).toBeNull()
+    expect(listHistory).toHaveBeenCalledTimes(3)
+  })
 })

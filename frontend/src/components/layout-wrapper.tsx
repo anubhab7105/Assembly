@@ -51,48 +51,63 @@ export function SidebarContent({ onClose }: { onClose?: () => void }) {
   const [executions, setExecutions] = useState<HistoryRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  // A newer history read (including Retry) supersedes every older pending read.
+  const historyRequestGeneration = React.useRef(0)
   const [search, setSearch] = useState("")
   const [showHistory, setShowHistory] = useState(pathname === "/executions")
   const importInputRef = React.useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
 
   // Read-only: a failed read never clears or rewrites saved history.
+  // Manual retries and event-driven syncs share a generation so stale results
+  // cannot overwrite a newer successful read.
   const loadExecutions = async () => {
+    const requestGeneration = ++historyRequestGeneration.current
     setLoading(true)
     try {
-      setExecutions(await storage.listHistory())
+      const items = await storage.listHistory()
+      if (historyRequestGeneration.current !== requestGeneration) return
+      setExecutions(items)
       setLoadError(false)
     } catch (e) {
+      if (historyRequestGeneration.current !== requestGeneration) return
       setLoadError(true)
       if (process.env.NODE_ENV !== "production") console.error(e)
     } finally {
-      setLoading(false)
+      if (historyRequestGeneration.current === requestGeneration) {
+        setLoading(false)
+      }
     }
   }
 
   useEffect(() => {
     let cancelled = false
     const sync = () => {
+      const requestGeneration = ++historyRequestGeneration.current
       storage
         .listHistory()
         .then((items) => {
-          if (cancelled) return
+          if (cancelled || historyRequestGeneration.current !== requestGeneration) return
           setExecutions(items)
           setLoadError(false)
         })
         .catch((error: unknown) => {
-          if (cancelled) return
+          if (cancelled || historyRequestGeneration.current !== requestGeneration) return
           setLoadError(true)
           if (process.env.NODE_ENV !== "production") console.error(error)
         })
         .finally(() => {
-          if (!cancelled) setLoading(false)
+          if (!cancelled && historyRequestGeneration.current === requestGeneration) {
+            setLoading(false)
+          }
         })
     }
     sync()
     window.addEventListener("assembly:history-change", sync)
     return () => {
       cancelled = true
+      // Invalidate any outstanding read owned by this effect on unmount/change.
+      historyRequestGeneration.current += 1
       window.removeEventListener("assembly:history-change", sync)
     }
   }, [pathname])

@@ -51,6 +51,8 @@ jobs:
       run: npx vitest run --config vitest.config.mts src/components/privacy-dialog.test.tsx
     - name: Run theme toggle tests
       run: npx vitest run --config vitest.config.mts src/components/theme-toggle.test.tsx
+    - name: Run sidebar history loading tests
+      run: npx vitest run --config vitest.config.mts src/components/layout-wrapper.test.tsx
     - name: Run Vitest storage lifecycle tests
       run: npm test
     - name: Install Playwright Browsers
