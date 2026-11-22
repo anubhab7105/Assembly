@@ -123,6 +123,17 @@ describe("BrowserStorage lifecycle contracts", () => {
     await expect(storage.listHistory()).rejects.toBeInstanceOf(StorageError)
   })
 
+  it("keeps an intentionally cleared history readable when IndexedDB is unavailable", async () => {
+    const storage = new BrowserStorage()
+    await storage.saveHistory(baseRecord)
+
+    await storage.clearHistory()
+
+    // The empty array is an explicit fallback marker, unlike a missing key.
+    expect(local.get("assembly:history")).toBe("[]")
+    expect(await storage.listHistory()).toEqual([])
+  })
+
   it("fails clearly rather than falsely claiming a save when both layers fail", async () => {
     setLocalStorage({ blocked: true })
     const storage = new BrowserStorage()
