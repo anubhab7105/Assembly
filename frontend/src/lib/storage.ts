@@ -507,7 +507,7 @@ class BaseStorage implements StorageService {
     }
     const normalized = normalizeHistory(record, { isIncoming: true })
     if (!normalized) throw new Error("Invalid history record. Nothing was saved.")
-    const items = (await idbGet<unknown>("history", true)) ?? []
+    const items = (await idbGet<unknown>("history")) ?? []
     const existing = Array.isArray(items) ? items.map((item) => normalizeHistory(item)).filter((item): item is HistoryRecord => item !== null) : []
     const next = [normalized, ...existing.filter((h) => h.id !== normalized.id)].slice(0, MAX_HISTORY)
     const usage = await this.getUsage()
@@ -522,7 +522,7 @@ class BaseStorage implements StorageService {
   }
 
   async deleteHistory(id: string): Promise<void> {
-    const items = (await idbGet<unknown>("history", true)) ?? []
+    const items = (await idbGet<unknown>("history")) ?? []
     const existing = Array.isArray(items) ? items.map((item) => normalizeHistory(item)).filter((item): item is HistoryRecord => item !== null) : []
     await idbSet("history", existing.filter((h) => h.id !== id))
     notifyHistoryChange()
@@ -607,7 +607,7 @@ class BaseStorage implements StorageService {
       data = parseImport(text)
     }
 
-    const currentHistory = (await idbGet<unknown>("history", true)) ?? []
+    const currentHistory = (await idbGet<unknown>("history")) ?? []
     const currentUsage = (await idbGet<unknown>("usage")) ?? []
 
     const history = Array.isArray(currentHistory)
