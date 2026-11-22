@@ -135,12 +135,15 @@ async function idbGet<T>(key: string): Promise<T | null> {
   }
 
   try {
-    if (typeof window === "undefined") return null
+    if (typeof window === "undefined") throw new Error("Browser storage is unavailable")
     const raw = window.localStorage.getItem(`assembly:${key}`)
-    return raw ? (JSON.parse(raw) as T) : null
+    if (raw === null) {
+      throw new Error(`No localStorage fallback exists for ${key}`)
+    }
+    return JSON.parse(raw) as T
   } catch (fallbackError) {
-    // Both stores failed. Don't let a later mutation overwrite data that
-    // cannot be read reliably.
+    // Both stores failed or no fallback exists. Don't turn an unreadable
+    // history store into a successful empty read that could hide saved data.
     const error = storageError("read saved data", fallbackError)
     error.cause = idbError
     throw error
