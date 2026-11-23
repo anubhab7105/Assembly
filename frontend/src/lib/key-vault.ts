@@ -226,116 +226,116 @@ export class KeyVault {
     const generation = ++this.unlockGeneration
     const assertCurrent = () => this.assertUnlockGeneration(generation)
 
+    // Serialize reads, migrations, and publication with writes and clearAll().
+    // This prevents an overlapping clear from being undone by an older unlock.
     return withVaultWriteLock(async () => {
       if (!passphrase || passphrase.length < MIN_LEGACY_PASSPHRASE_LENGTH) {
         throw new Error("Vault passphrase must contain at least 8 characters.")
       }
 
       const stored = await this.readCurrentEncrypted()
-    assertCurrent()
-    let keys: Record<string, string> = {}
-    let nextKey: CryptoKey
-    let nextSalt: Uint8Array
-
-    if (isEncryptedRecord(stored)) {
-      try {
-        nextSalt = fromBase64(stored.salt)
-        nextKey = await deriveKey(passphrase, nextSalt, stored.iterations)
-        assertCurrent()
-        keys = await decryptRecord(stored, nextKey)
-        assertCurrent()
-      } catch {
-        assertCurrent()
-        throw new Error("Incorrect passphrase or damaged vault. No saved data was changed.")
-      }
-      await this.removeLegacyPlaintext()
       assertCurrent()
-    } else {
-      const legacyPlaintext = stored === undefined ? await this.readLegacyPlaintext() : stored
-      assertCurrent()
-      if (legacyPlaintext !== undefined && !isKeysRecord(legacyPlaintext)) {
-        throw new Error("Saved vault format is invalid. The existing record was left untouched.")
-      }
+      let keys: Record<string, string> = {}
+      let nextKey: CryptoKey
+      let nextSalt: Uint8Array
 
-      if (legacyPlaintext !== undefined) {
-        if (passphrase.length < MIN_NEW_PASSPHRASE_LENGTH) {
-          throw new Error("Create a new vault passphrase with at least 12 characters to protect migrated keys.")
+      if (isEncryptedRecord(stored)) {
+        try {
+          nextSalt = fromBase64(stored.salt)
+          nextKey = await deriveKey(passphrase, nextSalt, stored.iterations)
+          assertCurrent()
+          keys = await decryptRecord(stored, nextKey)
+          assertCurrent()
+        } catch {
+          assertCurrent()
+          throw new Error("Incorrect passphrase or damaged vault. No saved data was changed.")
         }
-        keys = { ...legacyPlaintext }
-        nextSalt = makeSalt()
-        nextKey = await deriveKey(passphrase, nextSalt)
-        assertCurrent()
-        const encrypted = await encryptRecord(keys, nextKey, nextSalt)
-        assertCurrent()
-        assertCurrent()
-        if ((await this.readCurrentEncrypted()) !== undefined) {
-          throw new KeyStorageError("Another tab has already created or migrated the vault. Unlock it again before continuing.")
-        }
-        assertCurrent()
-        await this.writeStored(encrypted)
         assertCurrent()
         await this.removeLegacyPlaintext()
         assertCurrent()
       } else {
-        const legacy = await get<{
-          v: number
-          salt: string
-          iv: string
-          ciphertext: string
-        } | undefined>(LEGACY_ENCRYPTED_KEY).catch(() => undefined)
+        const legacyPlaintext = stored === undefined ? await this.readLegacyPlaintext() : stored
         assertCurrent()
+        if (legacyPlaintext !== undefined && !isKeysRecord(legacyPlaintext)) {
+          throw new Error("Saved vault format is invalid. The existing record was left untouched.")
+        }
 
-        if (legacy) {
-          try {
-            const legacySalt = fromBase64(legacy.salt)
-            const legacyKey = await deriveKey(passphrase, legacySalt, LEGACY_KDF_ITERATIONS)
-            assertCurrent()
-            const bytes = await crypto.subtle.decrypt(
-              { name: "AES-GCM", iv: fromBase64(legacy.iv) as BufferSource },
-              legacyKey,
-              fromBase64(legacy.ciphertext) as BufferSource,
-            )
-            assertCurrent()
-            const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes))
-            if (!isKeysRecord(parsed)) throw new Error("Invalid legacy payload")
-            keys = { ...parsed }
-          } catch {
-            assertCurrent()
-            throw new Error("Incorrect legacy passphrase or damaged vault. Nothing was deleted.")
+        if (legacyPlaintext !== undefined) {
+          if (passphrase.length < MIN_NEW_PASSPHRASE_LENGTH) {
+            throw new Error("Create a new vault passphrase with at least 12 characters to protect migrated keys.")
           }
+          keys = { ...legacyPlaintext }
           nextSalt = makeSalt()
           nextKey = await deriveKey(passphrase, nextSalt)
           assertCurrent()
           const encrypted = await encryptRecord(keys, nextKey, nextSalt)
           assertCurrent()
-          assertCurrent()
           if ((await this.readCurrentEncrypted()) !== undefined) {
-            throw new KeyStorageError("Another tab has already migrated the vault. Unlock it again before continuing.")
+            throw new KeyStorageError("Another tab has already created or migrated the vault. Unlock it again before continuing.")
           }
           assertCurrent()
           await this.writeStored(encrypted)
           assertCurrent()
-          await this.clearLegacyEncryptedBlobs(true)
+          await this.removeLegacyPlaintext()
           assertCurrent()
         } else {
-          if (passphrase.length < MIN_NEW_PASSPHRASE_LENGTH) {
-            throw new Error("Create a vault passphrase with at least 12 characters.")
+          const legacy = await get<{
+            v: number
+            salt: string
+            iv: string
+            ciphertext: string
+          } | undefined>(LEGACY_ENCRYPTED_KEY).catch(() => undefined)
+          assertCurrent()
+
+          if (legacy) {
+            try {
+              const legacySalt = fromBase64(legacy.salt)
+              const legacyKey = await deriveKey(passphrase, legacySalt, LEGACY_KDF_ITERATIONS)
+              assertCurrent()
+              const bytes = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: fromBase64(legacy.iv) as BufferSource },
+                legacyKey,
+                fromBase64(legacy.ciphertext) as BufferSource,
+              )
+              assertCurrent()
+              const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes))
+              if (!isKeysRecord(parsed)) throw new Error("Invalid legacy payload")
+              keys = { ...parsed }
+            } catch {
+              assertCurrent()
+              throw new Error("Incorrect legacy passphrase or damaged vault. Nothing was deleted.")
+            }
+            nextSalt = makeSalt()
+            nextKey = await deriveKey(passphrase, nextSalt)
+            assertCurrent()
+            const encrypted = await encryptRecord(keys, nextKey, nextSalt)
+            assertCurrent()
+            if ((await this.readCurrentEncrypted()) !== undefined) {
+              throw new KeyStorageError("Another tab has already migrated the vault. Unlock it again before continuing.")
+            }
+            assertCurrent()
+            await this.writeStored(encrypted)
+            assertCurrent()
+            await this.clearLegacyEncryptedBlobs(true)
+            assertCurrent()
+          } else {
+            if (passphrase.length < MIN_NEW_PASSPHRASE_LENGTH) {
+              throw new Error("Create a vault passphrase with at least 12 characters.")
+            }
+            nextSalt = makeSalt()
+            nextKey = await deriveKey(passphrase, nextSalt)
+            assertCurrent()
+            const encrypted = await encryptRecord({}, nextKey, nextSalt)
+            assertCurrent()
+            if ((await this.readCurrentEncrypted()) !== undefined) {
+              throw new KeyStorageError("Another tab has already created the vault. Unlock it again before continuing.")
+            }
+            assertCurrent()
+            await this.writeStored(encrypted)
+            assertCurrent()
           }
-          nextSalt = makeSalt()
-          nextKey = await deriveKey(passphrase, nextSalt)
-          assertCurrent()
-          const encrypted = await encryptRecord({}, nextKey, nextSalt)
-          assertCurrent()
-          assertCurrent()
-          if ((await this.readCurrentEncrypted()) !== undefined) {
-            throw new KeyStorageError("Another tab has already created the vault. Unlock it again before continuing.")
-          }
-          assertCurrent()
-          await this.writeStored(encrypted)
-          assertCurrent()
         }
       }
-    }
 
       assertCurrent()
       this.cryptoKey = nextKey
