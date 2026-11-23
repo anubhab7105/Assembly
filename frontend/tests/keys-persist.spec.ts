@@ -314,5 +314,20 @@ test.describe("Keys survive refresh (P0)", () => {
     })
     expect(persisted).not.toContain(CANARY_GROQ)
     expect(persisted).toContain("PBKDF2-SHA-256")
+    const allIndexedDbValues = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("keyval-store")
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const values = await new Promise<unknown[]>((resolve, reject) => {
+        const request = db.transaction("keyval", "readonly").objectStore("keyval").getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      return values.map(value => JSON.stringify(value))
+    })
+    expect(allIndexedDbValues.join("\\n")).not.toContain(CANARY_GROQ)
   })
 })
