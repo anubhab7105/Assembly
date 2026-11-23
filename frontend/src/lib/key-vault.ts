@@ -17,6 +17,17 @@ const LEGACY_KDF_ITERATIONS = 210_000
 const FORMAT_VERSION = 3
 const MIN_NEW_PASSPHRASE_LENGTH = 12
 const MIN_LEGACY_PASSPHRASE_LENGTH = 8
+const VAULT_WRITE_LOCK = "assembly-key-vault-write"
+
+async function withVaultWriteLock<T>(work: () => Promise<T>): Promise<T> {
+  const lockManager = typeof navigator === "undefined" ? undefined : navigator.locks
+  if (!lockManager) {
+    throw new KeyStorageError(
+      "This browser cannot safely coordinate saved-key updates across tabs. Use a current browser with Web Locks support.",
+    )
+  }
+  return lockManager.request(VAULT_WRITE_LOCK, { mode: "exclusive" }, work)
+}
 
 type EncryptedRecord = {
   v: number
@@ -127,6 +138,8 @@ export class KeyVault {
   private cryptoKey: CryptoKey | null = null
   private salt: Uint8Array | null = null
   private loaded = false
+  private lifecycleGeneration = 0
+  private unlockGeneration = 0
   private writeChain: Promise<void> = Promise.resolve()
   private primaryStoreAvailable = typeof indexedDB !== "undefined"
 
@@ -176,6 +189,30 @@ export class KeyVault {
     return run
   }
 
+  private assertUnlockGeneration(generation: number): void {
+    if (generation !== this.unlockGeneration) {
+      throw new VaultLockedError("The vault was locked or cleared while unlocking. Try again.")
+    }
+  }
+
+  private assertLifecycleGeneration(generation: number): void {
+    if (generation !== this.lifecycleGeneration || !this.isUnlocked()) {
+      throw new VaultLockedError("The vault was locked or a key was removed while this operation was pending. Try again.")
+    }
+  }
+
+  private async readLatestKeys(key: CryptoKey, salt: Uint8Array): Promise<Record<string, string>> {
+    const stored = await this.readCurrentEncrypted()
+    if (!isEncryptedRecord(stored) || stored.salt !== toBase64(salt)) {
+      throw new KeyStorageError("The saved vault changed in another tab. Lock and unlock it again before saving.")
+    }
+    try {
+      return await decryptRecord(stored, key)
+    } catch {
+      throw new KeyStorageError("The saved vault could not be verified after another tab updated it. Unlock again before saving.")
+    }
+  }
+
   async hasPersisted(): Promise<boolean> {
     if ((await this.readCurrentEncrypted()) !== undefined) return true
     return (await this.readLegacyPlaintext()) !== undefined
@@ -186,11 +223,15 @@ export class KeyVault {
   }
 
   async unlock(passphrase: string): Promise<Record<string, string>> {
+    const generation = ++this.unlockGeneration
+    const assertCurrent = () => this.assertUnlockGeneration(generation)
+
     if (!passphrase || passphrase.length < MIN_LEGACY_PASSPHRASE_LENGTH) {
       throw new Error("Vault passphrase must contain at least 8 characters.")
     }
 
     const stored = await this.readCurrentEncrypted()
+    assertCurrent()
     let keys: Record<string, string> = {}
     let nextKey: CryptoKey
     let nextSalt: Uint8Array
@@ -199,13 +240,18 @@ export class KeyVault {
       try {
         nextSalt = fromBase64(stored.salt)
         nextKey = await deriveKey(passphrase, nextSalt, stored.iterations)
+        assertCurrent()
         keys = await decryptRecord(stored, nextKey)
+        assertCurrent()
       } catch {
+        assertCurrent()
         throw new Error("Incorrect passphrase or damaged vault. No saved data was changed.")
       }
       await this.removeLegacyPlaintext()
+      assertCurrent()
     } else {
       const legacyPlaintext = stored === undefined ? await this.readLegacyPlaintext() : stored
+      assertCurrent()
       if (legacyPlaintext !== undefined && !isKeysRecord(legacyPlaintext)) {
         throw new Error("Saved vault format is invalid. The existing record was left untouched.")
       }
@@ -217,8 +263,20 @@ export class KeyVault {
         keys = { ...legacyPlaintext }
         nextSalt = makeSalt()
         nextKey = await deriveKey(passphrase, nextSalt)
-        await this.writeStored(await encryptRecord(keys, nextKey, nextSalt))
-        await this.removeLegacyPlaintext()
+        assertCurrent()
+        const encrypted = await encryptRecord(keys, nextKey, nextSalt)
+        assertCurrent()
+        await withVaultWriteLock(async () => {
+          assertCurrent()
+          if ((await this.readCurrentEncrypted()) !== undefined) {
+            throw new KeyStorageError("Another tab has already created or migrated the vault. Unlock it again before continuing.")
+          }
+          assertCurrent()
+          await this.writeStored(encrypted)
+          assertCurrent()
+          await this.removeLegacyPlaintext()
+        })
+        assertCurrent()
       } else {
         const legacy = await get<{
           v: number
@@ -226,37 +284,65 @@ export class KeyVault {
           iv: string
           ciphertext: string
         } | undefined>(LEGACY_ENCRYPTED_KEY).catch(() => undefined)
+        assertCurrent()
 
         if (legacy) {
           try {
             const legacySalt = fromBase64(legacy.salt)
             const legacyKey = await deriveKey(passphrase, legacySalt, LEGACY_KDF_ITERATIONS)
+            assertCurrent()
             const bytes = await crypto.subtle.decrypt(
               { name: "AES-GCM", iv: fromBase64(legacy.iv) as BufferSource },
               legacyKey,
               fromBase64(legacy.ciphertext) as BufferSource,
             )
+            assertCurrent()
             const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes))
             if (!isKeysRecord(parsed)) throw new Error("Invalid legacy payload")
             keys = { ...parsed }
           } catch {
+            assertCurrent()
             throw new Error("Incorrect legacy passphrase or damaged vault. Nothing was deleted.")
           }
           nextSalt = makeSalt()
           nextKey = await deriveKey(passphrase, nextSalt)
-          await this.writeStored(await encryptRecord(keys, nextKey, nextSalt))
-          await this.clearLegacyEncryptedBlobs()
+          assertCurrent()
+          const encrypted = await encryptRecord(keys, nextKey, nextSalt)
+          assertCurrent()
+          await withVaultWriteLock(async () => {
+            assertCurrent()
+            if ((await this.readCurrentEncrypted()) !== undefined) {
+              throw new KeyStorageError("Another tab has already migrated the vault. Unlock it again before continuing.")
+            }
+            assertCurrent()
+            await this.writeStored(encrypted)
+            assertCurrent()
+            await this.clearLegacyEncryptedBlobs(true)
+          })
+          assertCurrent()
         } else {
           if (passphrase.length < MIN_NEW_PASSPHRASE_LENGTH) {
             throw new Error("Create a vault passphrase with at least 12 characters.")
           }
           nextSalt = makeSalt()
           nextKey = await deriveKey(passphrase, nextSalt)
-          await this.writeStored(await encryptRecord({}, nextKey, nextSalt))
+          assertCurrent()
+          const encrypted = await encryptRecord({}, nextKey, nextSalt)
+          assertCurrent()
+          await withVaultWriteLock(async () => {
+            assertCurrent()
+            if ((await this.readCurrentEncrypted()) !== undefined) {
+              throw new KeyStorageError("Another tab has already created the vault. Unlock it again before continuing.")
+            }
+            assertCurrent()
+            await this.writeStored(encrypted)
+          })
+          assertCurrent()
         }
       }
     }
 
+    assertCurrent()
     this.cryptoKey = nextKey
     this.salt = nextSalt
     this.cache = keys
@@ -305,26 +391,50 @@ export class KeyVault {
     const secret = (key || "").trim()
     if (!id) throw new Error("Unknown provider. Nothing was saved.")
     if (!secret) throw new Error("Empty key. Nothing was saved.")
+    const generation = this.lifecycleGeneration
     await this.ensureUnlocked()
-    await this.enqueue(async () => {
-      const next = { ...this.cache, [id]: secret }
-      const encrypted = await encryptRecord(next, this.cryptoKey!, this.salt!)
+    const cryptoKey = this.cryptoKey
+    const salt = this.salt
+    if (!cryptoKey || !salt) throw new VaultLockedError()
+
+    await this.enqueue(() => withVaultWriteLock(async () => {
+      this.assertLifecycleGeneration(generation)
+      const latest = await this.readLatestKeys(cryptoKey, salt)
+      this.assertLifecycleGeneration(generation)
+      const next = { ...latest, [id]: secret }
+      const encrypted = await encryptRecord(next, cryptoKey, salt)
+      this.assertLifecycleGeneration(generation)
       await this.writeStored(encrypted)
+      this.assertLifecycleGeneration(generation)
       this.cache = next
-    })
+    }))
   }
 
   async removeKey(provider: string): Promise<void> {
     const id = (provider || "").trim()
     if (!id) return
+    const generation = ++this.lifecycleGeneration
     await this.ensureUnlocked()
-    await this.enqueue(async () => {
-      if (!(id in this.cache)) return
-      const next = { ...this.cache }
+    const cryptoKey = this.cryptoKey
+    const salt = this.salt
+    if (!cryptoKey || !salt) throw new VaultLockedError()
+
+    await this.enqueue(() => withVaultWriteLock(async () => {
+      this.assertLifecycleGeneration(generation)
+      const latest = await this.readLatestKeys(cryptoKey, salt)
+      this.assertLifecycleGeneration(generation)
+      if (!(id in latest)) {
+        this.cache = latest
+        return
+      }
+      const next = { ...latest }
       delete next[id]
-      await this.writeStored(await encryptRecord(next, this.cryptoKey!, this.salt!))
+      const encrypted = await encryptRecord(next, cryptoKey, salt)
+      this.assertLifecycleGeneration(generation)
+      await this.writeStored(encrypted)
+      this.assertLifecycleGeneration(generation)
       this.cache = next
-    })
+    }))
   }
 
   async getKey(provider: string): Promise<string | null> {
@@ -338,6 +448,8 @@ export class KeyVault {
   }
 
   async lock(): Promise<void> {
+    this.lifecycleGeneration += 1
+    this.unlockGeneration += 1
     this.cache = {}
     this.cryptoKey = null
     this.salt = null
@@ -345,7 +457,9 @@ export class KeyVault {
   }
 
   async clearAll(): Promise<void> {
-    await this.enqueue(async () => {
+    this.lifecycleGeneration += 1
+    this.unlockGeneration += 1
+    await this.enqueue(() => withVaultWriteLock(async () => {
       if (this.primaryStoreAvailable) {
         try {
           await del(KEYS_STORE_KEY)
@@ -367,7 +481,7 @@ export class KeyVault {
       this.cryptoKey = null
       this.salt = null
       this.loaded = false
-    })
+    }))
   }
 
   async hasLegacyEncrypted(): Promise<boolean> {
@@ -378,15 +492,25 @@ export class KeyVault {
     }
   }
 
-  private async clearLegacyEncryptedBlobs(): Promise<void> {
+  private async clearLegacyEncryptedBlobs(bestEffort = false): Promise<void> {
     if (this.primaryStoreAvailable) {
       for (const key of LEGACY_BLOBS) {
-        try { await del(key) } catch { /* the replacement ciphertext is verified */ }
+        try {
+          await del(key)
+        } catch {
+          if (!bestEffort) {
+            throw new KeyStorageError(`Couldn't remove legacy credential record ${key}. Some saved credentials may remain on this device.`)
+          }
+        }
       }
     }
     try {
       if (typeof window !== "undefined") window.localStorage.removeItem("assembly_remember_keys")
-    } catch { /* best-effort cleanup */ }
+    } catch {
+      if (!bestEffort) {
+        throw new KeyStorageError("Couldn't remove the legacy localStorage credential record. Some saved credentials may remain on this device.")
+      }
+    }
   }
 }
 
