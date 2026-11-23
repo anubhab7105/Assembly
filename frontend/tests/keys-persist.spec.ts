@@ -155,7 +155,7 @@ test.describe("Keys survive refresh (P0)", () => {
   test("4. navigate away and back without losing configuration", async ({ page }) => {
     await page.goto("/settings")
     await saveKey(page, "groq", CANARY_GROQ)
-    await page.goto("/chat")
+    await page.getByRole("link", { name: /Back to investigation/i }).click()
     await expect(page).toHaveURL(/\/chat$/)
 
     // The informational cookie notice is fixed to the viewport bottom and can
@@ -229,7 +229,7 @@ test.describe("Keys survive refresh (P0)", () => {
 
     await page.reload()
     await unlockVault(page)
-    await page.goto("/chat")
+    await page.getByRole("link", { name: /Back to investigation/i }).click()
     await expect(page.getByTestId("diversity-chip")).toContainText("gpt-oss", { timeout: 10000 })
 
     // Model selection is advanced configuration, so inspect it in its dialog.
