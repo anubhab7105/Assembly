@@ -246,12 +246,12 @@ export function KeysManager() {
   const providers = catalog?.providers.filter((p) => p.enabled) ?? []
   const tavilySaved = !!savedKeys["tavily"]
 
-  const handleSaveTavily = async (customKey?: string) => {
+  const handleSaveTavily = async (customKey?: string): Promise<boolean> => {
     const rawKey = cleanPastedKey(customKey || tavilyInput || savedKeys["tavily"] || "")
-    if (!rawKey) return
+    if (!rawKey) return false
     if (!globalVault.isUnlocked()) {
       setUnlockError("Create or unlock your encrypted vault before saving keys.")
-      return
+      return false
     }
     try {
       await globalVault.setKey("tavily", rawKey)
@@ -261,30 +261,31 @@ export function KeysManager() {
         description: e instanceof Error ? e.message : "Storage unavailable.",
         variant: "danger",
       })
-      return
+      return false
     }
     setSavedKeys((prev) => ({ ...prev, tavily: rawKey }))
     setTavilyInput("")
     toast({ title: "Search key saved", description: "Tavily key stored with your other keys.", variant: "success" })
+    return true
   }
 
-  const handleSaveAndTest = async (providerId: string, customKey?: string) => {
+  const handleSaveAndTest = async (providerId: string, customKey?: string): Promise<boolean> => {
     const rawKey = cleanPastedKey(customKey || inputs[providerId] || savedKeys[providerId] || "")
-    if (!rawKey) return
+    if (!rawKey) return false
     if (!globalVault.isUnlocked()) {
       setUnlockError("Create or unlock your encrypted vault before saving keys.")
-      return
+      return false
     }
     const generation = nextVerificationGeneration(providerId)
     void isKeyFormatOk(providerId, rawKey)
     try {
       await globalVault.setKey(providerId, rawKey)
     } catch (e) {
-      if (verificationGenerations.current[providerId] !== generation) return
+      if (verificationGenerations.current[providerId] !== generation) return false
       const message = e instanceof Error ? e.message : "Storage unavailable."
       setSaveErrors((prev) => ({ ...prev, [providerId]: message }))
       toast({ title: "Couldn't save key", description: message, variant: "danger" })
-      return
+      return false
     }
     setSaveErrors((prev) => {
       if (!(providerId in prev)) return prev
@@ -303,7 +304,7 @@ export function KeysManager() {
     })
     try {
       const res = await ApiClient.testKey(providerId, rawKey)
-      if (verificationGenerations.current[providerId] !== generation) return
+      if (verificationGenerations.current[providerId] !== generation) return true
       setStatuses((prev) => ({ ...prev, [providerId]: res.status }))
       if (res.verification) {
         setVerifications((prev) => ({ ...prev, [providerId]: res.verification! }))
@@ -321,10 +322,11 @@ export function KeysManager() {
         toast({ title: "Key test failed", description: res.message ?? "The provider rejected this key.", variant: "danger" })
       }
     } catch {
-      if (verificationGenerations.current[providerId] !== generation) return
+      if (verificationGenerations.current[providerId] !== generation) return true
       setStatuses((prev) => ({ ...prev, [providerId]: "unreachable" }))
       toast({ title: "Couldn't reach provider", description: "Couldn't reach the server; try again.", variant: "danger" })
     }
+    return true
   }
 
   // Universal Bar Save Handler
@@ -333,12 +335,10 @@ export function KeysManager() {
 
     setIsSubmittingUniversal(true)
     try {
-      if (selectedProviderId === "tavily") {
-        await handleSaveTavily(universalInput)
-      } else {
-        await handleSaveAndTest(selectedProviderId, universalInput)
-      }
-      setUniversalInput("")
+      const saved = selectedProviderId === "tavily"
+        ? await handleSaveTavily(universalInput)
+        : await handleSaveAndTest(selectedProviderId, universalInput)
+      if (saved) setUniversalInput("")
     } finally {
       setIsSubmittingUniversal(false)
     }
@@ -1087,6 +1087,9 @@ export function KeysManager() {
           <Button variant="outline" size="sm" onClick={() => {
             void globalVault.lock()
             setSavedKeys({})
+            setInputs({})
+            setTavilyInput("")
+            setUniversalInput("")
             setVaultUnlocked(false)
             setNeedsUnlock(true)
             setPassphrase("")
