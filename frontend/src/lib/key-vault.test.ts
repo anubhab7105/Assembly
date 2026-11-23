@@ -8,12 +8,24 @@ vi.mock("idb-keyval", () => ({
   del: vi.fn((key: string) => { store.delete(key); return Promise.resolve() }),
 }))
 
-import { get, set } from "idb-keyval"
+import { del, get, set } from "idb-keyval"
 import { KeyVault, KeyStorageError, VaultLockedError, KEYS_STORE_KEY } from "./key-vault"
 
 const CANARY_A = "gsk-CANARY-VAULT-A1"
 const CANARY_B = "tvly-CANARY-VAULT-B2"
 const PASS = "correct horse battery staple"
+
+let lockQueue: Promise<unknown> = Promise.resolve()
+function installWebLocks() {
+  const locks = {
+    request: vi.fn((_name: string, _options: unknown, callback: () => Promise<unknown>) => {
+      const result = lockQueue.then(callback, callback)
+      lockQueue = result.then(() => undefined, () => undefined)
+      return result
+    }),
+  }
+  vi.stubGlobal("navigator", { locks } as unknown as Navigator)
+}
 
 function mockLocalStorage() {
   const bag = new Map<string, string>()
@@ -48,6 +60,8 @@ async function makeLegacyBlob(passphrase: string, keys: Record<string, string>) 
 describe("KeyVault encrypted persistence", () => {
   beforeEach(() => {
     store.clear()
+    lockQueue = Promise.resolve()
+    installWebLocks()
     mockLocalStorage()
     vi.stubGlobal("indexedDB", {})
     vi.mocked(get).mockImplementation((key) => Promise.resolve(store.get(String(key))))
@@ -119,6 +133,97 @@ describe("KeyVault encrypted persistence", () => {
     await expect(vault.unlock("short pass")).rejects.toThrow(/at least 12/)
     await vault.unlock(PASS)
     await expect(vault.setKey("groq", " ")).rejects.toThrow(/Empty key/)
+  })
+
+
+  it("merges concurrent writes from separate vault instances against the latest encrypted record", async () => {
+    const first = new KeyVault()
+    const second = new KeyVault()
+    await first.unlock(PASS)
+    await second.unlock(PASS)
+
+    await Promise.all([
+      first.setKey("groq", CANARY_A),
+      second.setKey("tavily", CANARY_B),
+    ])
+
+    const reloaded = new KeyVault()
+    expect(await reloaded.unlock(PASS)).toEqual({ groq: CANARY_A, tavily: CANARY_B })
+  })
+
+  it("invalidates a pending unlock when lock is called", async () => {
+    const vault = new KeyVault()
+    let releaseRead: ((value: unknown) => void) | undefined
+    let signalRead: (() => void) | undefined
+    const readStarted = new Promise<void>(resolve => { signalRead = resolve })
+    const delayedRead = new Promise<unknown>(resolve => { releaseRead = resolve })
+    vi.spyOn(vault as any, "readLegacyPlaintext").mockImplementation(async () => {
+      signalRead?.()
+      return delayedRead
+    })
+
+    const pendingUnlock = vault.unlock(PASS)
+    await readStarted
+    await vault.lock()
+    releaseRead?.(undefined)
+
+    await expect(pendingUnlock).rejects.toBeInstanceOf(VaultLockedError)
+    expect(store.has(KEYS_STORE_KEY)).toBe(false)
+    expect(vault.isUnlocked()).toBe(false)
+  })
+
+  it("invalidates a pending save before it can write or republish cache after lock", async () => {
+    const vault = new KeyVault()
+    await vault.unlock(PASS)
+    const before = store.get(KEYS_STORE_KEY)
+    let releaseRead: (() => void) | undefined
+    let signalRead: (() => void) | undefined
+    const readStarted = new Promise<void>(resolve => { signalRead = resolve })
+    const delayedRead = new Promise<Record<string, string>>(resolve => { releaseRead = () => resolve({}) })
+    vi.spyOn(vault as any, "readLatestKeys").mockImplementation(async () => {
+      signalRead?.()
+      return delayedRead
+    })
+
+    const pendingSave = vault.setKey("groq", CANARY_A)
+    await readStarted
+    await vault.lock()
+    releaseRead?.()
+
+    await expect(pendingSave).rejects.toBeInstanceOf(VaultLockedError)
+    expect(store.get(KEYS_STORE_KEY)).toEqual(before)
+    expect(vault.isUnlocked()).toBe(false)
+  })
+
+  it("propagates legacy encrypted-record deletion failures from clearAll", async () => {
+    await makeLegacyBlob(PASS, { groq: CANARY_A })
+    vi.mocked(del).mockImplementation((key) => {
+      if (String(key) === "assembly_keys_encrypted_v2") {
+        return Promise.reject(new Error("legacy delete failed"))
+      }
+      store.delete(String(key))
+      return Promise.resolve()
+    })
+
+    const vault = new KeyVault()
+    await expect(vault.clearAll()).rejects.toBeInstanceOf(KeyStorageError)
+    expect(store.has("assembly_keys_encrypted_v2")).toBe(true)
+  })
+
+  it("keeps legacy blob cleanup best-effort after a verified migration", async () => {
+    await makeLegacyBlob("old vault passphrase", { groq: CANARY_A })
+    vi.mocked(del).mockImplementation((key) => {
+      if (String(key) === "assembly_keys_encrypted_v2") {
+        return Promise.reject(new Error("legacy delete failed"))
+      }
+      store.delete(String(key))
+      return Promise.resolve()
+    })
+
+    const vault = new KeyVault()
+    expect(await vault.unlock("old vault passphrase")).toEqual({ groq: CANARY_A })
+    expect(await vault.hasLegacyEncrypted()).toBe(true)
+    expect(JSON.stringify(store.get(KEYS_STORE_KEY))).not.toContain(CANARY_A)
   })
 
   it("detects tampered ciphertext and fails closed", async () => {
