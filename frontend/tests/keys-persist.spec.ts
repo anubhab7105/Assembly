@@ -328,6 +328,6 @@ test.describe("Keys survive refresh (P0)", () => {
       db.close()
       return values.map(value => JSON.stringify(value))
     })
-    expect(allIndexedDbValues.join("\\n")).not.toContain(CANARY_GROQ)
+    expect(allIndexedDbValues.every(value => !value.includes(CANARY_GROQ))).toBe(true)
   })
 })
