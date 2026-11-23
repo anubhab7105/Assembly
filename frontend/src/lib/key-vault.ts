@@ -177,7 +177,8 @@ export class KeyVault {
   }
 
   async hasPersisted(): Promise<boolean> {
-    return (await this.readStored()) !== undefined
+    if ((await this.readCurrentEncrypted()) !== undefined) return true
+    return (await this.readLegacyPlaintext()) !== undefined
   }
 
   isUnlocked(): boolean {
