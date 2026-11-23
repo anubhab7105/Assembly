@@ -1,6 +1,24 @@
 import { test, expect } from "@playwright/test"
 
 const CANARY_KEY = "sk-CANARY-123456789-TEST-KEY"
+const VAULT_PASSPHRASE = "assembly-e2e-vault-passphrase-2026"
+
+async function unlockVault(page: import("@playwright/test").Page) {
+  const setup = page.getByTestId("vault-setup-prompt")
+  const unlock = page.getByTestId("unlock-prompt")
+  if (await page.getByTestId("lock-vault").isVisible().catch(() => false)) return
+  await expect(setup.or(unlock)).toBeVisible({ timeout: 10000 })
+  if (await setup.isVisible().catch(() => false)) {
+    await setup.getByTestId("vault-setup-passphrase").fill(VAULT_PASSPHRASE)
+    await setup.getByTestId("vault-setup-submit").click()
+    await expect(setup).toBeHidden({ timeout: 10000 })
+    return
+  }
+  await unlock.getByTestId("unlock-passphrase").fill(VAULT_PASSPHRASE)
+  await unlock.getByTestId("unlock-submit").click()
+  await expect(unlock).toBeHidden({ timeout: 10000 })
+}
+
 
 test.describe("Assembly End-to-End flow (stateless)", () => {
   let consoleLogs: string[] = []
@@ -117,6 +135,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
   test("1. Setup flow with test keys and verify zero leakage", async ({ page }) => {
     await page.goto("/settings")
+    await unlockVault(page)
 
     const geminiCard = page.getByTestId("provider-card-gemini")
     await geminiCard.locator('input[type="password"]').fill(CANARY_KEY)
@@ -133,6 +152,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
   test("2. Model picker drives a stateless run", async ({ page }) => {
     // Keys first: the picker counts keyed providers only (N-05).
     await page.goto("/settings")
+    await unlockVault(page)
     for (const provider of ["groq", "openrouter"]) {
       const card = page.getByTestId(`provider-card-${provider}`)
       await card.locator('input[type="password"]').fill(CANARY_KEY)
@@ -142,9 +162,8 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
       })
     }
 
-    // Client-side navigation keeps the persistent vault (verified in
-    // keys-persist.spec.ts). The workspace can be opened directly.
-    await page.goto("/chat")
+    // Stay in the same document so the in-memory unlocked vault remains active.
+    await page.getByRole("link", { name: /Back to investigation/i }).click()
     await expect(page).toHaveURL(/\/chat/)
 
     // Advanced model controls are intentionally tucked into a dialog.
