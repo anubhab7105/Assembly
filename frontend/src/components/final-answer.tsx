@@ -228,7 +228,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
                     />
                   )
                 }
-                return <a {...props} target="_blank" rel="noreferrer" className="text-brand hover:underline" />
+                return <a {...props} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline" />
               },
             }}
           >

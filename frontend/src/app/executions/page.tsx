@@ -659,7 +659,7 @@ function ExecutionContent() {
                         <a
                           href={source.url}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="block truncate"
                         >
                           [{index + 1}] {source.title || hostFor(source.url)}
