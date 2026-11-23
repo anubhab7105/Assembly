@@ -66,6 +66,7 @@ describe("KeyVault encrypted persistence", () => {
     vi.stubGlobal("indexedDB", {})
     vi.mocked(get).mockImplementation((key) => Promise.resolve(store.get(String(key))))
     vi.mocked(set).mockImplementation((key, value) => { store.set(String(key), value); return Promise.resolve() })
+    vi.mocked(del).mockImplementation((key) => { store.delete(String(key)); return Promise.resolve() })
   })
 
   it("stores ciphertext only and survives a lock/reload/unlock cycle", async () => {
@@ -168,6 +169,28 @@ describe("KeyVault encrypted persistence", () => {
     releaseRead?.(undefined)
 
     await expect(pendingUnlock).rejects.toBeInstanceOf(VaultLockedError)
+    expect(store.has(KEYS_STORE_KEY)).toBe(false)
+    expect(vault.isUnlocked()).toBe(false)
+  })
+
+  it("invalidates an in-flight unlock when clearAll starts", async () => {
+    const vault = new KeyVault()
+    let releaseRead: ((value: unknown) => void) | undefined
+    let signalRead: (() => void) | undefined
+    const readStarted = new Promise<void>(resolve => { signalRead = resolve })
+    const delayedRead = new Promise<unknown>(resolve => { releaseRead = resolve })
+    vi.spyOn(vault as any, "readLegacyPlaintext").mockImplementation(async () => {
+      signalRead?.()
+      return delayedRead
+    })
+
+    const pendingUnlock = vault.unlock(PASS)
+    await readStarted
+    const clearing = vault.clearAll()
+    releaseRead?.(undefined)
+
+    await expect(pendingUnlock).rejects.toBeInstanceOf(VaultLockedError)
+    await clearing
     expect(store.has(KEYS_STORE_KEY)).toBe(false)
     expect(vault.isUnlocked()).toBe(false)
   })
