@@ -226,11 +226,12 @@ export class KeyVault {
     const generation = ++this.unlockGeneration
     const assertCurrent = () => this.assertUnlockGeneration(generation)
 
-    if (!passphrase || passphrase.length < MIN_LEGACY_PASSPHRASE_LENGTH) {
-      throw new Error("Vault passphrase must contain at least 8 characters.")
-    }
+    return withVaultWriteLock(async () => {
+      if (!passphrase || passphrase.length < MIN_LEGACY_PASSPHRASE_LENGTH) {
+        throw new Error("Vault passphrase must contain at least 8 characters.")
+      }
 
-    const stored = await this.readCurrentEncrypted()
+      const stored = await this.readCurrentEncrypted()
     assertCurrent()
     let keys: Record<string, string> = {}
     let nextKey: CryptoKey
@@ -266,16 +267,14 @@ export class KeyVault {
         assertCurrent()
         const encrypted = await encryptRecord(keys, nextKey, nextSalt)
         assertCurrent()
-        await withVaultWriteLock(async () => {
-          assertCurrent()
-          if ((await this.readCurrentEncrypted()) !== undefined) {
-            throw new KeyStorageError("Another tab has already created or migrated the vault. Unlock it again before continuing.")
-          }
-          assertCurrent()
-          await this.writeStored(encrypted)
-          assertCurrent()
-          await this.removeLegacyPlaintext()
-        })
+        assertCurrent()
+        if ((await this.readCurrentEncrypted()) !== undefined) {
+          throw new KeyStorageError("Another tab has already created or migrated the vault. Unlock it again before continuing.")
+        }
+        assertCurrent()
+        await this.writeStored(encrypted)
+        assertCurrent()
+        await this.removeLegacyPlaintext()
         assertCurrent()
       } else {
         const legacy = await get<{
@@ -309,16 +308,14 @@ export class KeyVault {
           assertCurrent()
           const encrypted = await encryptRecord(keys, nextKey, nextSalt)
           assertCurrent()
-          await withVaultWriteLock(async () => {
-            assertCurrent()
-            if ((await this.readCurrentEncrypted()) !== undefined) {
-              throw new KeyStorageError("Another tab has already migrated the vault. Unlock it again before continuing.")
-            }
-            assertCurrent()
-            await this.writeStored(encrypted)
-            assertCurrent()
-            await this.clearLegacyEncryptedBlobs(true)
-          })
+          assertCurrent()
+          if ((await this.readCurrentEncrypted()) !== undefined) {
+            throw new KeyStorageError("Another tab has already migrated the vault. Unlock it again before continuing.")
+          }
+          assertCurrent()
+          await this.writeStored(encrypted)
+          assertCurrent()
+          await this.clearLegacyEncryptedBlobs(true)
           assertCurrent()
         } else {
           if (passphrase.length < MIN_NEW_PASSPHRASE_LENGTH) {
@@ -329,25 +326,24 @@ export class KeyVault {
           assertCurrent()
           const encrypted = await encryptRecord({}, nextKey, nextSalt)
           assertCurrent()
-          await withVaultWriteLock(async () => {
-            assertCurrent()
-            if ((await this.readCurrentEncrypted()) !== undefined) {
-              throw new KeyStorageError("Another tab has already created the vault. Unlock it again before continuing.")
-            }
-            assertCurrent()
-            await this.writeStored(encrypted)
-          })
+          assertCurrent()
+          if ((await this.readCurrentEncrypted()) !== undefined) {
+            throw new KeyStorageError("Another tab has already created the vault. Unlock it again before continuing.")
+          }
+          assertCurrent()
+          await this.writeStored(encrypted)
           assertCurrent()
         }
       }
     }
 
-    assertCurrent()
-    this.cryptoKey = nextKey
-    this.salt = nextSalt
-    this.cache = keys
-    this.loaded = true
-    return { ...keys }
+      assertCurrent()
+      this.cryptoKey = nextKey
+      this.salt = nextSalt
+      this.cache = keys
+      this.loaded = true
+      return { ...keys }
+    })
   }
 
   private async readLegacyPlaintext(): Promise<unknown> {
