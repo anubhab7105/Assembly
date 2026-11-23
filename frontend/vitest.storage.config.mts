@@ -10,6 +10,7 @@ export default defineConfig({
       "src/lib/api-client-attachments.test.ts",
       "src/lib/history-import.test.ts",
       "src/lib/attachments.test.ts",
+      "src/app/executions/external-links.test.tsx",
     ],
   },
   resolve: {
