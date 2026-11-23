@@ -92,6 +92,12 @@ export default function ModelsPage() {
     const key = keyInput.replace(/[\u200B-\u200D\uFEFF]/g, "").trim()
     setTesting(true)
     setMessage(null)
+    if (!globalVault.isUnlocked()) {
+      setTesting(false)
+      setMessageTone("warning")
+      setMessage("Open Settings to create or unlock your encrypted vault before saving provider keys.")
+      return
+    }
     try {
       await globalVault.setKey(provider.id, key)
       setSavedKeys((current) => ({ ...current, [provider.id]: key }))

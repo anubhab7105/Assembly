@@ -26,7 +26,9 @@ vi.mock("@/lib/key-vault", () => ({
     allKeys: vi.fn().mockResolvedValue({}),
     hasPersisted: vi.fn().mockResolvedValue(false),
     hasLegacyEncrypted: vi.fn().mockResolvedValue(false),
-    migrateLegacy: vi.fn(),
+    isUnlocked: vi.fn().mockReturnValue(false),
+    unlock: vi.fn().mockResolvedValue({}),
+    lock: vi.fn(),
     clearAll: vi.fn(),
   },
 }));
