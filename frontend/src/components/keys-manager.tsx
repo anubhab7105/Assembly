@@ -165,10 +165,15 @@ export function KeysManager() {
         setCatalog(null)
       }
       try {
-        const hasStored = await globalVault.hasPersisted()
-        const hasLegacy = await globalVault.hasLegacyEncrypted()
-        if (hasStored || hasLegacy) setNeedsUnlock(true)
-        else setNeedsSetup(true)
+        if (globalVault.isUnlocked()) {
+          setSavedKeys(await globalVault.allKeys())
+          setVaultUnlocked(true)
+        } else {
+          const hasStored = await globalVault.hasPersisted()
+          const hasLegacy = await globalVault.hasLegacyEncrypted()
+          if (hasStored || hasLegacy) setNeedsUnlock(true)
+          else setNeedsSetup(true)
+        }
       } catch (error) {
         setVaultError(error instanceof Error ? error.message : "Secure browser storage is unavailable.")
       }
