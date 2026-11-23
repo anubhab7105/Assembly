@@ -158,7 +158,7 @@ describe("KeyVault encrypted persistence", () => {
     let signalRead: (() => void) | undefined
     const readStarted = new Promise<void>(resolve => { signalRead = resolve })
     const delayedRead = new Promise<unknown>(resolve => { releaseRead = resolve })
-    vi.spyOn(vault as any, "readLegacyPlaintext").mockImplementation(async () => {
+    vi.spyOn(vault as unknown as { readLegacyPlaintext: () => Promise<unknown> }, "readLegacyPlaintext").mockImplementation(async () => {
       signalRead?.()
       return delayedRead
     })
@@ -179,7 +179,7 @@ describe("KeyVault encrypted persistence", () => {
     let signalRead: (() => void) | undefined
     const readStarted = new Promise<void>(resolve => { signalRead = resolve })
     const delayedRead = new Promise<unknown>(resolve => { releaseRead = resolve })
-    vi.spyOn(vault as any, "readLegacyPlaintext").mockImplementation(async () => {
+    vi.spyOn(vault as unknown as { readLegacyPlaintext: () => Promise<unknown> }, "readLegacyPlaintext").mockImplementation(async () => {
       signalRead?.()
       return delayedRead
     })
@@ -203,7 +203,7 @@ describe("KeyVault encrypted persistence", () => {
     let signalRead: (() => void) | undefined
     const readStarted = new Promise<void>(resolve => { signalRead = resolve })
     const delayedRead = new Promise<Record<string, string>>(resolve => { releaseRead = () => resolve({}) })
-    vi.spyOn(vault as any, "readLatestKeys").mockImplementation(async () => {
+    vi.spyOn(vault as unknown as { readLatestKeys: (key: CryptoKey, salt: Uint8Array) => Promise<Record<string, string>> }, "readLatestKeys").mockImplementation(async () => {
       signalRead?.()
       return delayedRead
     })
