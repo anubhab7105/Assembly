@@ -4,6 +4,10 @@ Assembly is an experimental multi-agent AI workspace. Give it a question and a t
 
 Assembly is a research project, not a promise of correctness. Multiple models can share the same blind spots, citations may be incomplete, and a confident-looking consensus can still be wrong.
 
+## Technical writing
+
+- [Assembly: An Experimental Multi-Agent AI Workspace for Independent Solving, Structured Disagreement, and Synthesis](https://assembly-ai.hashnode.dev/assembly-an-experimental-multi-agent-ai-workspace-for-independent-solving-structured-disagreement-and-synthesis) — an engineering overview of the project's architecture, orchestration workflow, model routing, consensus, debate, and development status.
+
 ## What Assembly does
 
 A typical run goes through these stages:
