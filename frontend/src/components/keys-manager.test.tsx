@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { KeysManager } from "./keys-manager";
 import { ToastProvider } from "./ui/toast";
 import { ApiClient } from "@/lib/api-client";
+import { globalVault } from "@/lib/key-vault";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
@@ -26,7 +27,9 @@ vi.mock("@/lib/key-vault", () => ({
     allKeys: vi.fn().mockResolvedValue({}),
     hasPersisted: vi.fn().mockResolvedValue(false),
     hasLegacyEncrypted: vi.fn().mockResolvedValue(false),
-    migrateLegacy: vi.fn(),
+    isUnlocked: vi.fn().mockReturnValue(false),
+    unlock: vi.fn().mockResolvedValue({}),
+    lock: vi.fn(),
     clearAll: vi.fn(),
   },
 }));
@@ -66,9 +69,61 @@ const catalogFixture = {
 beforeEach(() => {
   vi.mocked(ApiClient.catalog).mockResolvedValue(catalogFixture as never);
   vi.mocked(ApiClient.wakeup).mockResolvedValue(undefined);
+  vi.mocked(globalVault.isUnlocked).mockReturnValue(false);
+  vi.mocked(globalVault.hasPersisted).mockResolvedValue(false);
+  vi.mocked(globalVault.hasLegacyEncrypted).mockResolvedValue(false);
+  vi.mocked(globalVault.allKeys).mockResolvedValue({});
+  vi.mocked(globalVault.setKey).mockResolvedValue(undefined);
 });
 
 describe("KeysManager setup page (FR-30 snapshot)", () => {
+
+  it("preserves the universal input when the locked vault rejects the save", async () => {
+    const { container } = render(
+      <ToastProvider>
+        <KeysManager />
+      </ToastProvider>,
+    );
+    const input = await screen.findByTestId("universal-save").then(() =>
+      container.querySelector<HTMLInputElement>("#universal-key-input"),
+    );
+    if (!input) throw new Error("Universal key input was not rendered");
+    fireEvent.change(input, { target: { value: "gsk-unlock-required-canary" } });
+    fireEvent.click(screen.getByTestId("universal-save"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("unlock-error").textContent).toContain("Create or unlock");
+    });
+    expect(input.value).toBe("gsk-unlock-required-canary");
+    expect(globalVault.setKey).not.toHaveBeenCalled();
+  });
+
+  it("clears provider, Tavily, and universal credential inputs when locking", async () => {
+    vi.mocked(globalVault.isUnlocked).mockReturnValue(true);
+    vi.mocked(globalVault.allKeys).mockResolvedValue({ groq: "gsk-saved-canary", tavily: "tvly-saved-canary" });
+    const { container } = render(
+      <ToastProvider>
+        <KeysManager />
+      </ToastProvider>,
+    );
+
+    const lock = await screen.findByTestId("lock-vault");
+    const universal = container.querySelector<HTMLInputElement>("#universal-key-input");
+    const tavily = screen.getByTestId("tavily-input") as HTMLInputElement;
+    const provider = screen.getByTestId("provider-card-groq").querySelector<HTMLInputElement>('input[type="password"]');
+    if (!universal || !provider) throw new Error("Credential input was not rendered");
+
+    fireEvent.change(universal, { target: { value: "gsk-unsaved-universal" } });
+    fireEvent.change(tavily, { target: { value: "tvly-unsaved-tavily" } });
+    fireEvent.change(provider, { target: { value: "gsk-unsaved-provider" } });
+    fireEvent.click(lock);
+
+    expect(universal.value).toBe("");
+    expect(tavily.value).toBe("");
+    expect(provider.value).toBe("");
+    expect(globalVault.lock).toHaveBeenCalled();
+  });
+
   it("shows banner, stepper, copy-link, hint, why line and fallback", async () => {
     const { container } = render(
       <ToastProvider>

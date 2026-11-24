@@ -7,6 +7,7 @@ import { test, expect, type Page } from "@playwright/test";
 const CANARY_GROQ = "gsk-CANARY-PERSIST-GROQ-01";
 const CANARY_GEMINI = "AIza-CANARY-PERSIST-GEMINI-02";
 const CANARY_OPENROUTER = "sk-or-CANARY-PERSIST-OR-03";
+const VAULT_PASSPHRASE = "assembly-e2e-vault-passphrase-2026";
 
 const CATALOG = {
   providers: [
@@ -30,7 +31,24 @@ async function mockNetwork(page: Page) {
   })
 }
 
+async function unlockVault(page: Page) {
+  if (await page.getByTestId("lock-vault").isVisible().catch(() => false)) return
+  const setup = page.getByTestId("vault-setup-prompt")
+  const unlock = page.getByTestId("unlock-prompt")
+  await expect(setup.or(unlock)).toBeVisible({ timeout: 10000 })
+  if (await setup.isVisible().catch(() => false)) {
+    await setup.getByTestId("vault-setup-passphrase").fill(VAULT_PASSPHRASE)
+    await setup.getByTestId("vault-setup-submit").click()
+    await expect(setup).toBeHidden({ timeout: 10000 })
+    return
+  }
+  await unlock.getByTestId("unlock-passphrase").fill(VAULT_PASSPHRASE)
+  await unlock.getByTestId("unlock-submit").click()
+  await expect(unlock).toBeHidden({ timeout: 10000 })
+}
+
 async function saveKey(page: Page, provider: string, key: string) {
+  await unlockVault(page)
   const card = page.getByTestId(`provider-card-${provider}`)
   await card.locator('input[type="password"]').fill(key)
   await card.getByRole("button", { name: /Save & Test/i }).click()
@@ -48,6 +66,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page.getByTestId("readiness-chip")).toContainText("families ready")
 
     await page.reload()
+    await unlockVault(page)
     await expect(page.getByTestId("provider-card-groq")).toBeVisible({ timeout: 10000 })
     // Restored keys count toward readiness without re-testing this session.
     await expect(page.getByTestId("readiness-chip")).toContainText("gpt-oss", { timeout: 10000 })
@@ -65,6 +84,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page.getByTestId("readiness-chip")).toContainText("2 families ready", { timeout: 10000 })
 
     await page.reload()
+    await unlockVault(page)
     await expect(page.getByTestId("readiness-chip")).toContainText("2 families ready", { timeout: 10000 })
   })
 
@@ -94,16 +114,48 @@ test.describe("Keys survive refresh (P0)", () => {
     }, { groq: CANARY_GROQ })
 
     await page.reload()
+    await unlockVault(page)
     await expect(page.getByTestId("readiness-chip")).toContainText("gpt-oss", { timeout: 10000 })
-    // A second reload with no interaction must keep the seeded value.
+    // The verified ciphertext replaces the legacy plaintext record.
+    const encryptedRecord = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("keyval-store")
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const record = await new Promise<unknown>((resolve, reject) => {
+        const request = db.transaction("keyval", "readonly").objectStore("keyval").get("assembly_keys_encrypted_v3")
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      return record
+    })
+    expect(encryptedRecord).toMatchObject({ v: 3, kdf: "PBKDF2-SHA-256" })
+    const legacyRecord = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("keyval-store")
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const record = await new Promise<unknown>((resolve, reject) => {
+        const request = db.transaction("keyval", "readonly").objectStore("keyval").get("assembly_keys_v1")
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      return record
+    })
+    expect(legacyRecord).toBeUndefined()
     await page.reload()
+    await unlockVault(page)
     await expect(page.getByTestId("readiness-chip")).toContainText("gpt-oss", { timeout: 10000 })
   })
 
   test("4. navigate away and back without losing configuration", async ({ page }) => {
     await page.goto("/settings")
     await saveKey(page, "groq", CANARY_GROQ)
-    await page.goto("/chat")
+    await page.getByRole("link", { name: /Back to investigation/i }).click()
     await expect(page).toHaveURL(/\/chat$/)
 
     // The informational cookie notice is fixed to the viewport bottom and can
@@ -132,6 +184,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(groqCard.getByTestId("test-result-groq")).toContainText(/valid/i, { timeout: 10000 })
 
     await page.reload()
+    await unlockVault(page)
     await expect(page.getByTestId("readiness-chip")).toContainText("1 families ready", { timeout: 10000 })
     await expect(page.getByTestId("limits-unavailable-gemini")).toContainText("rpm, rpd, tpm", { timeout: 10000 })
   })
@@ -149,6 +202,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page.getByTestId("readiness-chip")).not.toContainText("gpt-oss")
 
     await page.reload()
+    await unlockVault(page)
     await expect(page.getByTestId("limits-unavailable-gemini")).toContainText("rpm, rpd, tpm", { timeout: 10000 })
     await expect(page.getByTestId("readiness-chip")).not.toContainText("gpt-oss")
   })
@@ -174,7 +228,8 @@ test.describe("Keys survive refresh (P0)", () => {
     await saveKey(page, "openrouter", CANARY_OPENROUTER)
 
     await page.reload()
-    await page.goto("/chat")
+    await unlockVault(page)
+    await page.getByRole("link", { name: /Back to investigation/i }).click()
     await expect(page.getByTestId("diversity-chip")).toContainText("gpt-oss", { timeout: 10000 })
 
     // Model selection is advanced configuration, so inspect it in its dialog.
@@ -216,7 +271,7 @@ test.describe("Keys survive refresh (P0)", () => {
     const card = page.getByTestId("provider-card-groq")
     await card.locator('input[type="password"]').fill(CANARY_GROQ)
     await card.getByRole("button", { name: /Save & Test/i }).click()
-    await expect(card.getByTestId("save-error-groq")).toContainText(/Couldn't save|storage/i, { timeout: 10000 })
+    await expect(page.getByTestId("vault-error")).toContainText(/storage|update saved keys/i, { timeout: 10000 })
     // Nothing claimed saved: no readiness, no masked placeholder.
     await expect(page.getByTestId("readiness-chip")).toContainText("0 families ready")
   })
@@ -234,14 +289,45 @@ test.describe("Keys survive refresh (P0)", () => {
     await page.goto("/settings")
     await saveKey(page, "groq", CANARY_GROQ)
     await page.reload()
+    await unlockVault(page)
     await expect(page.getByTestId("readiness-chip")).toContainText("gpt-oss", { timeout: 10000 })
 
     for (const url of seenUrls) expect(url).not.toContain(CANARY_GROQ)
     expect(page.url()).not.toContain(CANARY_GROQ)
     for (const log of consoleLogs) expect(log).not.toContain(CANARY_GROQ)
-    // IndexedDB is the canonical store; the localStorage mirror stays empty
-    // while IndexedDB is healthy, so plaintext must not leak there.
+    // Both storage backends must remain ciphertext-only.
     const ls = await page.evaluate(() => JSON.stringify(window.localStorage))
     expect(ls).not.toContain(CANARY_GROQ)
+    const persisted = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("keyval-store")
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const record = await new Promise<unknown>((resolve, reject) => {
+        const request = db.transaction("keyval", "readonly").objectStore("keyval").get("assembly_keys_encrypted_v3")
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      return JSON.stringify(record)
+    })
+    expect(persisted).not.toContain(CANARY_GROQ)
+    expect(persisted).toContain("PBKDF2-SHA-256")
+    const allIndexedDbValues = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("keyval-store")
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const values = await new Promise<unknown[]>((resolve, reject) => {
+        const request = db.transaction("keyval", "readonly").objectStore("keyval").getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      return values.map(value => JSON.stringify(value))
+    })
+    expect(allIndexedDbValues.every(value => !value.includes(CANARY_GROQ))).toBe(true)
   })
 })

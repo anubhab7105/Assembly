@@ -144,6 +144,9 @@ export function KeysManager() {
   const [vaultLoaded, setVaultLoaded] = useState(false)
   const [tavilyInput, setTavilyInput] = useState("")
   const [needsUnlock, setNeedsUnlock] = useState(false)
+  const [needsSetup, setNeedsSetup] = useState(false)
+  const [vaultUnlocked, setVaultUnlocked] = useState(false)
+  const [vaultError, setVaultError] = useState<string | null>(null)
   const [unlockError, setUnlockError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
 
@@ -162,14 +165,17 @@ export function KeysManager() {
         setCatalog(null)
       }
       try {
-        const keys = await globalVault.allKeys()
-        if (Object.keys(keys).length > 0) {
-          setSavedKeys(keys)
-        } else if (await globalVault.hasLegacyEncrypted().catch(() => false)) {
-          setNeedsUnlock(true)
+        if (globalVault.isUnlocked()) {
+          setSavedKeys(await globalVault.allKeys())
+          setVaultUnlocked(true)
+        } else {
+          const hasStored = await globalVault.hasPersisted()
+          const hasLegacy = await globalVault.hasLegacyEncrypted()
+          if (hasStored || hasLegacy) setNeedsUnlock(true)
+          else setNeedsSetup(true)
         }
-      } catch {
-        setSavedKeys({})
+      } catch (error) {
+        setVaultError(error instanceof Error ? error.message : "Secure browser storage is unavailable.")
       }
       setVaultLoaded(true)
     }
@@ -187,14 +193,17 @@ export function KeysManager() {
 
   const handleUnlock = async () => {
     try {
-      const keys = await globalVault.migrateLegacy(passphrase)
+      const keys = await globalVault.unlock(passphrase)
       setSavedKeys(keys)
       setNeedsUnlock(false)
-      setUnlockError(keys && Object.keys(keys).length > 0 ? null : "No keys found in the saved vault.")
-      toast({ title: "Keys restored", description: "Saved keys were restored on this device.", variant: "success" })
+      setNeedsSetup(false)
+      setVaultUnlocked(true)
+      setUnlockError(null)
+      setPassphrase("")
+      toast({ title: "Vault unlocked", description: "Saved credentials are available in this session.", variant: "success" })
     } catch (e) {
       setUnlockError(
-        e instanceof Error ? e.message : "Wrong passphrase. Nothing was deleted. Try again or use Clear all keys.",
+        e instanceof Error ? e.message : "Vault could not be unlocked. No saved data was changed.",
       )
     }
   }
@@ -212,6 +221,8 @@ export function KeysManager() {
       return
     }
     setNeedsUnlock(false)
+    setNeedsSetup(true)
+    setVaultUnlocked(false)
     setUnlockError(null)
     setSavedKeys({})
     setInputs({})
@@ -235,9 +246,13 @@ export function KeysManager() {
   const providers = catalog?.providers.filter((p) => p.enabled) ?? []
   const tavilySaved = !!savedKeys["tavily"]
 
-  const handleSaveTavily = async (customKey?: string) => {
+  const handleSaveTavily = async (customKey?: string): Promise<boolean> => {
     const rawKey = cleanPastedKey(customKey || tavilyInput || savedKeys["tavily"] || "")
-    if (!rawKey) return
+    if (!rawKey) return false
+    if (!globalVault.isUnlocked()) {
+      setUnlockError("Create or unlock your encrypted vault before saving keys.")
+      return false
+    }
     try {
       await globalVault.setKey("tavily", rawKey)
     } catch (e) {
@@ -246,26 +261,31 @@ export function KeysManager() {
         description: e instanceof Error ? e.message : "Storage unavailable.",
         variant: "danger",
       })
-      return
+      return false
     }
     setSavedKeys((prev) => ({ ...prev, tavily: rawKey }))
     setTavilyInput("")
     toast({ title: "Search key saved", description: "Tavily key stored with your other keys.", variant: "success" })
+    return true
   }
 
-  const handleSaveAndTest = async (providerId: string, customKey?: string) => {
+  const handleSaveAndTest = async (providerId: string, customKey?: string): Promise<boolean> => {
     const rawKey = cleanPastedKey(customKey || inputs[providerId] || savedKeys[providerId] || "")
-    if (!rawKey) return
+    if (!rawKey) return false
+    if (!globalVault.isUnlocked()) {
+      setUnlockError("Create or unlock your encrypted vault before saving keys.")
+      return false
+    }
     const generation = nextVerificationGeneration(providerId)
     void isKeyFormatOk(providerId, rawKey)
     try {
       await globalVault.setKey(providerId, rawKey)
     } catch (e) {
-      if (verificationGenerations.current[providerId] !== generation) return
+      if (verificationGenerations.current[providerId] !== generation) return false
       const message = e instanceof Error ? e.message : "Storage unavailable."
       setSaveErrors((prev) => ({ ...prev, [providerId]: message }))
       toast({ title: "Couldn't save key", description: message, variant: "danger" })
-      return
+      return false
     }
     setSaveErrors((prev) => {
       if (!(providerId in prev)) return prev
@@ -284,7 +304,7 @@ export function KeysManager() {
     })
     try {
       const res = await ApiClient.testKey(providerId, rawKey)
-      if (verificationGenerations.current[providerId] !== generation) return
+      if (verificationGenerations.current[providerId] !== generation) return true
       setStatuses((prev) => ({ ...prev, [providerId]: res.status }))
       if (res.verification) {
         setVerifications((prev) => ({ ...prev, [providerId]: res.verification! }))
@@ -302,10 +322,11 @@ export function KeysManager() {
         toast({ title: "Key test failed", description: res.message ?? "The provider rejected this key.", variant: "danger" })
       }
     } catch {
-      if (verificationGenerations.current[providerId] !== generation) return
+      if (verificationGenerations.current[providerId] !== generation) return true
       setStatuses((prev) => ({ ...prev, [providerId]: "unreachable" }))
       toast({ title: "Couldn't reach provider", description: "Couldn't reach the server; try again.", variant: "danger" })
     }
+    return true
   }
 
   // Universal Bar Save Handler
@@ -314,12 +335,10 @@ export function KeysManager() {
 
     setIsSubmittingUniversal(true)
     try {
-      if (selectedProviderId === "tavily") {
-        await handleSaveTavily(universalInput)
-      } else {
-        await handleSaveAndTest(selectedProviderId, universalInput)
-      }
-      setUniversalInput("")
+      const saved = selectedProviderId === "tavily"
+        ? await handleSaveTavily(universalInput)
+        : await handleSaveAndTest(selectedProviderId, universalInput)
+      if (saved) setUniversalInput("")
     } finally {
       setIsSubmittingUniversal(false)
     }
@@ -405,6 +424,8 @@ export function KeysManager() {
       }
     }
     setNeedsUnlock(false)
+    setNeedsSetup(true)
+    setVaultUnlocked(false)
     setUnlockError(null)
     setSavedKeys({})
     setInputs({})
@@ -480,7 +501,7 @@ export function KeysManager() {
           </div>
           {/* Retained in DOM for persistent vault test contract */}
           <p data-testid="persisted-banner" className="sr-only">
-            Saved keys stay in this browser across refreshes and can be removed here or cleared with site data. Keys are stored unencrypted in local browser storage, not protected by the OS.
+            Saved keys stay in this browser across refreshes and can be removed here or cleared with site data. Saved keys are encrypted before browser persistence and survive across refreshes after unlocking. The passphrase is not stored; active same-origin scripts may access keys while the vault is unlocked.
           </p>
         </CardHeader>
       </Card>
@@ -1031,37 +1052,48 @@ export function KeysManager() {
         </div>
       </div>
 
-      {/* Legacy Unlock prompt if needed */}
+      {vaultError && <p role="alert" data-testid="vault-error" className="text-sm text-red-500">{vaultError}</p>}
+      {needsSetup && (
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3" data-testid="vault-setup-prompt">
+          <div>
+            <p className="font-medium">Protect your API keys</p>
+            <p className="text-xs text-muted-foreground">Create a passphrase of at least 12 characters. It encrypts your credentials before they are saved. The passphrase is never stored, and it cannot be recovered if lost.</p>
+          </div>
+          <div className="flex gap-2">
+            <input type="password" placeholder="Create vault passphrase" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} autoComplete="new-password" data-testid="vault-setup-passphrase" className="flex-1 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm" />
+            <Button size="sm" onClick={() => void handleUnlock()} disabled={passphrase.length < 12} data-testid="vault-setup-submit">Create vault</Button>
+          </div>
+          {unlockError && <p role="alert" className="text-xs text-warning" data-testid="unlock-error">{unlockError}</p>}
+        </div>
+      )}
       {needsUnlock && (
-        <div className="rounded-xl border border-white/10 bg-[#0b0c0e] p-5 space-y-3 assembly-vault-card">
+        <div className="rounded-xl border border-border bg-card p-5 space-y-3 assembly-vault-card">
           <div data-testid="unlock-prompt" className="space-y-3">
             <div className="flex flex-col">
               <span className="font-medium">Unlock saved keys</span>
-              <span className="text-xs text-muted-foreground">
-                This device holds keys saved before an update. Enter your previous passphrase once to move them into current storage.
-              </span>
+              <span className="text-xs text-muted-foreground">Enter the passphrase used to protect saved credentials. The passphrase is never stored.</span>
             </div>
             <div className="flex gap-2">
-              <input
-                type="password"
-                placeholder="Previous passphrase"
-                value={passphrase}
-                onChange={(e) => setPassphrase(e.target.value)}
-                autoComplete="off"
-                data-testid="unlock-passphrase"
-                className="flex-1 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm"
-              />
-              <Button size="sm" onClick={() => void handleUnlock()} data-testid="unlock-submit">
-                Unlock
-              </Button>
+              <input type="password" placeholder="Vault passphrase" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} autoComplete="off" data-testid="unlock-passphrase" className="flex-1 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm" />
+              <Button size="sm" onClick={() => void handleUnlock()} disabled={passphrase.length < 8} data-testid="unlock-submit">Unlock</Button>
             </div>
-            {unlockError && (
-              <p data-testid="unlock-error" className="text-xs text-warning">{unlockError}</p>
-            )}
-            <Button variant="outline" size="sm" onClick={() => void handleForget()} data-testid="forget-keys">
-              Forget keys
-            </Button>
+            {unlockError && <p data-testid="unlock-error" className="text-xs text-warning">{unlockError}</p>}
+            <Button variant="outline" size="sm" onClick={() => void handleForget()} data-testid="forget-keys">Forget keys</Button>
           </div>
+        </div>
+      )}
+      {vaultUnlocked && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={() => {
+            void globalVault.lock()
+            setSavedKeys({})
+            setInputs({})
+            setTavilyInput("")
+            setUniversalInput("")
+            setVaultUnlocked(false)
+            setNeedsUnlock(true)
+            setPassphrase("")
+          }} data-testid="lock-vault">Lock vault</Button>
         </div>
       )}
 

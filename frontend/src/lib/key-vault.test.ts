@@ -1,296 +1,261 @@
-/**
- * KeyVault regression tests for the P0 refresh bug.
- *
- * The old vault kept keys in memory unless Remember+passphrase was set, so
- * every plain Save vanished on reload. These tests pin the fixed contract:
- * save → new instance (simulated reload) → restored, with merge/remove/
- * honest-failure semantics. idb-keyval is mocked with an in-memory Map
- * shared across instances (jsdom has no IndexedDB); WebCrypto does real
- * work only for the legacy-migration roundtrip. Canary strings only.
- */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+/** KeyVault encryption and migration regression tests. */
+import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const store = new Map<string, unknown>();
-
+const store = new Map<string, unknown>()
 vi.mock("idb-keyval", () => ({
   get: vi.fn((key: string) => Promise.resolve(store.get(key))),
-  set: vi.fn((key: string, value: unknown) => {
-    store.set(key, value);
-    return Promise.resolve();
-  }),
-  del: vi.fn((key: string) => {
-    store.delete(key);
-    return Promise.resolve();
-  }),
-}));
+  set: vi.fn((key: string, value: unknown) => { store.set(key, value); return Promise.resolve() }),
+  del: vi.fn((key: string) => { store.delete(key); return Promise.resolve() }),
+}))
 
-import { get, set } from "idb-keyval";
-import { KeyVault, KeyStorageError, KEYS_STORE_KEY } from "./key-vault";
+import { del, get, set } from "idb-keyval"
+import { KeyVault, KeyStorageError, VaultLockedError, KEYS_STORE_KEY } from "./key-vault"
 
-const CANARY_A = "gsk-CANARY-VAULT-A1";
-const CANARY_B = "tvly-CANARY-VAULT-B2";
-const CANARY_C = "sk-or-CANARY-VAULT-C3";
-const PASS = "test-passphrase-01";
+const CANARY_A = "gsk-CANARY-VAULT-A1"
+const CANARY_B = "tvly-CANARY-VAULT-B2"
+const PASS = "correct horse battery staple"
 
-function mockLocalStorage() {
-  const bag = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
-    getItem: (k: string) => bag.get(k) ?? null,
-    setItem: (k: string, v: string) => void bag.set(k, v),
-    removeItem: (k: string) => void bag.delete(k),
-  } as Storage);
-  return bag;
+let lockQueue: Promise<unknown> = Promise.resolve()
+function installWebLocks() {
+  const locks = {
+    request: vi.fn((_name: string, _options: unknown, callback: () => Promise<unknown>) => {
+      const result = lockQueue.then(callback, callback)
+      lockQueue = result.then(() => undefined, () => undefined)
+      return result
+    }),
+  }
+  vi.stubGlobal("navigator", { locks } as unknown as Navigator)
 }
 
-async function buildLegacyBlob(passphrase: string, keys: Record<string, string>) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const base = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(passphrase),
-    "PBKDF2",
-    false,
-    ["deriveKey"],
-  );
-  const kek = await crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: salt as BufferSource, iterations: 210_000, hash: "SHA-256" },
-    base,
+function mockLocalStorage() {
+  const bag = new Map<string, string>()
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => bag.get(key) ?? null,
+    setItem: (key: string, value: string) => { bag.set(key, value) },
+    removeItem: (key: string) => { bag.delete(key) },
+  } as Storage)
+  return bag
+}
+
+async function makeLegacyBlob(passphrase: string, keys: Record<string, string>) {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"])
+  const legacyKey = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 210_000, hash: "SHA-256" },
+    material,
     { name: "AES-GCM", length: 256 },
     false,
     ["encrypt", "decrypt"],
-  );
+  )
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv as BufferSource },
-    kek,
+    legacyKey,
     new TextEncoder().encode(JSON.stringify(keys)),
-  );
-  const b64 = (buf: ArrayBuffer | Uint8Array) => {
-    const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-    let s = "";
-    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-    return btoa(s);
-  };
-  await set("assembly_keys_encrypted_v2", {
-    v: 2,
-    salt: b64(salt),
-    iv: b64(iv),
-    ciphertext: b64(ciphertext),
-  });
+  )
+  const b64 = (value: Uint8Array | ArrayBuffer) => btoa(String.fromCharCode(...(value instanceof Uint8Array ? value : new Uint8Array(value))))
+  await set("assembly_keys_encrypted_v2", { v: 2, salt: b64(salt), iv: b64(iv), ciphertext: b64(ciphertext) })
 }
 
-describe("KeyVault persistence (P0)", () => {
+describe("KeyVault encrypted persistence", () => {
   beforeEach(() => {
-    store.clear();
-    mockLocalStorage();
-    vi.mocked(get).mockImplementation((key: Parameters<typeof get>[0]) => Promise.resolve(store.get(key as string)));
-    vi.mocked(set).mockImplementation((key: Parameters<typeof set>[0], value: unknown) => {
-      store.set(key as string, value);
-      return Promise.resolve();
-    });
-  });
-
-  it("1. save restores after reload with no extra step", async () => {
-    const first = new KeyVault();
-    await first.setKey("groq", CANARY_A);
-    expect(await first.hasPersisted()).toBe(true);
-
-    const reloaded = new KeyVault();
-    expect(await reloaded.allKeys()).toEqual({ groq: CANARY_A });
-    expect(await reloaded.getKey("groq")).toBe(CANARY_A);
-  });
-
-  it("2. multiple providers all survive reload", async () => {
-    const first = new KeyVault();
-    await first.setKey("groq", CANARY_A);
-    await first.setKey("tavily", CANARY_B);
-    await first.setKey("openrouter", CANARY_C);
-
-    const reloaded = new KeyVault();
-    expect(await reloaded.allKeys()).toEqual({
-      groq: CANARY_A,
-      tavily: CANARY_B,
-      openrouter: CANARY_C,
-    });
-  });
-
-  it("uses persistent localStorage fallback if IndexedDB is unavailable and clears it on deletion", async () => {
-    const fallback = mockLocalStorage();
-    vi.stubGlobal("indexedDB", undefined);
-    vi.mocked(get).mockRejectedValue(new Error("IndexedDB unavailable"));
-    vi.mocked(set).mockRejectedValue(new Error("IndexedDB unavailable"));
-
-    const vault = new KeyVault();
-    await vault.setKey("groq", CANARY_A);
-    expect(JSON.parse(fallback.get("assembly:keys_v1") ?? "{}")).toEqual({ groq: CANARY_A });
-
-    const reloaded = new KeyVault();
-    expect(await reloaded.allKeys()).toEqual({ groq: CANARY_A });
-
-    await reloaded.removeKey("groq");
-    expect(await new KeyVault().allKeys()).toEqual({});
-  });
-
-  it("3. initialization never overwrites pre-existing values with empty defaults", async () => {
-    await set(KEYS_STORE_KEY, { groq: CANARY_A });
-    const fresh = new KeyVault();
-    // No write performed — a pure read must return the saved value.
-    expect(await fresh.allKeys()).toEqual({ groq: CANARY_A });
-    expect(store.get(KEYS_STORE_KEY)).toEqual({ groq: CANARY_A });
-  });
-
-  it("5. updating one provider preserves the others", async () => {
-    const vault = new KeyVault();
-    await vault.setKey("groq", CANARY_A);
-    await vault.setKey("tavily", CANARY_B);
-    await vault.setKey("groq", CANARY_C);
-
-    const reloaded = new KeyVault();
-    expect(await reloaded.allKeys()).toEqual({ groq: CANARY_C, tavily: CANARY_B });
-  });
-
-  it("6. explicit per-provider removal keeps the others", async () => {
-    const vault = new KeyVault();
-    await vault.setKey("groq", CANARY_A);
-    await vault.setKey("tavily", CANARY_B);
-    await vault.removeKey("groq");
-
-    expect(await vault.allKeys()).toEqual({ tavily: CANARY_B });
-    const reloaded = new KeyVault();
-    expect(await reloaded.allKeys()).toEqual({ tavily: CANARY_B });
-  });
-
-  it("clearAll removes memory and disk", async () => {
-    const vault = new KeyVault();
-    await vault.setKey("groq", CANARY_A);
-    await vault.clearAll();
-    expect(await vault.allKeys()).toEqual({});
-    expect(await vault.hasPersisted()).toBe(false);
-    const reloaded = new KeyVault();
-    expect(await reloaded.allKeys()).toEqual({});
-  });
-
-  it("empty keys are rejected without claiming a save", async () => {
-    const vault = new KeyVault();
-    await expect(vault.setKey("groq", "   ")).rejects.toThrow(/Empty key/);
-    expect(await vault.allKeys()).toEqual({});
-    expect(await vault.hasPersisted()).toBe(false);
-  });
-
-  it("8. storage failure is surfaced honestly (nothing claimed saved)", async () => {
-    const vault = new KeyVault();
-    await vault.setKey("groq", CANARY_A);
-    // Break both layers: IndexedDB get+set throw, localStorage throws.
-    vi.mocked(get).mockRejectedValue(new Error("idb dead"));
-    vi.mocked(set).mockRejectedValue(new Error("idb dead"));
-    vi.stubGlobal("localStorage", {
-      getItem: () => null,
-      setItem: () => {
-        throw new Error("quota exceeded");
-      },
-      removeItem: () => {},
-    } as unknown as Storage);
-    await expect(vault.setKey("tavily", CANARY_B)).rejects.toBeInstanceOf(KeyStorageError);
-  });
-
-  it("does not seed the cache from localStorage when initial IndexedDB loading fails", async () => {
-    const fallback = mockLocalStorage();
-    fallback.set("assembly:keys_v1", JSON.stringify({ groq: CANARY_B }));
-    // The vault only treats IndexedDB as the primary store when `indexedDB`
-    // exists, so the environment must look like a real browser: without this a
-    // read failure would legitimately fall back to the localStorage mirror.
-    vi.stubGlobal("indexedDB", {});
-    vi.mocked(get).mockRejectedValue(new Error("IndexedDB read failed"));
-
-    const vault = new KeyVault();
-    await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError);
-
-    // Public reads remain fail-soft, but only with the in-memory cache (empty
-    // for a fresh vault), not the stale localStorage mirror.
-    expect(await vault.getKey("groq")).toBeNull();
-    expect(await vault.allKeys()).toEqual({});
-    expect(JSON.parse(fallback.get("assembly:keys_v1") ?? "{}")).toEqual({ groq: CANARY_B });
-  });
-
-  it("does not use the localStorage mirror after an established IndexedDB read fails", async () => {
-    const fallback = mockLocalStorage();
-    const vault = new KeyVault();
-    await vault.setKey("groq", CANARY_A);
-    fallback.set("assembly:keys_v1", JSON.stringify({ groq: CANARY_B }));
-
-    // A read failure must reject the mutation; it must not act on the mirror.
-    vi.mocked(get).mockRejectedValue(new Error("IndexedDB read failed"));
-
-    await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError);
-    expect(store.get(KEYS_STORE_KEY)).toEqual({ groq: CANARY_A });
-    expect(JSON.parse(fallback.get("assembly:keys_v1") ?? "{}")).toEqual({ groq: CANARY_B });
-
-    // Reads keep their existing cache-based fallback behavior.
-    expect(await vault.getKey("groq")).toBe(CANARY_A);
-    expect(await vault.allKeys()).toEqual({ groq: CANARY_A });
-  });
-
-  it("does not use the cache after an established IndexedDB read fails during mutation", async () => {
-    const vault = new KeyVault();
-    await vault.setKey("groq", CANARY_A);
-    vi.mocked(get).mockRejectedValue(new Error("IndexedDB read failed"));
-
-    await expect(vault.setKey("tavily", CANARY_B)).rejects.toBeInstanceOf(KeyStorageError);
-    expect(store.get(KEYS_STORE_KEY)).toEqual({ groq: CANARY_A });
-  });
-
-  it("does not report removal as successful when an established IndexedDB store rejects a write", async () => {
-    const fallback = mockLocalStorage();
-    const vault = new KeyVault();
-    await vault.setKey("groq", CANARY_A);
-
-    // The primary still contains the old key, while its next write fails.
-    vi.mocked(set).mockRejectedValue(new Error("IndexedDB write failed"));
-
-    await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError);
-    expect(store.get(KEYS_STORE_KEY)).toEqual({ groq: CANARY_A });
-    expect(fallback.get("assembly:keys_v1")).toBeUndefined();
-    expect(await new KeyVault().getKey("groq")).toBe(CANARY_A);
+    store.clear()
+    lockQueue = Promise.resolve()
+    installWebLocks()
+    mockLocalStorage()
+    vi.stubGlobal("indexedDB", {})
+    vi.mocked(get).mockImplementation((key) => Promise.resolve(store.get(String(key))))
+    vi.mocked(set).mockImplementation((key, value) => { store.set(String(key), value); return Promise.resolve() })
+    vi.mocked(del).mockImplementation((key) => { store.delete(String(key)); return Promise.resolve() })
   })
 
-  it("does not report removal as successful when both persistent stores reject writes", async () => {
-    const vault = new KeyVault();
-    await vault.setKey("groq", CANARY_A);
+  it("stores ciphertext only and survives a lock/reload/unlock cycle", async () => {
+    const vault = new KeyVault()
+    await vault.unlock(PASS)
+    await vault.setKey("groq", CANARY_A)
+    await vault.setKey("tavily", CANARY_B)
+    const raw = JSON.stringify(store.get(KEYS_STORE_KEY))
+    expect(raw).not.toContain(CANARY_A)
+    expect(raw).not.toContain(CANARY_B)
+    expect(raw).toContain("PBKDF2-SHA-256")
+    await vault.lock()
+    await expect(vault.allKeys()).rejects.toBeInstanceOf(VaultLockedError)
+    const reloaded = new KeyVault()
+    await expect(reloaded.unlock("incorrect passphrase")).rejects.toThrow(/Incorrect passphrase/)
+    expect(await reloaded.unlock(PASS)).toEqual({ groq: CANARY_A, tavily: CANARY_B })
+  })
 
-    vi.mocked(set).mockRejectedValue(new Error("IndexedDB unavailable"));
-    vi.stubGlobal(
-      "localStorage",
-      {
-        getItem: () => null,
-        setItem: () => {
-          throw new Error("storage unavailable");
-        },
-        removeItem: () => {},
-      } as unknown as Storage,
-    );
+  it("encrypts localStorage fallback values when IndexedDB is unavailable", async () => {
+    const fallback = mockLocalStorage()
+    vi.stubGlobal("indexedDB", undefined)
+    vi.mocked(get).mockRejectedValue(new Error("IndexedDB unavailable"))
+    const vault = new KeyVault()
+    await vault.unlock(PASS)
+    await vault.setKey("groq", CANARY_A)
+    const raw = fallback.get("assembly:keys_encrypted_v3") ?? ""
+    expect(raw).not.toContain(CANARY_A)
+    expect(JSON.parse(raw).kdf).toBe("PBKDF2-SHA-256")
+    await vault.lock()
+    expect(await new KeyVault().unlock(PASS)).toEqual({ groq: CANARY_A })
+  })
 
-    await expect(vault.removeKey("groq")).rejects.toBeInstanceOf(KeyStorageError);
-    expect(await new KeyVault().getKey("groq")).toBe(CANARY_A);
-  });
+  it("migrates legacy plaintext only after ciphertext has been verified", async () => {
+    await set("assembly_keys_v1", { groq: CANARY_A })
+    const vault = new KeyVault()
+    expect(await vault.hasPersisted()).toBe(true)
+    await vault.unlock(PASS)
+    const raw = JSON.stringify(store.get(KEYS_STORE_KEY))
+    expect(raw).not.toContain(CANARY_A)
+    expect(store.has("assembly_keys_v1")).toBe(false)
+    expect(await vault.getKey("groq")).toBe(CANARY_A)
+  })
 
-  it("corrupt canonical record never crashes reads", async () => {
-    await set(KEYS_STORE_KEY, { groq: 42 });
-    const vault = new KeyVault();
-    expect(await vault.allKeys()).toEqual({});
-    expect(await vault.hasPersisted()).toBe(false);
-  });
+  it("preserves legacy plaintext when encrypted persistence fails", async () => {
+    await set("assembly_keys_v1", { groq: CANARY_A })
+    vi.mocked(set).mockRejectedValue(new Error("IndexedDB write failed"))
+    const vault = new KeyVault()
+    await expect(vault.unlock(PASS)).rejects.toBeInstanceOf(KeyStorageError)
+    expect(store.get("assembly_keys_v1")).toEqual({ groq: CANARY_A })
+  })
 
-  it("legacy encrypted blob migrates once with the passphrase, then is gone", async () => {
-    await buildLegacyBlob(PASS, { groq: CANARY_A });
-    const vault = new KeyVault();
-    expect(await vault.hasLegacyEncrypted()).toBe(true);
-    // Canonical store is still empty: only the migration prompt should show.
-    expect(await vault.allKeys()).toEqual({});
-    await expect(vault.migrateLegacy("short")).rejects.toThrow(/at least 8/);
-    await expect(vault.migrateLegacy("wrong-passphrase-99")).rejects.toThrow(/Wrong passphrase/);
-    expect(await vault.hasLegacyEncrypted()).toBe(true);
-    expect(await vault.migrateLegacy(PASS)).toEqual({ groq: CANARY_A });
-    expect(await vault.hasLegacyEncrypted()).toBe(false);
-    const reloaded = new KeyVault();
-    expect(await reloaded.allKeys()).toEqual({ groq: CANARY_A });
-  });
-});
+  it("migrates the previous encrypted v2 blob without losing credentials", async () => {
+    await makeLegacyBlob("old vault passphrase", { groq: CANARY_A })
+    const vault = new KeyVault()
+    await expect(vault.unlock("not the old phrase")).rejects.toThrow(/Incorrect legacy passphrase/)
+    expect(await vault.hasLegacyEncrypted()).toBe(true)
+    expect(await vault.unlock("old vault passphrase")).toEqual({ groq: CANARY_A })
+    expect(await vault.hasLegacyEncrypted()).toBe(false)
+    expect(JSON.stringify(store.get(KEYS_STORE_KEY))).not.toContain(CANARY_A)
+  })
+
+  it("rejects weak initial passphrases and empty keys", async () => {
+    const vault = new KeyVault()
+    await expect(vault.unlock("short")).rejects.toThrow(/at least 8/)
+    await expect(vault.unlock("short pass")).rejects.toThrow(/at least 12/)
+    await vault.unlock(PASS)
+    await expect(vault.setKey("groq", " ")).rejects.toThrow(/Empty key/)
+  })
+
+
+  it("merges concurrent writes from separate vault instances against the latest encrypted record", async () => {
+    const first = new KeyVault()
+    const second = new KeyVault()
+    await first.unlock(PASS)
+    await second.unlock(PASS)
+
+    await Promise.all([
+      first.setKey("groq", CANARY_A),
+      second.setKey("tavily", CANARY_B),
+    ])
+
+    const reloaded = new KeyVault()
+    expect(await reloaded.unlock(PASS)).toEqual({ groq: CANARY_A, tavily: CANARY_B })
+  })
+
+  it("invalidates a pending unlock when lock is called", async () => {
+    const vault = new KeyVault()
+    let releaseRead: ((value: unknown) => void) | undefined
+    let signalRead: (() => void) | undefined
+    const readStarted = new Promise<void>(resolve => { signalRead = resolve })
+    const delayedRead = new Promise<unknown>(resolve => { releaseRead = resolve })
+    vi.spyOn(vault as unknown as { readLegacyPlaintext: () => Promise<unknown> }, "readLegacyPlaintext").mockImplementation(async () => {
+      signalRead?.()
+      return delayedRead
+    })
+
+    const pendingUnlock = vault.unlock(PASS)
+    await readStarted
+    await vault.lock()
+    releaseRead?.(undefined)
+
+    await expect(pendingUnlock).rejects.toBeInstanceOf(VaultLockedError)
+    expect(store.has(KEYS_STORE_KEY)).toBe(false)
+    expect(vault.isUnlocked()).toBe(false)
+  })
+
+  it("invalidates an in-flight unlock when clearAll starts", async () => {
+    const vault = new KeyVault()
+    let releaseRead: ((value: unknown) => void) | undefined
+    let signalRead: (() => void) | undefined
+    const readStarted = new Promise<void>(resolve => { signalRead = resolve })
+    const delayedRead = new Promise<unknown>(resolve => { releaseRead = resolve })
+    vi.spyOn(vault as unknown as { readLegacyPlaintext: () => Promise<unknown> }, "readLegacyPlaintext").mockImplementation(async () => {
+      signalRead?.()
+      return delayedRead
+    })
+
+    const pendingUnlock = vault.unlock(PASS)
+    await readStarted
+    const clearing = vault.clearAll()
+    releaseRead?.(undefined)
+
+    await expect(pendingUnlock).rejects.toBeInstanceOf(VaultLockedError)
+    await clearing
+    expect(store.has(KEYS_STORE_KEY)).toBe(false)
+    expect(vault.isUnlocked()).toBe(false)
+  })
+
+  it("invalidates a pending save before it can write or republish cache after lock", async () => {
+    const vault = new KeyVault()
+    await vault.unlock(PASS)
+    const before = store.get(KEYS_STORE_KEY)
+    let releaseRead: (() => void) | undefined
+    let signalRead: (() => void) | undefined
+    const readStarted = new Promise<void>(resolve => { signalRead = resolve })
+    const delayedRead = new Promise<Record<string, string>>(resolve => { releaseRead = () => resolve({}) })
+    vi.spyOn(vault as unknown as { readLatestKeys: (key: CryptoKey, salt: Uint8Array) => Promise<Record<string, string>> }, "readLatestKeys").mockImplementation(async () => {
+      signalRead?.()
+      return delayedRead
+    })
+
+    const pendingSave = vault.setKey("groq", CANARY_A)
+    await readStarted
+    await vault.lock()
+    releaseRead?.()
+
+    await expect(pendingSave).rejects.toBeInstanceOf(VaultLockedError)
+    expect(store.get(KEYS_STORE_KEY)).toEqual(before)
+    expect(vault.isUnlocked()).toBe(false)
+  })
+
+  it("propagates legacy encrypted-record deletion failures from clearAll", async () => {
+    await makeLegacyBlob(PASS, { groq: CANARY_A })
+    vi.mocked(del).mockImplementation((key) => {
+      if (String(key) === "assembly_keys_encrypted_v2") {
+        return Promise.reject(new Error("legacy delete failed"))
+      }
+      store.delete(String(key))
+      return Promise.resolve()
+    })
+
+    const vault = new KeyVault()
+    await expect(vault.clearAll()).rejects.toBeInstanceOf(KeyStorageError)
+    expect(store.has("assembly_keys_encrypted_v2")).toBe(true)
+  })
+
+  it("keeps legacy blob cleanup best-effort after a verified migration", async () => {
+    await makeLegacyBlob("old vault passphrase", { groq: CANARY_A })
+    vi.mocked(del).mockImplementation((key) => {
+      if (String(key) === "assembly_keys_encrypted_v2") {
+        return Promise.reject(new Error("legacy delete failed"))
+      }
+      store.delete(String(key))
+      return Promise.resolve()
+    })
+
+    const vault = new KeyVault()
+    expect(await vault.unlock("old vault passphrase")).toEqual({ groq: CANARY_A })
+    expect(await vault.hasLegacyEncrypted()).toBe(true)
+    expect(JSON.stringify(store.get(KEYS_STORE_KEY))).not.toContain(CANARY_A)
+  })
+
+  it("detects tampered ciphertext and fails closed", async () => {
+    const vault = new KeyVault()
+    await vault.unlock(PASS)
+    await vault.setKey("groq", CANARY_A)
+    await vault.lock()
+    const record = store.get(KEYS_STORE_KEY) as { ciphertext: string }
+    store.set(KEYS_STORE_KEY, { ...record, ciphertext: record.ciphertext.slice(0, -4) + "AAAA" })
+    await expect(new KeyVault().unlock(PASS)).rejects.toThrow(/Incorrect passphrase/)
+  })
+})

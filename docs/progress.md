@@ -1032,3 +1032,13 @@
   - All tests passing: Playwright landing test (1/1), unit tests (15/15), ESLint (0 errors), Next.js build (clean).
 
 
+
+
+## 2026-11-23 — Issue #82: Encrypt provider credentials persisted in browser storage
+
+- Added passphrase-derived AES-256-GCM encryption (PBKDF2-HMAC-SHA-256, 600,000 iterations) for a new v3 IndexedDB key and localStorage fallback. Fresh random IVs are used for each update; neither passphrase nor CryptoKey is persisted.
+- Added create/unlock/lock behavior in Settings and gated provider and Tavily writes until the vault is unlocked.
+- Legacy plaintext values migrate to a separate encrypted key. The code verifies the encrypted copy before removing the old plaintext record. Previous v2 passphrase blobs are upgraded using their original KDF parameters.
+- Added unit and Playwright regression coverage for ciphertext-only storage, reload/lock/unlock, wrong passphrase, tampering, legacy migration, and failed migration writes.
+- Security limitation: encryption at rest does not prevent same-origin script access while unlocked; lost passphrases cannot be recovered.
+- Validation: pending CI on PR.
