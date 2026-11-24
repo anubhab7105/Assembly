@@ -6,6 +6,9 @@
 assembly.db
 .local/
 
+# Local benchmark recordings (may contain sensitive user data)
+recordings/
+
 # ── Python ──────────────────────────────────
 __pycache__/
 *.pyc
