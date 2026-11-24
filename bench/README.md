@@ -34,6 +34,31 @@ Keys come from the local key store selected by app mode (`dev` can load
 `.env.dev`; `desktop` uses the OS keyring). The scripts print provider/model
 names only, never key values.
 
+## Recording privacy and retention
+
+Benchmark recordings may contain sensitive user data, including prompts,
+questions, model responses, and attachment context.
+
+- Keep real benchmark recordings local. Do not commit them, attach them to
+  public issues or pull requests, or share them publicly.
+- The repository root `recordings/` directory is ignored by Git.
+- Committed benchmark fixtures and demo data must contain only synthetic,
+  non-sensitive information. Never use real user conversations as fixtures.
+- Limit access to real recordings to people who need them for benchmark
+  evaluation.
+- Delete recordings when they are no longer needed, subject to applicable
+  retention requirements.
+
+Before committing benchmark changes, verify that no real recordings are
+staged or tracked. Also inspect any custom recording path supplied through
+`scripts/record_run.py --out` and review tracked benchmark result files:
+
+```powershell
+git ls-files recordings/
+git ls-files 'bench/results/*.jsonl'
+git status --short
+```
+
 ## Pinning model families (`--pin-team`, `--pin-families`)
 
 Pins are **enforced**, not advisory. The router, planner, team formation,
