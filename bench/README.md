@@ -50,10 +50,12 @@ questions, model responses, and attachment context.
   retention requirements.
 
 Before committing benchmark changes, verify that no real recordings are
-staged or tracked:
+staged or tracked. Also inspect any custom recording path supplied through
+`scripts/record_run.py --out` and review tracked benchmark result files:
 
 ```powershell
 git ls-files recordings/
+git ls-files 'bench/results/*.jsonl'
 git status --short
 ```
 

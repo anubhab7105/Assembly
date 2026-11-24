@@ -1,3 +1,11 @@
+## 2026-11-24 — Protect benchmark recordings and document privacy handling
+
+- Added `recordings/` to the root `.gitignore` to exclude local benchmark recordings from Git.
+- Documented the privacy risks of recordings containing prompts, questions, model responses, and attachment context.
+- Clarified that real recordings must remain private and committed fixtures must use synthetic, non-sensitive data.
+- Added pre-commit checks for tracked recordings, benchmark result JSONL files, and custom recording output paths.
+- Verified the recordings ignore rule and confirmed that no files under `recordings/` are tracked.
+
 ## 2026-11-17 — Permanently remove blocking PrivacyDialog from /chat
 
 - Privacy Notice modal removed from `/chat`: completely removed `<PrivacyDialog />` and its blocking acknowledgment check so users directly land on the composer without modal popups. Full privacy terms remain available in `/settings` (Privacy section) and on the public `/privacy` policy page.
