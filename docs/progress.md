@@ -3,8 +3,10 @@
 - Added a final `rehype-sanitize` stage after KaTeX and highlight.js; raw HTML remains disabled.
 - Kept the default safe schema and explicitly allowed only renderer-required MathML/KaTeX tags and narrowly scoped syntax-highlighting/KaTeX class names. Link protocols are limited to HTTP, HTTPS, and mailto; event-handler attributes are not allowed. KaTeX-generated inline layout styles are permitted only on renderer-created `span` nodes; raw HTML stays escaped.
 - Added component-level regression coverage that renders the actual ReactMarkdown pipeline and inspects the resulting DOM for hostile HTML, event handlers, unsafe URLs, malformed Markdown, GFM footnotes, KaTeX fractions/aria-hidden output, and syntax highlighting.
-- Follow-up review fixes: preserve KaTeX's `frac-line` class and HAST `ariaHidden`; keep GFM footnote references/backlinks aligned with sanitized IDs while retaining the default clobber prefix.
-- Validation: CI passed on implementation commit `c1e58f04`; Gitleaks, audit/CSP gates, lint, TypeScript, production build, all Vitest suites, 23 Playwright tests, and backend migrations/tests succeeded. No live provider keys are needed for this rendering-only change.
+- Follow-up review fixes: preserve KaTeX's `frac-line`, `katex-sizing`, `katex-base`, and `katex-strut` classes; allow the constrained SVG `line` geometry used by `\\cancel`; and retain HAST `ariaHidden`.
+- Normalize permitted URL scheme letters before sanitization while continuing to reject disallowed protocols. Convert inert raw HTML HAST nodes to text before sanitization so literal tags remain visible; HTML parsing remains disabled and `rehype-raw` is not added. Keep GFM footnote references/backlinks aligned with sanitized IDs and retain the default clobber prefix.
+- Component regressions cover escaped raw tags, uppercase/mixed-case permitted links, rejected `javascript:` links, KaTeX sizing classes, fraction bars, cancellation strokes, and footnote reference/backlink targets.
+- Validation: CI run [45655225192](https://github.com/anubhab7105/Assembly/actions/runs/45655225192) passed on code/test commit `045d75f2061a5d2fd00f471b019e99d6a68f51e2`: Gitleaks, npm audit/CSP gates, lint, TypeScript, production build, Vitest suites, 23 Playwright tests, Python dependency audit, schema check, migrations, and backend tests. No live provider keys are needed for this rendering-only change.
 
 ## 2026-11-24 — Protect benchmark recordings and document privacy handling
 
