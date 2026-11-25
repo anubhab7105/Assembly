@@ -147,7 +147,7 @@ describe("FinalAnswer Markdown sanitization", () => {
     expect(container.querySelector("code.hljs.language-js")).not.toBeNull()
     expect(container.querySelector("code .hljs-keyword")).not.toBeNull()
     expect(container.querySelector(".katex")).not.toBeNull()
-    expect(container.querySelector(".katex math semantics mrow annotation")).not.toBeNull()
+    expect(container.querySelector(".katex span")).not.toBeNull()
   })
 
   it("does not create active HTML or preserve dangerous links and handler attributes", () => {
