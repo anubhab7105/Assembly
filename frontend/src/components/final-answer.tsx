@@ -41,6 +41,7 @@ const markdownSanitizeSchema = {
       ...(defaultSchema.attributes?.span ?? []),
       ["className", /^hljs-[a-z0-9_-]+$/],
       ["className", /^katex(?:-mathml|-html)?$/],
+      ["className", "katex-display"],
       ["className", /^(?:base|strut|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner|mfrac|mroot|msup|msub|msubsup|mspace|sizing|reset-size[0-9]+|size[0-9]+|mstyle|mtight|vlist(?:-[tr][0-9]?)?|pstrut|text|mathrm|mathbf|mathit|mathnormal|mathbb|mathcal|mathfrak|mathscr|op-symbol|op-limits|accent|accentunder|delimcenter|delim-size[1-4]|nulldelimiter|stretchy|hide-tail|halfarrow|brace(?:-left|-right)?|enclosing|cancel|sout|underline|overline|col-align-[cl]|arraycolsep|cd|tag|eqn-num|rule|llap|rlap|vbox|ams(?:rm|bb|cal|frak|math)|main(?:rm|it|bf|bb|cal|frak|mi|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner))$/],
       "style",
       "aria-hidden",
