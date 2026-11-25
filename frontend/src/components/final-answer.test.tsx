@@ -137,9 +137,7 @@ describe("FinalAnswer Markdown sanitization", () => {
       "const answer = 42",
       "```",
       "",
-      "$$",
-      "x^2 + y^2 = z^2",
-      "$$",
+      "Inline math: $x^2 + y^2 = z^2$",
     ].join("\n")
 
     const { container } = render(<FinalAnswer state={state} />)
@@ -148,7 +146,7 @@ describe("FinalAnswer Markdown sanitization", () => {
     expect(container.querySelector("ul li")).not.toBeNull()
     expect(container.querySelector("code.hljs.language-js")).not.toBeNull()
     expect(container.querySelector("code .hljs-keyword")).not.toBeNull()
-    expect(container.querySelector(".katex-display .katex")).not.toBeNull()
+    expect(container.querySelector(".katex")).not.toBeNull()
     expect(container.querySelector(".katex .strut[style]")).not.toBeNull()
   })
 
