@@ -118,3 +118,74 @@ describe("FinalAnswer confidence display", () => {
     expect(screen.getByText("Team Size")).toBeDefined()
   })
 })
+
+
+describe("FinalAnswer Markdown sanitization", () => {
+  it("renders ordinary Markdown, GFM tables/lists, syntax highlighting, and math", () => {
+    const state = makeState("Moderate")
+    state.finalAnswer = [
+      "# Safe heading",
+      "",
+      "- first item",
+      "- second item",
+      "",
+      "| Name | Value |",
+      "| --- | ---: |",
+      "| item | 2 |",
+      "",
+      "```js",
+      "const answer = 42",
+      "```",
+      "",
+      "$$",
+      "x^2 + y^2 = z^2",
+      "$$",
+    ].join("\n")
+
+    const { container } = render(<FinalAnswer state={state} />)
+    expect(screen.getByRole("heading", { name: "Safe heading" })).toBeDefined()
+    expect(container.querySelector("table")).not.toBeNull()
+    expect(container.querySelector("ul li")).not.toBeNull()
+    expect(container.querySelector("code.hljs.language-js")).not.toBeNull()
+    expect(container.querySelector("code .hljs-keyword")).not.toBeNull()
+    expect(container.querySelector(".katex-display .katex")).not.toBeNull()
+    expect(container.querySelector(".katex .strut[style]")).not.toBeNull()
+  })
+
+  it("does not create active HTML or preserve dangerous links and handler attributes", () => {
+    const state = makeState("Moderate")
+    state.finalAnswer = [
+      '<img src=x onerror="window.__markdownXss = true">',
+      '<svg onload="window.__markdownXss = true"><script>alert(1)</script></svg>',
+      '<iframe src="javascript:alert(1)"></iframe>',
+      "",
+      '[run](javascript:alert%281%29)',
+      '[data](data:text/html,boom)',
+      "",
+      '<a href="https://safe.example" onclick="window.__markdownXss = true">raw html link</a>',
+      '<span style="background:url(javascript:alert(1))" onmouseover="alert(1)">styled raw html</span>',
+      "",
+      '[safe](https://example.com)',
+    ].join("\n")
+
+    const { container } = render(<FinalAnswer state={state} />)
+    const answer = container.querySelector(".assembly-answer-prose")
+    expect(answer).not.toBeNull()
+    expect(answer?.querySelector("img, svg, iframe, script")).toBeNull()
+    expect(answer?.querySelector("[onerror], [onload], [onclick], [onmouseover]")).toBeNull()
+    expect(Array.from(answer?.querySelectorAll("a") ?? []).some((link) =>
+      /^(javascript|data):/i.test(link.getAttribute("href") ?? ""),
+    )).toBe(false)
+    expect(answer?.querySelector('a[href="https://example.com"]')).not.toBeNull()
+    expect(screen.getByText(/raw html link/).tagName).not.toBe("A")
+    expect(answer?.querySelector('[style*="javascript"]')).toBeNull()
+  })
+
+  it("renders malformed Markdown as text without introducing executable nodes", () => {
+    const state = makeState("Moderate")
+    state.finalAnswer = '<script>window.__markdownXss = true</script>\n\n[broken](javascript:alert(1)'
+    const { container } = render(<FinalAnswer state={state} />)
+    expect(container.querySelector("script")).toBeNull()
+    expect(container.querySelector("[onerror], [onload], [onclick]")).toBeNull()
+  })
+})

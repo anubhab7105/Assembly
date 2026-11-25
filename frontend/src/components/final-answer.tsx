@@ -7,12 +7,62 @@ import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import rehypeHighlight from "rehype-highlight"
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize"
 import { Copy, Download, Layers, ShieldAlert, Sparkles, Info, CheckCircle2, ArrowRight, Link2 } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { useComfort } from "@/components/cinematic/comfort"
 import { ExecutionState } from "@/hooks/use-execution"
 import "katex/dist/katex.min.css"
 import "highlight.js/styles/github-dark.css"
+
+// Keep Markdown rendering intentionally narrower than arbitrary HTML. KaTeX and
+// highlight.js add generated markup before sanitization; allow only the classes,
+// MathML elements, and inert SVG geometry those renderers need. KaTeX's inline
+// styles are retained only on generated spans (raw HTML stays disabled).
+const markdownSanitizeSchema = {
+  ...defaultSchema,
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "math", "semantics", "mrow", "mi", "mn", "mo", "mtext", "mspace",
+    "msup", "msub", "msubsup", "mfrac", "msqrt", "mroot", "mover",
+    "munder", "munderover", "mstyle", "merror", "mpadded", "mphantom",
+    "mfenced", "menclose", "mmultiscripts", "mprescripts", "none",
+    "mtable", "mlabeledtr", "mtr", "mtd", "maction", "annotation",
+    "svg", "path",
+  ],
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [["className", "hljs", /^language-[a-z0-9_-]+$/]],
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      ["className", "katex-display"],
+    ],
+    span: [
+      ...(defaultSchema.attributes?.span ?? []),
+      ["className", /^hljs-[a-z0-9_-]+$/],
+      ["className", /^katex(?:-mathml|-html)?$/],
+      ["className", /^(?:base|strut|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner|mfrac|mroot|msup|msub|msubsup|mspace|sizing|reset-size[0-9]+|size[0-9]+|mstyle|mtight|vlist(?:-[tr][0-9]?)?|pstrut|text|mathrm|mathbf|mathit|mathnormal|mathbb|mathcal|mathfrak|mathscr|op-symbol|op-limits|accent|accentunder|delimcenter|delim-size[1-4]|nulldelimiter|stretchy|hide-tail|halfarrow|brace(?:-left|-right)?|enclosing|cancel|sout|underline|overline|col-align-[cl]|arraycolsep|cd|tag|eqn-num|rule|llap|rlap|vbox|ams(?:rm|bb|cal|frak|math)|main(?:rm|it|bf|bb|cal|frak|mi|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner))$/],
+      "style",
+      "aria-hidden",
+    ],
+    math: ["xmlns", "display"],
+    semantics: [],
+    annotation: [["encoding", "application/x-tex"]],
+    mi: ["mathvariant"],
+    mstyle: ["mathvariant", "displaystyle", "scriptlevel"],
+    mfenced: ["open", "close", "separators"],
+    menclose: ["notation"],
+    mpadded: ["width", "height", "depth", "lspace", "voffset"],
+    mo: ["fence", "separator", "stretchy", "symmetric", "maxsize", "minsize", "lspace", "rspace", "form", "largeop", "movablelimits", "accent"],
+    mspace: ["width", "height", "depth", "linebreak"],
+    mfrac: ["linethickness"],
+    mtable: ["columnalign", "rowspacing", "columnspacing"],
+    mtd: ["columnspan", "rowspan", "rowalign", "columnalign"],
+    svg: ["xmlns", "width", "height", "viewBox", "preserveAspectRatio", "role", "focusable"],
+    path: ["d", "fill", "stroke", "strokeWidth", "transform"],
+  },
+  protocols: { ...defaultSchema.protocols, href: ["http", "https", "mailto"] },
+}
 
 interface FinalAnswerProps {
   state: ExecutionState
@@ -212,7 +262,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
         <div className="assembly-answer-prose max-w-full min-w-0 overflow-x-auto">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex, rehypeHighlight]}
+            rehypePlugins={[rehypeKatex, rehypeHighlight, [rehypeSanitize, markdownSanitizeSchema]]}
             components={{
               a: ({ ...props }) => {
                 // Custom handler for inline citations like [1]

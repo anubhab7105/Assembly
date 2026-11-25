@@ -2,6 +2,12 @@
 
 Append-only log of significant technical and product decisions.
 
+## 2026-11-25 — Sanitize model-generated Markdown after rendering plugins (Issue #112)
+
+- Context: `FinalAnswer` renders model-generated and imported answer text with `react-markdown`, GitHub Flavored Markdown, KaTeX, and highlight.js. Raw HTML parsing is not enabled, but the rendered tree should still have an explicit final sanitizer boundary for unsafe attributes/elements and URL protocols.
+- Decision: Keep `rehype-raw` disabled. Run `rehype-sanitize` after KaTeX and highlight.js. Start from `hast-util-sanitize`'s default schema, add only the MathML/KaTeX and syntax-highlight class surface needed for those renderers, and constrain links to HTTP, HTTPS, and mailto. Permit KaTeX's computed inline layout styles only on generated `span` nodes; arbitrary style input remains inert because raw HTML is not parsed. Do not allow event-handler attributes.
+- Consequences: Model-generated answer content is sanitized after all HTML-producing transforms. GFM remains supported; component tests render the actual ReactMarkdown pipeline and inspect its output DOM for normal Markdown, tables/lists, syntax highlighting, KaTeX, script-like markup, event handlers, unsafe URLs, and malformed Markdown. The allowlist must be reviewed when upgrading KaTeX or highlight.js so renderer compatibility does not expand into arbitrary HTML.
+
 ## 2026-10-26 — Typed chat status states so success/info messages are not announced as errors (Issue #53)
 
 - Context: `frontend/src/app/chat/page.tsx` classified any status message that did not match one of two hard-coded progress strings (`"Checking capacity…"` / `"Running team… (streaming)"`) as an error (`statusIsError`). As a result, file-readiness, privacy, informational, and success messages were rendered with `role="alert"`, `aria-live="assertive"`, `text-danger`, and `bg-danger-subtle` — announcing ordinary messages as errors to screen readers.
