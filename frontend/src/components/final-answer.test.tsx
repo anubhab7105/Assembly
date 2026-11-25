@@ -146,6 +146,7 @@ describe("FinalAnswer Markdown sanitization", () => {
     expect(container.querySelector("ul li")).not.toBeNull()
     expect(container.querySelector("code.hljs.language-js")).not.toBeNull()
     expect(container.querySelector("code .hljs-keyword")).not.toBeNull()
+    console.log("MARKDOWN_RENDER_DEBUG", container.querySelector(".assembly-answer-prose")?.innerHTML)
     expect(container.querySelector(".katex")).not.toBeNull()
     expect(container.querySelector(".katex .strut[style]")).not.toBeNull()
   })
