@@ -118,3 +118,122 @@ describe("FinalAnswer confidence display", () => {
     expect(screen.getByText("Team Size")).toBeDefined()
   })
 })
+
+
+describe("FinalAnswer Markdown sanitization", () => {
+  it("renders ordinary Markdown, GFM tables/lists, syntax highlighting, and math", () => {
+    const state = makeState("Moderate")
+    state.finalAnswer = [
+      "# Safe heading",
+      "",
+      "- first item",
+      "- second item",
+      "",
+      "| Name | Value |",
+      "| --- | ---: |",
+      "| item | 2 |",
+      "",
+      "```js",
+      "const answer = 42",
+      "```",
+      "",
+      "Inline math: $x^2 + y^2 = z^2$",
+      "Power: $x^2$",
+      "Fraction: $\\frac{1}{2}$",
+      "Cancellation: $\\cancel{x}$",
+    ].join("\n")
+
+    const { container } = render(<FinalAnswer state={state} />)
+    expect(screen.getByRole("heading", { name: "Safe heading" })).toBeDefined()
+    expect(container.querySelector("table")).not.toBeNull()
+    expect(container.querySelector("ul li")).not.toBeNull()
+    expect(container.querySelector("code.hljs.language-js")).not.toBeNull()
+    expect(container.querySelector("code .hljs-keyword")).not.toBeNull()
+    expect(container.querySelector(".katex")).not.toBeNull()
+    expect(container.querySelector(".katex span")).not.toBeNull()
+    expect(container.querySelector(".katex .frac-line")?.classList.contains("frac-line")).toBe(true)
+    expect(container.querySelector(".katex .katex-sizing")).not.toBeNull()
+    expect(container.querySelector(".katex .katex-base")).not.toBeNull()
+    expect(container.querySelector(".katex .katex-strut")).not.toBeNull()
+    expect(container.querySelector(".katex-html")?.getAttribute("aria-hidden")).toBe("true")
+
+    const cancellationLine = container.querySelector(".katex svg line")
+    expect(cancellationLine).not.toBeNull()
+    expect(cancellationLine?.getAttribute("x1")).toBe("0")
+    expect(cancellationLine?.getAttribute("y1")).toBe("100%")
+    expect(cancellationLine?.getAttribute("x2")).toBe("100%")
+    expect(cancellationLine?.getAttribute("y2")).toBe("0")
+    expect(cancellationLine?.getAttribute("stroke-width")).toBe("0.046em")
+  })
+
+  it("does not create active HTML or preserve dangerous links and handler attributes", () => {
+    const state = makeState("Moderate")
+    state.finalAnswer = [
+      '<img src=x onerror="window.__markdownXss = true">',
+      '<svg onload="window.__markdownXss = true"><script>alert(1)</script></svg>',
+      '<iframe src="javascript:alert(1)"></iframe>',
+      "",
+      '[run](javascript:alert%281%29)',
+      '[data](data:text/html,boom)',
+      '[uppercase](HTTPS://example.com/upper)',
+      '[mixed-case](MaIlTo:reader@example.com)',
+      "",
+      "Use <button> to submit.",
+      '<a href="https://safe.example" onclick="window.__markdownXss = true">raw html link</a>',
+      '<span style="background:url(javascript:alert(1))" onmouseover="alert(1)">styled raw html</span>',
+      "",
+      '[safe](https://example.com)',
+    ].join("\n")
+
+    const { container } = render(<FinalAnswer state={state} />)
+    const answer = container.querySelector(".assembly-answer-prose")
+    expect(answer).not.toBeNull()
+    expect(answer?.querySelector("img, svg, iframe, script")).toBeNull()
+    expect(answer?.querySelector("[onerror], [onload], [onclick], [onmouseover]")).toBeNull()
+    expect(Array.from(answer?.querySelectorAll("a") ?? []).some((link) =>
+      /^(javascript|data):/i.test(link.getAttribute("href") ?? ""),
+    )).toBe(false)
+    expect(answer?.querySelector('a[href="https://example.com"]')).not.toBeNull()
+    expect(answer?.querySelector('a[href="https://example.com/upper"]')).not.toBeNull()
+    expect(answer?.querySelector('a[href="mailto:reader@example.com"]')).not.toBeNull()
+    expect(answer?.textContent).toContain("Use <button> to submit.")
+    expect(answer?.querySelector("button")).toBeNull()
+    expect(screen.getByText(/raw html link/).tagName).not.toBe("A")
+    expect(answer?.querySelector('[style*="javascript"]')).toBeNull()
+  })
+
+  it("renders malformed Markdown as text without introducing executable nodes", () => {
+    const state = makeState("Moderate")
+    state.finalAnswer = '<script>window.__markdownXss = true</script>\n\n[broken](javascript:alert(1)'
+    const { container } = render(<FinalAnswer state={state} />)
+    expect(container.querySelector("script")).toBeNull()
+    expect(container.querySelector("[onerror], [onload], [onclick]")).toBeNull()
+  })
+
+  it("keeps GFM footnote references and backlinks connected after sanitization", () => {
+    const state = makeState("Moderate")
+    state.finalAnswer = [
+      "A statement with a footnote[^detail].",
+      "",
+      "[^detail]: The footnote definition remains available.",
+    ].join("\n")
+
+    const { container } = render(<FinalAnswer state={state} />)
+    const answer = container.querySelector(".assembly-answer-prose")
+    const reference = answer?.querySelector<HTMLAnchorElement>("a[data-footnote-ref]")
+    const backref = answer?.querySelector<HTMLAnchorElement>("a[data-footnote-backref]")
+    const ids = Array.from(answer?.querySelectorAll<HTMLElement>("[id]") ?? []).map((element) => element.id)
+
+    expect(reference).not.toBeNull()
+    expect(backref).not.toBeNull()
+
+    const referenceTarget = reference?.getAttribute("href")?.slice(1)
+    const backrefTarget = backref?.getAttribute("href")?.slice(1)
+    expect(referenceTarget).toBeTruthy()
+    expect(backrefTarget).toBeTruthy()
+    expect(ids).toContain(referenceTarget)
+    expect(ids).toContain(backrefTarget)
+    expect(ids.every((id) => id.startsWith("user-content-"))).toBe(true)
+  })
+
+})

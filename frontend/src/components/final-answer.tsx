@@ -1,18 +1,136 @@
 "use client"
 
 import React, { useState } from "react"
+import type { Element, Root } from "hast"
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import rehypeHighlight from "rehype-highlight"
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize"
 import { Copy, Download, Layers, ShieldAlert, Sparkles, Info, CheckCircle2, ArrowRight, Link2 } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { useComfort } from "@/components/cinematic/comfort"
 import { ExecutionState } from "@/hooks/use-execution"
 import "katex/dist/katex.min.css"
 import "highlight.js/styles/github-dark.css"
+
+// Keep Markdown rendering intentionally narrower than arbitrary HTML. KaTeX and
+// highlight.js add generated markup before sanitization; allow only the classes,
+// MathML elements, and inert SVG geometry those renderers need. KaTeX's inline
+// styles are retained only on generated spans (raw HTML stays disabled).
+
+function rehypeConvertRawHtmlToText() {
+  return (tree: Root) => {
+    const visit = (node: Root | Element): void => {
+      for (let index = 0; index < node.children.length; index += 1) {
+        const child = node.children[index] as unknown as { type: string; value?: string }
+        if (child.type === "raw") {
+          node.children[index] = { type: "text", value: child.value ?? "" }
+        } else if (child.type === "element") {
+          visit(node.children[index] as Element)
+        }
+      }
+    }
+
+    visit(tree)
+  }
+}
+
+function rehypeNormalizeLinkProtocols() {
+  const schemePattern = /^([a-z][a-z\d+.-]*):/i
+
+  return (tree: Root) => {
+    const visit = (node: Root | Element): void => {
+      if (node.type === "element" && node.tagName === "a") {
+        const href = node.properties.href
+        if (typeof href === "string") {
+          node.properties.href = href.replace(schemePattern, (_match, scheme: string) => `${scheme.toLowerCase()}:`)
+        }
+      }
+
+      for (const child of node.children) {
+        if (child.type === "element") visit(child)
+      }
+    }
+
+    visit(tree)
+  }
+}
+
+function rehypeAlignGfmFootnoteLinks() {
+  return (tree: Root) => {
+    const visit = (node: Root | Element): void => {
+      if (node.type === "element" && node.tagName === "a") {
+        const { dataFootnoteRef, dataFootnoteBackref, className, href } = node.properties
+        const isFootnoteLink =
+          dataFootnoteRef !== undefined ||
+          dataFootnoteBackref !== undefined ||
+          (Array.isArray(className) && className.includes("data-footnote-backref"))
+        if (
+          isFootnoteLink &&
+          typeof href === "string" &&
+          href.startsWith("#user-content-")
+        ) {
+          node.properties.href = `#user-content-${href.slice(1)}`
+        }
+      }
+
+      for (const child of node.children) {
+        if (child.type === "element") visit(child)
+      }
+    }
+
+    visit(tree)
+  }
+}
+
+const markdownSanitizeSchema = {
+  ...defaultSchema,
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "math", "semantics", "mrow", "mi", "mn", "mo", "mtext", "mspace",
+    "msup", "msub", "msubsup", "mfrac", "msqrt", "mroot", "mover",
+    "munder", "munderover", "mstyle", "merror", "mpadded", "mphantom",
+    "mfenced", "menclose", "mmultiscripts", "mprescripts", "none",
+    "mtable", "mlabeledtr", "mtr", "mtd", "maction", "annotation",
+    "svg", "path", "line",
+  ],
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [["className", "hljs", /^language-[a-z0-9_-]+$/]],
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      ["className", "katex-display"],
+    ],
+    span: [
+      ...(defaultSchema.attributes?.span ?? []),
+      // One className rule is deliberate: hast-util-sanitize evaluates
+      // allowed class tokens against a single rule for this attribute.
+      ["className", /^(?:hljs-[a-z0-9_-]+|frac-line|katex(?:-mathml|-html|-display|-sizing|-base|-strut)?|base|strut|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner|mfrac|mroot|msup|msub|msubsup|mspace|sizing|reset-size[0-9]+|size[0-9]+|mstyle|mtight|vlist(?:-[tr][0-9]?)?|pstrut|text|mathrm|mathbf|mathit|mathnormal|mathbb|mathcal|mathfrak|mathscr|op-symbol|op-limits|accent|accentunder|delimcenter|delim-size[1-4]|nulldelimiter|stretchy|hide-tail|halfarrow|brace(?:-left|-right)?|enclosing|cancel|sout|underline|overline|col-align-[cl]|arraycolsep|cd|tag|eqn-num|rule|llap|rlap|vbox|ams(?:rm|bb|cal|frak|math)|main(?:rm|it|bf|bb|cal|frak|mi|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner))$/],
+      "style",
+      "ariaHidden",
+    ],
+    math: ["xmlns", "display"],
+    semantics: [],
+    annotation: [["encoding", "application/x-tex"]],
+    mi: ["mathvariant"],
+    mstyle: ["mathvariant", "displaystyle", "scriptlevel"],
+    mfenced: ["open", "close", "separators"],
+    menclose: ["notation"],
+    mpadded: ["width", "height", "depth", "lspace", "voffset"],
+    mo: ["fence", "separator", "stretchy", "symmetric", "maxsize", "minsize", "lspace", "rspace", "form", "largeop", "movablelimits", "accent"],
+    mspace: ["width", "height", "depth", "linebreak"],
+    mfrac: ["linethickness"],
+    mtable: ["columnalign", "rowspacing", "columnspacing"],
+    mtd: ["columnspan", "rowspan", "rowalign", "columnalign"],
+    svg: ["xmlns", "width", "height", "viewBox", "preserveAspectRatio", "role", "focusable"],
+    path: ["d", "fill", "stroke", "strokeWidth", "transform"],
+    line: ["x1", "y1", "x2", "y2", "strokeWidth"],
+  },
+  protocols: { ...defaultSchema.protocols, href: ["http", "https", "mailto"] },
+}
 
 interface FinalAnswerProps {
   state: ExecutionState
@@ -212,7 +330,14 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
         <div className="assembly-answer-prose max-w-full min-w-0 overflow-x-auto">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex, rehypeHighlight]}
+            rehypePlugins={[
+              rehypeKatex,
+              rehypeHighlight,
+              rehypeConvertRawHtmlToText,
+              rehypeNormalizeLinkProtocols,
+              [rehypeSanitize, markdownSanitizeSchema],
+              rehypeAlignGfmFootnoteLinks,
+            ]}
             components={{
               a: ({ ...props }) => {
                 // Custom handler for inline citations like [1]
