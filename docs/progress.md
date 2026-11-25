@@ -2,8 +2,9 @@
 
 - Added a final `rehype-sanitize` stage after KaTeX and highlight.js; raw HTML remains disabled.
 - Kept the default safe schema and explicitly allowed only renderer-required MathML/KaTeX tags and narrowly scoped syntax-highlighting/KaTeX class names. Link protocols are limited to HTTP, HTTPS, and mailto; event-handler attributes are not allowed. KaTeX-generated inline layout styles are permitted only on renderer-created `span` nodes; raw HTML stays escaped.
-- Added component-level regression coverage that renders the actual ReactMarkdown pipeline and inspects the resulting DOM for hostile HTML, event handlers, unsafe URLs, malformed Markdown, GFM, KaTeX and highlighting.
-- Validation: pending CI on the PR head; no live provider keys are needed for this rendering-only change.
+- Added component-level regression coverage that renders the actual ReactMarkdown pipeline and inspects the resulting DOM for hostile HTML, event handlers, unsafe URLs, malformed Markdown, GFM footnotes, KaTeX fractions/aria-hidden output, and syntax highlighting.
+- Follow-up review fixes: preserve KaTeX's `frac-line` class and HAST `ariaHidden`; keep GFM footnote references/backlinks aligned with sanitized IDs while retaining the default clobber prefix.
+- Validation: pending CI on the updated PR head; no live provider keys are needed for this rendering-only change.
 
 ## 2026-11-24 — Protect benchmark recordings and document privacy handling
 
