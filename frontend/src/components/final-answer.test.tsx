@@ -138,7 +138,9 @@ describe("FinalAnswer Markdown sanitization", () => {
       "```",
       "",
       "Inline math: $x^2 + y^2 = z^2$",
+      "Power: $x^2$",
       "Fraction: $\\frac{1}{2}$",
+      "Cancellation: $\\cancel{x}$",
     ].join("\n")
 
     const { container } = render(<FinalAnswer state={state} />)
@@ -150,7 +152,18 @@ describe("FinalAnswer Markdown sanitization", () => {
     expect(container.querySelector(".katex")).not.toBeNull()
     expect(container.querySelector(".katex span")).not.toBeNull()
     expect(container.querySelector(".katex .frac-line")?.classList.contains("frac-line")).toBe(true)
+    expect(container.querySelector(".katex .katex-sizing")).not.toBeNull()
+    expect(container.querySelector(".katex .katex-base")).not.toBeNull()
+    expect(container.querySelector(".katex .katex-strut")).not.toBeNull()
     expect(container.querySelector(".katex-html")?.getAttribute("aria-hidden")).toBe("true")
+
+    const cancellationLine = container.querySelector(".katex svg line")
+    expect(cancellationLine).not.toBeNull()
+    expect(cancellationLine?.getAttribute("x1")).toBe("0")
+    expect(cancellationLine?.getAttribute("y1")).toBe("100%")
+    expect(cancellationLine?.getAttribute("x2")).toBe("100%")
+    expect(cancellationLine?.getAttribute("y2")).toBe("0")
+    expect(cancellationLine?.getAttribute("stroke-width")).toBe("0.046em")
   })
 
   it("does not create active HTML or preserve dangerous links and handler attributes", () => {
@@ -162,7 +175,10 @@ describe("FinalAnswer Markdown sanitization", () => {
       "",
       '[run](javascript:alert%281%29)',
       '[data](data:text/html,boom)',
+      '[uppercase](HTTPS://example.com/upper)',
+      '[mixed-case](MaIlTo:reader@example.com)',
       "",
+      "Use <button> to submit.",
       '<a href="https://safe.example" onclick="window.__markdownXss = true">raw html link</a>',
       '<span style="background:url(javascript:alert(1))" onmouseover="alert(1)">styled raw html</span>',
       "",
@@ -178,6 +194,10 @@ describe("FinalAnswer Markdown sanitization", () => {
       /^(javascript|data):/i.test(link.getAttribute("href") ?? ""),
     )).toBe(false)
     expect(answer?.querySelector('a[href="https://example.com"]')).not.toBeNull()
+    expect(answer?.querySelector('a[href="https://example.com/upper"]')).not.toBeNull()
+    expect(answer?.querySelector('a[href="mailto:reader@example.com"]')).not.toBeNull()
+    expect(answer?.textContent).toContain("Use <button> to submit.")
+    expect(answer?.querySelector("button")).toBeNull()
     expect(screen.getByText(/raw html link/).tagName).not.toBe("A")
     expect(answer?.querySelector('[style*="javascript"]')).toBeNull()
   })
