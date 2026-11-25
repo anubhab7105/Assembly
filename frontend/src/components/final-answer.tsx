@@ -39,7 +39,7 @@ function rehypeConvertRawHtmlToText() {
 }
 
 function rehypeNormalizeLinkProtocols() {
-  const schemePattern = /^([a-z][a-z\\d+.-]*):/i
+  const schemePattern = /^([a-z][a-z\d+.-]*):/i
 
   return (tree: Root) => {
     const visit = (node: Root | Element): void => {
