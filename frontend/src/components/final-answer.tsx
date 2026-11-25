@@ -25,9 +25,13 @@ function rehypeAlignGfmFootnoteLinks() {
   return (tree: Root) => {
     const visit = (node: Root | Element): void => {
       if (node.type === "element" && node.tagName === "a") {
-        const { dataFootnoteRef, dataFootnoteBackref, href } = node.properties
+        const { dataFootnoteRef, dataFootnoteBackref, className, href } = node.properties
+        const isFootnoteLink =
+          dataFootnoteRef !== undefined ||
+          dataFootnoteBackref !== undefined ||
+          (Array.isArray(className) && className.includes("data-footnote-backref"))
         if (
-          (dataFootnoteRef === true || dataFootnoteBackref === true) &&
+          isFootnoteLink &&
           typeof href === "string" &&
           href.startsWith("#user-content-")
         ) {
