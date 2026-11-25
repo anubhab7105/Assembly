@@ -138,7 +138,7 @@ describe("FinalAnswer Markdown sanitization", () => {
       "```",
       "",
       "Inline math: $x^2 + y^2 = z^2$",
-      "Fraction: $\\\\frac{1}{2}$",
+      "Fraction: $\\frac{1}{2}$",
     ].join("\n")
 
     const { container } = render(<FinalAnswer state={state} />)
