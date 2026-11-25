@@ -138,6 +138,7 @@ describe("FinalAnswer Markdown sanitization", () => {
       "```",
       "",
       "Inline math: $x^2 + y^2 = z^2$",
+      "Fraction: $\\\\frac{1}{2}$",
     ].join("\n")
 
     const { container } = render(<FinalAnswer state={state} />)
@@ -148,6 +149,8 @@ describe("FinalAnswer Markdown sanitization", () => {
     expect(container.querySelector("code .hljs-keyword")).not.toBeNull()
     expect(container.querySelector(".katex")).not.toBeNull()
     expect(container.querySelector(".katex span")).not.toBeNull()
+    expect(container.querySelector(".katex .frac-line")?.classList.contains("frac-line")).toBe(true)
+    expect(container.querySelector(".katex-html")?.getAttribute("aria-hidden")).toBe("true")
   })
 
   it("does not create active HTML or preserve dangerous links and handler attributes", () => {
@@ -186,4 +189,31 @@ describe("FinalAnswer Markdown sanitization", () => {
     expect(container.querySelector("script")).toBeNull()
     expect(container.querySelector("[onerror], [onload], [onclick]")).toBeNull()
   })
+
+  it("keeps GFM footnote references and backlinks connected after sanitization", () => {
+    const state = makeState("Moderate")
+    state.finalAnswer = [
+      "A statement with a footnote[^detail].",
+      "",
+      "[^detail]: The footnote definition remains available.",
+    ].join("\n")
+
+    const { container } = render(<FinalAnswer state={state} />)
+    const answer = container.querySelector(".assembly-answer-prose")
+    const reference = answer?.querySelector<HTMLAnchorElement>("a[data-footnote-ref]")
+    const backref = answer?.querySelector<HTMLAnchorElement>("a[data-footnote-backref]")
+    const ids = Array.from(answer?.querySelectorAll<HTMLElement>("[id]") ?? []).map((element) => element.id)
+
+    expect(reference).not.toBeNull()
+    expect(backref).not.toBeNull()
+
+    const referenceTarget = reference?.getAttribute("href")?.slice(1)
+    const backrefTarget = backref?.getAttribute("href")?.slice(1)
+    expect(referenceTarget).toBeTruthy()
+    expect(backrefTarget).toBeTruthy()
+    expect(ids).toContain(referenceTarget)
+    expect(ids).toContain(backrefTarget)
+    expect(ids.every((id) => id.startsWith("user-content-"))).toBe(true)
+  })
+
 })
