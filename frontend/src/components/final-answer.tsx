@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
+import type { Element, Root } from "hast"
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -19,6 +20,30 @@ import "highlight.js/styles/github-dark.css"
 // highlight.js add generated markup before sanitization; allow only the classes,
 // MathML elements, and inert SVG geometry those renderers need. KaTeX's inline
 // styles are retained only on generated spans (raw HTML stays disabled).
+
+function rehypeAlignGfmFootnoteLinks() {
+  return (tree: Root) => {
+    const visit = (node: Root | Element): void => {
+      if (node.type === "element" && node.tagName === "a") {
+        const { dataFootnoteRef, dataFootnoteBackref, href } = node.properties
+        if (
+          (dataFootnoteRef === true || dataFootnoteBackref === true) &&
+          typeof href === "string" &&
+          href.startsWith("#user-content-")
+        ) {
+          node.properties.href = `#user-content-${href.slice(1)}`
+        }
+      }
+
+      for (const child of node.children) {
+        if (child.type === "element") visit(child)
+      }
+    }
+
+    visit(tree)
+  }
+}
+
 const markdownSanitizeSchema = {
   ...defaultSchema,
   tagNames: [
@@ -41,9 +66,9 @@ const markdownSanitizeSchema = {
       ...(defaultSchema.attributes?.span ?? []),
       // One className rule is deliberate: hast-util-sanitize evaluates
       // allowed class tokens against a single rule for this attribute.
-      ["className", /^(?:hljs-[a-z0-9_-]+|katex(?:-mathml|-html|-display)?|base|strut|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner|mfrac|mroot|msup|msub|msubsup|mspace|sizing|reset-size[0-9]+|size[0-9]+|mstyle|mtight|vlist(?:-[tr][0-9]?)?|pstrut|text|mathrm|mathbf|mathit|mathnormal|mathbb|mathcal|mathfrak|mathscr|op-symbol|op-limits|accent|accentunder|delimcenter|delim-size[1-4]|nulldelimiter|stretchy|hide-tail|halfarrow|brace(?:-left|-right)?|enclosing|cancel|sout|underline|overline|col-align-[cl]|arraycolsep|cd|tag|eqn-num|rule|llap|rlap|vbox|ams(?:rm|bb|cal|frak|math)|main(?:rm|it|bf|bb|cal|frak|mi|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner))$/],
+      ["className", /^(?:hljs-[a-z0-9_-]+|frac-line|katex(?:-mathml|-html|-display)?|base|strut|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner|mfrac|mroot|msup|msub|msubsup|mspace|sizing|reset-size[0-9]+|size[0-9]+|mstyle|mtight|vlist(?:-[tr][0-9]?)?|pstrut|text|mathrm|mathbf|mathit|mathnormal|mathbb|mathcal|mathfrak|mathscr|op-symbol|op-limits|accent|accentunder|delimcenter|delim-size[1-4]|nulldelimiter|stretchy|hide-tail|halfarrow|brace(?:-left|-right)?|enclosing|cancel|sout|underline|overline|col-align-[cl]|arraycolsep|cd|tag|eqn-num|rule|llap|rlap|vbox|ams(?:rm|bb|cal|frak|math)|main(?:rm|it|bf|bb|cal|frak|mi|mord|mop|mbin|mrel|mopen|mclose|mpunct|minner))$/],
       "style",
-      "aria-hidden",
+      "ariaHidden",
     ],
     math: ["xmlns", "display"],
     semantics: [],
@@ -262,7 +287,7 @@ export function FinalAnswer({ state }: FinalAnswerProps) {
         <div className="assembly-answer-prose max-w-full min-w-0 overflow-x-auto">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex, rehypeHighlight, [rehypeSanitize, markdownSanitizeSchema]]}
+            rehypePlugins={[rehypeKatex, rehypeHighlight, [rehypeSanitize, markdownSanitizeSchema], rehypeAlignGfmFootnoteLinks]}
             components={{
               a: ({ ...props }) => {
                 // Custom handler for inline citations like [1]
