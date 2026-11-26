@@ -11,6 +11,8 @@ services:
         value: "3.11.9"
       - key: APP_ENV
         value: production
+      # Hosted service must stay in web mode; this disables the desktop-only
+      # persisted execution WebSocket. Browser progress uses POST /api/run SSE.
       - key: APP_MODE
         value: web
       - key: DEBUG
