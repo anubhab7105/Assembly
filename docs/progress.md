@@ -1,6 +1,6 @@
 ## 2026-11-26 — Mobile responsiveness, hero layout polish, and Assembly favicon (Issue #131)
 
-- Mobile navigation: Added responsive 3-line hamburger menu in `landing-header.tsx` with slide-down dropdown menu for mobile devices (`<= 640px`), cleanly hiding the desktop CTA button from header navigation on small viewports.
+- Mobile navigation: Added responsive 3-line hamburger menu in `landing-header.tsx` with slide-down dropdown menu for mobile devices (`<= 640px`), centered items with section dividers, and cleanly hid the desktop CTA button from header navigation on small viewports.
 - Mobile hero layout and spacing: Centered the 3D Brand Orbs Orbit canvas directly between the hero CTA button and Section 2 carousel on mobile. Eliminated the oversized 100vh void, pulled the black hero card higher up, removed SVG notch distortion, and expanded the card to full-width to prevent yellow side borders.
 - Get Started page layout: Removed restrictive container constraints to spread content naturally full-width on mobile without black side gutters. Added responsive back button (`←` icon on mobile, `← Back to overview` on desktop) and optimized button touch sizing.
 - Assembly favicon: Generated multi-resolution static dotted 'A' Assembly badge (matching `BrandOrbMark` without pulsing animation) across `favicon.ico`, `icon.png`, and `apple-icon.png`, and explicitly declared icon metadata in `layout.tsx`.

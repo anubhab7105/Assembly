@@ -192,12 +192,12 @@ export function LandingHeader() {
       {mobileMenuOpen && (
         <div
           id="mobile-nav-menu"
-          className="sm:hidden absolute top-full left-0 right-0 border-b border-white/10 bg-[#0b0c0e]/95 backdrop-blur-2xl px-6 py-6 shadow-2xl z-50 text-white"
+          className="sm:hidden absolute top-full left-0 right-0 border-b border-white/10 bg-[#0b0c0e]/95 backdrop-blur-2xl shadow-2xl z-50 text-white"
         >
-          <nav className="flex flex-col gap-4 text-base font-medium" aria-label="Mobile navigation">
+          <nav className="flex flex-col divide-y divide-white/10 text-base font-medium" aria-label="Mobile navigation">
             <Link
               href="/#how-it-works"
-              className="py-2 text-white/85 transition hover:text-[#eaa221]"
+              className="w-full px-6 py-3.5 text-center block text-white/90 transition hover:text-[#eaa221] hover:bg-white/[0.04]"
               onClick={(e) => {
                 setMobileMenuOpen(false);
                 handleNavClick("how-it-works", e);
@@ -207,8 +207,8 @@ export function LandingHeader() {
             </Link>
             <Link
               href="/science"
-              className={`py-2 transition hover:text-[#eaa221] ${
-                pathname === "/science" ? "text-[#eaa221]" : "text-white/85"
+              className={`w-full px-6 py-3.5 text-center block transition hover:text-[#eaa221] hover:bg-white/[0.04] ${
+                pathname === "/science" ? "text-[#eaa221]" : "text-white/90"
               }`}
               onClick={() => setMobileMenuOpen(false)}
             >
@@ -216,7 +216,7 @@ export function LandingHeader() {
             </Link>
             <Link
               href="/#your-control"
-              className="py-2 text-white/85 transition hover:text-[#eaa221]"
+              className="w-full px-6 py-3.5 text-center block text-white/90 transition hover:text-[#eaa221] hover:bg-white/[0.04]"
               onClick={(e) => {
                 setMobileMenuOpen(false);
                 handleNavClick("your-control", e);
@@ -226,7 +226,7 @@ export function LandingHeader() {
             </Link>
             <Link
               href="/#faq"
-              className="py-2 text-white/85 transition hover:text-[#eaa221]"
+              className="w-full px-6 py-3.5 text-center block text-white/90 transition hover:text-[#eaa221] hover:bg-white/[0.04]"
               onClick={(e) => {
                 setMobileMenuOpen(false);
                 handleNavClick("faq", e);
