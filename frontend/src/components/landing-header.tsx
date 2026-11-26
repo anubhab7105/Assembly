@@ -234,16 +234,6 @@ export function LandingHeader() {
             >
               FAQ
             </Link>
-            <div className="pt-4 mt-2 border-t border-white/10">
-              <Link
-                href="/get-started"
-                className="flex items-center justify-center gap-2 rounded-full bg-[#eaa221] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#f2b94e]"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Start an investigation
-                <ArrowUpRight className="size-4" />
-              </Link>
-            </div>
           </nav>
         </div>
       )}
