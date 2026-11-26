@@ -46,7 +46,7 @@ DESKTOP MODE
 `
 
 Boundary definitions:
-- TB1 Internet to FastAPI: CORS + JWT (web), desktop_token (desktop)
+- TB1 Internet to FastAPI: CORS + JWT (web), desktop_token (desktop); loopback-only, origin-allowlisted dev WebSocket (dev)
 - TB2 Desktop/dev persistence: SQLAlchemy ORM over local SQLite; web mode has no database boundary.
 - TB3 FastAPI to External APIs: HTTPS; keys in headers/body only
 - TB4 Tauri WebView to Sidecar: localhost 127.0.0.1 only; desktop_token
@@ -132,6 +132,7 @@ Boundary definitions:
 | SSRF | All HTTP targets hardcoded; no user-controlled URL fetching |
 | Auth (web) | JWT HS256 with audience claim; sub on every DB query |
 | Auth (desktop) | desktop_token (32 hex bytes) on every non-health request; first-message WS auth |
+| Auth (dev WS) | No token only for APP_MODE=dev + APP_ENV=development; exact frontend Origin allow-list and loopback-bound listener; single-user local use only |
 | Authorization | user_id enforced on conversation, execution, event queries |
 | Rate limiting | Per-IP + per-user sliding window; concurrent execution cap |
 | Input validation | Pydantic at all external boundaries; 1 MB body cap; 2000-char question max |
@@ -199,9 +200,11 @@ Fix applied: Startup check refuses web+production mode when JWT_SECRET_KEY match
 
 ## 6. Local execution WebSocket boundary (ASM-API-002)
 
-The persisted execution-progress WebSocket at `/api/executions/ws/{execution_id}` is a **local-only** interface for `APP_MODE=desktop` and `APP_MODE=dev`. Hosted `APP_MODE=web` rejects the handshake before any execution lookup or event replay. Both local modes require the configured `desktop_token` in the first WebSocket message (`{"type":"auth","token":"..."}`) before the server queries local execution history. Missing, malformed, or invalid credentials are rejected without returning execution data. Unknown execution IDs are rejected with a generic not-found close.
+The persisted execution-progress WebSocket at `/api/executions/ws/{execution_id}` is a **local-only** interface for `APP_MODE=desktop` and `APP_MODE=dev`. Hosted `APP_MODE=web` rejects the handshake before any execution lookup or event replay. Desktop mode requires the configured `desktop_token` in the first WebSocket message (`{"type":"auth","token":"..."}`) before the server queries local execution history. Missing, malformed, invalid, or legacy `hello` credentials are rejected without returning execution data. Unknown execution IDs are rejected with a generic not-found close.
 
-The hosted deployment must keep `APP_MODE=web` (as configured in `render.yaml` and the backend container). Hosted browser progress uses the stateless `POST /api/run` SSE path; this local SQLite-backed execution socket must not be exposed there. Use `APP_MODE=dev` only for single-user local development and bind the backend to loopback; production deployments must not use dev mode. Do not rely on Origin/CORS checks as execution authorization; the local token and explicit runtime-mode gate are the boundary.
+The development browser cannot access the backend-generated desktop token, so the socket has a deliberately narrower dev-only exception: no token is required only when `APP_MODE=dev` and `APP_ENV=development`, and only when the WebSocket Origin exactly matches a configured, non-wildcard frontend origin. The Python entry point binds dev mode to `127.0.0.1`; keep any alternate dev server bound to loopback too. This is a single-user local-development convenience, not authentication for remote or shared use. Legacy `hello` frames are never accepted as credentials and are closed.
+
+The hosted deployment must keep `APP_MODE=web` (as configured in `render.yaml` and the backend container). Hosted browser progress uses the stateless `POST /api/run` SSE path; this local SQLite-backed execution socket must not be exposed there. Production deployments must not use dev mode. Origin/CORS is a browser-origin check, not authentication by itself; the loopback-only dev listener and single-user restriction are part of the dev trust boundary, while desktop relies on the local token.
 
 ## 7. Accepted Risks
 
