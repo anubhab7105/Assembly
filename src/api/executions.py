@@ -292,37 +292,55 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
     """Local desktop/dev progress socket; authenticate before accessing local history."""
     # Persisted executions are local-only. Hosted web mode uses the
     # stateless /api/run SSE stream and must never expose this socket.
-    if settings.is_web or (settings.app_mode == "dev" and settings.app_env != "development"):
+    is_local_dev = settings.app_mode == "dev" and settings.app_env == "development"
+    if settings.is_web or (settings.app_mode == "dev" and not is_local_dev):
         await websocket.close(code=4004, reason="Execution WebSocket unavailable")
         return
 
     origin = websocket.headers.get("origin")
     allowed = settings.cors_origins
-    if (
+    normalized_allowed = [value.rstrip("/") for value in allowed]
+    if is_local_dev:
+        # The dev browser does not have the backend-generated desktop token.
+        # Trust only an explicitly configured, non-wildcard frontend origin;
+        # dev mode is a single-user local workflow, not a remote auth scheme.
+        if (
+            not origin
+            or "*" in allowed
+            or origin.rstrip("/") not in normalized_allowed
+        ):
+            await websocket.close(
+                code=status.WS_1008_POLICY_VIOLATION, reason="Invalid Origin"
+            )
+            return
+    elif (
         allowed
         and "*" not in allowed
         and origin
-        and origin.rstrip("/") not in [o.rstrip("/") for o in allowed]
+        and origin.rstrip("/") not in normalized_allowed
     ):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid Origin")
         return
 
     await websocket.accept()
-    try:
-        data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-        msg = json.loads(data)
-        if (
-            not isinstance(msg, dict)
-            or msg.get("type") != "auth"
-            or not isinstance(msg.get("token"), str)
-            or not settings.desktop_token
-            or msg.get("token") != settings.desktop_token
-        ):
+    if not is_local_dev:
+        # Desktop clients must prove possession of the sidecar token before
+        # any execution lookup or event replay. Legacy hello frames are not auth.
+        try:
+            data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            msg = json.loads(data)
+            if (
+                not isinstance(msg, dict)
+                or msg.get("type") != "auth"
+                or not isinstance(msg.get("token"), str)
+                or not settings.desktop_token
+                or msg.get("token") != settings.desktop_token
+            ):
+                await websocket.close(code=4001, reason="Authentication failed")
+                return
+        except Exception:
             await websocket.close(code=4001, reason="Authentication failed")
             return
-    except Exception:
-        await websocket.close(code=4001, reason="Authentication failed")
-        return
 
     db = SessionLocal()
     try:
@@ -370,6 +388,19 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text("pong")
+                continue
+
+            try:
+                message = json.loads(data)
+            except (json.JSONDecodeError, TypeError):
+                message = None
+            if data.strip().lower() == "hello" or (
+                isinstance(message, dict) and message.get("type") == "hello"
+            ):
+                await websocket.close(
+                    code=4001, reason="Legacy hello message is not supported"
+                )
+                return
     except WebSocketDisconnect:
         logger.info(f"WS      | Client disconnected from {execution_id[:8]}...")
     except Exception:
