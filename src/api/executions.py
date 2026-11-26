@@ -283,13 +283,13 @@ async def list_events(
 
 
 # ═════════════════════════════════════════════════════════════════════
-# WebSocket — Real-time Progress (desktop-only; web/dev use SSE)
+# WebSocket — Real-time Progress (local desktop/dev; web uses SSE)
 # ═════════════════════════════════════════════════════════════════════
 
 
 @router.websocket("/ws/{execution_id}")
 async def websocket_progress(websocket: WebSocket, execution_id: str):
-    """Desktop-only progress socket; authenticate before accessing local history."""
+    """Local desktop/dev progress socket; authenticate before accessing local history."""
     # Persisted executions are local-only. Hosted web mode uses the
     # stateless /api/run SSE stream and must never expose this socket.
     if settings.is_web or (settings.app_mode == "dev" and settings.is_production):
