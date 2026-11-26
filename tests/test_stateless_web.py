@@ -893,6 +893,8 @@ def test_execution_websocket_rejects_dev_clients_without_an_allowed_origin(
 
     monkeypatch.setattr(settings, "app_mode", "dev")
     monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "frontend_url", "")
+    monkeypatch.setattr(settings, "cors_allow_list", "")
     monkeypatch.setattr(
         "src.api.executions.SessionLocal",
         lambda: pytest.fail("DB must not be queried for an untrusted dev origin"),
