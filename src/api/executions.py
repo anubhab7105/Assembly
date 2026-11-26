@@ -321,6 +321,14 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
         return
 
     db = SessionLocal()
+    try:
+        execution = db.query(Execution).filter(Execution.id == execution_id).first()
+        if not execution:
+            await websocket.close(code=4004, reason="Not found")
+            return
+    finally:
+        db.close()
+
     current_conns = _ws_connections.get(execution_id, [])
     if len(current_conns) >= MAX_WS_CONNECTIONS_PER_EXEC:
         logger.warning(f"WS      | Connection cap reached for {execution_id[:8]}...")
