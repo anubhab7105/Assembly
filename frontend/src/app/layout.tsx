@@ -47,6 +47,13 @@ export const metadata: Metadata = {
     description:
       "Agents from 3 or more model families argue first. You keep one sourced answer.",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: "/apple-icon.png",
+  },
 }
 
 import { LayoutWrapper } from "@/components/layout-wrapper"

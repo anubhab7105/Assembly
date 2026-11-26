@@ -1693,18 +1693,64 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .assembly-rich-footer {
-    padding: 60px 0 32px;
+    padding: 56px 0 36px;
+  }
+
+  .assembly-rich-footer-inner {
+    gap: 40px;
   }
 
   .assembly-rich-footer-grid {
     grid-template-columns: 1fr;
-    gap: 32px;
+    gap: 36px;
+    text-align: center;
   }
 
   .assembly-rich-footer-brand-col {
     grid-column: span 1;
+    align-items: center;
+    text-align: center;
+  }
+
+  .assembly-rich-footer-brand-col .assembly-wordmark {
+    justify-content: center;
+    margin-inline: auto;
+  }
+
+  .assembly-rich-footer-desc {
+    text-align: center;
+    margin-inline: auto;
+    max-width: 320px;
+  }
+
+  .assembly-rich-footer-nav-col {
+    align-items: center;
+    text-align: center;
+  }
+
+  .assembly-rich-footer-heading {
+    text-align: center;
+  }
+
+  .assembly-rich-footer-list {
+    align-items: center;
+    text-align: center;
+  }
+
+  .assembly-rich-footer-list li {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .assembly-rich-footer-link {
+    justify-content: center;
+  }
+
+  .assembly-rich-footer-link:hover {
+    transform: none;
   }
 
   .assembly-rich-footer-bottom {
@@ -1712,6 +1758,7 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
+    text-align: center;
   }
 
   .assembly-rich-footer-back-to-top {
@@ -3113,7 +3160,7 @@
   }
 
   .assembly-landing-header {
-    min-height: 70px;
+    min-height: 56px;
     padding-inline: 16px;
   }
 
@@ -3122,7 +3169,7 @@
   }
 
   .assembly-landing-actions {
-    gap: 0;
+    display: none !important;
   }
 
   .assembly-nav-secondary {
@@ -3262,10 +3309,28 @@
     margin-top: 19px;
   }
 
+  .assembly-bezel-frame.assembly-nova-section {
+    width: 100% !important;
+    max-width: 100vw !important;
+    margin-inline: 0 !important;
+    margin-top: 0 !important;
+    border-radius: 0 0 28px 28px !important;
+  }
+
   .assembly-control-section {
-    margin-block: 30px 58px;
+    margin-top: 0 !important;
+    margin-bottom: 58px;
     padding: 22px 17px;
-    border-radius: 21px;
+    border-radius: 0 !important;
+  }
+
+  .assembly-bezel-notch {
+    display: none !important;
+  }
+
+  .assembly-hero-yellow-stage {
+    padding-top: 56px !important;
+    padding-bottom: 24px;
   }
 
   .assembly-control-copy h2 {

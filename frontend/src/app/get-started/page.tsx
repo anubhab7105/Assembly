@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, CheckCircle2, Terminal } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle2, Terminal } from "lucide-react"
 import { BrandOrbMark } from "@/components/brand-orb-mark"
 
 const requirements = [
@@ -19,32 +19,47 @@ function CodeBlock({ children }: { children: string }) {
 export default function GetStartedPage() {
   return (
     <main id="main-content" tabIndex={-1} className="min-h-full bg-[#080808] text-[#f4f0e8]">
-      <div className="mx-auto max-w-5xl px-5 pb-20 pt-8 sm:px-8 lg:px-10">
+      <div className="w-full px-6 pb-20 pt-8 sm:px-10 lg:px-14">
         <header className="flex items-center justify-between gap-4 border-b border-white/10 pb-6">
           <Link href="/" aria-label="Assembly home" className="flex items-center gap-2 text-lg font-semibold tracking-tight text-white">
             <BrandOrbMark style={{ width: 32, height: 32 }} />
             <span>Assembly</span>
           </Link>
-          <Link href="/" className="text-sm text-white/60 transition hover:text-white">Back to overview</Link>
+          <Link
+            href="/"
+            aria-label="Back to overview"
+            className="inline-flex items-center gap-1.5 text-sm text-white/60 transition hover:text-white"
+          >
+            <ArrowLeft className="size-4" />
+            <span className="hidden sm:inline">Back to overview</span>
+          </Link>
         </header>
 
-        <section className="py-16 sm:py-20">
-          <p className="mb-5 text-xs font-semibold uppercase tracking-[0.24em] text-[#eaa221]">Run it on your machine</p>
-          <h1 className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">Run Assembly locally.</h1>
-          <p className="mt-6 max-w-2xl text-base leading-8 text-white/65 sm:text-lg">
+        <section className="pt-8 pb-8 sm:pt-14 sm:pb-12">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.24em] text-[#eaa221] sm:mb-4">Run it on your machine</p>
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight sm:text-6xl">Run Assembly locally.</h1>
+          <p className="mt-4 text-sm leading-7 text-white/65 sm:mt-5 sm:text-lg sm:leading-8">
             The hosted website introduces the project. The FastAPI backend and investigation workspace run on your machine; model inference uses the provider APIs for the keys you configure.
           </p>
-          <div className="mt-9 flex flex-wrap gap-3">
-            <a href="https://github.com/anubhab7105/Assembly" target="_blank" rel="noreferrer noopener" className="inline-flex min-h-12 items-center gap-2 rounded-full bg-[#eaa221] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[#f2b94e]">
-              Open the Assembly repository <ArrowRight className="size-4" />
+          <div className="mt-6 flex flex-wrap gap-2.5 sm:mt-8 sm:gap-3">
+            <a
+              href="https://github.com/anubhab7105/Assembly"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[#eaa221] px-4 py-2 text-xs font-semibold text-black transition hover:bg-[#f2b94e] sm:min-h-12 sm:px-6 sm:py-3 sm:text-sm"
+            >
+              Open the Assembly repository <ArrowRight className="size-3.5 sm:size-4" />
             </a>
-            <a href="#installation" className="inline-flex min-h-12 items-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/35">
-              <Terminal className="size-4" /> View installation steps
+            <a
+              href="#installation"
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/35 sm:min-h-12 sm:px-6 sm:py-3 sm:text-sm"
+            >
+              <Terminal className="size-3.5 sm:size-4" /> View installation steps
             </a>
           </div>
         </section>
 
-        <section className="grid gap-8 border-y border-white/10 py-10 sm:grid-cols-[1fr_1.4fr]">
+        <section className="grid gap-8 border-y border-white/10 py-7 sm:py-8 sm:grid-cols-[1fr_1.4fr]">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#eaa221]">Before you begin</p>
             <h2 className="mt-3 text-2xl font-semibold">Requirements</h2>
@@ -131,7 +146,7 @@ cd ..`}</CodeBlock>
 
         <section className="border-t border-white/10 pt-8">
           <h2 className="text-2xl font-semibold">Connect your model providers</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-white/60">Once the local workspace opens, use Settings to add your own provider API keys. Assembly uses bring-your-own-key access; keep keys private and never paste them into source files, issues, or screenshots.</p>
+          <p className="mt-3 text-sm leading-7 text-white/60">Once the local workspace opens, use Settings to add your own provider API keys. Assembly uses bring-your-own-key access; keep keys private and never paste them into source files, issues, or screenshots.</p>
           <p className="mt-5 text-sm text-white/45">Need more detail? The repository README and contributor guide contain the full development and testing instructions.</p>
           <a href="http://127.0.0.1:3000/chat" className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-[#eaa221] hover:text-[#f2b94e]">Open the local chat page <ArrowRight className="size-4" /></a>
         </section>
