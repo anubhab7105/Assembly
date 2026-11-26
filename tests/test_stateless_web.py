@@ -859,7 +859,9 @@ def test_execution_websocket_is_disabled_in_web_mode(
     assert exc_info.value.code == 4004
 
 
-def test_execution_websocket_is_disabled_for_non_development_dev_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_execution_websocket_is_disabled_for_non_development_dev_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A dev-mode configuration outside development cannot expose local history."""
     from src.core.config import settings
     from src.main import app
@@ -879,7 +881,9 @@ def test_execution_websocket_is_disabled_for_non_development_dev_mode(monkeypatc
     assert exc_info.value.code == 4004
 
 
-def test_execution_websocket_requires_token_in_dev_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_execution_websocket_requires_token_in_dev_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Local dev mode preserves the socket but rejects unauthenticated clients."""
     from src.core.config import settings
     from src.main import app
@@ -898,7 +902,9 @@ def test_execution_websocket_requires_token_in_dev_mode(monkeypatch: pytest.Monk
             websocket.receive_text()
 
 
-def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Desktop sockets reject absent or incorrect first-message credentials."""
     from src.core.config import settings
     from src.main import app
@@ -924,7 +930,9 @@ def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(monkeypa
             websocket.receive_text()
 
 
-def test_execution_websocket_rejects_unknown_execution_after_valid_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_execution_websocket_rejects_unknown_execution_after_valid_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """An authenticated desktop client receives no content for an unknown ID."""
     from src.core.config import settings
     from src.main import app
@@ -959,7 +967,6 @@ class _UnknownExecutionSession:
 
     def close(self) -> None:
         pass
-
 
 
 def test_execution_websocket_streams_progress_for_authenticated_desktop_client(
