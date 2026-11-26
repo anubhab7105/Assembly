@@ -199,9 +199,9 @@ Fix applied: Startup check refuses web+production mode when JWT_SECRET_KEY match
 
 ## 6. Local execution WebSocket boundary (ASM-API-002)
 
-The persisted execution-progress WebSocket at `/api/executions/ws/{execution_id}` is a **desktop-sidecar-only** interface. It is disabled unless `APP_MODE=desktop`; `APP_MODE=web` (hosted) and `APP_MODE=dev` reject the handshake before any execution lookup or event replay. Desktop clients must send the configured `desktop_token` in the first WebSocket message (`{"type":"auth","token":"..."}`) before the server queries local execution history. Missing, malformed, or invalid credentials are rejected without returning execution data. Unknown execution IDs are rejected with a generic not-found close.
+The persisted execution-progress WebSocket at `/api/executions/ws/{execution_id}` is a **local-only** interface for `APP_MODE=desktop` and `APP_MODE=dev`. Hosted `APP_MODE=web` rejects the handshake before any execution lookup or event replay. Both local modes require the configured `desktop_token` in the first WebSocket message (`{"type":"auth","token":"..."}`) before the server queries local execution history. Missing, malformed, or invalid credentials are rejected without returning execution data. Unknown execution IDs are rejected with a generic not-found close.
 
-The hosted deployment must keep `APP_MODE=web` (as configured in `render.yaml` and the backend container). Hosted browser progress uses the stateless `POST /api/run` SSE path; this local SQLite-backed execution socket must not be exposed there. Developer mode also does not receive this socket: use the stateless run/SSE API for local web development. Do not rely on Origin/CORS checks as execution authorization; the desktop token and explicit runtime-mode gate are the boundary.
+The hosted deployment must keep `APP_MODE=web` (as configured in `render.yaml` and the backend container). Hosted browser progress uses the stateless `POST /api/run` SSE path; this local SQLite-backed execution socket must not be exposed there. Use `APP_MODE=dev` only for single-user local development and bind the backend to loopback; production deployments must not use dev mode. Do not rely on Origin/CORS checks as execution authorization; the local token and explicit runtime-mode gate are the boundary.
 
 ## 7. Accepted Risks
 

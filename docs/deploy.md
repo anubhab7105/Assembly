@@ -29,7 +29,7 @@ The included `render.yaml` defines the web service. Configure these environment 
 
 Users supply provider API keys through the browser for a run. Do not add users' provider keys to hosted environment variables. A server-side Tavily key is optional and is ignored by default in web mode unless `ALLOW_SERVER_SEARCH_KEY` is deliberately enabled.
 
-Hosted mode deliberately disables the local execution-history WebSocket (`/api/executions/ws/{execution_id}`). The hosted frontend must use the stateless `POST /api/run` SSE stream for progress. Do not change the hosted service to `APP_MODE=desktop` to enable the socket; desktop mode requires the local sidecar and its private token contract. `APP_MODE=dev` also rejects the execution WebSocket.
+Hosted mode deliberately disables the local execution-history WebSocket (`/api/executions/ws/{execution_id}`). The hosted frontend must use the stateless `POST /api/run` SSE stream for progress. Do not change the hosted service to `APP_MODE=desktop` or `APP_MODE=dev` to enable the socket. Both desktop and dev modes require the local token; use dev mode only for single-user local development with the backend bound to loopback.
 
 Deploy the service, then verify its `/health` endpoint before connecting the frontend.
 

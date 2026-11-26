@@ -851,17 +851,23 @@ def test_execution_websocket_is_disabled_in_web_mode(web_mode, monkeypatch) -> N
             pytest.fail("web-mode WebSocket must be rejected")
 
 
-def test_execution_websocket_is_disabled_in_dev_mode(monkeypatch) -> None:
-    """The unauthenticated development server cannot expose local execution events."""
+def test_execution_websocket_requires_token_in_dev_mode(monkeypatch) -> None:
+    """Local dev mode preserves the socket but rejects unauthenticated clients."""
     from src.core.config import settings
     from src.main import app
+    from starlette.websockets import WebSocketDisconnect
 
     monkeypatch.setattr(settings, "app_mode", "dev")
-    monkeypatch.setattr("src.api.executions.SessionLocal", lambda: pytest.fail("DB must not be queried"))
+    monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: pytest.fail("DB must not be queried before token validation"),
+    )
     client = TestClient(app)
-    with pytest.raises(Exception):
-        with client.websocket_connect("/api/executions/ws/unknown-execution"):
-            pytest.fail("dev-mode WebSocket must be rejected")
+    with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
+        websocket.send_text(json.dumps({"type": "auth"}))
+        with pytest.raises(WebSocketDisconnect):
+            websocket.receive_text()
 
 
 def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(monkeypatch) -> None:

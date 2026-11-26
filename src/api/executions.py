@@ -290,10 +290,9 @@ async def list_events(
 @router.websocket("/ws/{execution_id}")
 async def websocket_progress(websocket: WebSocket, execution_id: str):
     """Desktop-only progress socket; authenticate before accessing local history."""
-    # The execution store and event stream are local-only. Fail closed in both
-    # hosted web and developer-server modes; only the desktop sidecar has the
-    # token contract required to authorize this endpoint.
-    if settings.app_mode != "desktop":
+    # Persisted executions are local-only. Hosted web mode uses the
+    # stateless /api/run SSE stream and must never expose this socket.
+    if settings.is_web or (settings.app_mode == "dev" and settings.is_production):
         await websocket.close(code=4004, reason="Execution WebSocket unavailable")
         return
 
