@@ -871,6 +871,10 @@ def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(monkeypa
 
     monkeypatch.setattr(settings, "app_mode", "desktop")
     monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: pytest.fail("DB must not be queried before token validation"),
+    )
     client = TestClient(app)
 
     from starlette.websockets import WebSocketDisconnect

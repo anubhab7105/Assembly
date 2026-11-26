@@ -203,7 +203,7 @@ The persisted execution-progress WebSocket at `/api/executions/ws/{execution_id}
 
 The hosted deployment must keep `APP_MODE=web` (as configured in `render.yaml` and the backend container). Hosted browser progress uses the stateless `POST /api/run` SSE path; this local SQLite-backed execution socket must not be exposed there. Developer mode also does not receive this socket: use the stateless run/SSE API for local web development. Do not rely on Origin/CORS checks as execution authorization; the desktop token and explicit runtime-mode gate are the boundary.
 
-## 6. Accepted Risks
+## 7. Accepted Risks
 
 | ID | Risk | Rationale |
 |---|---|---|
@@ -218,7 +218,7 @@ The hosted deployment must keep `APP_MODE=web` (as configured in `render.yaml` a
 
 ---
 
-## 7. Dependency Risk Notes
+## 8. Dependency Risk Notes
 
 | Package | Constraint | Risk |
 |---|---|---|
