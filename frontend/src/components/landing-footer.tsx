@@ -24,7 +24,7 @@ export function LandingFooter() {
           {/* Column 1: Brand & Philosophy */}
           <div className="assembly-rich-footer-brand-col">
             <Link href="/" className="assembly-wordmark" aria-label="Assembly Home" onClick={scrollToTop}>
-              <BrandOrbMark className="assembly-wordmark-mark--header" darkColor={true} /><span>ssembly</span>
+              <BrandOrbMark className="assembly-wordmark-mark--header" /><span>ssembly</span>
             </Link>
             <p className="assembly-rich-footer-desc">
               Turn one hard question into a temporary team of independent AI agents. Cross-examined, cited, and transparent.

@@ -5,11 +5,7 @@
   - Removed `.assembly-section` class from `#get-started` so it avoids inherited `padding-block: 66px` on responsive screens.
   - Aligned `typographyVortexRenderer.ts` dark background from `#151515` to `#000000`, eliminating visible color mismatch and gray box artifacts.
   - Eliminated the black gaps between the FAQ section and the vortex, and between the vortex and the footer across all viewports.
-- Marigold yellow footer:
-  - Converted `.assembly-rich-footer` background to marigold yellow (`#eaa221`) with clean edge-to-edge layout and no top border.
-  - Restyled all typography, column headings, links, and copyright text in high-contrast dark ink (`#0b0c0e`).
-  - Added `darkColor={true}` to `BrandOrbMark` in the footer to render the dotted 'A' mark in pitch black against the yellow background.
-  - Refined mobile spacing and link alignment.
+- Footer styling: Restored the footer back to its original dark theme (`#000000` surface, `rgba(255, 255, 255, 0.08)` top border, luminous dotted 'A' mark, and muted/white typography with yellow CTA link) while retaining clean spacing beneath the vortex.
 - Get Started page button: Updated link on `/get-started` to a prominent yellow pill button ("View the source code ->") linking directly to the Assembly repository on GitHub (`https://github.com/anubhab7105/Assembly`).
 - Verification: Frontend ESLint clean (0 errors), Vitest suite passed (39/39 tests), backend test suite passed (716 tests), and key leak scan passed.
 
