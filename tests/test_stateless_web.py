@@ -12,7 +12,7 @@ import json
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Self
 
 import pytest
 from fastapi.testclient import TestClient
@@ -954,7 +954,7 @@ def test_execution_websocket_rejects_unknown_execution_after_valid_auth(
 
 
 class _UnknownExecutionQuery:
-    def filter(self, *_args: object, **_kwargs: object) -> _UnknownExecutionQuery:
+    def filter(self, *_args: object, **_kwargs: object) -> Self:
         return self
 
     def first(self) -> None:
@@ -980,7 +980,7 @@ def test_execution_websocket_streams_progress_for_authenticated_desktop_client(
     monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
 
     class FoundExecutionQuery:
-        def filter(self, *_args: object, **_kwargs: object) -> FoundExecutionQuery:
+        def filter(self, *_args: object, **_kwargs: object) -> Self:
             return self
 
         def first(self) -> object:
