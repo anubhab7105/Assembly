@@ -389,7 +389,7 @@ def test_persist_fetch_order_and_dedup(db_session) -> None:
 
 
 def _authed_client(monkeypatch, db_path=None):
-    """Desktop local-history client (no accounts, no auth headers)."""
+    """Local dev history client (no accounts, no user-facing auth headers)."""
     from sqlalchemy import create_engine as _create_engine
     from sqlalchemy.orm import sessionmaker as _sessionmaker
     from sqlalchemy.pool import StaticPool as _StaticPool
@@ -469,10 +469,14 @@ def _ws_collect(client, token, execution_id, after_seq, want_count):
     from src.core.config import settings as _settings
 
     messages: list[dict[str, Any]] = []
+    is_local_dev = _settings.app_mode == "dev" and _settings.app_env == "development"
+    headers = {"origin": "http://localhost:3000" if is_local_dev else "tauri://localhost"}
     with client.websocket_connect(
-        f"/api/executions/ws/{execution_id}?after_seq={after_seq}"
+        f"/api/executions/ws/{execution_id}?after_seq={after_seq}",
+        headers=headers,
     ) as ws:
-        ws.send_text(json.dumps({"type": "auth", "token": _settings.desktop_token}))
+        if not is_local_dev:
+            ws.send_text(json.dumps({"type": "auth", "token": _settings.desktop_token}))
         for _ in range(want_count):
             messages.append(json.loads(ws.receive_text()))
     return messages
@@ -482,10 +486,14 @@ def _ws_expect_silence(client, token, execution_id, after_seq) -> None:
     """Prove an empty replay: the next message must be our pong, not a row."""
     from src.core.config import settings as _settings
 
+    is_local_dev = _settings.app_mode == "dev" and _settings.app_env == "development"
+    headers = {"origin": "http://localhost:3000" if is_local_dev else "tauri://localhost"}
     with client.websocket_connect(
-        f"/api/executions/ws/{execution_id}?after_seq={after_seq}"
+        f"/api/executions/ws/{execution_id}?after_seq={after_seq}",
+        headers=headers,
     ) as ws:
-        ws.send_text(json.dumps({"type": "auth", "token": _settings.desktop_token}))
+        if not is_local_dev:
+            ws.send_text(json.dumps({"type": "auth", "token": _settings.desktop_token}))
         ws.send_text("ping")
         assert ws.receive_text() == "pong"
 
