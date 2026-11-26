@@ -1014,6 +1014,8 @@ def test_execution_websocket_streams_progress_for_local_clients(
     monkeypatch.setattr(settings, "app_mode", app_mode)
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+    monkeypatch.setattr(settings, "frontend_url", "")
+    monkeypatch.setattr(settings, "cors_allow_list", "")
 
     class FoundExecutionQuery:
         def filter(self, *_args: object, **_kwargs: object) -> Self:
