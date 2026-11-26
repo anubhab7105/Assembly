@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -840,7 +841,9 @@ def test_run_rejects_with_503_when_attachment_validation_queue_full(
     assert not any(action == "run" for _, action in _rate_limit_history)
 
 
-def test_execution_websocket_is_disabled_in_web_mode(web_mode, monkeypatch) -> None:
+def test_execution_websocket_is_disabled_in_web_mode(
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Hosted mode rejects the local-only socket before auth or DB access."""
     from src.main import app
     from starlette.websockets import WebSocketDisconnect
@@ -856,7 +859,7 @@ def test_execution_websocket_is_disabled_in_web_mode(web_mode, monkeypatch) -> N
     assert exc_info.value.code == 4004
 
 
-def test_execution_websocket_is_disabled_for_non_development_dev_mode(monkeypatch) -> None:
+def test_execution_websocket_is_disabled_for_non_development_dev_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """A dev-mode configuration outside development cannot expose local history."""
     from src.core.config import settings
     from src.main import app
@@ -876,7 +879,7 @@ def test_execution_websocket_is_disabled_for_non_development_dev_mode(monkeypatc
     assert exc_info.value.code == 4004
 
 
-def test_execution_websocket_requires_token_in_dev_mode(monkeypatch) -> None:
+def test_execution_websocket_requires_token_in_dev_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Local dev mode preserves the socket but rejects unauthenticated clients."""
     from src.core.config import settings
     from src.main import app
@@ -895,7 +898,7 @@ def test_execution_websocket_requires_token_in_dev_mode(monkeypatch) -> None:
             websocket.receive_text()
 
 
-def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(monkeypatch) -> None:
+def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
     """Desktop sockets reject absent or incorrect first-message credentials."""
     from src.core.config import settings
     from src.main import app
@@ -921,7 +924,7 @@ def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(monkeypa
             websocket.receive_text()
 
 
-def test_execution_websocket_rejects_unknown_execution_after_valid_auth(monkeypatch) -> None:
+def test_execution_websocket_rejects_unknown_execution_after_valid_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     """An authenticated desktop client receives no content for an unknown ID."""
     from src.core.config import settings
     from src.main import app
@@ -943,23 +946,25 @@ def test_execution_websocket_rejects_unknown_execution_after_valid_auth(monkeypa
 
 
 class _UnknownExecutionQuery:
-    def filter(self, *_args, **_kwargs):
+    def filter(self, *_args: object, **_kwargs: object) -> _UnknownExecutionQuery:
         return self
 
-    def first(self):
+    def first(self) -> None:
         return None
 
 
 class _UnknownExecutionSession:
-    def query(self, *_args, **_kwargs):
+    def query(self, *_args: object, **_kwargs: object) -> _UnknownExecutionQuery:
         return _UnknownExecutionQuery()
 
-    def close(self):
+    def close(self) -> None:
         pass
 
 
 
-def test_execution_websocket_streams_progress_for_authenticated_desktop_client(monkeypatch) -> None:
+def test_execution_websocket_streams_progress_for_authenticated_desktop_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A valid local desktop token still receives stored progress and ping/pong."""
     from src.core.config import settings
     from src.main import app
@@ -968,23 +973,38 @@ def test_execution_websocket_streams_progress_for_authenticated_desktop_client(m
     monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
 
     class FoundExecutionQuery:
-        def filter(self, *_args, **_kwargs):
+        def filter(self, *_args: object, **_kwargs: object) -> FoundExecutionQuery:
             return self
 
-        def first(self):
+        def first(self) -> object:
             return object()
 
     class FoundExecutionSession:
-        def query(self, *_args, **_kwargs):
+        def query(self, *_args: object, **_kwargs: object) -> FoundExecutionQuery:
             return FoundExecutionQuery()
 
-        def close(self):
+        def close(self) -> None:
             pass
 
-    replayed_event = {"seq": 1, "event_type": "execution.progress", "message": "safe progress"}
+    @dataclass(frozen=True)
+    class ReplayEventRow:
+        seq: int
+
+    replayed_event: dict[str, Any] = {
+        "seq": 1,
+        "event_type": "execution.progress",
+        "message": "safe progress",
+    }
+    replay_row = ReplayEventRow(seq=1)
     monkeypatch.setattr("src.api.executions.SessionLocal", FoundExecutionSession)
-    monkeypatch.setattr("src.api.executions.fetch_events", lambda *_args, **_kwargs: [replayed_event])
-    monkeypatch.setattr("src.api.executions.event_to_wire", lambda event: event)
+    monkeypatch.setattr(
+        "src.api.executions.fetch_events",
+        lambda *_args, **_kwargs: [replay_row],
+    )
+    monkeypatch.setattr(
+        "src.api.executions.event_to_wire",
+        lambda _row: replayed_event,
+    )
 
     client = TestClient(app)
     # Desktop uses a Tauri/custom-scheme origin; the desktop CORS wildcard
