@@ -289,7 +289,7 @@ async def list_events(
 
 @router.websocket("/ws/{execution_id}")
 async def websocket_progress(websocket: WebSocket, execution_id: str):
-    """Local desktop/dev progress socket; authenticate before accessing local history."""
+    """Local desktop/dev progress socket with mode-specific access checks."""
     # Persisted executions are local-only. Hosted web mode uses the
     # stateless /api/run SSE stream and must never expose this socket.
     is_local_dev = settings.app_mode == "dev" and settings.app_env == "development"
