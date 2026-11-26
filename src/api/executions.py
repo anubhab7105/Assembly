@@ -283,7 +283,7 @@ async def list_events(
 
 
 # ═════════════════════════════════════════════════════════════════════
-# WebSocket — Real-time Progress (desktop/dev runs; web uses SSE)
+# WebSocket — Real-time Progress (desktop-only; web/dev use SSE)
 # ═════════════════════════════════════════════════════════════════════
 
 

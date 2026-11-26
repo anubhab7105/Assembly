@@ -873,13 +873,16 @@ def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(monkeypa
     monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
     client = TestClient(app)
 
-    with pytest.raises(Exception):
-        with client.websocket_connect("/api/executions/ws/unknown-execution"):
-            pytest.fail("missing token must be rejected")
+    from starlette.websockets import WebSocketDisconnect
 
-    with pytest.raises(Exception):
-        with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
-            websocket.send_text(json.dumps({"type": "auth", "token": "wrong-token"}))
+    with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
+        websocket.send_text(json.dumps({"type": "auth"}))
+        with pytest.raises(WebSocketDisconnect):
+            websocket.receive_text()
+
+    with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
+        websocket.send_text(json.dumps({"type": "auth", "token": "wrong-token"}))
+        with pytest.raises(WebSocketDisconnect):
             websocket.receive_text()
 
 
@@ -915,3 +918,39 @@ class _UnknownExecutionSession:
 
     def close(self):
         pass
+
+
+
+def test_execution_websocket_streams_progress_for_authenticated_desktop_client(monkeypatch) -> None:
+    """A valid local desktop token still receives stored progress and ping/pong."""
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "desktop")
+    monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+
+    class FoundExecutionQuery:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def first(self):
+            return object()
+
+    class FoundExecutionSession:
+        def query(self, *_args, **_kwargs):
+            return FoundExecutionQuery()
+
+        def close(self):
+            pass
+
+    replayed_event = {"seq": 1, "event_type": "execution.progress", "message": "safe progress"}
+    monkeypatch.setattr("src.api.executions.SessionLocal", FoundExecutionSession)
+    monkeypatch.setattr("src.api.executions.fetch_events", lambda *_args, **_kwargs: [replayed_event])
+    monkeypatch.setattr("src.api.executions.event_to_wire", lambda event: event)
+
+    client = TestClient(app)
+    with client.websocket_connect("/api/executions/ws/existing-execution") as websocket:
+        websocket.send_text(json.dumps({"type": "auth", "token": "test-desktop-token"}))
+        assert json.loads(websocket.receive_text()) == replayed_event
+        websocket.send_text("ping")
+        assert websocket.receive_text() == "pong"
