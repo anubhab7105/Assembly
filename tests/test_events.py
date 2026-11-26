@@ -401,6 +401,9 @@ def _authed_client(monkeypatch, db_path=None):
     from src.main import app
 
     monkeypatch.setattr(settings, "app_mode", "dev")
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "frontend_url", "")
+    monkeypatch.setattr(settings, "cors_allow_list", "")
 
     if db_path is None:
         engine = _create_engine(
