@@ -1444,12 +1444,10 @@
 
 .assembly-faq-inner {
   width: min(var(--landing-max), calc(100% - clamp(24px, 3.2vw, 44px)));
-  max-width: 1040px;
   margin-inline: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 48px;
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 54px;
 }
 
 .assembly-faq-section .assembly-section-kicker {
@@ -1462,7 +1460,7 @@
 
 .assembly-faq-section h2 {
   color: #0b0c0e !important;
-  text-align: center;
+  text-align: left;
   margin-bottom: 0;
 }
 
@@ -1471,28 +1469,23 @@
 }
 
 .assembly-faq-section .assembly-section-heading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  margin: 0 auto;
-  padding-left: 0;
-  max-width: 620px;
+  display: block;
+  margin: 0;
+  padding-left: clamp(20px, 2.4vw, 38px);
+  text-align: left;
 }
 
 .assembly-faq-section .assembly-section-heading > div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+  display: block;
+  text-align: left;
 }
 
 .assembly-faq-section .assembly-section-heading>p {
-  margin-top: 6px;
-  text-align: center;
+  margin-top: 16px;
+  text-align: left;
   color: #0b0c0e !important;
   opacity: 0.9;
-  max-width: 520px;
+  max-width: 440px;
 }
 
 .assembly-faq-list {
@@ -3211,7 +3204,12 @@
   }
 
   .assembly-faq-inner {
+    grid-template-columns: 1fr;
     gap: 32px;
+  }
+
+  .assembly-faq-section .assembly-section-heading {
+    padding-left: 0;
   }
 }
 

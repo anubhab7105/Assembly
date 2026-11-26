@@ -1,6 +1,6 @@
 ## 2026-11-26 — Landing page polish: FAQ & Footer marigold styling, vortex spacing, and Get Started link (PR #132)
 
-- FAQ section styling: Transformed the FAQ section to full-width marigold yellow (`#eaa221`), centered the heading block ("GOOD TO KNOW", "Before you begin.", description), styled question summaries in high-contrast dark text (`#0b0c0e`), answers in white (`#ffffff`), and staged "Before you" in black with "begin." in white.
+- FAQ section styling: Retained full-width marigold yellow (`#eaa221`) background with a 2-column layout on desktop (left: heading block, right: question-answer accordion), styled question summaries in high-contrast dark text (`#0b0c0e`), answers in white (`#ffffff`), and staged "Before you" in black with "begin." in white.
 - 3D Typography Vortex spacing & dark mode alignment:
   - Removed `.assembly-section` class from `#get-started` so it avoids inherited `padding-block: 66px` on responsive screens.
   - Aligned `typographyVortexRenderer.ts` dark background from `#151515` to `#000000`, eliminating visible color mismatch and gray box artifacts.
