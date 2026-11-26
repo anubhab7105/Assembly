@@ -843,12 +843,17 @@ def test_run_rejects_with_503_when_attachment_validation_queue_full(
 def test_execution_websocket_is_disabled_in_web_mode(web_mode, monkeypatch) -> None:
     """Hosted mode rejects the local-only socket before auth or DB access."""
     from src.main import app
+    from starlette.websockets import WebSocketDisconnect
 
-    monkeypatch.setattr("src.api.executions.SessionLocal", lambda: pytest.fail("DB must not be queried"))
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: pytest.fail("DB must not be queried"),
+    )
     client = TestClient(app)
-    with pytest.raises(Exception):
+    with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect("/api/executions/ws/unknown-execution"):
-            pytest.fail("web-mode WebSocket must be rejected")
+            pass
+    assert exc_info.value.code == 4004
 
 
 def test_execution_websocket_is_disabled_for_non_development_dev_mode(monkeypatch) -> None:
@@ -862,10 +867,13 @@ def test_execution_websocket_is_disabled_for_non_development_dev_mode(monkeypatc
         "src.api.executions.SessionLocal",
         lambda: pytest.fail("DB must not be queried"),
     )
+    from starlette.websockets import WebSocketDisconnect
+
     client = TestClient(app)
-    with pytest.raises(Exception):
+    with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect("/api/executions/ws/unknown-execution"):
-            pytest.fail("non-development dev-mode WebSocket must be rejected")
+            pass
+    assert exc_info.value.code == 4004
 
 
 def test_execution_websocket_requires_token_in_dev_mode(monkeypatch) -> None:
@@ -924,11 +932,14 @@ def test_execution_websocket_rejects_unknown_execution_after_valid_auth(monkeypa
         "src.api.executions.SessionLocal",
         lambda: _UnknownExecutionSession(),
     )
+    from starlette.websockets import WebSocketDisconnect
+
     client = TestClient(app)
-    with pytest.raises(Exception):
-        with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
-            websocket.send_text(json.dumps({"type": "auth", "token": "test-desktop-token"}))
+    with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
+        websocket.send_text(json.dumps({"type": "auth", "token": "test-desktop-token"}))
+        with pytest.raises(WebSocketDisconnect) as exc_info:
             websocket.receive_text()
+    assert exc_info.value.code == 4004
 
 
 class _UnknownExecutionQuery:
