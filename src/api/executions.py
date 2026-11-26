@@ -299,7 +299,12 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
 
     origin = websocket.headers.get("origin")
     allowed = settings.cors_origins
-    if allowed and origin and origin.rstrip("/") not in [o.rstrip("/") for o in allowed]:
+    if (
+        allowed
+        and "*" not in allowed
+        and origin
+        and origin.rstrip("/") not in [o.rstrip("/") for o in allowed]
+    ):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid Origin")
         return
 

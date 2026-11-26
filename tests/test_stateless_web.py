@@ -949,7 +949,12 @@ def test_execution_websocket_streams_progress_for_authenticated_desktop_client(m
     monkeypatch.setattr("src.api.executions.event_to_wire", lambda event: event)
 
     client = TestClient(app)
-    with client.websocket_connect("/api/executions/ws/existing-execution") as websocket:
+    # Desktop uses a Tauri/custom-scheme origin; the desktop CORS wildcard
+    # must not accidentally block it. The token remains mandatory.
+    with client.websocket_connect(
+        "/api/executions/ws/existing-execution",
+        headers={"origin": "tauri://localhost"},
+    ) as websocket:
         websocket.send_text(json.dumps({"type": "auth", "token": "test-desktop-token"}))
         assert json.loads(websocket.receive_text()) == replayed_event
         websocket.send_text("ping")
