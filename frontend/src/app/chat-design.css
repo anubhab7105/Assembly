@@ -1464,6 +1464,17 @@
   margin-bottom: 0;
 }
 
+.assembly-faq-section h2 em,
+.assembly-faq-em {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.assembly-faq-you {
+  color: #0b0c0e !important;
+}
+
 .assembly-faq-section h2 .assembly-faq-highlight {
   color: #ffffff !important;
 }
@@ -3197,6 +3208,10 @@
   .assembly-control-inner {
     grid-template-columns: 1fr;
     gap: 36px;
+  }
+
+  .assembly-control-list-wrapper {
+    border-bottom: none !important;
   }
 
   .assembly-faq-section {

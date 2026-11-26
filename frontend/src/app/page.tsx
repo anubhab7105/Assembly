@@ -74,7 +74,7 @@ export default function LandingPage() {
               <div className="assembly-section-heading">
                 <div>
                   <span className="assembly-section-kicker">Good to know</span>
-                  <h2>Before you <span className="assembly-faq-highlight">begin.</span></h2>
+                  <h2>Before <em className="assembly-faq-em"><span className="assembly-faq-you">you</span> <span className="assembly-faq-highlight">begin.</span></em></h2>
                 </div>
                 <p>Clear answers about what Assembly does, what it uses, and what stays in your control.</p>
               </div>
