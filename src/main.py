@@ -408,7 +408,7 @@ if __name__ == "__main__":
 
     else:
         port = int(os.environ.get("PORT", settings.port))
-        host = "0.0.0.0"
+        host = "127.0.0.1" if settings.app_mode == "dev" else "0.0.0.0"
         reload = settings.debug
 
     uvicorn.run(

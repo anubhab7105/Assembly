@@ -11,7 +11,8 @@ import asyncio
 import json
 import logging
 from collections.abc import Iterator
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Self
 
 import pytest
 from fastapi.testclient import TestClient
@@ -838,3 +839,242 @@ def test_run_rejects_with_503_when_attachment_validation_queue_full(
     assert "Server is busy" in resp.json()["detail"]
     # Rejection at the gate must not consume run rate limit quota
     assert not any(action == "run" for _, action in _rate_limit_history)
+
+
+def test_execution_websocket_is_disabled_in_web_mode(
+    web_mode: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hosted mode rejects the local-only socket before auth or DB access."""
+    from src.main import app
+    from starlette.websockets import WebSocketDisconnect
+
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: pytest.fail("DB must not be queried"),
+    )
+    client = TestClient(app)
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect("/api/executions/ws/unknown-execution"):
+            pass
+    assert exc_info.value.code == 4004
+
+
+def test_execution_websocket_is_disabled_for_non_development_dev_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dev-mode configuration outside development cannot expose local history."""
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "dev")
+    monkeypatch.setattr(settings, "app_env", "staging")
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: pytest.fail("DB must not be queried"),
+    )
+    from starlette.websockets import WebSocketDisconnect
+
+    client = TestClient(app)
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect("/api/executions/ws/unknown-execution"):
+            pass
+    assert exc_info.value.code == 4004
+
+
+@pytest.mark.parametrize("origin", [None, "https://untrusted.example"])
+def test_execution_websocket_rejects_dev_clients_without_an_allowed_origin(
+    origin: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dev-mode sockets require an explicit, non-wildcard frontend origin."""
+    from src.core.config import settings
+    from src.main import app
+    from starlette.websockets import WebSocketDisconnect
+
+    monkeypatch.setattr(settings, "app_mode", "dev")
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "frontend_url", "")
+    monkeypatch.setattr(settings, "cors_allow_list", "")
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: pytest.fail("DB must not be queried for an untrusted dev origin"),
+    )
+    client = TestClient(app)
+    headers = {"origin": origin} if origin else {}
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            "/api/executions/ws/unknown-execution",
+            headers=headers,
+        ):
+            pass
+    assert exc_info.value.code == 1008
+
+
+@pytest.mark.parametrize("legacy_message", ["hello", '{"type":"hello"}'])
+def test_execution_websocket_rejects_legacy_hello_before_desktop_lookup(
+    legacy_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A legacy hello frame is never accepted as desktop authentication."""
+    from src.core.config import settings
+    from src.main import app
+    from starlette.websockets import WebSocketDisconnect
+
+    monkeypatch.setattr(settings, "app_mode", "desktop")
+    monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: pytest.fail("DB must not be queried before desktop auth"),
+    )
+    client = TestClient(app)
+    with client.websocket_connect(
+        "/api/executions/ws/unknown-execution",
+        headers={"origin": "tauri://localhost"},
+    ) as websocket:
+        websocket.send_text(legacy_message)
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            websocket.receive_text()
+    assert exc_info.value.code == 4001
+
+
+def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Desktop sockets reject absent or incorrect first-message credentials."""
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "desktop")
+    monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: pytest.fail("DB must not be queried before token validation"),
+    )
+    client = TestClient(app)
+
+    from starlette.websockets import WebSocketDisconnect
+
+    with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
+        websocket.send_text(json.dumps({"type": "auth"}))
+        with pytest.raises(WebSocketDisconnect):
+            websocket.receive_text()
+
+    with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
+        websocket.send_text(json.dumps({"type": "auth", "token": "wrong-token"}))
+        with pytest.raises(WebSocketDisconnect):
+            websocket.receive_text()
+
+
+def test_execution_websocket_rejects_unknown_execution_after_valid_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An authenticated desktop client receives no content for an unknown ID."""
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "desktop")
+    monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: _UnknownExecutionSession(),
+    )
+    from starlette.websockets import WebSocketDisconnect
+
+    client = TestClient(app)
+    with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
+        websocket.send_text(json.dumps({"type": "auth", "token": "test-desktop-token"}))
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            websocket.receive_text()
+    assert exc_info.value.code == 4004
+
+
+class _UnknownExecutionQuery:
+    def filter(self, *_args: object, **_kwargs: object) -> Self:
+        return self
+
+    def first(self) -> None:
+        return None
+
+
+class _UnknownExecutionSession:
+    def query(self, *_args: object, **_kwargs: object) -> _UnknownExecutionQuery:
+        return _UnknownExecutionQuery()
+
+    def close(self) -> None:
+        pass
+
+
+@pytest.mark.parametrize("app_mode", ["desktop", "dev"])
+def test_execution_websocket_streams_progress_for_local_clients(
+    app_mode: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Desktop token auth and the allowlisted local dev browser both stream progress."""
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", app_mode)
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+    monkeypatch.setattr(settings, "frontend_url", "")
+    monkeypatch.setattr(settings, "cors_allow_list", "")
+
+    class FoundExecutionQuery:
+        def filter(self, *_args: object, **_kwargs: object) -> Self:
+            return self
+
+        def first(self) -> object:
+            return object()
+
+    class FoundExecutionSession:
+        def query(self, *_args: object, **_kwargs: object) -> FoundExecutionQuery:
+            return FoundExecutionQuery()
+
+        def close(self) -> None:
+            pass
+
+    @dataclass(frozen=True)
+    class ReplayEventRow:
+        seq: int
+
+    replayed_event: dict[str, Any] = {
+        "seq": 1,
+        "event_type": "execution.progress",
+        "message": "safe progress",
+    }
+    replay_row = ReplayEventRow(seq=1)
+    monkeypatch.setattr("src.api.executions.SessionLocal", FoundExecutionSession)
+    monkeypatch.setattr(
+        "src.api.executions.fetch_events",
+        lambda *_args, **_kwargs: [replay_row],
+    )
+    monkeypatch.setattr(
+        "src.api.executions.event_to_wire",
+        lambda _row: replayed_event,
+    )
+
+    client = TestClient(app)
+    headers = (
+        {"origin": "tauri://localhost"}
+        if app_mode == "desktop"
+        else {"origin": "http://localhost:3000"}
+    )
+    with client.websocket_connect(
+        "/api/executions/ws/existing-execution",
+        headers=headers,
+    ) as websocket:
+        if app_mode == "desktop":
+            websocket.send_text(
+                json.dumps({"type": "auth", "token": "test-desktop-token"})
+            )
+        # Development browser clients connect without the backend-only token.
+        assert json.loads(websocket.receive_text()) == replayed_event
+        websocket.send_text("ping")
+        assert websocket.receive_text() == "pong"
+        if app_mode == "dev":
+            websocket.send_text(json.dumps({"type": "hello"}))
+            from starlette.websockets import WebSocketDisconnect
+
+            with pytest.raises(WebSocketDisconnect) as exc_info:
+                websocket.receive_text()
+            assert exc_info.value.code == 4001
