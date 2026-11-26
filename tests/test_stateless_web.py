@@ -851,6 +851,23 @@ def test_execution_websocket_is_disabled_in_web_mode(web_mode, monkeypatch) -> N
             pytest.fail("web-mode WebSocket must be rejected")
 
 
+def test_execution_websocket_is_disabled_for_non_development_dev_mode(monkeypatch) -> None:
+    """A dev-mode configuration outside development cannot expose local history."""
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "dev")
+    monkeypatch.setattr(settings, "app_env", "staging")
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: pytest.fail("DB must not be queried"),
+    )
+    client = TestClient(app)
+    with pytest.raises(Exception):
+        with client.websocket_connect("/api/executions/ws/unknown-execution"):
+            pytest.fail("non-development dev-mode WebSocket must be rejected")
+
+
 def test_execution_websocket_requires_token_in_dev_mode(monkeypatch) -> None:
     """Local dev mode preserves the socket but rejects unauthenticated clients."""
     from src.core.config import settings
