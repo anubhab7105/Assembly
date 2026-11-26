@@ -838,3 +838,80 @@ def test_run_rejects_with_503_when_attachment_validation_queue_full(
     assert "Server is busy" in resp.json()["detail"]
     # Rejection at the gate must not consume run rate limit quota
     assert not any(action == "run" for _, action in _rate_limit_history)
+
+
+def test_execution_websocket_is_disabled_in_web_mode(web_mode, monkeypatch) -> None:
+    """Hosted mode rejects the local-only socket before auth or DB access."""
+    from src.main import app
+
+    monkeypatch.setattr("src.api.executions.SessionLocal", lambda: pytest.fail("DB must not be queried"))
+    client = TestClient(app)
+    with pytest.raises(Exception):
+        with client.websocket_connect("/api/executions/ws/unknown-execution"):
+            pytest.fail("web-mode WebSocket must be rejected")
+
+
+def test_execution_websocket_is_disabled_in_dev_mode(monkeypatch) -> None:
+    """The unauthenticated development server cannot expose local execution events."""
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "dev")
+    monkeypatch.setattr("src.api.executions.SessionLocal", lambda: pytest.fail("DB must not be queried"))
+    client = TestClient(app)
+    with pytest.raises(Exception):
+        with client.websocket_connect("/api/executions/ws/unknown-execution"):
+            pytest.fail("dev-mode WebSocket must be rejected")
+
+
+def test_execution_websocket_rejects_missing_and_invalid_desktop_tokens(monkeypatch) -> None:
+    """Desktop sockets reject absent or incorrect first-message credentials."""
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "desktop")
+    monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+    client = TestClient(app)
+
+    with pytest.raises(Exception):
+        with client.websocket_connect("/api/executions/ws/unknown-execution"):
+            pytest.fail("missing token must be rejected")
+
+    with pytest.raises(Exception):
+        with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
+            websocket.send_text(json.dumps({"type": "auth", "token": "wrong-token"}))
+            websocket.receive_text()
+
+
+def test_execution_websocket_rejects_unknown_execution_after_valid_auth(monkeypatch) -> None:
+    """An authenticated desktop client receives no content for an unknown ID."""
+    from src.core.config import settings
+    from src.main import app
+
+    monkeypatch.setattr(settings, "app_mode", "desktop")
+    monkeypatch.setattr(settings, "desktop_token", "test-desktop-token")
+    monkeypatch.setattr(
+        "src.api.executions.SessionLocal",
+        lambda: _UnknownExecutionSession(),
+    )
+    client = TestClient(app)
+    with pytest.raises(Exception):
+        with client.websocket_connect("/api/executions/ws/unknown-execution") as websocket:
+            websocket.send_text(json.dumps({"type": "auth", "token": "test-desktop-token"}))
+            websocket.receive_text()
+
+
+class _UnknownExecutionQuery:
+    def filter(self, *_args, **_kwargs):
+        return self
+
+    def first(self):
+        return None
+
+
+class _UnknownExecutionSession:
+    def query(self, *_args, **_kwargs):
+        return _UnknownExecutionQuery()
+
+    def close(self):
+        pass

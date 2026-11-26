@@ -289,8 +289,13 @@ async def list_events(
 
 @router.websocket("/ws/{execution_id}")
 async def websocket_progress(websocket: WebSocket, execution_id: str):
-    """Desktop/dev progress socket. Origin-checked; desktop needs token."""
-    await websocket.accept()
+    """Desktop-only progress socket; authenticate before accessing local history."""
+    # The execution store and event stream are local-only. Fail closed in both
+    # hosted web and developer-server modes; only the desktop sidecar has the
+    # token contract required to authorize this endpoint.
+    if settings.app_mode != "desktop":
+        await websocket.close(code=4004, reason="Execution WebSocket unavailable")
+        return
 
     origin = websocket.headers.get("origin")
     allowed = settings.cors_origins
@@ -298,36 +303,24 @@ async def websocket_progress(websocket: WebSocket, execution_id: str):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid Origin")
         return
 
-    if settings.app_mode == "desktop":
-        try:
-            data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-            msg = json.loads(data)
-            if msg.get("type") != "auth" or msg.get("token") != settings.desktop_token:
-                await websocket.close(code=4001, reason="Authentication failed")
-                return
-        except Exception:
+    await websocket.accept()
+    try:
+        data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+        msg = json.loads(data)
+        if (
+            not isinstance(msg, dict)
+            or msg.get("type") != "auth"
+            or not isinstance(msg.get("token"), str)
+            or not settings.desktop_token
+            or msg.get("token") != settings.desktop_token
+        ):
             await websocket.close(code=4001, reason="Authentication failed")
             return
-    else:
-        # Web/dev: no token in URL; consume one optional hello message.
-        try:
-            await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
-        except Exception:
-            pass
-
-    if settings.is_web:
-        await websocket.close(code=4004, reason="Use POST /api/run in web mode")
+    except Exception:
+        await websocket.close(code=4001, reason="Authentication failed")
         return
 
     db = SessionLocal()
-    try:
-        execution = db.query(Execution).filter(Execution.id == execution_id).first()
-        if not execution:
-            await websocket.close(code=4004, reason="Not found")
-            return
-    finally:
-        db.close()
-
     current_conns = _ws_connections.get(execution_id, [])
     if len(current_conns) >= MAX_WS_CONNECTIONS_PER_EXEC:
         logger.warning(f"WS      | Connection cap reached for {execution_id[:8]}...")
