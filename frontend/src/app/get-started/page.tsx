@@ -148,7 +148,16 @@ cd ..`}</CodeBlock>
           <h2 className="text-2xl font-semibold">Connect your model providers</h2>
           <p className="mt-3 text-sm leading-7 text-white/60">Once the local workspace opens, use Settings to add your own provider API keys. Assembly uses bring-your-own-key access; keep keys private and never paste them into source files, issues, or screenshots.</p>
           <p className="mt-5 text-sm text-white/45">Need more detail? The repository README and contributor guide contain the full development and testing instructions.</p>
-          <a href="http://127.0.0.1:3000/chat" className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-[#eaa221] hover:text-[#f2b94e]">Open the local chat page <ArrowRight className="size-4" /></a>
+          <div className="mt-7">
+            <a
+              href="https://github.com/anubhab7105/Assembly"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[#eaa221] px-4 py-2 text-xs font-semibold text-black transition hover:bg-[#f2b94e] sm:min-h-12 sm:px-6 sm:py-3 sm:text-sm"
+            >
+              View the source code <ArrowRight className="size-3.5 sm:size-4" />
+            </a>
+          </div>
         </section>
       </div>
     </main>

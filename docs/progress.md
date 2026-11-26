@@ -1,3 +1,18 @@
+## 2026-11-26 — Landing page polish: FAQ & Footer marigold styling, vortex spacing, and Get Started link (PR #132)
+
+- FAQ section styling: Transformed the FAQ section to full-width marigold yellow (`#eaa221`), centered the heading block ("GOOD TO KNOW", "Before you begin.", description), styled question summaries in high-contrast dark text (`#0b0c0e`), answers in white (`#ffffff`), and staged "Before you" in black with "begin." in white.
+- 3D Typography Vortex spacing & dark mode alignment:
+  - Removed `.assembly-section` class from `#get-started` so it avoids inherited `padding-block: 66px` on responsive screens.
+  - Aligned `typographyVortexRenderer.ts` dark background from `#151515` to `#000000`, eliminating visible color mismatch and gray box artifacts.
+  - Eliminated the black gaps between the FAQ section and the vortex, and between the vortex and the footer across all viewports.
+- Marigold yellow footer:
+  - Converted `.assembly-rich-footer` background to marigold yellow (`#eaa221`) with clean edge-to-edge layout and no top border.
+  - Restyled all typography, column headings, links, and copyright text in high-contrast dark ink (`#0b0c0e`).
+  - Added `darkColor={true}` to `BrandOrbMark` in the footer to render the dotted 'A' mark in pitch black against the yellow background.
+  - Refined mobile spacing and link alignment.
+- Get Started page button: Updated link on `/get-started` to a prominent yellow pill button ("View the source code ->") linking directly to the Assembly repository on GitHub (`https://github.com/anubhab7105/Assembly`).
+- Verification: Frontend ESLint clean (0 errors), Vitest suite passed (39/39 tests), backend test suite passed (716 tests), and key leak scan passed.
+
 ## 2026-11-26 — Mobile responsiveness, hero layout polish, and Assembly favicon (Issue #131)
 
 - Mobile navigation: Added responsive 3-line hamburger menu in `landing-header.tsx` with slide-down dropdown menu for mobile devices (`<= 640px`), centered items with section dividers, and cleanly hid the desktop CTA button from header navigation on small viewports.

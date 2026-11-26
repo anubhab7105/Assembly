@@ -1131,16 +1131,16 @@
   width: 100vw;
   margin-left: calc(-50vw + 50%);
   margin-right: calc(-50vw + 50%);
-  margin-top: 0;
-  margin-bottom: 0;
-  padding: 0;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 0 !important;
   background: #000000;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  height: clamp(520px, 60vw, 760px);
+  height: clamp(480px, 52vw, 680px);
 }
 
 .assembly-intro-text-stage {
@@ -1431,31 +1431,77 @@
 }
 
 .assembly-faq-section {
+  position: relative;
+  z-index: 1;
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
+  margin-right: calc(-50vw + 50%);
+  background: #eaa221;
+  color: #0b0c0e;
+  padding-block: clamp(64px, 7vw, 96px);
+  border-top: none !important;
+}
+
+.assembly-faq-inner {
   width: min(var(--landing-max), calc(100% - clamp(24px, 3.2vw, 44px)));
+  max-width: 1040px;
   margin-inline: auto;
-  display: grid;
-  grid-template-columns: .8fr 1.2fr;
-  gap: 54px;
-  padding-block: 80px 100px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 48px;
+}
+
+.assembly-faq-section .assembly-section-kicker {
+  color: #0b0c0e !important;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.assembly-faq-section h2 {
+  color: #0b0c0e !important;
+  text-align: center;
+  margin-bottom: 0;
+}
+
+.assembly-faq-section h2 .assembly-faq-highlight {
+  color: #ffffff !important;
 }
 
 .assembly-faq-section .assembly-section-heading {
-  display: block;
-  margin: 0;
-  padding-left: clamp(20px, 2.4vw, 38px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin: 0 auto;
+  padding-left: 0;
+  max-width: 620px;
+}
+
+.assembly-faq-section .assembly-section-heading > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .assembly-faq-section .assembly-section-heading>p {
-  margin-top: 16px;
+  margin-top: 6px;
+  text-align: center;
+  color: #0b0c0e !important;
+  opacity: 0.9;
+  max-width: 520px;
 }
 
 .assembly-faq-list {
-  border-top: 1px solid var(--border);
+  width: 100%;
+  border-top: 1px solid rgba(0, 0, 0, 0.18);
 }
 
 .assembly-faq-item {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.18);
 }
 
 .assembly-faq-item summary {
@@ -1467,7 +1513,8 @@
   cursor: pointer;
   list-style: none;
   font-size: .89rem;
-  font-weight: 630;
+  font-weight: 650;
+  color: #0b0c0e !important;
 }
 
 .assembly-faq-item summary::-webkit-details-marker {
@@ -1480,22 +1527,30 @@
   height: 28px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.06);
   border-radius: 50%;
-  color: var(--muted-foreground);
-  transition: transform .2s ease;
+  color: #0b0c0e;
+  transition: transform .2s ease, background .2s ease, color .2s ease;
+}
+
+.assembly-faq-item summary:hover span {
+  background: rgba(0, 0, 0, 0.14);
 }
 
 .assembly-faq-item[open] summary span {
   transform: rotate(90deg);
-  color: var(--brand);
+  background: #0b0c0e;
+  color: #eaa221;
+  border-color: #0b0c0e;
 }
 
 .assembly-faq-item p {
-  max-width: 640px;
+  max-width: 900px;
   padding: 0 42px 22px 0;
-  color: var(--muted-foreground);
-  font-size: .83rem;
+  color: #ffffff !important;
+  opacity: 0.95;
+  font-size: .86rem;
   line-height: 1.8;
 }
 
@@ -1529,9 +1584,10 @@
   width: 100vw;
   margin-left: calc(-50vw + 50%);
   margin-right: calc(-50vw + 50%);
-  background: #000000;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 80px 0 44px;
+  background: #eaa221;
+  color: #0b0c0e;
+  border-top: none !important;
+  padding: 48px 0 44px;
   position: relative;
   z-index: 10;
 }
@@ -1541,7 +1597,7 @@
   margin-inline: auto;
   display: flex;
   flex-direction: column;
-  gap: 64px;
+  gap: 56px;
 }
 
 .assembly-rich-footer-grid {
@@ -1557,8 +1613,13 @@
   max-width: 380px;
 }
 
+.assembly-rich-footer-brand-col .assembly-wordmark {
+  color: #0b0c0e !important;
+}
+
 .assembly-rich-footer-desc {
-  color: var(--muted-foreground);
+  color: #0b0c0e !important;
+  opacity: 0.88;
   font-size: 0.86rem;
   line-height: 1.65;
   margin: 0;
@@ -1569,12 +1630,12 @@
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.07);
+  border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 540;
-  color: var(--muted-foreground);
+  color: #0b0c0e;
   width: fit-content;
   margin-top: 4px;
 }
@@ -1583,8 +1644,8 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #3ad462;
-  box-shadow: 0 0 8px #3ad462;
+  background: #0b0c0e;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
 }
 
 .assembly-rich-footer-nav-col {
@@ -1595,10 +1656,10 @@
 
 .assembly-rich-footer-heading {
   font-size: 0.82rem;
-  font-weight: 650;
-  letter-spacing: 0.06em;
+  font-weight: 750;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--foreground);
+  color: #0b0c0e !important;
   margin: 0;
 }
 
@@ -1612,10 +1673,11 @@
 }
 
 .assembly-rich-footer-link {
-  color: var(--muted-foreground);
+  color: #0b0c0e !important;
+  opacity: 0.82;
   font-size: 0.84rem;
   text-decoration: none;
-  transition: color 0.18s ease, transform 0.18s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1623,17 +1685,20 @@
 }
 
 .assembly-rich-footer-link:hover {
-  color: #ffffff;
+  color: #000000 !important;
+  opacity: 1 !important;
   transform: translateX(2px);
 }
 
 .assembly-rich-footer-link--cta {
-  color: #eaa221 !important;
-  font-weight: 600;
+  color: #0b0c0e !important;
+  font-weight: 700;
+  opacity: 1 !important;
 }
 
 .assembly-rich-footer-link--cta:hover {
-  color: #ffffff;
+  color: #000000 !important;
+  opacity: 1 !important;
 }
 
 .assembly-rich-footer-bottom {
@@ -1642,9 +1707,10 @@
   align-items: center;
   justify-content: center;
   padding-top: 32px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 0.76rem;
-  color: var(--muted-foreground);
+  border-top: 1px solid rgba(0, 0, 0, 0.16) !important;
+  font-size: 0.78rem;
+  color: #0b0c0e !important;
+  opacity: 0.85;
   gap: 16px;
 }
 
@@ -1653,6 +1719,7 @@
   align-items: center;
   justify-content: center;
   text-align: center;
+  color: #0b0c0e !important;
 }
 
 .assembly-rich-footer-bottom-divider {
@@ -1665,20 +1732,20 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.25);
   border-radius: 999px;
   padding: 6px 14px;
   font-size: 0.74rem;
-  color: var(--muted-foreground);
+  color: #0b0c0e;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .assembly-rich-footer-back-to-top:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.14);
+  color: #000000;
+  border-color: rgba(0, 0, 0, 0.4);
 }
 
 @media (max-width: 900px) {
@@ -1694,8 +1761,14 @@
 }
 
 @media (max-width: 640px) {
+  .assembly-intro-text-section {
+    height: clamp(380px, 85vw, 480px);
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   .assembly-rich-footer {
-    padding: 56px 0 36px;
+    padding: 28px 0 36px;
   }
 
   .assembly-rich-footer-inner {
@@ -3146,9 +3219,11 @@
   }
 
   .assembly-faq-section {
-    grid-template-columns: 1fr;
-    gap: 30px;
     padding-block: 70px;
+  }
+
+  .assembly-faq-inner {
+    gap: 32px;
   }
 }
 
@@ -3319,7 +3394,7 @@
 
   .assembly-control-section {
     margin-top: 0 !important;
-    margin-bottom: 58px;
+    margin-bottom: 0 !important;
     padding: 22px 17px;
     border-radius: 0 !important;
   }
@@ -3368,7 +3443,8 @@
   }
 
   .assembly-faq-section {
-    padding-block: 65px;
+    margin-top: 0 !important;
+    padding-block: 40px 65px;
   }
 
   .assembly-faq-section h2 {
