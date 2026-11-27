@@ -78,9 +78,28 @@ async def verify_run_provider_keys(
     wanted = list(dict.fromkeys(
         value.strip() for value in (selected or []) if value and value.strip()
     ))
+    if len(wanted) > 50:
+        raise PinViolationError("Select no more than 50 models.")
     selected_providers: dict[str, str] = {}
-    if wanted:
-        _allowed, selected_providers = _resolve_selection(wanted)
+    known_models: dict[str, str] = {}
+    disabled_models: set[str] = set()
+    for provider_id, spec in catalog.providers.items():
+        for model in spec.models:
+            if spec.enabled:
+                known_models[model.id] = provider_id
+            else:
+                disabled_models.add(model.id)
+    for model_id in wanted:
+        if model_id in disabled_models:
+            raise PinViolationError(
+                f"Selected model {model_id!r} belongs to a provider that is not permitted."
+            )
+        provider_id = known_models.get(model_id)
+        if provider_id is None:
+            raise PinViolationError(
+                f"Selected model {model_id!r} is not in the permitted model catalog."
+            )
+        selected_providers[model_id] = provider_id
 
     supplied = {
         str(provider).strip(): str(key).strip()
