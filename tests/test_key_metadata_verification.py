@@ -25,11 +25,11 @@ async def test_gemini_catalog_extracts_only_documented_model_token_limits(fake_k
         )
     )
 
-    status, ids, body, metadata = await keys_mod._list_gemini(fake_key)
+    status, ids, invalid_key_signal, metadata = await keys_mod._list_gemini(fake_key)
 
     assert status == 200
     assert ids == ["gemini-3.8-flash"]
-    assert body == ""
+    assert invalid_key_signal is False
     assert metadata == {
         "gemini-3.8-flash": {
             "context_tokens": 1_000_000,
@@ -66,7 +66,7 @@ async def test_groq_models_probe_keeps_only_limit_headers_with_known_meanings(
         )
     )
 
-    status, ids, body, metadata, quota_headers = await keys_mod._list_openai(
+    status, ids, invalid_key_signal, metadata, quota_headers = await keys_mod._list_openai(
         "https://api.groq.com/openai/v1",
         fake_key,
         {},
@@ -74,7 +74,7 @@ async def test_groq_models_probe_keeps_only_limit_headers_with_known_meanings(
 
     assert status == 200
     assert ids == ["openai/gpt-oss-20b"]
-    assert body == ""
+    assert invalid_key_signal is False
     assert metadata == {"openai/gpt-oss-20b": {"context_tokens": 131072}}
     assert quota_headers == {
         "x-ratelimit-limit-requests": "14400",

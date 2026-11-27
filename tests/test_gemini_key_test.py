@@ -7,7 +7,9 @@ pasted-key whitespace never turns a valid key invalid.
 
 import logging
 
+import httpx
 import pytest
+import respx
 from pytest import LogCaptureFixture
 
 from fastapi.testclient import TestClient
@@ -54,11 +56,13 @@ def _stub_list(
     monkeypatch: pytest.MonkeyPatch,
     status: int | None,
     ids: list[str],
-    body: str = "",
+    invalid_key_signal: bool = False,
     metadata: dict[str, dict[str, int]] | None = None,
 ) -> None:
-    async def _fake(key: str) -> tuple[int | None, list[str], str, dict[str, dict[str, int]]]:
-        return status, ids, body, metadata or {}
+    async def _fake(
+        key: str,
+    ) -> tuple[int | None, list[str], bool, dict[str, dict[str, int]]]:
+        return status, ids, invalid_key_signal, metadata or {}
 
     monkeypatch.setattr(keys_mod, "_list_gemini", _fake)
 
@@ -106,7 +110,7 @@ def test_list_400_api_key_invalid_is_invalid(monkeypatch, fake_key: str) -> None
         monkeypatch,
         400,
         [],
-        '{"error": {"code": 400, "message": "API key not valid. API_KEY_INVALID"}}',
+        invalid_key_signal=True,
     )
     body = (
         _client(monkeypatch)
@@ -118,7 +122,7 @@ def test_list_400_api_key_invalid_is_invalid(monkeypatch, fake_key: str) -> None
 
 
 def test_list_401_is_invalid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, 401, [], '{"error": {"status": "UNAUTHENTICATED"}}')
+    _stub_list(monkeypatch, 401, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -129,7 +133,7 @@ def test_list_401_is_invalid(monkeypatch, fake_key: str) -> None:
 
 
 def test_list_403_is_invalid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, 403, [], '{"error": {"status": "PERMISSION_DENIED"}}')
+    _stub_list(monkeypatch, 403, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -140,7 +144,7 @@ def test_list_403_is_invalid(monkeypatch, fake_key: str) -> None:
 
 
 def test_list_429_is_quota_not_invalid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, 429, [], '{"error": {"status": "RESOURCE_EXHAUSTED"}}')
+    _stub_list(monkeypatch, 429, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -152,7 +156,7 @@ def test_list_429_is_quota_not_invalid(monkeypatch, fake_key: str) -> None:
 
 
 def test_list_404_model_is_key_valid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, 404, [], '{"error": {"status": "NOT_FOUND"}}')
+    _stub_list(monkeypatch, 404, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -164,7 +168,7 @@ def test_list_404_model_is_key_valid(monkeypatch, fake_key: str) -> None:
 
 
 def test_list_timeout_is_unreachable_never_invalid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, None, [], "")
+    _stub_list(monkeypatch, None, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -178,9 +182,11 @@ def test_list_timeout_is_unreachable_never_invalid(monkeypatch, fake_key: str) -
 def test_trailing_newline_key_is_trimmed_before_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, str] = {}
 
-    async def _capture(key: str) -> tuple[int, list[str], str, dict[str, dict[str, int]]]:
+    async def _capture(
+        key: str,
+    ) -> tuple[int, list[str], bool, dict[str, dict[str, int]]]:
         seen["key"] = key
-        return 200, ["gemini-3.8-flash"], "", {}
+        return 200, ["gemini-3.8-flash"], False, {}
 
     monkeypatch.setattr(keys_mod, "_list_gemini", _capture)
     body = (
@@ -222,7 +228,7 @@ def test_max_tokens_empty_generation_is_distinct_non_auth_error() -> None:
 
 
 def test_canary_never_in_test_response_or_logs(monkeypatch: pytest.MonkeyPatch, caplog: LogCaptureFixture) -> None:
-    _stub_list(monkeypatch, 401, [], "unauthorized")
+    _stub_list(monkeypatch, 401, [])
     with caplog.at_level(logging.INFO, logger="assembly"):
         res = _client(monkeypatch).post(
             "/api/keys/test", json={"provider": "gemini", "key": CANARY}
@@ -370,7 +376,7 @@ def test_disabled_provider_key_can_be_verified_without_enabling_routing(
     model = load_models_config().providers["cerebras"].models[0].id
 
     async def _fake_openai(_url: str, _key: str, _headers: dict[str, str]):
-        return 200, [model], "", {}, {}
+        return 200, [model], False, {}, {}
 
     monkeypatch.setattr(keys_mod, "_list_openai", _fake_openai)
     response = _client(monkeypatch).post(
@@ -386,3 +392,135 @@ def test_disabled_provider_key_can_be_verified_without_enabling_routing(
     assert "disabled" in body["verification"]["quota_metadata_issue"]
     assert "still disabled" in body["message"]
     assert fake_key not in response.text
+
+
+@pytest.mark.parametrize(
+    (
+        "provider",
+        "status_code",
+        "has_invalid_key_marker",
+        "expected_error",
+        "expected_rate_limited",
+    ),
+    [
+        ("gemini", 400, True, "auth_error", False),
+        ("gemini", 400, False, "bad_response", False),  # malformed/non-specific 400
+        ("groq", 400, True, "auth_error", False),
+        ("gemini", 429, False, "rate_limited", True),
+        ("groq", 401, False, "auth_error", False),
+        ("groq", 429, False, "rate_limited", True),
+        ("groq", 502, False, "unreachable", False),
+        ("huggingface", 401, False, "auth_error", False),
+        ("huggingface", 429, False, "rate_limited", True),
+        ("huggingface", 500, False, "unreachable", False),
+    ],
+)
+@respx.mock
+def test_upstream_error_payloads_are_not_returned_or_logged(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_key: str,
+    caplog: LogCaptureFixture,
+    provider: str,
+    status_code: int,
+    has_invalid_key_marker: bool,
+    expected_error: str,
+    expected_rate_limited: bool,
+) -> None:
+    """Only normalized classifications cross the provider/API boundary."""
+    marker = "UPSTREAM_SECRET_CANARY_987654"
+    response_text = f"provider diagnostic body {marker}"
+
+    async def allow_rate_limit(*_args, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(keys_mod, "check_rate_limit", allow_rate_limit)
+    if provider in ("gemini", "groq"):
+        payload = (
+            {
+                "error": {
+                    "code": "API_KEY_INVALID",
+                    "message": f"API_KEY_INVALID {response_text}",
+                }
+            }
+            if has_invalid_key_marker
+            else None
+        )
+        upstream = (
+            httpx.Response(status_code, json=payload)
+            if payload is not None
+            else httpx.Response(status_code, text=response_text)
+        )
+        url = (
+            keys_mod._GEMINI_LIST_URL
+            if provider == "gemini"
+            else "https://api.groq.com/openai/v1/models"
+        )
+        respx.get(url).mock(return_value=upstream)
+    else:
+        from src.providers.config import load_models_config
+
+        model = load_models_config().providers["huggingface"].models[0].id
+        respx.get(keys_mod._HF_MODEL_URL.format(model=model)).mock(
+            return_value=httpx.Response(status_code, text=response_text)
+        )
+
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        response = _client(monkeypatch).post(
+            "/api/keys/test", json={"provider": provider, "key": fake_key}
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["error_code"] == expected_error
+    assert payload["rate_limited"] is expected_rate_limited
+    assert marker not in response.text
+    assert marker not in caplog.text
+
+
+@respx.mock
+def test_gemini_nested_error_info_reason_classifies_invalid_key_without_leak(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_key: str,
+    caplog: LogCaptureFixture,
+) -> None:
+    """Google's nested ErrorInfo reason is used without retaining its payload."""
+    marker = "NESTED_PROVIDER_DIAGNOSTIC_CANARY"
+
+    async def allow_rate_limit(*_args, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(keys_mod, "check_rate_limit", allow_rate_limit)
+    respx.get(keys_mod._GEMINI_LIST_URL).mock(
+        return_value=httpx.Response(
+            400,
+            json={
+                "error": {
+                    "code": 400,
+                    "status": "INVALID_ARGUMENT",
+                    "message": "Request had an invalid argument.",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                            "reason": "API_KEY_INVALID",
+                            "domain": "googleapis.com",
+                            "metadata": {"diagnostic": marker},
+                        }
+                    ],
+                }
+            },
+        )
+    )
+
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        response = _client(monkeypatch).post(
+            "/api/keys/test", json={"provider": "gemini", "key": fake_key}
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["valid"] is False
+    assert payload["error_code"] == "auth_error"
+    assert marker not in response.text
+    assert marker not in caplog.text
+    assert fake_key not in response.text
+    assert fake_key not in caplog.text

@@ -1111,3 +1111,11 @@
 - Restricted the two-family minimum enforcement to team/run formation. Single-agent routing can still choose an available model for fallback/retry paths; preflight and team routing continue to enforce the two-family minimum.
 - Updated capacity endpoint test stubs to expose a valid three-family diversity gate, and updated single-family routing regression expectations to require rejection. The last-resort role test now uses two compliant families.
 - Validation: GitHub Actions CI run #621 is running on the updated PR head; results pending.
+
+
+## 2026-11-27 — Codex review fixes for Issue #84
+
+- Verified Codex's findings against the PR branch. Extended the invalid-key classifier to inspect only string values in Google's nested `error.details[].reason` entries, covering `API_KEY_INVALID` when the top-level status is `INVALID_ARGUMENT`. The helper still returns only a boolean and does not retain the provider payload.
+- Added an API regression test using the nested Google ErrorInfo response shape and a diagnostic canary; it asserts the result remains `auth_error` and neither the canary nor the submitted key appears in the response or captured application logs.
+- Recorded the redaction/classification rationale, normalized response behavior, and internal return-contract change in `docs/decisions.md`.
+- Validation: a fresh GitHub Actions run on this updated PR head is required; the previous successful CI run predates these review fixes. No live provider calls or real credentials are used by the new test.
