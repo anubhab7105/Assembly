@@ -16,7 +16,7 @@ SENSITIVE_SIGNUP_FALLBACK = (
 )
 
 #: Minimum distinct model families for a healthy team (2 works with warning).
-MIN_FAMILIES_TO_START = 2
+MIN_FAMILIES_TO_START = 3
 
 
 class CatalogModel(BaseModel):
