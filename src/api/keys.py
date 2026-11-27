@@ -157,9 +157,9 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
     quota_headers: dict[str, str] = {}
     openrouter_key_info: dict[str, int] = {}
     if spec.base == "google-genai":
-        list_status, listed, list_body, model_metadata = await _list_gemini(key)
+        list_status, listed, invalid_key_signal, model_metadata = await _list_gemini(key)
     elif spec.base == "openai-compatible":
-        list_status, listed, list_body, model_metadata, quota_headers = await _list_openai(
+        list_status, listed, invalid_key_signal, model_metadata, quota_headers = await _list_openai(
             spec.url or "", key, dict(spec.headers)
         )
         if req.provider == "openrouter" and list_status == 200:
@@ -197,7 +197,7 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
         )
 
     result = _classify_list_result(
-        req.provider, label, model, list_status, listed, list_body
+        req.provider, label, model, list_status, listed, invalid_key_signal
     )
     if list_status == 200:
         result.verification = _build_key_metadata_verification(
@@ -213,7 +213,7 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
 
 async def _list_gemini(
     key: str,
-) -> tuple[int | None, list[str], str, dict[str, dict[str, int]]]:
+) -> tuple[int | None, list[str], bool, dict[str, dict[str, int]]]:
     """List Gemini models and retain documented per-model token limits.
 
     API-key authentication stays in the header. This is a read-only catalogue
@@ -228,11 +228,11 @@ async def _list_gemini(
     except Exception:  # noqa: BLE001 — any transport failure reads as unreachable
         return None, [], "", {}
     if response.status_code != 200:
-        return response.status_code, [], response.text[:500], {}
+        return response.status_code, [], _gemini_invalid_key_signal(response), {}
     try:
         data = response.json()
     except ValueError:
-        return response.status_code, [], "", {}
+        return response.status_code, [], False, {}
     models = data.get("models", []) if isinstance(data, dict) else []
     ids: list[str] = []
     metadata: dict[str, dict[str, int]] = {}
@@ -253,9 +253,29 @@ async def _list_gemini(
             metadata[model_id] = limits
     return response.status_code, sorted(ids), "", metadata
 
+
+def _gemini_invalid_key_signal(response: httpx.Response) -> bool:
+    """Extract only Gemini's documented invalid-key marker; discard the body."""
+    try:
+        payload = response.json()
+    except ValueError:
+        return False
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        return False
+    # Google APIs identify this specific 400 case with API_KEY_INVALID.
+    status_value = error.get("status")
+    message = error.get("message")
+    return (
+        isinstance(status_value, str) and status_value.upper() == "API_KEY_INVALID"
+    ) or (
+        isinstance(message, str) and "API_KEY_INVALID" in message.upper()
+    )
+
+
 async def _list_openai(
     base_url: str, key: str, extra_headers: dict[str, str]
-) -> tuple[int | None, list[str], str, dict[str, dict[str, int]], dict[str, str]]:
+) -> tuple[int | None, list[str], bool, dict[str, dict[str, int]], dict[str, str]]:
     """GET {base}/models once; retain only safe, allowlisted metadata."""
     try:
         async with httpx.AsyncClient(timeout=_LIST_TIMEOUT_SECONDS) as client:
@@ -266,11 +286,11 @@ async def _list_openai(
     except Exception:  # noqa: BLE001 — any transport failure reads as unreachable
         return None, [], "", {}, {}
     if response.status_code != 200:
-        return response.status_code, [], response.text[:500], {}, {}
+        return response.status_code, [], False, {}, {}
     try:
         data = response.json()
     except ValueError:
-        return response.status_code, [], "", {}, {}
+        return response.status_code, [], False, {}, {}
     items = data.get("data", []) if isinstance(data, dict) else []
     ids: list[str] = []
     metadata: dict[str, dict[str, int]] = {}
@@ -515,9 +535,9 @@ def _classify_list_result(
     model: str,
     list_status: int | None,
     listed: list[str],
-    list_body: str,
+    invalid_key_signal: bool = False,
 ) -> KeyTestResponse:
-    """Classify by status code only. Only an auth failure is 'invalid'."""
+    """Classify using status plus a redacted Gemini invalid-key signal."""
     if list_status is None:
         return KeyTestResponse(
             provider=provider,
@@ -549,10 +569,7 @@ def _classify_list_result(
             model_available=True if model else None,
             message=f"Key verified for {provider}.",
         )
-    lowered = (list_body or "").lower()
-    if list_status in (401, 403) or (
-        list_status == 400 and "api_key_invalid" in lowered
-    ):
+    if list_status in (401, 403) or (list_status == 400 and invalid_key_signal):
         return KeyTestResponse(
             provider=provider,
             valid=False,
