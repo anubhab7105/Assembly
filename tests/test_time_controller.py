@@ -664,6 +664,13 @@ def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
         "asyncio.timeout(timeout_s)",
         "adversarial_round",
     )
+    assert timeout_wraps_await(
+        trees["orchestrator"],
+        "asyncio.timeout(search_timeout_s)",
+        "search",
+    )
+    assert "SEARCH_SECONDS_EACH * max(" in sources["orchestrator"]
+    assert "deadline.remaining() - deadline.synth_reserve" in sources["orchestrator"]
     assert "timeout_s=deadline.timeout_for_call()" in sources["orchestrator"]
 
     # Solve and regular debate enforce timeouts around their provider calls.
@@ -731,3 +738,44 @@ async def test_adversarial_challenge_timeout_cancels_provider() -> None:
         )
     assert time.monotonic() - started < 2.0
     assert cancelled.is_set()
+
+
+async def test_hung_research_provider_is_cancelled_within_deadline(
+    orchestrator, monkeypatch
+) -> None:
+    """A sequential search provider must not consume the synthesis reserve."""
+    import src.orchestration.orchestrator as orch_module
+    from src.orchestration.planner import Planner
+    from src.orchestration.time_controller import Deadline
+    from src.research.router import SearchRouter
+
+    original_plan = Planner.plan
+
+    async def plan_with_research(self, *args, **kwargs):
+        plan = await original_plan(self, *args, **kwargs)
+        plan.needs_research = True
+        return plan
+
+    cancelled = asyncio.Event()
+
+    async def hanging_search(self, query, max_results=None, problem_type="general"):
+        try:
+            await asyncio.sleep(30.0)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(Planner, "plan", plan_with_research)
+    monkeypatch.setattr(orch_module, "SEARCH_SECONDS_EACH", 0.01)
+    monkeypatch.setattr(SearchRouter, "search", hanging_search)
+
+    result = await orchestrator.execute(
+        execution_id="test-exec-hung-search",
+        question="Find evidence for this question.",
+        time_budget_minutes=3,
+        deadline=Deadline(budget_seconds=60.0, synth_reserve_seconds=0.0),
+    )
+
+    assert result.status == "completed"
+    assert cancelled.is_set()
+    assert any("Web research timed out" in warning for warning in result.warnings)
