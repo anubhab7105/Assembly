@@ -439,7 +439,14 @@ async def test_gemini_uses_google_genai_async_client(monkeypatch) -> None:
             )
 
     async_models = AsyncModels()
-    client = SimpleNamespace(aio=SimpleNamespace(models=async_models))
+    cleanup = {"calls": 0}
+
+    async def close_async_client():
+        cleanup["calls"] += 1
+
+    client = SimpleNamespace(
+        aio=SimpleNamespace(models=async_models, aclose=close_async_client)
+    )
     monkeypatch.setattr(gemini_module.genai, "Client", lambda api_key: client)
     monkeypatch.setattr("src.providers.quota.get_limiter", lambda: Limiter())
 
@@ -465,6 +472,11 @@ async def test_gemini_uses_google_genai_async_client(monkeypatch) -> None:
     ]
     assert async_models.request["config"].system_instruction == "Be concise"
     assert async_models.request["config"].max_output_tokens == 256
+
+    await provider.aclose()
+    await provider.aclose()
+    assert cleanup["calls"] == 1
+    assert provider.is_available() is False
 
 
 
