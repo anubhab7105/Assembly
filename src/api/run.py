@@ -552,7 +552,7 @@ async def start_run(req: RunRequest, request: Request):
             run_id,
             question,
             req.time_budget_minutes,
-            dict(req.provider_keys or {}),
+            verified_keys,
             allowed,
             pins,
             [u.model_dump() for u in (req.usage_snapshot or [])],
