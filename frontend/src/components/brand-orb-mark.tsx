@@ -130,7 +130,8 @@ export function BrandDottedAMark({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let animId: number;
+    let animId: number | null = null;
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const S = typeof size === "number" ? size : 32;
 
@@ -155,22 +156,40 @@ export function BrandDottedAMark({
       return useDark ? [0, 0, 0] : null;
     };
 
-    // Paint initial frame synchronously so mark is visible immediately without waiting for rAF
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, S, S);
-    drawAura(ctx, S, 0, getAccent(), S < 28);
-
-    const render = (timeMs: number) => {
-      const t = timeMs / 1000;
+    const paint = (time: number) => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, S, S);
+      drawAura(ctx, S, time, getAccent(), S < 28);
+    };
 
-      drawAura(ctx, S, t, getAccent(), S < 28);
+    const render = (timeMs: number) => {
+      paint(timeMs / 1000);
       animId = requestAnimationFrame(render);
     };
 
-    animId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(animId);
+    const handleMotionPreferenceChange = () => {
+      if (animId !== null) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+      if (motionPreference.matches) {
+        paint(0);
+      } else {
+        animId = requestAnimationFrame(render);
+      }
+    };
+
+    // The logo remains visible as a static mark when motion is reduced.
+    paint(0);
+    motionPreference.addEventListener("change", handleMotionPreferenceChange);
+    if (!motionPreference.matches) {
+      animId = requestAnimationFrame(render);
+    }
+
+    return () => {
+      motionPreference.removeEventListener("change", handleMotionPreferenceChange);
+      if (animId !== null) cancelAnimationFrame(animId);
+    };
   }, [size, darkColor]);
 
   const dimension = typeof size === "number" ? `${size}px` : size;

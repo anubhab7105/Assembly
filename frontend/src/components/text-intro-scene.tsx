@@ -6,6 +6,14 @@ import { TypographyVortexCanvas, TextPathStudies, RectangleButtons } from "@desi
 import "@designcodeio/threeui/style.css";
 
 const emptySubscribe = () => () => {};
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+const subscribeToMotionPreference = (callback: () => void) => {
+  const preference = window.matchMedia(REDUCED_MOTION_QUERY);
+  preference.addEventListener("change", callback);
+  return () => preference.removeEventListener("change", callback);
+};
+const getMotionPreference = () => window.matchMedia(REDUCED_MOTION_QUERY).matches;
+const getServerMotionPreference = () => true;
 
 // Halftone dotted "A" mark circles [gx, gy, radius] from ThreeUI BrandOrbs "aura" specification
 const AURA_DOTS: readonly [number, number, number][] = [
@@ -123,8 +131,9 @@ function KineticAssemblyWordmark({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let animId: number;
+    let animId: number | null = null;
     let startTime: number | null = null;
+    const motionPreference = window.matchMedia(REDUCED_MOTION_QUERY);
     const DURATION = 2100; // ms
 
     const drawFrame = (p: number, t: number) => {
@@ -265,13 +274,38 @@ function KineticAssemblyWordmark({
         onSettledRef.current();
       }
 
-      // Continuous 60 FPS loop so the aura wave ripples forever through the dotted "A" mark
-      animId = requestAnimationFrame(render);
+      // Continue the decorative ripple only when the user has not requested reduced motion.
+      if (!motionPreference.matches) {
+        animId = requestAnimationFrame(render);
+      }
     };
 
-    animId = requestAnimationFrame(render);
+    const completeWithoutMotion = () => {
+      if (animId !== null) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+      drawFrame(1, 0);
+      if (!hasCompletedRef.current) {
+        hasCompletedRef.current = true;
+        onSettledRef.current();
+      }
+    };
+
+    const handleMotionPreferenceChange = () => {
+      if (motionPreference.matches) completeWithoutMotion();
+    };
+
+    motionPreference.addEventListener("change", handleMotionPreferenceChange);
+    if (motionPreference.matches) {
+      completeWithoutMotion();
+    } else {
+      animId = requestAnimationFrame(render);
+    }
+
     return () => {
-      cancelAnimationFrame(animId);
+      motionPreference.removeEventListener("change", handleMotionPreferenceChange);
+      if (animId !== null) cancelAnimationFrame(animId);
       isAnimatingRef.current = false;
     };
   }, [isTriggered]);
@@ -286,6 +320,11 @@ function KineticAssemblyWordmark({
 export function TextIntroScene() {
   const router = useRouter();
   const isClient = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const prefersReducedMotion = useSyncExternalStore(
+    subscribeToMotionPreference,
+    getMotionPreference,
+    getServerMotionPreference,
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const [isTriggered, setIsTriggered] = useState(false);
   const [isSettled, setIsSettled] = useState(false);
@@ -294,6 +333,11 @@ export function TextIntroScene() {
   useEffect(() => {
     if (!isClient) return;
     if (hasFiredTriggerRef.current) return;
+    if (prefersReducedMotion) {
+      hasFiredTriggerRef.current = true;
+      setIsTriggered(true);
+      return;
+    }
     const el = containerRef.current;
     if (!el) return;
 
@@ -351,7 +395,7 @@ export function TextIntroScene() {
     }
 
     return cleanup;
-  }, [isClient]);
+  }, [isClient, prefersReducedMotion]);
 
   if (!isClient) {
     return (
@@ -368,38 +412,41 @@ export function TextIntroScene() {
       className={`shader-frame assembly-intro-frame ${isSettled ? "is-settled" : ""}`}
       style={{ width: "100%", height: "100%", position: "relative", background: "#000000", overflow: "hidden" }}
     >
-      {/* 1. Background Layer: Rotating Concentric Typographic Vortex from Image 2 */}
-      <div className="assembly-intro-vortex-layer" aria-label="Concentric typographic vortex">
-        <TypographyVortexCanvas
-          mode="dark"
-          phrase={VORTEX_PHRASE}
-          speed={1.0}
-          ringGrowth={1.21}
-          opacity={0.88}
-          dissolveRadius={1.0}
-          particleAmount={1.0}
-          suctionDuration={920}
-          guideLines={false}
-        />
-      </div>
+      {/* These canvases are decorative and can run continuous animation loops. */}
+      {!prefersReducedMotion && (
+        <>
+          <div className="assembly-intro-vortex-layer" aria-label="Concentric typographic vortex">
+            <TypographyVortexCanvas
+              mode="dark"
+              phrase={VORTEX_PHRASE}
+              speed={1.0}
+              ringGrowth={1.21}
+              opacity={0.88}
+              dissolveRadius={1.0}
+              particleAmount={1.0}
+              suctionDuration={920}
+              guideLines={false}
+            />
+          </div>
 
-      {/* 2. Center 3D Typographic Globe from Image 2 */}
-      <div className="assembly-intro-globe-center" aria-hidden="true">
-        <TextPathStudies
-          variant="globe-study"
-          mode="dark"
-          scale={1.25}
-          opacity={1.00}
-          hue={0}
-          saturation={1.00}
-          brightness={1.00}
-          style={{
-            width: "100%",
-            height: "100%",
-            background: "transparent",
-          }}
-        />
-      </div>
+          <div className="assembly-intro-globe-center" aria-hidden="true">
+            <TextPathStudies
+              variant="globe-study"
+              mode="dark"
+              scale={1.25}
+              opacity={1.00}
+              hue={0}
+              saturation={1.00}
+              brightness={1.00}
+              style={{
+                width: "100%",
+                height: "100%",
+                background: "transparent",
+              }}
+            />
+          </div>
+        </>
+      )}
 
       {/* 3. Foreground Layer: Kinetic Chromatic Assembling Wordmark + Button */}
       <div className="assembly-intro-foreground-stage">
