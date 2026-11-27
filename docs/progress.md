@@ -1119,3 +1119,10 @@
 - Added an API regression test using the nested Google ErrorInfo response shape and a diagnostic canary; it asserts the result remains `auth_error` and neither the canary nor the submitted key appears in the response or captured application logs.
 - Recorded the redaction/classification rationale, normalized response behavior, and internal return-contract change in `docs/decisions.md`.
 - Validation: a fresh GitHub Actions run on this updated PR head is required; the previous successful CI run predates these review fixes. No live provider calls or real credentials are used by the new test.
+
+## 2026-11-27 — Next.js security upgrade to 16.4.6
+
+- Confirmed `frontend/package.json` and `frontend/package-lock.json` pinned Next.js 16.4.1 before the change; no matching Next.js upgrade PR or branch was found.
+- Upgraded `next` and the matching `eslint-config-next` to 16.4.6. Refreshed the lockfile entries for Next.js, `@next/env`, all optional platform SWC packages, and the matching Next.js ESLint plugin/config.
+- Set `experimental.agentUpgrade` to `security` in `frontend/next.config.ts`, preserving the existing static-export and Turbopack configuration.
+- Validation: package/lockfile pins and Next.js package metadata were checked for consistency. Local `npm ci`, lint, tests, and production build could not be run because this execution environment could not resolve GitHub for a local checkout; GitHub Actions CI is required before merge.
