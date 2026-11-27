@@ -1,3 +1,25 @@
+## 2026-11-26 — Landing page polish: FAQ & Footer marigold styling, vortex spacing, and Get Started link (PR #132)
+
+- FAQ section styling: Retained full-width marigold yellow (`#eaa221`) background with a 2-column layout on desktop (left: heading block, right: question-answer accordion), styled question summaries in high-contrast dark text (`#0b0c0e`), answers in white (`#ffffff`), and styled heading with Georgia italic serif typography on "you" (`#0b0c0e`) and "begin." (`#ffffff`).
+- Mobile section merge: Removed `.assembly-control-list-wrapper` bottom border on mobile screens (`<= 900px`) to merge the Control section and FAQ section seamlessly into one continuous yellow block.
+- MasterFlex universal responsiveness: Verified zero horizontal overflow and fluid scaling across all mobile, tablet, and desktop viewports (320px to 1920px+).
+- 3D Typography Vortex spacing & dark mode alignment:
+  - Removed `.assembly-section` class from `#get-started` so it avoids inherited `padding-block: 66px` on responsive screens.
+  - Aligned `typographyVortexRenderer.ts` dark background from `#151515` to `#000000`, eliminating visible color mismatch and gray box artifacts.
+  - Eliminated the black gaps between the FAQ section and the vortex, and between the vortex and the footer across all viewports.
+- Footer styling: Restored the footer back to its original dark theme (`#000000` surface, `rgba(255, 255, 255, 0.08)` top border, luminous dotted 'A' mark, and muted/white typography with yellow CTA link) while retaining clean spacing beneath the vortex.
+- Get Started page button: Updated link on `/get-started` to a prominent yellow pill button ("View the source code ->") linking directly to the Assembly repository on GitHub (`https://github.com/anubhab7105/Assembly`).
+- Verification: Frontend ESLint clean (0 errors), Vitest suite passed (39/39 tests), backend test suite passed (716 tests), and key leak scan passed.
+
+## 2026-11-26 — Mobile responsiveness, hero layout polish, and Assembly favicon (Issue #131)
+
+- Mobile navigation: Added responsive 3-line hamburger menu in `landing-header.tsx` with slide-down dropdown menu for mobile devices (`<= 640px`), centered items with section dividers, and cleanly hid the desktop CTA button from header navigation on small viewports.
+- Mobile hero layout and spacing: Centered the 3D Brand Orbs Orbit canvas directly between the hero CTA button and Section 2 carousel on mobile. Eliminated the oversized 100vh void, pulled the black hero card higher up, removed SVG notch distortion, and expanded the card to full-width to prevent yellow side borders.
+- Get Started page layout: Removed restrictive container constraints to spread content naturally full-width on mobile without black side gutters. Added responsive back button (`←` icon on mobile, `← Back to overview` on desktop) and optimized button touch sizing.
+- Assembly favicon: Generated multi-resolution static dotted 'A' Assembly badge (matching `BrandOrbMark` without pulsing animation) across `favicon.ico`, `icon.png`, and `apple-icon.png`, and explicitly declared icon metadata in `layout.tsx`.
+- Mobile footer alignment: Centered footer brand philosophy, navigation columns (Product, Architecture, Trust & Legal), section headings, and copyright bar on mobile screens (`<= 640px`).
+- Verification: Frontend ESLint passed with 0 errors/warnings, Vitest suite passed (39/39 tests), backend test suite passed (716 tests), and key leak scan passed.
+
 ## 2026-11-25 — Sanitize untrusted answer Markdown (Issue #112)
 
 - Added a final `rehype-sanitize` stage after KaTeX and highlight.js; raw HTML remains disabled.

@@ -567,16 +567,91 @@
 
 /* Mobile Responsive (<= 900px) */
 @media (max-width: 900px) {
+  /* Position 3D orbiting canvas between Section 1 CTA button and Section 2 carousel */
+  .assembly-nova-experience-root .intro-orbit-box {
+    display: flex !important;
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    left: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 320px !important;
+    height: 290px !important;
+    margin: 20px auto 0 auto !important;
+    pointer-events: none;
+    z-index: 5;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .assembly-nova-experience-root .intro-orbit-canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+  }
+
+  /* Collapse rigid 100vh / 700px min-height on mobile so hero wraps naturally without empty black void */
+  .assembly-nova-experience-root .assembly-hero-section,
+  .assembly-nova-experience-root #intro.assembly-hero-section {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    padding-top: 16px !important;
+    padding-bottom: 24px;
+  }
+
+  .assembly-nova-experience-root #intro .section-stage {
+    position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 16px;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
   .assembly-nova-experience-root .intro-bottom-left {
-    left: 20px;
-    top: 40px;
-    bottom: auto;
-    width: calc(100% - 40px);
-    max-width: 100%;
+    position: relative !important;
+    left: 0 !important;
+    top: 0 !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .assembly-nova-experience-root .headline-box {
-    font-size: 38px;
+    font-size: 36px !important;
+    padding: 6px 14px;
+  }
+
+  .assembly-nova-experience-root .headline-plain-text {
+    font-size: 36px !important;
+    padding: 4px 14px;
+  }
+
+  .assembly-nova-experience-root .intro-desc {
+    margin-top: 16px;
+  }
+
+  .assembly-nova-experience-root .intro-desc p {
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .assembly-nova-experience-root #how-it-works.assembly-hero-section,
+  .assembly-nova-experience-root #product.assembly-hero-section {
+    min-height: auto !important;
+    padding: 40px 0 32px 0 !important;
+  }
+
+  .assembly-nova-experience-root #reviews.assembly-hero-section {
+    min-height: auto !important;
+    padding: 40px 0 32px 0 !important;
   }
 
   .assembly-nova-experience-root .review-quote {

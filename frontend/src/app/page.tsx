@@ -70,17 +70,19 @@ export default function LandingPage() {
           </section>
 
           <section id="faq" className="assembly-faq-section">
-            <div className="assembly-section-heading">
-              <div>
-                <span className="assembly-section-kicker">Good to know</span>
-                <h2>Before you begin.</h2>
+            <div className="assembly-faq-inner">
+              <div className="assembly-section-heading">
+                <div>
+                  <span className="assembly-section-kicker">Good to know</span>
+                  <h2>Before <em className="assembly-faq-em"><span className="assembly-faq-you">you</span> <span className="assembly-faq-highlight">begin.</span></em></h2>
+                </div>
+                <p>Clear answers about what Assembly does, what it uses, and what stays in your control.</p>
               </div>
-              <p>Clear answers about what Assembly does, what it uses, and what stays in your control.</p>
+              <LandingFaqAccordion items={faqs} />
             </div>
-            <LandingFaqAccordion items={faqs} />
           </section>
 
-          <section id="get-started" className="assembly-section assembly-intro-text-section" aria-label="Assembly intro animation">
+          <section id="get-started" className="assembly-intro-text-section" aria-label="Assembly intro animation">
             <div className="assembly-intro-text-stage">
               <TextIntroScene />
             </div>

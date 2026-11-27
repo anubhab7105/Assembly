@@ -316,7 +316,7 @@ export function createTypographyVortexRenderer(
       buildRings();
     }
     context.clearRect(0, 0, width, height);
-    context.fillStyle = isLight ? "#eef1f6" : "#151515";
+    context.fillStyle = isLight ? "#eef1f6" : "#000000";
     context.fillRect(0, 0, width, height);
     layerContext.clearRect(0, 0, width, height);
     const deltaTime = Math.min(time - (lastTime || time), 100);

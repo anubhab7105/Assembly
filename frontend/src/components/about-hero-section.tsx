@@ -17,6 +17,13 @@ export function AboutHeroSection() {
 
     const animateHero = () => {
       if (!section) return;
+
+      // On mobile viewports, keep the black section fully spread edge-to-edge
+      if (typeof window !== "undefined" && window.innerWidth <= 900) {
+        section.style.width = "100%";
+        return;
+      }
+
       const rect = section.getBoundingClientRect();
       const windowHeight = window.innerHeight;
 

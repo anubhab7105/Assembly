@@ -4,14 +4,25 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandOrbMark } from "@/components/brand-orb-mark";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Menu, X } from "lucide-react";
 
 export function LandingHeader() {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const [isScrolled, setIsScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isHeaderSolid = !isHome || isScrolled;
+  const isDarkHeader = isHeaderSolid || mobileMenuOpen;
   const headerRef = useRef<HTMLElement>(null);
+
+  // Close mobile menu on Escape key
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // Smooth scroll helper for section links
   const scrollToSection = useCallback((sectionId: string) => {
@@ -150,7 +161,7 @@ export function LandingHeader() {
         </Link>
       </nav>
 
-      <div className="assembly-landing-actions">
+      <div className="assembly-landing-actions hidden sm:flex">
         <Link
           href="/get-started"
           className="assembly-nav-cta"
@@ -160,6 +171,72 @@ export function LandingHeader() {
           <ArrowUpRight className="size-4" />
         </Link>
       </div>
+
+      {/* Mobile Hamburger Button */}
+      <button
+        type="button"
+        className={`sm:hidden inline-flex items-center justify-center p-2 rounded-lg transition ${
+          isDarkHeader
+            ? "text-white/85 hover:text-white hover:bg-white/10"
+            : "text-black/85 hover:text-black hover:bg-black/10"
+        }`}
+        onClick={() => setMobileMenuOpen((prev) => !prev)}
+        aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+        aria-expanded={mobileMenuOpen}
+        aria-controls="mobile-nav-menu"
+      >
+        {mobileMenuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
+      </button>
+
+      {/* Mobile Dropdown Navigation Menu */}
+      {mobileMenuOpen && (
+        <div
+          id="mobile-nav-menu"
+          className="sm:hidden absolute top-full left-0 right-0 border-b border-white/10 bg-[#0b0c0e]/95 backdrop-blur-2xl shadow-2xl z-50 text-white"
+        >
+          <nav className="flex flex-col divide-y divide-white/10 text-base font-medium" aria-label="Mobile navigation">
+            <Link
+              href="/#how-it-works"
+              className="w-full px-6 py-3.5 text-center block text-white/90 transition hover:text-[#eaa221] hover:bg-white/[0.04]"
+              onClick={(e) => {
+                setMobileMenuOpen(false);
+                handleNavClick("how-it-works", e);
+              }}
+            >
+              How it works
+            </Link>
+            <Link
+              href="/science"
+              className={`w-full px-6 py-3.5 text-center block transition hover:text-[#eaa221] hover:bg-white/[0.04] ${
+                pathname === "/science" ? "text-[#eaa221]" : "text-white/90"
+              }`}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Idea
+            </Link>
+            <Link
+              href="/#your-control"
+              className="w-full px-6 py-3.5 text-center block text-white/90 transition hover:text-[#eaa221] hover:bg-white/[0.04]"
+              onClick={(e) => {
+                setMobileMenuOpen(false);
+                handleNavClick("your-control", e);
+              }}
+            >
+              Your control
+            </Link>
+            <Link
+              href="/#faq"
+              className="w-full px-6 py-3.5 text-center block text-white/90 transition hover:text-[#eaa221] hover:bg-white/[0.04]"
+              onClick={(e) => {
+                setMobileMenuOpen(false);
+                handleNavClick("faq", e);
+              }}
+            >
+              FAQ
+            </Link>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
