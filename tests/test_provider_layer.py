@@ -468,6 +468,14 @@ async def test_gemini_uses_google_genai_async_client(monkeypatch) -> None:
 
 
 
+
+def test_nvidia_example_placeholder_is_not_treated_as_a_real_key(monkeypatch) -> None:
+    from pydantic import SecretStr
+
+    monkeypatch.setattr(settings, "nvidia_api_key", SecretStr("nvapi-your-nvidia-api-key"))
+    assert settings.has_provider("nvidia") is False
+
+
 def test_nvidia_and_mistral_env_keys_are_mapped() -> None:
     from src.core.keystore import EnvKeyStore
 
