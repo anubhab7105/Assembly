@@ -4,7 +4,6 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
 from src.providers.config import QUOTA_METADATA_MAX_AGE_DAYS, load_models_config, provider_limits_issue
-from src.providers.router import MIN_FAMILIES_TO_START as ROUTER_MIN_FAMILIES_TO_START
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 
@@ -17,7 +16,7 @@ SENSITIVE_SIGNUP_FALLBACK = (
 )
 
 #: Minimum distinct model families for a healthy team (2 works with warning).
-MIN_FAMILIES_TO_START = ROUTER_MIN_FAMILIES_TO_START
+MIN_FAMILIES_TO_START = 3
 
 
 class CatalogModel(BaseModel):
