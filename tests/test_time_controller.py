@@ -609,3 +609,253 @@ def test_api_cancel_unknown_is_404(monkeypatch) -> None:
     client = _authed_client(monkeypatch)
     response = client.post("/api/executions/does-not-exist/cancel")
     assert response.status_code == 404
+
+# ── Orchestration phase deadline wiring ────────────────────────────────
+
+
+def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
+    """Assert each provider phase is nested inside its effective timeout."""
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    sources = {
+        "orchestrator": (root / "src/orchestration/orchestrator.py").read_text(),
+        "manager": (root / "src/orchestration/agent_manager.py").read_text(),
+        "debate": (root / "src/orchestration/debate.py").read_text(),
+    }
+    trees = {name: ast.parse(source) for name, source in sources.items()}
+
+    def function_named(tree, name):
+        return next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == name
+        )
+
+    def walk_scope(nodes):
+        """Walk one lexical scope, never descending into nested scopes."""
+        pending = list(reversed(nodes))
+        while pending:
+            node = pending.pop()
+            yield node
+            if isinstance(
+                node,
+                (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda),
+            ):
+                continue
+            pending.extend(reversed(list(ast.iter_child_nodes(node))))
+
+    def timeout_wraps_await(
+        tree, function_name, timeout_expression, awaited_method, awaited_receiver
+    ):
+        function = function_named(tree, function_name)
+        for node in walk_scope(function.body):
+            if not isinstance(node, ast.AsyncWith):
+                continue
+            timeout_contexts = [
+                ast.unparse(item.context_expr) for item in node.items
+            ]
+            if timeout_expression not in timeout_contexts:
+                continue
+            for child in walk_scope(node.body):
+                if not isinstance(child, ast.Await):
+                    continue
+                call = child.value
+                if (
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and call.func.attr == awaited_method
+                    and isinstance(call.func.value, ast.Name)
+                    and call.func.value.id == awaited_receiver
+                ):
+                    return True
+        return False
+
+    def call_passes_keyword(
+        tree, function_name, called_method, keyword_name, expected_value
+    ):
+        function = function_named(tree, function_name)
+        for node in walk_scope(function.body):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != called_method:
+                continue
+            for keyword in node.keywords:
+                if (
+                    keyword.arg == keyword_name
+                    and ast.unparse(keyword.value) == expected_value
+                ):
+                    return True
+        return False
+
+    # The wrapper must enclose the actual await in the executing lexical
+    # scope and match the receiver, not merely a nested helper declaration.
+    assert timeout_wraps_await(
+        trees["orchestrator"],
+        "execute",
+        "asyncio.timeout(deadline.timeout_for_call(PLANNER_CALL_SECONDS))",
+        "plan",
+        "planner",
+    )
+    assert timeout_wraps_await(
+        trees["orchestrator"],
+        "execute",
+        "asyncio.timeout(deadline.synthesis_timeout())",
+        "synthesize",
+        "synthesizer",
+    )
+    assert timeout_wraps_await(
+        trees["orchestrator"],
+        "execute",
+        "asyncio.timeout(search_timeout_s)",
+        "search",
+        "search_router",
+    )
+    assert timeout_wraps_await(
+        trees["orchestrator"],
+        "_run_adversarial_round",
+        "asyncio.timeout(timeout_s)",
+        "adversarial_round",
+        "consensus_engine",
+    )
+
+    # The execute call site itself must pass the run deadline, not merely
+    # rely on a helper that can also be invoked with a hard-coded timeout.
+    assert call_passes_keyword(
+        trees["orchestrator"],
+        "execute",
+        "_run_adversarial_round",
+        "timeout_s",
+        "deadline.timeout_for_call()",
+    )
+
+    # Regression guard: a nested async function's await is not protected by
+    # an outer timeout if the function is invoked after that context exits.
+    nested_scope = ast.parse(
+        """
+async def execute():
+    async with asyncio.timeout(1):
+        async def deferred():
+            await planner.plan()
+    await deferred()
+"""
+    )
+    assert not timeout_wraps_await(
+        nested_scope,
+        "execute",
+        "asyncio.timeout(1)",
+        "plan",
+        "planner",
+    )
+
+    # Solve and regular debate enforce timeouts around their provider calls.
+    assert "timeout_s=deadline.timeout_for_call()" in sources["orchestrator"]
+    assert "async with asyncio.timeout(timeout_s):" in sources["manager"]
+    assert "async with asyncio.timeout(timeout_s):" in sources["debate"]
+
+    # Tracked solve/debate tasks are drained, and run-level resources settle.
+    assert "await own_tracker.drain()" in sources["manager"]
+    assert "await own_tracker.drain()" in sources["debate"]
+    assert 'self._deadlines.pop(execution_id, None)' in sources["orchestrator"]
+    assert "ProgressEventType.EXECUTION_CANCELLED" in sources["orchestrator"]
+    assert "ProgressEventType.EXECUTION_FAILED_PARTIAL" in sources["orchestrator"]
+    assert sources["orchestrator"].count("key_store.clear()") >= 3
+
+
+async def test_adversarial_challenge_timeout_cancels_provider() -> None:
+    """The optional adversarial critic call must not outlive its run window."""
+    from src.agents.base_agent import AgentOutput
+    from src.orchestration.budget_controller import BudgetController
+    from src.orchestration.consensus import ConsensusEngine
+    from src.orchestration.orchestrator import Orchestrator
+
+    cancelled = asyncio.Event()
+
+    class _HangingCritic:
+        agent_id = "critic-01"
+        agent_type = "critic"
+        family = "critic-family"
+
+        async def adversarial_challenge(self, question, others, round_number):
+            try:
+                await asyncio.sleep(30.0)
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+    critic = _HangingCritic()
+    prior = [
+        AgentOutput(
+            agent_id="solver-01",
+            agent_type="solver",
+            position="A supported answer",
+            confidence=0.9,
+            provider="mock",
+            model="solver-model",
+            family="solver-family",
+        )
+    ]
+    orchestrator = Orchestrator()
+
+    async def emit_event(event_type, payload):
+        return None
+
+    started = time.monotonic()
+    with pytest.raises(TimeoutError):
+        await orchestrator._run_adversarial_round(
+            ConsensusEngine(),
+            [critic],
+            "Q?",
+            prior,
+            1,
+            BudgetController(3),
+            emit_event,
+            timeout_s=0.02,
+        )
+    assert time.monotonic() - started < 2.0
+    assert cancelled.is_set()
+
+
+async def test_hung_research_provider_is_cancelled_within_deadline(
+    orchestrator, monkeypatch
+) -> None:
+    """A sequential search provider must not consume the synthesis reserve."""
+    import src.orchestration.orchestrator as orch_module
+    from src.orchestration.planner import Planner
+    from src.orchestration.time_controller import Deadline
+    from src.research.router import SearchRouter
+
+    original_plan = Planner.plan
+
+    async def plan_with_research(self, *args, **kwargs):
+        plan = await original_plan(self, *args, **kwargs)
+        plan.needs_research = True
+        return plan
+
+    cancelled = asyncio.Event()
+
+    async def hanging_search(self, query, max_results=None, problem_type="general"):
+        try:
+            await asyncio.sleep(30.0)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(Planner, "plan", plan_with_research)
+    monkeypatch.setattr(orch_module, "SEARCH_SECONDS_EACH", 0.01)
+    monkeypatch.setattr(SearchRouter, "search", hanging_search)
+
+    result = await orchestrator.execute(
+        execution_id="test-exec-hung-search",
+        question="Find evidence for this question.",
+        time_budget_minutes=3,
+        deadline=Deadline(budget_seconds=60.0, synth_reserve_seconds=0.0),
+    )
+
+    assert result.status == "completed"
+    assert cancelled.is_set()
+    assert any("Web research timed out" in warning for warning in result.warnings)

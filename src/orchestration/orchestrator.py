@@ -26,6 +26,7 @@ from src.orchestration.budget_controller import BudgetController
 from src.orchestration.capacity import (
     AGENT_CALL_SECONDS,
     PLANNER_CALL_SECONDS,
+    SEARCH_SECONDS_EACH,
     KeyBudget,
     heuristic_suggestion,
     plan_capacity,
@@ -591,7 +592,11 @@ class Orchestrator:
             # PHASE 3: WEB RESEARCH (if needed)
             # ════════════════════════════════════════════════════════════
             search_results = []
-            if plan.needs_research and budget.can_search():
+            if (
+                plan.needs_research
+                and budget.can_search()
+                and not deadline.should_synthesize_now()
+            ):
                 await emit_event(
                     ProgressEventType.AGENT_STATUS,
                     {
@@ -601,9 +606,31 @@ class Orchestrator:
                     },
                 )
 
-                raw_search_results = await search_router.search(
-                    question, problem_type=getattr(plan, "problem_type", "general")
+                # SearchRouter may try several providers sequentially. Bound
+                # the complete provider pass by both its estimated cost and
+                # the room left after protecting the synthesis reserve.
+                search_estimate = SEARCH_SECONDS_EACH * max(
+                    1, len(search_router.providers)
                 )
+                search_timeout_s = min(
+                    search_estimate,
+                    max(0.0, deadline.remaining() - deadline.synth_reserve),
+                )
+                raw_search_results = []
+                if search_timeout_s > 0:
+                    try:
+                        async with asyncio.timeout(search_timeout_s):
+                            raw_search_results = await search_router.search(
+                                question,
+                                problem_type=getattr(plan, "problem_type", "general"),
+                            )
+                    except TimeoutError:
+                        warning = (
+                            "Web research timed out within the execution budget; "
+                            "continuing without external search results."
+                        )
+                        warnings.append(warning)
+                        logger.warning("Research │ Search phase timed out; continuing")
                 budget.record_search(len(raw_search_results))
                 used_sources = search_router.last_providers_used
 
@@ -794,17 +821,26 @@ class Orchestrator:
                     adversarial_done = True
                     # The strike is a targeted round: EVALUATING → DEBATING.
                     state_machine.transition(ExecState.DEBATING)
-                    challenged = await self._run_adversarial_round(
-                        consensus_engine,
-                        agents,
-                        question,
-                        outputs,
-                        round_number,
-                        budget,
-                        emit_event,
-                        agent_manager,
-                        attachment_context=attachment_context,
-                    )
+                    try:
+                        challenged = await self._run_adversarial_round(
+                            consensus_engine,
+                            agents,
+                            question,
+                            outputs,
+                            round_number,
+                            budget,
+                            emit_event,
+                            agent_manager,
+                            timeout_s=deadline.timeout_for_call(),
+                            attachment_context=attachment_context,
+                        )
+                    except TimeoutError:
+                        logger.warning(
+                            "Exec    │ Adversarial challenge timed out; "
+                            "proceeding to synthesis"
+                        )
+                        state_machine.transition(ExecState.EVALUATING)
+                        break
                     await emit_breaker_trips()
                     if challenged is not None:
                         outputs, consensus_result, challenge = challenged
@@ -1286,6 +1322,7 @@ class Orchestrator:
         budget,
         emit_event,
         agent_manager=None,
+        timeout_s: float | None = None,
         attachment_context: str = "",
     ):
         """One WORKFLOW 5b strike: a different-family critic attacks the consensus.
@@ -1322,14 +1359,29 @@ class Orchestrator:
             },
         )
         try:
-            new_outputs, report = await consensus_engine.adversarial_round(
-                critic,
-                question,
-                outputs,
-                round_number,
-                time_for_round=budget.has_time_for_debate(),
-                quota_ok=not budget.is_token_limited(),
-            )
+            if timeout_s is None:
+                new_outputs, report = await consensus_engine.adversarial_round(
+                    critic,
+                    question,
+                    outputs,
+                    round_number,
+                    time_for_round=budget.has_time_for_debate(),
+                    quota_ok=not budget.is_token_limited(),
+                )
+            else:
+                async with asyncio.timeout(timeout_s):
+                    new_outputs, report = await consensus_engine.adversarial_round(
+                        critic,
+                        question,
+                        outputs,
+                        round_number,
+                        time_for_round=budget.has_time_for_debate(),
+                        quota_ok=not budget.is_token_limited(),
+                    )
+        except TimeoutError:
+            # Let the caller route directly to synthesis; falling back to a
+            # normal debate round here could consume the reserved final window.
+            raise
         except Exception as e:  # noqa: BLE001 — a failed strike must not kill the run
             logger.error("Orchestrator │ Adversarial round failed (type=%s)", type(e).__name__)
             if agent_manager is not None:
