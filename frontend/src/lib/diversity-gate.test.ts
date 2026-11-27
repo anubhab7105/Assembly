@@ -33,9 +33,16 @@ describe("diversity-gate chip states", () => {
     expect(FAMILY_GATE_THRESHOLDS).toEqual({ ok: 3, warn: 2 });
   });
 
-  it("same family twice counts once", () => {
+  it("same family twice counts once and remains blocked", () => {
     const gate = evaluateGate(["llama", "llama"], 2);
     expect(gate.level).toBe("BLOCKED");
     expect(gate.families_count).toBe(1);
+  });
+
+  it("blocks when a core role has no usable model", () => {
+    const gate = evaluateGate(["llama", "qwen"], 2, ["solver"]);
+    expect(gate.level).toBe("BLOCKED");
+    expect(gate.roles_ready).toEqual(["solver"]);
+    expect(gate.reasons[0]).toContain("critic");
   });
 });

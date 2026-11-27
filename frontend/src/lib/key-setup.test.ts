@@ -35,9 +35,11 @@ describe("key-setup helpers (FR-30)", () => {
     expect(line).toContain("qwen");
   });
 
-  it("minimum banner mentions 3 families and recommended order", () => {
+  it("minimum banner separates the two-family minimum from the three-family recommendation", () => {
     const banner = minimumToStartBanner(1, ["groq", "openrouter", "gemini"]);
-    expect(banner).toContain("3 model families");
+    expect(banner).toContain("at least 2 distinct solver/critic model families");
+    expect(banner).toContain("Three families are recommended");
     expect(banner).toContain("groq");
+    expect(minimumToStartBanner(2, ["groq", "openrouter"])).toContain("Minimum to start: met");
   });
 });

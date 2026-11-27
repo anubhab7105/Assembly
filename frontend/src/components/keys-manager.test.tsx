@@ -39,29 +39,32 @@ const catalogFixture = {
     {
       id: "groq",
       enabled: true,
+      limits_ready: true,
       key_url: "https://console.groq.com/keys",
       privacy_note: null,
       key_steps: ["Open the key page.", "Sign in.", "Press Test."],
       key_notes: null,
       sensitive_signup: null,
       models: [
-        { id: "openai/gpt-oss-20b", family: "gpt-oss", roles: ["solver"], scope: "model" },
+        { id: "openai/gpt-oss-20b", family: "gpt-oss", roles: ["solver", "critic"], scope: "model" },
       ],
     },
     {
       id: "openrouter",
       enabled: true,
+      limits_ready: true,
       key_url: "https://openrouter.ai/keys",
       privacy_note: null,
       key_steps: ["Open the key page.", "Create a key."],
       key_notes: null,
       sensitive_signup: null,
-      models: [{ id: "x:free", family: "gemma", roles: ["solver"], scope: "account" }],
+      models: [{ id: "x:free", family: "gemma", roles: ["solver", "critic"], scope: "account" }],
     },
   ],
   families: ["gemma", "gpt-oss"],
   recommended_order: ["groq", "openrouter"],
-  minimum_families: 3,
+  minimum_families: 2,
+  recommended_families: 3,
   sensitive_signup_fallback:
     "Check this during signup; if it asks for payment, skip this provider (Assembly is free-tier only)",
 };
@@ -131,9 +134,9 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
       </ToastProvider>,
     );
     expect(await screen.findByTestId("minimum-to-start-banner")).toBeDefined();
-    expect((await screen.findByTestId("minimum-to-start-text")).textContent).toContain(
-      "3 model families",
-    );
+    const readinessText = (await screen.findByTestId("minimum-to-start-text")).textContent ?? "";
+    expect(readinessText).toContain("Minimum to start: met");
+    expect(readinessText).toContain("Three families are recommended");
     expect(await screen.findByTestId("stepper-groq")).toBeDefined();
     expect(await screen.findByTestId("copy-link-groq")).toBeDefined();
     expect((await screen.findByTestId("prefix-hint-groq")).textContent).toContain(

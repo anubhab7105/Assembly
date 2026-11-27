@@ -19,20 +19,23 @@ const catalog = {
     {
       id: "groq",
       enabled: true,
+      limits_ready: true,
       models: [
-        { id: "gpt-oss-20b", family: "gpt-oss", roles: ["solver"] },
-        { id: "qwen-27b", family: "qwen", roles: ["solver"] },
+        { id: "gpt-oss-20b", family: "gpt-oss", roles: ["solver", "critic"] },
+        { id: "qwen-27b", family: "qwen", roles: ["solver", "critic"] },
       ],
     },
     {
       id: "openrouter",
       enabled: true,
-      models: [{ id: "gemma-free", family: "gemma", roles: ["solver"] }],
+      limits_ready: true,
+      models: [{ id: "gemma-free", family: "gemma", roles: ["solver", "critic"] }],
     },
     {
       id: "cerebras",
       enabled: false,
-      models: [{ id: "cereb-llama", family: "llama", roles: ["solver"] }],
+      limits_ready: false,
+      models: [{ id: "cereb-llama", family: "llama", roles: ["solver", "critic"] }],
     },
   ],
 }
@@ -53,6 +56,12 @@ describe("ModelPicker family counting", () => {
     expect((await screen.findByTestId("picker-gate-chip")).textContent).toContain(
       "2 families ready",
     )
+    expect(screen.getByRole("checkbox", { name: /gemma-free/ })).toBeDisabled()
+    expect(screen.getByRole("checkbox", { name: /cereb-llama/ })).toBeDisabled()
+    const pinSelect = screen.getByRole("combobox", { name: "Pin model" })
+    expect(Array.from((pinSelect as HTMLSelectElement).options).map((option) => option.value)).toEqual([
+      "", "gpt-oss-20b", "qwen-27b",
+    ])
   })
 
   it("shows BLOCKED with no keys instead of promising catalog families", async () => {
@@ -62,5 +71,6 @@ describe("ModelPicker family counting", () => {
     expect((await screen.findByTestId("picker-gate-chip")).textContent).toContain(
       "0 families ready",
     )
+    expect(screen.getByRole("checkbox", { name: /gpt-oss-20b/ })).toBeDisabled()
   })
 })

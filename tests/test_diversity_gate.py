@@ -195,7 +195,7 @@ def test_status_preflight_carry_diversity(monkeypatch) -> None:
         },
     )
     assert pre.status_code == 200, pre.text
-    assert pre.json()["diversity"]["level"] in ("OK", "WARN", "DEGRADED", "BLOCKED")
+    assert pre.json()["diversity"]["level"] in ("OK", "WARN", "BLOCKED")
 
 
 def test_one_family_team_is_rejected_before_routing(tmp_path) -> None:
