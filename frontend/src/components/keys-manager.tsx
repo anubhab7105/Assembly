@@ -146,6 +146,54 @@ export function KeysManager() {
   const invalidateVerificationGenerations = (providerIds: string[]) => {
     for (const providerId of providerIds) nextVerificationGeneration(providerId)
   }
+
+  // Restored credentials are not considered run-ready until the exact saved
+  // key has been checked against the current provider catalogue again.
+  const verifyRestoredProviderKeys = async (
+    keys: Record<string, string>,
+    providerCatalog: Catalog | null,
+  ) => {
+    const providersToVerify = (providerCatalog?.providers ?? []).filter(
+      (provider) =>
+        provider.enabled &&
+        typeof keys[provider.id] === "string" &&
+        keys[provider.id].trim().length > 0,
+    )
+    if (providersToVerify.length === 0) return
+
+    const generations = new Map<string, number>()
+    for (const provider of providersToVerify) {
+      generations.set(provider.id, nextVerificationGeneration(provider.id))
+    }
+
+    setStatuses((prev) => {
+      const next = { ...prev }
+      for (const provider of providersToVerify) next[provider.id] = "testing"
+      return next
+    })
+    setVerifications((prev) => {
+      const next = { ...prev }
+      for (const provider of providersToVerify) delete next[provider.id]
+      return next
+    })
+
+    await Promise.all(
+      providersToVerify.map(async (provider) => {
+        const generation = generations.get(provider.id)
+        try {
+          const result = await ApiClient.testKey(provider.id, keys[provider.id])
+          if (generation !== verificationGenerations.current[provider.id]) return
+          setStatuses((prev) => ({ ...prev, [provider.id]: result.status }))
+          if (result.verification) {
+            setVerifications((prev) => ({ ...prev, [provider.id]: result.verification! }))
+          }
+        } catch {
+          if (generation !== verificationGenerations.current[provider.id]) return
+          setStatuses((prev) => ({ ...prev, [provider.id]: "unreachable" }))
+        }
+      }),
+    )
+  }
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
@@ -166,15 +214,19 @@ export function KeysManager() {
   useEffect(() => {
     async function load() {
       ApiClient.wakeup()
+      let loadedCatalog: Catalog | null = null
       try {
-        setCatalog(await ApiClient.catalog())
+        loadedCatalog = await ApiClient.catalog()
+        setCatalog(loadedCatalog)
       } catch {
         setCatalog(null)
       }
       try {
         if (globalVault.isUnlocked()) {
-          setSavedKeys(await globalVault.allKeys())
+          const keys = await globalVault.allKeys()
+          setSavedKeys(keys)
           setVaultUnlocked(true)
+          void verifyRestoredProviderKeys(keys, loadedCatalog)
         } else {
           const hasStored = await globalVault.hasPersisted()
           const hasLegacy = await globalVault.hasLegacyEncrypted()
@@ -202,6 +254,7 @@ export function KeysManager() {
     try {
       const keys = await globalVault.unlock(passphrase)
       setSavedKeys(keys)
+      void verifyRestoredProviderKeys(keys, catalog)
       setNeedsUnlock(false)
       setNeedsSetup(false)
       setVaultUnlocked(true)
