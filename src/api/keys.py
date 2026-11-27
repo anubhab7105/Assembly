@@ -228,7 +228,12 @@ async def _list_gemini(
     except Exception:  # noqa: BLE001 — any transport failure reads as unreachable
         return None, [], False, {}
     if response.status_code != 200:
-        return response.status_code, [], (_provider_invalid_key_signal(response) if response.status_code == 400 else False), {}
+        invalid_key_signal = (
+            _provider_invalid_key_signal(response)
+            if response.status_code == 400
+            else False
+        )
+        return response.status_code, [], invalid_key_signal, {}
     try:
         data = response.json()
     except ValueError:
@@ -544,7 +549,7 @@ def _classify_list_result(
     listed: list[str],
     invalid_key_signal: bool = False,
 ) -> KeyTestResponse:
-    """Classify using status plus a redacted Gemini invalid-key signal."""
+    """Classify using status plus a redacted provider invalid-key signal."""
     if list_status is None:
         return KeyTestResponse(
             provider=provider,
