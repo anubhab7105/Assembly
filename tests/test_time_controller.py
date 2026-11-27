@@ -671,8 +671,6 @@ def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
     )
     assert "SEARCH_SECONDS_EACH * max(" in sources["orchestrator"]
     assert "deadline.remaining() - deadline.synth_reserve" in sources["orchestrator"]
-    assert "timeout_s=deadline.timeout_for_call()" in sources["orchestrator"]
-
     # Solve and regular debate enforce timeouts around their provider calls.
     assert "timeout_s=deadline.timeout_for_call()" in sources["orchestrator"]
     assert "async with asyncio.timeout(timeout_s):" in sources["manager"]
