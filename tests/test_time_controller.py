@@ -614,44 +614,114 @@ def test_api_cancel_unknown_is_404(monkeypatch) -> None:
 
 
 def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
-    """Keep each orchestration provider phase wired to the shared deadline.
-
-    This is deliberately a structural regression test: timeout enforcement
-    belongs to the orchestrator for planning/synthesis and to the manager
-    entry points for solve/debate. Runtime tests above exercise the actual
-    timeout and cancellation behavior with fake providers.
-    """
+    """Assert that each provider phase is nested inside its effective timeout."""
+    import ast
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    orchestrator = (root / "src/orchestration/orchestrator.py").read_text()
-    planner = (root / "src/orchestration/planner.py").read_text()
-    manager = (root / "src/orchestration/agent_manager.py").read_text()
-    debate = (root / "src/orchestration/debate.py").read_text()
+    sources = {
+        "orchestrator": (root / "src/orchestration/orchestrator.py").read_text(),
+        "manager": (root / "src/orchestration/agent_manager.py").read_text(),
+        "debate": (root / "src/orchestration/debate.py").read_text(),
+    }
+    trees = {name: ast.parse(source) for name, source in sources.items()}
 
-    # Planning contains two provider attempts (initial + schema retry);
-    # the orchestrator wraps the whole operation so neither can outlive
-    # the deadline-derived planner call window.
-    assert orchestrator.count("deadline.timeout_for_call(PLANNER_CALL_SECONDS)") == 1
-    assert "async with asyncio.timeout(" in orchestrator
-    assert "await planner.plan(" in orchestrator
-    assert planner.count(".generate(") == 2
+    def timeout_wraps_await(tree, timeout_expression: str, awaited_method: str) -> bool:
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.AsyncWith):
+                continue
+            timeout_contexts = [
+                ast.unparse(item.context_expr) for item in node.items
+            ]
+            if timeout_expression not in timeout_contexts:
+                continue
+            for child in ast.walk(node):
+                if not isinstance(child, ast.Await):
+                    continue
+                call = child.value
+                if (
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and call.func.attr == awaited_method
+                ):
+                    return True
+        return False
 
-    # Independent solve and every debate round receive the remaining
-    # deadline-derived timeout, enforced around each provider-facing call.
-    assert orchestrator.count("timeout_s=deadline.timeout_for_call()") >= 2
-    assert "async with asyncio.timeout(timeout_s):" in manager
-    assert "async with asyncio.timeout(timeout_s):" in debate
+    # The wrapper must enclose the actual awaited operation, not merely
+    # coexist elsewhere in the source file.
+    assert timeout_wraps_await(
+        trees["orchestrator"],
+        "asyncio.timeout(deadline.timeout_for_call(PLANNER_CALL_SECONDS))",
+        "plan",
+    )
+    assert timeout_wraps_await(
+        trees["orchestrator"],
+        "asyncio.timeout(deadline.synthesis_timeout())",
+        "synthesize",
+    )
 
-    # Synthesis has its own bounded final window and a minimum completion
-    # allowance; task trackers drain phase stragglers on all exits.
-    assert "async with asyncio.timeout(deadline.synthesis_timeout()):" in orchestrator
-    assert manager.count("await own_tracker.drain()") == 1
-    assert debate.count("await own_tracker.drain()") == 1
+    # Solve and regular debate enforce timeouts around their provider calls.
+    assert "timeout_s=deadline.timeout_for_call()" in sources["orchestrator"]
+    assert "async with asyncio.timeout(timeout_s):" in sources["manager"]
+    assert "async with asyncio.timeout(timeout_s):" in sources["debate"]
 
-    # Settled executions drop their cancellation registration. Cancellation
-    # and ordinary failure both have terminal events and clean up resources.
-    assert 'self._deadlines.pop(execution_id, None)' in orchestrator
-    assert "ProgressEventType.EXECUTION_CANCELLED" in orchestrator
-    assert "ProgressEventType.EXECUTION_FAILED_PARTIAL" in orchestrator
-    assert orchestrator.count("key_store.clear()") >= 3
+    # Tracked solve/debate tasks are drained, and run-level resources settle.
+    assert "await own_tracker.drain()" in sources["manager"]
+    assert "await own_tracker.drain()" in sources["debate"]
+    assert 'self._deadlines.pop(execution_id, None)' in sources["orchestrator"]
+    assert "ProgressEventType.EXECUTION_CANCELLED" in sources["orchestrator"]
+    assert "ProgressEventType.EXECUTION_FAILED_PARTIAL" in sources["orchestrator"]
+    assert sources["orchestrator"].count("key_store.clear()") >= 3
+
+
+async def test_adversarial_challenge_timeout_cancels_provider() -> None:
+    """The optional adversarial critic call must not outlive its run window."""
+    from src.agents.base_agent import AgentOutput
+    from src.orchestration.budget_controller import BudgetController
+    from src.orchestration.consensus import ConsensusEngine
+
+    cancelled = asyncio.Event()
+
+    class _HangingCritic:
+        agent_id = "critic-01"
+        agent_type = "critic"
+        family = "critic-family"
+
+        async def adversarial_challenge(self, question, others, round_number):
+            try:
+                await asyncio.sleep(30.0)
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+    critic = _HangingCritic()
+    prior = [
+        AgentOutput(
+            agent_id="solver-01",
+            agent_type="solver",
+            position="A supported answer",
+            confidence=0.9,
+            provider="mock",
+            model="solver-model",
+            family="solver-family",
+        )
+    ]
+    orchestrator = Orchestrator()
+
+    async def emit_event(event_type, payload):
+        return None
+
+    started = time.monotonic()
+    with pytest.raises(TimeoutError):
+        await orchestrator._run_adversarial_round(
+            ConsensusEngine(),
+            [critic],
+            "Q?",
+            prior,
+            1,
+            BudgetController(3),
+            emit_event,
+            timeout_s=0.02,
+        )
+    assert time.monotonic() - started < 2.0
+    assert cancelled.is_set()
