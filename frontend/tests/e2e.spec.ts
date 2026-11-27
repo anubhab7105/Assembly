@@ -191,6 +191,60 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.getByTestId("run-summary-strip")).toContainText("2 agents")
   })
 
+  test("rechecks availability after a cached quota cooldown block", async ({ page }) => {
+    let preflightAttempts = 0
+    await page.route("**/api/preflight", async route => {
+      preflightAttempts += 1
+      if (preflightAttempts === 1) {
+        await route.fulfill({
+          json: {
+            feasible: false,
+            explanation: "Provider quota cooldowns leave fewer than two usable model families.",
+            diversity: {
+              level: "BLOCKED",
+              families_ready: ["gpt-oss"],
+              families_count: 1,
+              providers_count: 1,
+              roles_ready: ["critic", "solver"],
+              reasons: ["Provider quota cooldowns leave fewer than two usable model families."],
+            },
+          },
+        })
+        return
+      }
+      await route.fulfill({ json: { feasible: true, explanation: "Capacity recovered." } })
+    })
+
+    await page.goto("/settings")
+    await unlockVault(page)
+    for (const provider of ["groq", "openrouter"]) {
+      const card = page.getByTestId(`provider-card-${provider}`)
+      await card.locator('input[type="password"]').fill(CANARY_KEY)
+      await card.getByRole("button", { name: /Test Saved Key|Save & Test/i }).click()
+      await expect(card.getByTestId(`test-result-${provider}`)).toContainText(/valid/i, {
+        timeout: 10000,
+      })
+    }
+
+    // Keep the same document so the unlocked vault remains available.
+    await page.getByRole("link", { name: /Back to investigation/i }).click()
+    await expect(page).toHaveURL(/\\/chat/)
+    await expect(page.getByTestId("diversity-chip")).toContainText("2 families ready")
+
+    await page.locator("#research-question").fill("Can the capacity check recover after a quota cooldown?")
+    await page.getByRole("button", { name: /Start run/i }).click()
+    await expect(page.getByText(/Not feasible: Provider quota cooldowns/i)).toBeVisible()
+    await expect(page.getByTestId("retry-preflight")).toBeVisible()
+
+    await page.getByTestId("retry-preflight").click()
+    await expect(page.getByTestId("retry-preflight")).toHaveCount(0)
+    await expect(page.getByRole("button", { name: /Start run/i })).toBeEnabled()
+    await page.getByRole("button", { name: /Start run/i }).click()
+
+    await expect(page).toHaveURL(/\\/executions\\?id=local-.+/)
+    expect(preflightAttempts).toBe(2)
+  })
+
   test("3. History export/import round-trips without server storage", async ({ page }) => {
     await page.goto("/chat")
 
