@@ -119,24 +119,28 @@ class ProvidersStatusResponse(BaseModel):
     diversity: DiversityGateResponse = DiversityGateResponse()
 
 
-@router.post("/keys/test", response_model=KeyTestResponse)
-async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
-    """Validate a key with one auth-only models-list call; echo nothing."""
-    ip = client_ip(request)
-    await check_rate_limit(
-        f"ip:{ip}", "test_keys", settings.rate_limit_key_test_per_min_per_ip, 60
-    )
-    key = clean_key(req.key)
+async def verify_provider_key(
+    provider_id: str,
+    raw_key: str | SecretStr,
+    *,
+    catalog=None,
+) -> KeyTestResponse:
+    """Verify this exact key against the provider model catalogue.
+
+    Performs only provider-authenticated model-list/metadata checks. It never
+    generates content, stores the key, or logs/returns key material.
+    """
+    key = clean_key(raw_key)
     if not key:
         return KeyTestResponse(
-            provider=req.provider,
+            provider=provider_id,
             valid=False,
             rate_limited=False,
             error_code="auth_error",
             message=f"No key entered. {_COPY_HINT}",
         )
     try:
-        catalog = load_models_config()
+        catalog = catalog or load_models_config()
     except (FileNotFoundError, ValueError, TypeError):
         return KeyTestResponse(
             provider=req.provider,
@@ -145,14 +149,14 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
             error_code="error",
             message="Server catalog is unavailable; try again.",
         )
-    spec = catalog.providers.get(req.provider)
+    spec = catalog.providers.get(provider_id)
     if spec is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unknown provider: {req.provider}",
+            detail=f"Unknown provider: {provider_id}",
         )
     model = spec.models[0].id if spec.models else ""
-    label = "Google" if spec.base == "google-genai" else req.provider
+    label = "Google" if spec.base == "google-genai" else provider_id
     model_metadata: dict[str, dict[str, int]] = {}
     quota_headers: dict[str, str] = {}
     openrouter_key_info: dict[str, int] = {}
@@ -162,14 +166,14 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
         list_status, listed, invalid_key_signal, model_metadata, quota_headers = await _list_openai(
             spec.url or "", key, dict(spec.headers)
         )
-        if req.provider == "openrouter" and list_status == 200:
+        if provider_id == "openrouter" and list_status == 200:
             openrouter_key_info = await _openrouter_key_info(key)
     elif spec.base == "huggingface":
-        result = await _test_huggingface(req.provider, model, key)
+        result = await _test_huggingface(provider_id, model, key)
         if result.valid:
             model_availability: dict[str, bool | None] = {model: result.model_available}
             for configured in spec.models[1:]:
-                probe = await _test_huggingface(req.provider, configured.id, key)
+                probe = await _test_huggingface(provider_id, configured.id, key)
                 model_availability[configured.id] = (
                     probe.model_available if probe.valid or probe.error_code == "model_not_found" else None
                 )
@@ -178,12 +182,12 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
             ]
             result.available_models = available_models
             result.verification = _build_key_metadata_verification(
-                req.provider, spec, available_models, {}, {}, {},
+                provider_id, spec, available_models, {}, {}, {},
                 model_availability=model_availability,
             )
         if not spec.enabled and result.valid:
             result.message = (
-                f"Key verified; {req.provider} is still disabled in models.yaml "
+                f"Key verified; {provider_id} is still disabled in models.yaml "
                 "and will not be used for runs."
             )
         return result
@@ -201,14 +205,24 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
     )
     if list_status == 200:
         result.verification = _build_key_metadata_verification(
-            req.provider, spec, listed, model_metadata, quota_headers, openrouter_key_info
+            provider_id, spec, listed, model_metadata, quota_headers, openrouter_key_info
         )
     if not spec.enabled and result.valid:
         result.message = (
-            f"Key verified; {req.provider} is still disabled in models.yaml "
+            f"Key verified; {provider_id} is still disabled in models.yaml "
             "and will not be used for runs."
         )
     return result
+
+
+@router.post("/keys/test", response_model=KeyTestResponse)
+async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
+    """Validate one key with an auth-only model-list call; echo nothing."""
+    ip = client_ip(request)
+    await check_rate_limit(
+        f"ip:{ip}", "test_keys", settings.rate_limit_key_test_per_min_per_ip, 60
+    )
+    return await verify_provider_key(req.provider, req.key)
 
 
 async def _list_gemini(
