@@ -228,7 +228,7 @@ async def _list_gemini(
     except Exception:  # noqa: BLE001 — any transport failure reads as unreachable
         return None, [], False, {}
     if response.status_code != 200:
-        return response.status_code, [], (_gemini_invalid_key_signal(response) if response.status_code == 400 else False), {}
+        return response.status_code, [], (_provider_invalid_key_signal(response) if response.status_code == 400 else False), {}
     try:
         data = response.json()
     except ValueError:
@@ -286,7 +286,10 @@ async def _list_openai(
     except Exception:  # noqa: BLE001 — any transport failure reads as unreachable
         return None, [], False, {}, {}
     if response.status_code != 200:
-        return response.status_code, [], False, {}, {}
+        invalid_key_signal = (
+            _provider_invalid_key_signal(response) if response.status_code == 400 else False
+        )
+        return response.status_code, [], invalid_key_signal, {}, {}
     try:
         data = response.json()
     except ValueError:
