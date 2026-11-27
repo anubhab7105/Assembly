@@ -190,19 +190,22 @@ def main() -> int:
             cwd=ROOT,
             env=backend_env,
         )
+        npm_args = [
+            "npm",
+            "run",
+            "dev",
+            "--",
+            "--hostname",
+            args.frontend_host,
+            "--port",
+            args.frontend_port,
+        ]
+        # On Windows, npm is often a PowerShell (.ps1) shim (e.g. nvm-windows),
+        # which subprocess.CreateProcess cannot execute directly. Run it via cmd.
+        if sys.platform == "win32":
+            npm_args = ["cmd", "/c"] + npm_args
         frontend = subprocess.Popen(
-            _command(
-                [
-                    "npm",
-                    "run",
-                    "dev",
-                    "--",
-                    "--hostname",
-                    args.frontend_host,
-                    "--port",
-                    args.frontend_port,
-                ]
-            ),
+            _command(npm_args),
             cwd=FRONTEND,
             env=frontend_env,
         )
