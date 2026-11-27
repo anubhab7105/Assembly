@@ -62,14 +62,17 @@ def main() -> None:
     # Gemini via SDK model listing.
     if settings.has_provider("gemini"):
         try:
-            import google.generativeai as genai
+            from google import genai
 
-            genai.configure(api_key=reveal(settings.gemini_api_key))
-            ids = sorted(
-                m.name.replace("models/", "")
-                for m in genai.list_models()
-                if "generateContent" in m.supported_generation_methods
-            )
+            client = genai.Client(api_key=reveal(settings.gemini_api_key))
+            try:
+                ids = sorted(
+                    model.name.removeprefix("models/")
+                    for model in client.models.list()
+                    if "generateContent" in (model.supported_actions or [])
+                )
+            finally:
+                client.close()
             print(f"gemini ({len(ids)}):")
             for model_id in ids:
                 print(f"  {model_id}")
