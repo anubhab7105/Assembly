@@ -460,8 +460,9 @@ async def start_run(req: RunRequest, request: Request):
             content={
                 "code": BLOCKED_CODE,
                 "detail": (
-                    "Not enough usable solver/critic model families. Add valid keys "
+                    "Not enough usable solver/critic model families. Add tested keys with fresh quota configuration "
                     + f"for at least {MINIMUM_FAMILIES} distinct families; three are recommended."
+                    + ((" Provider readiness: " + "; ".join(ctx.provider_issues[:4])) if ctx.provider_issues else "")
                 ),
                 "minimum_families": MINIMUM_FAMILIES,
             },
