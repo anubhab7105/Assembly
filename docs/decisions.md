@@ -2,6 +2,13 @@
 
 Append-only log of significant technical and product decisions.
 
+## 2026-11-27 — Enforce usable two-family minimum and align model readiness (Issue #35)
+
+- Context: The family gate accepted a single usable family through a confirmation-based degraded mode, and the picker could expose selectable or pinnable models that were disabled, had unverified/stale quota metadata, or lacked a saved key. Counting arbitrary model families could also overstate the availability of the required solver and critic roles.
+- Decision: Keep three distinct solver/critic-capable families as the OK/recommended target and two as the minimum/WARN state. Block when fewer than two usable families are available or either core role is missing. Count only enabled, quota-ready, keyed, selected, non-exhausted models that support solver or critic. Validate explicit selections and pins at request-context construction; apply the same gate to run and preflight. Show unavailable catalogue models with a reason, but disable adding them and exclude them from pin choices.
+- Consequences: The one-family "Run anyway" path is removed. Preflight remains a structured capacity response but reports infeasible when the family gate blocks. Provider count never substitutes for distinct family count. Quota values and verification dates remain sourced from the catalogue; no limits are inferred or refreshed by this change.
+
+
 ## 2026-11-25 — Sanitize model-generated Markdown after rendering plugins (Issue #112)
 
 - Context: `FinalAnswer` renders model-generated and imported answer text with `react-markdown`, GitHub Flavored Markdown, KaTeX, and highlight.js. Raw HTML parsing is not enabled, but the rendered tree should still have an explicit final sanitizer boundary for unsafe attributes/elements and URL protocols.

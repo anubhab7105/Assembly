@@ -1,3 +1,11 @@
+## 2026-11-27 — Issue #35: enforce two-family readiness across UI and API
+
+- Re-verified the defect against `main` at `74173be0b4c64d3526dc88908690f36bd8a2306e` before editing. Confirmed one-family runs could proceed after confirmation and the model picker did not fully gate selection/pins on live readiness.
+- Updated the router to count distinct usable solver/critic model families only. Three families yield OK; two yield WARN; fewer than two or missing core-role coverage is BLOCKED. The router's own minimum enforcement now matches the advertised two-family minimum.
+- Updated request-context validation to reject unknown, disabled, quota-unverified, keyless, unconfigured, or unavailable explicit selections and invalid/unavailable role pins before preflight or run. Preflight keeps its structured response but reports infeasible for a blocked diversity gate; run returns the existing machine-readable blocked response.
+- Updated the frontend gate, Model Picker, chat launch checks, and setup banner. Unavailable catalogue models remain visible with an explanation but cannot be newly selected or pinned. Two families are required; three remain recommended.
+- Added backend and frontend regression tests for one-family blocking, required role coverage, model selection/pin validation, preflight/run behavior, unavailable model choices, and setup copy.
+
 ## 2026-11-26 — Landing page polish: FAQ & Footer marigold styling, vortex spacing, and Get Started link (PR #132)
 
 - FAQ section styling: Retained full-width marigold yellow (`#eaa221`) background with a 2-column layout on desktop (left: heading block, right: question-answer accordion), styled question summaries in high-contrast dark text (`#0b0c0e`), answers in white (`#ffffff`), and styled heading with Georgia italic serif typography on "you" (`#0b0c0e`) and "begin." (`#ffffff`).

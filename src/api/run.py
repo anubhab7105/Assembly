@@ -17,6 +17,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from src.providers.router import MIN_FAMILIES_TO_START
+
 from src.api.request_context import (
     _diversity_is_blocked,
     _filtered_router,
@@ -48,8 +50,6 @@ router = APIRouter(prefix="/api/run", tags=["run"])
 BLOCKED_CODE = "blocked_no_usable_keys"
 
 #: Minimum distinct model families for a healthy team (mirrors catalog).
-from src.providers.router import MIN_FAMILIES_TO_START
-
 MINIMUM_FAMILIES = MIN_FAMILIES_TO_START
 
 

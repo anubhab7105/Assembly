@@ -676,7 +676,7 @@ export default function Home() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault()
-                  if (!loading && (question.trim() || attachments.length > 0) && gate.level !== "BLOCKED") {
+                  if (!loading && (question.trim() || attachments.length > 0) && shownGate.level !== "BLOCKED") {
                     handleLaunch()
                   }
                 }
@@ -740,7 +740,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleLaunch}
-                disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
+                disabled={loading || (!question.trim() && attachments.length === 0) || shownGate.level === "BLOCKED"}
                 className="assembly-composer-run-pill shrink-0"
                 aria-label={loading ? "Running" : "Start run"}
               >

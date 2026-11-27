@@ -33,6 +33,10 @@ export function ModelPicker({
     ApiClient.catalog().then(setCatalog).catch(() => setError("Could not load model catalog."))
   }, [])
 
+  useEffect(() => {
+    setPinModel(value.pins[pinRole] ?? "")
+  }, [pinRole, value.pins])
+
   const toggle = (id: string) => {
     const next = value.selected.includes(id)
       ? value.selected.filter((m) => m !== id)
