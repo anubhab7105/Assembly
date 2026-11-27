@@ -772,7 +772,6 @@ class ModelRouter:
         family diversity. `allowed_families` (bench pins) constrains the
         choice; no pinned candidate raises PinViolationError.
         """
-        self._enforce_minimum()
         allowed = normalize_allowed_families(allowed_families)
 
         if (

@@ -147,12 +147,10 @@ def test_two_families_warn_but_proceed(tmp_path) -> None:
     assert len(routing.decisions) == 2
 
 
-def test_single_family_returns_degraded_flag(tmp_path) -> None:
+def test_single_family_is_blocked_before_team_routing(tmp_path) -> None:
     router, _ = _router(tmp_path, _fam1(), {"pa": "k1", "pb": "k2", "pc": "k3"})
-    routing = router.route_team(_team("solver", "critic"))
-    assert routing.degraded
-    assert routing.warnings != []
-    assert [d.family for d in routing.decisions] == ["gpt-oss", "gpt-oss"]
+    with pytest.raises(RuntimeError, match="at least 2 distinct usable model families"):
+        router.route_team(_team("solver", "critic"))
 
 
 # ── Fallback chains ─────────────────────────────────────────────────
@@ -452,9 +450,16 @@ def test_last_resort_warning_survives_pin_edits(tmp_path) -> None:
                 "family": "gpt-oss",
                 "roles": ["solver", "critic", "planner"],
             }
-        ]
+        ],
+        "pb": [
+            {
+                "id": "pb-strong",
+                "family": "qwen",
+                "roles": ["solver", "critic", "planner"],
+            }
+        ],
     }
-    router, _ = _router(tmp_path, providers, {"pa": "k1"})
+    router, _ = _router(tmp_path, providers, {"pa": "k1", "pb": "k2"})
     routing = router.route_team(_team("researcher"))
     assert len(routing.decisions) == 1
     assert any("No usable researcher model" in w for w in routing.warnings)

@@ -27,15 +27,12 @@ export function ModelPicker({
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pinRole, setPinRole] = useState<string>("critic")
-  const [pinModel, setPinModel] = useState<string>("")
+  const [pinDraft, setPinDraft] = useState<{ role: string; model: string } | null>(null)
+  const pinModel = pinDraft?.role === pinRole ? pinDraft.model : value.pins[pinRole] ?? ""
 
   useEffect(() => {
     ApiClient.catalog().then(setCatalog).catch(() => setError("Could not load model catalog."))
   }, [])
-
-  useEffect(() => {
-    setPinModel(value.pins[pinRole] ?? "")
-  }, [pinRole, value.pins])
 
   const toggle = (id: string) => {
     const next = value.selected.includes(id)
@@ -154,7 +151,7 @@ export function ModelPicker({
           id="pin-model"
           aria-label="Pin model"
           value={pinModel}
-          onChange={(e) => setPinModel(e.target.value)}
+          onChange={(e) => setPinDraft({ role: pinRole, model: e.target.value })}
           className="min-h-11 rounded-md border border-border bg-background px-2 py-2 text-xs max-w-56"
         >
           <option value="">none</option>
