@@ -11,7 +11,7 @@ websockets>=12.0
 platformdirs>=4.0.0
 
 # AI Providers (all OpenAI-compatible traffic goes through async httpx now;
-# no vendor SDKs except Gemini's; Hugging Face is optional/disabled by default)
+# no vendor SDKs except Gemini's; Hugging Face is optional)
 google-genai>=1.0.0
 huggingface-hub>=0.20.0
 pyyaml>=6.0.0
