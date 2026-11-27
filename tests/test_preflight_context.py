@@ -360,7 +360,6 @@ async def test_run_verification_filters_each_key_to_its_own_readiness(
         VerifiedModelMetadata,
     )
     from src.api.request_context import verify_run_provider_keys
-    from src.providers.config import default_catalog_path
     from tests.conftest import make_models_yaml
 
     path = make_models_yaml(
