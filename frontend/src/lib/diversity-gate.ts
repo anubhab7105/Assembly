@@ -16,6 +16,7 @@ export interface DiversityGate {
   families_ready: string[];
   families_count: number;
   providers_count: number;
+  roles_ready: string[];
   reasons: string[];
 }
 
@@ -25,38 +26,49 @@ function suggestFix(ready: string[]): string {
   return `Add a ${hint} key to reach 3 families.`;
 }
 
-export function evaluateGate(families: string[], providersCount: number): DiversityGate {
+export function evaluateGate(
+  families: string[],
+  providersCount: number,
+  rolesReady: string[] = ["solver", "critic"],
+): DiversityGate {
   const ready = [...new Set(families)].sort();
+  const roles = [...new Set(rolesReady)].sort();
   const count = ready.length;
-  if (count >= FAMILY_GATE_THRESHOLDS.ok) {
+  const missingRoles = ["solver", "critic"].filter((role) => !roles.includes(role));
+  const base = {
+    families_ready: ready,
+    families_count: count,
+    providers_count: providersCount,
+    roles_ready: roles,
+  };
+  if (missingRoles.length > 0) {
     return {
-      level: "OK",
-      families_ready: ready,
-      families_count: count,
-      providers_count: providersCount,
-      reasons: [`${count} families ready: ${ready.join(", ")}.`],
+      ...base,
+      level: "BLOCKED",
+      reasons: [
+        `No usable ${missingRoles.join(" or ")} model is ready. Check saved API keys, verified quota limits, and model selection.`,
+      ],
     };
+  }
+  if (count >= FAMILY_GATE_THRESHOLDS.ok) {
+    return { ...base, level: "OK", reasons: [`${count} distinct solver/critic families ready: ${ready.join(", ")}.`] };
   }
   if (count === FAMILY_GATE_THRESHOLDS.warn) {
     return {
+      ...base,
       level: "WARN",
-      families_ready: ready,
-      families_count: count,
-      providers_count: providersCount,
       reasons: [
-        `Only ${count} distinct model families ready (${ready.join(", ")}): independent reasoning is weakened. ${suggestFix(ready)}`,
+        `Only ${count} distinct solver/critic families ready (${ready.join(", ")}): independent reasoning is weakened. ${suggestFix(ready)}`,
       ],
     };
   }
   return {
+    ...base,
     level: "BLOCKED",
-    families_ready: ready,
-    families_count: count,
-    providers_count: providersCount,
     reasons: [
       count === 1
-        ? `Only 1 distinct model family ready (${ready.join(", ")}). Assembly requires at least 2 independent model families to run. ${suggestFix(ready)}`
-        : "No model families ready. Add valid keys for providers with at least 2 distinct usable model families, then try again.",
+        ? `Only 1 distinct solver/critic family is ready (${ready.join(", ")}). Assembly requires at least 2 distinct usable families to run. ${suggestFix(ready)}`
+        : "No usable solver/critic model families are ready. Add valid keys for providers with verified quota limits, then try again.",
     ],
   };
 }

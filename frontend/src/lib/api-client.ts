@@ -26,6 +26,7 @@ export interface Catalog {
   families: string[]
   recommended_order?: string[]
   minimum_families?: number
+  recommended_families?: number
   sensitive_signup_fallback?: string
 }
 
@@ -50,6 +51,13 @@ export interface KeyMetadataVerification {
   quota_metadata_ready: boolean
   quota_metadata_issue?: string | null
   note: string
+}
+
+export interface PreflightResult {
+  feasible: boolean
+  explanation?: string
+  feasible_tier?: number
+  diversity?: import("./diversity-gate").DiversityGate
 }
 
 export interface UsageEntry {
@@ -100,8 +108,8 @@ export class ApiClient {
     usage: UsageEntry[] = [],
     providerKeys: Record<string, string> = {},
     selection: ModelSelection = { selected: [], pins: {} },
-  ) {
-    return this.request("/api/preflight", {
+  ): Promise<PreflightResult> {
+    return this.request<PreflightResult>("/api/preflight", {
       method: "POST",
       body: JSON.stringify({
         question,
@@ -110,7 +118,7 @@ export class ApiClient {
         model_selection: selection,
         usage_snapshot: usage,
       }),
-    }) as Promise<{ feasible: boolean; explanation?: string; feasible_tier?: number }>
+    })
   }
 
   /** POST /api/run and stream SSE events to onEvent. Resolves on run.finished. */

@@ -7,7 +7,8 @@
 export const SENSITIVE_SIGNUP_FALLBACK =
   "Check this during signup; if it asks for payment, skip this provider (Assembly is free-tier only)";
 
-export const MIN_FAMILIES_TO_START = 3;
+export const MIN_FAMILIES_TO_START = 2;
+export const RECOMMENDED_FAMILIES = 3;
 
 export function sensitiveSignupText(value: string | null | undefined): string {
   if (typeof value === "string" && value.trim().length > 0) return value;
@@ -56,12 +57,9 @@ export function minimumToStartBanner(
 ): string {
   const order = recommendedOrder.length > 0 ? recommendedOrder.join(" → ") : "catalog order";
   if (readyFamilies >= MIN_FAMILIES_TO_START) {
-    return `Minimum to start: met (${readyFamilies} families). Recommended order: ${order}.`;
+    return `Minimum to start: met (${readyFamilies} families). Three families are recommended. Recommended order: ${order}.`;
   }
-  if (readyFamilies === 2) {
-    return `Minimum to start: add keys for at least 3 model families (2 works with a warning). Recommended order: ${order}.`;
-  }
-  return `Minimum to start: add keys for at least 3 model families (2 works with a warning). Recommended order: ${order}.`;
+  return `Minimum to start: add keys for at least 2 distinct solver/critic model families. Three families are recommended. Recommended order: ${order}.`;
 }
 
 /**

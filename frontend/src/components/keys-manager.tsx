@@ -445,14 +445,20 @@ export function KeysManager() {
   }
 
   const readyFamilies = new Set<string>()
+  const rolesReady = new Set<string>()
   providers.forEach((p) => {
-    if (p.limits_ready && savedKeys[p.id] && statuses[p.id] !== "invalid") {
-      p.models.forEach((m) => readyFamilies.add(m.family))
+    if (p.enabled && p.limits_ready && savedKeys[p.id] && statuses[p.id] !== "invalid") {
+      p.models.forEach((model) => {
+        const coreRoles = ["solver", "critic"].filter((role) => model.roles.includes(role))
+        if (coreRoles.length > 0) readyFamilies.add(model.family)
+        coreRoles.forEach((role) => rolesReady.add(role))
+      })
     }
   })
   const gate = evaluateGate(
     [...readyFamilies],
-    providers.filter((p) => p.limits_ready && savedKeys[p.id]).length,
+    providers.filter((p) => p.enabled && p.limits_ready && savedKeys[p.id] && statuses[p.id] !== "invalid").length,
+    [...rolesReady],
   )
 
   if (!vaultLoaded) {
