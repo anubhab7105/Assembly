@@ -24,6 +24,7 @@ export function keyPrefixHint(providerId: string): string {
     groq: "Keys usually start with gsk_. Paste the full value.",
     gemini: "Keys usually start with AIza. Paste the full value.",
     openrouter: "Keys usually start with sk-or-. Paste the full value.",
+    mistral: "Paste the API key from your Mistral console.",
     cerebras: "Keys usually start with csk-. Paste the full value.",
     huggingface: "Keys usually start with hf_. Paste the full value.",
     nvidia: "Keys usually start with nvapi-. Paste the full value.",
