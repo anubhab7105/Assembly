@@ -48,6 +48,7 @@ _PLACEHOLDER_PREFIXES = (
     "hf_your",
     "csk_your",
     "xpl_your",
+    "nvapi-your",
 )
 
 
