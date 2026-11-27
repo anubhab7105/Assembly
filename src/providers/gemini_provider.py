@@ -260,6 +260,12 @@ class GeminiProvider(AIProvider):
             )
             raise structured from e
 
+    async def aclose(self) -> None:
+        """Close the async Google Gen AI transport owned by this provider."""
+        client, self._client = self._client, None
+        if client is not None:
+            await client.aio.aclose()
+
     def is_available(self) -> bool:
         return self._client is not None and bool(self._fingerprint)
 
