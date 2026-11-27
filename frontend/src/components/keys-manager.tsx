@@ -45,6 +45,7 @@ const TARGET_PROVIDERS: TargetProvider[] = [
   { id: "groq", env: "GROQ_API_KEY", name: "Groq", placeholder: "gsk_your-groq-api-key" },
   { id: "cerebras", env: "CEREBRAS_API_KEY", name: "Cerebras", placeholder: "csk-your-cerebras-api-key" },
   { id: "openrouter", env: "OPENROUTER_API_KEY", name: "OpenRouter", placeholder: "sk-or-your-openrouter-api-key" },
+  { id: "mistral", env: "MISTRAL_API_KEY", name: "Mistral", placeholder: "your-mistral-api-key" },
   { id: "huggingface", env: "HUGGINGFACE_API_KEY", name: "Hugging Face", placeholder: "hf_your-huggingface-api-key" },
   { id: "nvidia", env: "NVIDIA_API_KEY", name: "NVIDIA", placeholder: "nvapi-your-nvidia-api-key" },
 ]
@@ -78,6 +79,12 @@ const PROVIDER_METADATA: Record<
     roles: ["Solver", "Critic", "Synthesizer"],
     highlight: "Multi-architecture open weight diversity",
     link: "https://openrouter.ai/keys",
+  },
+  mistral: {
+    models: "Mistral models from your account catalog",
+    roles: ["Solver", "Critic"],
+    highlight: "General-purpose text generation with an independent model family",
+    link: "https://console.mistral.ai/api-keys/",
   },
   huggingface: {
     models: "Mistral 7B, Qwen 2.5 Coder",
