@@ -256,7 +256,13 @@ class ModelRouter:
     def _suggest_families(self, ready: list[str]) -> str:
         """Actionable fix hint naming catalog families the user lacks."""
         missing: list[str] = []
-        for spec in self.config.providers.values():
+        for provider_id, spec in self.config.providers.items():
+            if not spec.enabled:
+                continue
+            try:
+                validate_provider_limits(provider_id, spec)
+            except LimitsNotFilledError:
+                continue
             for model in spec.models:
                 if model.family not in ready and model.family not in missing:
                     missing.append(model.family)

@@ -17,8 +17,6 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from src.providers.router import MIN_FAMILIES_TO_START
-
 from src.api.request_context import (
     _diversity_is_blocked,
     _filtered_router,
@@ -33,6 +31,7 @@ from src.core.rate_limit import (
     client_ip,
     count_invalid_request,
 )
+from src.providers.router import MIN_FAMILIES_TO_START
 from src.database.schemas import RunRequest
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
 from src.providers.quota import get_limiter
