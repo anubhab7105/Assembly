@@ -88,6 +88,8 @@ async def verify_run_provider_keys(
         if str(provider).strip() and str(key).strip()
     }
     required_providers = set(selected_providers.values()) if wanted else set(supplied)
+    if not required_providers:
+        return {}, [], ["No API keys were supplied for this run."]
     for provider_id in required_providers:
         if not supplied.get(provider_id):
             raise PinViolationError(
