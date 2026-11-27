@@ -193,9 +193,8 @@ def _authed_client(monkeypatch, db_path: str) -> tuple[TestClient, str]:
 def test_canary_end_to_end_api_db_ws(monkeypatch, tmp_path, caplog) -> None:
     db_file = tmp_path / "canary.db"
     client, _token = _authed_client(monkeypatch, str(db_file))
-    # Offline hermetic run: mock routing, no live provider calls (single live
-    # keys now proceed degraded under the family gate and would hit real
-    # network; TestClient portals cancel slow background tasks).
+    # Offline hermetic run: mock routing; requests below the two-family
+    # minimum are rejected before any provider call.
     import src.api.executions as exec_mod
     import src.orchestration.orchestrator as orch_mod
     from src.providers.mock_provider import MockProvider

@@ -49,11 +49,23 @@ async def preflight(req: RunRequest, request: Request):
             content={"code": "pin_violation", "detail": str(exc)},
         )
     try:
-        return _build_preflight(
+        result = _build_preflight(
             question,
             req.time_budget_minutes,
             router_override=ctx.router,
         )
+        if result.diversity.level == "BLOCKED":
+            result = result.model_copy(
+                update={
+                    "feasible": False,
+                    "explanation": (
+                        result.diversity.reasons[0]
+                        if result.diversity.reasons
+                        else "At least 2 distinct usable solver/critic model families are required."
+                    ),
+                }
+            )
+        return result
     finally:
         if ctx.quota_snapshot_token is not None:
             get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)

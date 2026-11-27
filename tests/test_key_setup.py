@@ -19,7 +19,8 @@ def test_catalog_includes_key_steps_and_fallback() -> None:
     data = resp.json()
     assert "providers" in data
     assert "recommended_order" in data
-    assert data["minimum_families"] == 3
+    assert data["minimum_families"] == 2
+    assert data["recommended_families"] == 3
     assert data["sensitive_signup_fallback"] == SENSITIVE_SIGNUP_FALLBACK
     by_id = {p["id"]: p for p in data["providers"]}
     # At least one enabled provider carries generic safe steps.

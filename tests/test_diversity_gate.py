@@ -48,17 +48,17 @@ def test_groq_plus_openrouter_is_four_families_ok(tmp_path) -> None:
     assert gate.to_dict()["level"] == "OK"
 
 
-def test_two_providers_same_family_is_degraded(tmp_path) -> None:
+def test_two_providers_serving_one_family_are_blocked(tmp_path) -> None:
     providers = {
         "pa": [{"id": "pa-m", "family": "llama", "roles": list(ALL)}],
         "pb": [{"id": "pb-m", "family": "llama", "roles": list(ALL)}],
     }
     router, _, _ = _router(tmp_path, providers, {"pa": "k1", "pb": "k2"})
     gate = router.diversity_gate()
-    assert gate.level == "DEGRADED"
+    assert gate.level == "BLOCKED"
     assert gate.families_ready == ["llama"]
-    assert gate.providers_count == 2  # two providers, one family
-    assert any("lower-confidence" in r for r in gate.reasons)
+    assert gate.providers_count == 2  # provider count never substitutes for family count
+    assert any("at least 2 distinct usable model families" in r for r in gate.reasons)
 
 
 def test_two_families_is_warn_with_fix_hint(tmp_path) -> None:
@@ -82,6 +82,29 @@ def test_zero_families_is_blocked(tmp_path) -> None:
     assert gate.level == "BLOCKED"
     assert gate.families_count == 0
 
+
+
+def test_models_without_solver_or_critic_roles_do_not_count(tmp_path) -> None:
+    providers = {
+        "pa": [{"id": "research-model", "family": "llama", "roles": ["researcher"]}],
+        "pb": [{"id": "plan-model", "family": "qwen", "roles": ["planner"]}],
+    }
+    router, _, _ = _router(tmp_path, providers, {"pa": "k1", "pb": "k2"})
+    gate = router.diversity_gate()
+    assert gate.level == "BLOCKED"
+    assert gate.families_count == 0
+    assert "solver" in gate.reasons[0] and "critic" in gate.reasons[0]
+
+
+def test_two_families_covering_solver_and_critic_warn(tmp_path) -> None:
+    providers = {
+        "pa": [{"id": "solver-model", "family": "llama", "roles": ["solver"]}],
+        "pb": [{"id": "critic-model", "family": "qwen", "roles": ["critic"]}],
+    }
+    router, _, _ = _router(tmp_path, providers, {"pa": "k1", "pb": "k2"})
+    gate = router.diversity_gate()
+    assert gate.level == "WARN"
+    assert set(gate.families_ready) == {"llama", "qwen"}
 
 def test_selection_narrowing_to_two_families_is_warn(tmp_path) -> None:
     router, _, _ = _router(
@@ -132,17 +155,20 @@ def test_unfilled_limits_exclude_the_provider(tmp_path) -> None:
     assert "gpt-oss" not in gate.families_ready or "qwen" not in gate.families_ready
 
 
-def test_enforce_minimum_blocks_only_on_zero(tmp_path) -> None:
+def test_enforce_minimum_blocks_zero_or_one_family(tmp_path) -> None:
     import pytest
 
     providers = {
         "pa": [{"id": "pa-m", "family": "llama", "roles": list(ALL)}],
+        "pb": [{"id": "pb-m", "family": "qwen", "roles": list(ALL)}],
     }
-    router, _, _ = _router(tmp_path, providers, {"pa": "k1"})
-    # 1 family used to raise under the provider-count gate; now it runs.
-    router._enforce_minimum()
+    one, _, _ = _router(tmp_path, {"pa": providers["pa"]}, {"pa": "k1"})
+    with pytest.raises(RuntimeError, match="at least 2 distinct usable model families"):
+        one._enforce_minimum()
+    two, _, _ = _router(tmp_path, providers, {"pa": "k1", "pb": "k2"})
+    two._enforce_minimum()
     empty, _, _ = _router(tmp_path, providers, {})
-    with pytest.raises(RuntimeError, match="usable model family"):
+    with pytest.raises(RuntimeError, match="at least 2 distinct usable model families"):
         empty._enforce_minimum()
 
 
@@ -155,7 +181,7 @@ def test_status_preflight_carry_diversity(monkeypatch) -> None:
     res = client.get("/api/providers/status")
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["diversity"]["level"] in ("OK", "WARN", "DEGRADED", "BLOCKED")
+    assert body["diversity"]["level"] in ("OK", "WARN", "BLOCKED")
     assert "families_ready" in body["diversity"]
 
     pre = client.post(
@@ -169,14 +195,13 @@ def test_status_preflight_carry_diversity(monkeypatch) -> None:
         },
     )
     assert pre.status_code == 200, pre.text
-    assert pre.json()["diversity"]["level"] in ("OK", "WARN", "DEGRADED", "BLOCKED")
+    assert pre.json()["diversity"]["level"] in ("OK", "WARN", "BLOCKED")
 
 
-def test_single_family_run_labels_lower_confidence() -> None:
-    """DEGRADED routing caps a High consensus at Moderate in the event."""
-    from src.orchestration.orchestrator import cap_label_for_degraded
+def test_one_family_team_is_rejected_before_routing(tmp_path) -> None:
+    import pytest
 
-    assert cap_label_for_degraded("High", True) == "Moderate"
-    assert cap_label_for_degraded("Moderate", True) == "Moderate"
-    assert cap_label_for_degraded("Low", True) == "Low"
-    assert cap_label_for_degraded("High", False) == "High"
+    provider = {"pa": [{"id": "pa-m", "family": "llama", "roles": list(ALL)}]}
+    router, _, _ = _router(tmp_path, provider, {"pa": "k1"})
+    with pytest.raises(RuntimeError, match="at least 2 distinct usable model families"):
+        router.route_team([{"agent_type": "solver"}])

@@ -44,7 +44,7 @@ async def main() -> int:
     if gate.level == "BLOCKED":
         print("ABORT: no usable model family. " + " ".join(gate.reasons))
         return 2
-    if gate.level in ("WARN", "DEGRADED"):
+    if gate.level == "WARN":
         print(
             "NOTE: " + " ".join(gate.reasons) + " — proceeding with reduced diversity."
         )

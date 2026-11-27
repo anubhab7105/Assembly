@@ -367,9 +367,20 @@ def _stub_preflight_context(monkeypatch, snapshot):
     import src.api.preflight as preflight_mod
     from src.api.request_context import RequestContext
 
+    ready_families = ["gemini", "qwen", "gpt-oss"]
     router = SimpleNamespace(
         quota_snapshot=lambda: snapshot,
-        available_families=lambda: ["gemini", "qwen", "gpt-oss"],
+        available_families=lambda: ready_families,
+        diversity_gate=lambda: SimpleNamespace(
+            to_dict=lambda: {
+                "level": "OK",
+                "families_ready": ready_families,
+                "families_count": len(ready_families),
+                "providers_count": len(ready_families),
+                "roles_ready": ["critic", "solver"],
+                "reasons": ["3 distinct solver/critic model families ready."],
+            }
+        ),
     )
     ctx = RequestContext(
         router=router,

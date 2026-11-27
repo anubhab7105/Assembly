@@ -2,6 +2,13 @@
 
 Append-only log of significant technical and product decisions.
 
+## 2026-11-27 — Enforce usable two-family minimum and align model readiness (Issue #35)
+
+- Context: The family gate accepted a single usable family through a confirmation-based degraded mode, and the picker could expose selectable or pinnable models that were disabled, had unverified/stale quota metadata, or lacked a saved key. Counting arbitrary model families could also overstate the availability of the required solver and critic roles.
+- Decision: Keep three distinct solver/critic-capable families as the OK/recommended target and two as the minimum/WARN state. Block when fewer than two usable families are available or either core role is missing. Count only enabled, quota-ready, keyed, selected, non-exhausted models that support solver or critic. Validate explicit selections and pins at request-context construction; apply the same gate to run and preflight. Show unavailable catalogue models with a reason, but disable adding them and exclude them from pin choices.
+- Consequences: The one-family "Run anyway" path is removed. Preflight remains a structured capacity response but reports infeasible when the family gate blocks. Provider count never substitutes for distinct family count. Quota values and verification dates remain sourced from the catalogue; no limits are inferred or refreshed by this change.
+
+
 ## 2026-11-25 — Sanitize model-generated Markdown after rendering plugins (Issue #112)
 
 - Context: `FinalAnswer` renders model-generated and imported answer text with `react-markdown`, GitHub Flavored Markdown, KaTeX, and highlight.js. Raw HTML parsing is not enabled, but the rendered tree should still have an explicit final sanitizer boundary for unsafe attributes/elements and URL protocols.
@@ -537,3 +544,10 @@ Append-only log of significant technical and product decisions.
 - Context: PR review identified two provider-facing phases outside the shared run deadline: sequential web research and the targeted adversarial critic call. It also found the initial source-text test did not prove the planner timeout actually enclosed the planner await.
 - Decision: Bound the complete SearchRouter pass by the lower of its provider-count estimate and the remaining time after the synthesis reserve; when research times out, cancel the in-flight search and continue without external results. Bound adversarial challenges by the same run deadline; on timeout, transition back to evaluation and proceed directly to synthesis rather than launching a second debate call. Strengthen the regression test with AST containment checks and hanging-provider cancellation cases.
 - Consequences: Research and adversarial provider calls cannot run unbounded within an execution. Research timeout degrades gracefully with a warning; adversarial timeout preserves the existing synthesis fallback. No provider API, dependency, or persisted data format changes.
+
+
+## 2026-11-27 — Keep single-agent fallback routing independent of the team minimum (Issue #35 CI follow-up)
+
+- Context: The initial minimum-family enforcement in the router's single-agent `route()` path also rejected legitimate fallback/retry routing after quota cooldowns reduced the remaining live family count, even when the run/team had already passed its initial eligibility gate. It also caused planner/capacity test doubles without a diversity-gate implementation to appear blocked.
+- Decision: Enforce the two-family minimum at team/run formation and preflight, not on each individual single-agent route. Keep team routing's gate intact. Individual role selection and quota fallback may continue against any currently usable model; this does not permit a new run to start below the two-family minimum.
+- Consequences: A run is admitted only through the shared minimum-family checks, while a provider failure during an admitted run can still use a valid single-agent fallback. Tests that isolate capacity planning explicitly provide an OK diversity gate.

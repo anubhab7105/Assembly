@@ -8,7 +8,7 @@ import { ApiClient, type Catalog, type UsageEntry } from "@/lib/api-client"
 import { storage } from "@/lib/storage"
 import { env } from "@/lib/env"
 import { ServerStatusBanner } from "@/components/server-status-banner"
-import { evaluateGate, gateChipText } from "@/lib/diversity-gate"
+import { evaluateGate, gateChipText, type DiversityGate } from "@/lib/diversity-gate"
 import { failureMessage, isPresentableRun } from "@/lib/run-outcome"
 import { makeChatStatus, type ChatStatus } from "@/lib/chat-status"
 import { ModelPicker, type ModelSelection } from "@/components/model-picker"
@@ -104,7 +104,7 @@ export default function Home() {
   const [catalogTick, setCatalogTick] = useState(0)
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
-  const [confirmedGateSignature, setConfirmedGateSignature] = useState<string | null>(null)
+  const [preflightGate, setPreflightGate] = useState<{ signature: string; gate: DiversityGate } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [showContextPopover, setShowContextPopover] = useState(false)
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -117,6 +117,7 @@ export default function Home() {
       setQuestion("")
       setAttachments([])
       setStatus(null)
+      setPreflightGate(null)
     }
     window.addEventListener("assembly:new-chat", handleNewChat)
     return () => window.removeEventListener("assembly:new-chat", handleNewChat)
@@ -149,29 +150,38 @@ export default function Home() {
   const gate = React.useMemo(() => {
     const enabled = new Set(enabledIds)
     const fams: string[] = []
+    const rolesReady = new Set<string>()
     if (catalog) {
       for (const p of catalog.providers) {
         if (!p.enabled || !p.limits_ready || !enabled.has(p.id)) continue
         for (const m of p.models) {
           if (selection.selected.length > 0 && !selection.selected.includes(m.id)) continue
-          if (!fams.includes(m.family)) fams.push(m.family)
+          const coreRoles = ["solver", "critic"].filter((role) => m.roles.includes(role))
+          if (coreRoles.length > 0 && !fams.includes(m.family)) fams.push(m.family)
+          coreRoles.forEach((role) => rolesReady.add(role))
         }
       }
     }
     const runnableProviderCount = catalog?.providers.filter(
       (provider) => provider.enabled && provider.limits_ready && enabled.has(provider.id),
     ).length ?? 0
-    return evaluateGate(fams, runnableProviderCount)
+    return evaluateGate(fams, runnableProviderCount, [...rolesReady])
   }, [catalog, enabledIds, selection.selected])
 
   const gateSignature = JSON.stringify({
-    level: gate.level,
-    reasons: gate.reasons,
     enabledIds: [...enabledIds].sort(),
     selected: [...selection.selected].sort(),
     pins: selection.pins,
   })
-  const degradedConfirmed = confirmedGateSignature === gateSignature
+  const preflightGateIsCurrent = preflightGate?.signature === gateSignature
+  // The backend gate also includes live provider cooldowns, which the
+  // browser-side catalog mirror cannot observe. Let the user clear a cached
+  // backend BLOCKED verdict when the local key/model configuration is runnable.
+  const canRetryCachedPreflight =
+    preflightGateIsCurrent &&
+    preflightGate?.gate.level === "BLOCKED" &&
+    gate.level !== "BLOCKED"
+  const shownGate = preflightGateIsCurrent ? preflightGate.gate : gate
 
   useEffect(() => {
     const refreshKeys = () => {
@@ -308,12 +318,8 @@ export default function Home() {
 
   const handleLaunch = async () => {
     if ((!question.trim() && attachments.length === 0) || loading) return
-    if (gate.level === "BLOCKED") {
-      setStatus(makeChatStatus(gate.reasons[0] ?? "No model families ready.", "info"))
-      return
-    }
-    if (gate.level === "DEGRADED" && !degradedConfirmed) {
-      setStatus(makeChatStatus("Confirm the single-family run below before launching.", "info"))
+    if (shownGate.level === "BLOCKED") {
+      setStatus(makeChatStatus(shownGate.reasons[0] ?? "At least two usable model families are required.", "info"))
       return
     }
     setLoading(true)
@@ -351,6 +357,9 @@ export default function Home() {
         providerKeys,
         { selected: selection.selected, pins: selection.pins },
       )
+      if (preflight.diversity) {
+        setPreflightGate({ signature: gateSignature, gate: preflight.diversity })
+      }
       if (!preflight.feasible) {
         setStatus(makeChatStatus(`Not feasible: ${preflight.explanation ?? "quota exhausted"}`, "error"))
         setLoading(false)
@@ -675,7 +684,7 @@ export default function Home() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault()
-                  if (!loading && (question.trim() || attachments.length > 0) && gate.level !== "BLOCKED") {
+                  if (!loading && (question.trim() || attachments.length > 0) && shownGate.level !== "BLOCKED") {
                     handleLaunch()
                   }
                 }
@@ -739,7 +748,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleLaunch}
-                disabled={loading || (!question.trim() && attachments.length === 0) || gate.level === "BLOCKED"}
+                disabled={loading || (!question.trim() && attachments.length === 0) || shownGate.level === "BLOCKED"}
                 className="assembly-composer-run-pill shrink-0"
                 aria-label={loading ? "Running" : "Start run"}
               >
@@ -756,31 +765,49 @@ export default function Home() {
           </div>
 
           <div className="assembly-chat-banners-stack space-y-3">
-            {gate.families_count === 0 && (
+            {shownGate.level === "BLOCKED" && (
               <div className="assembly-chat-warning-banner rounded-xl border px-3.5 py-2.5">
-                <p className="text-xs font-medium text-warning leading-relaxed">
-                  Set up your provider keys in{" "}
-                  <Link href="/settings" className="underline underline-offset-2 font-semibold hover:opacity-80">
-                    Settings
-                  </Link>{" "}
-                  to start an investigation. At least two ready model families are required for a run; three are recommended.
-                </p>
+                {canRetryCachedPreflight ? (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs font-medium text-warning leading-relaxed">
+                      Current provider capacity is below the two-family minimum. Quota cooldowns may recover, so you can check availability again.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      data-testid="retry-preflight"
+                      onClick={() => {
+                        setPreflightGate(null)
+                        setStatus(makeChatStatus(
+                          "The previous capacity verdict was cleared. Start the run again to check current availability.",
+                          "info",
+                        ))
+                      }}
+                    >
+                      Recheck availability
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-xs font-medium text-warning leading-relaxed">
+                    Set up your provider keys in{" "}
+                    <Link href="/settings" className="underline underline-offset-2 font-semibold hover:opacity-80">
+                      Settings
+                    </Link>{" "}
+                    to start an investigation. At least two distinct usable families with solver and critic coverage are required; three are recommended.
+                  </p>
+                )}
               </div>
             )}
 
             <div
               data-testid="diversity-chip"
               className={`assembly-readiness-chip flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
-                gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
+                shownGate.level === "OK" ? "border-success/30 bg-success-subtle/40" : shownGate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : "border-danger/30 bg-danger/10"
               }`}
             >
-              <span className="font-medium">{gateChipText(gate)}</span>
-              {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
-              {gate.level === "DEGRADED" && !degradedConfirmed && (
-                <Button variant="outline" size="sm" className="min-h-8" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
-                  Run anyway
-                </Button>
-              )}
+              <span className="font-medium">{gateChipText(shownGate)}</span>
+              {shownGate.level !== "OK" && <span className="text-muted-foreground">{shownGate.reasons[0]}</span>}
             </div>
 
             {catalogFailed && (
