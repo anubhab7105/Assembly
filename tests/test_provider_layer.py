@@ -8,6 +8,7 @@ import respx
 from pydantic import ValidationError
 
 from src.core.config import settings
+from src.providers.base import ChatMessage
 from src.providers.config import load_models_config
 from src.providers.errors import (
     AuthError,
