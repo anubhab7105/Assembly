@@ -104,6 +104,7 @@ export default function Home() {
   const [catalogTick, setCatalogTick] = useState(0)
   const [showModelSettings, setShowModelSettings] = useState(false)
   const [enabledIds, setEnabledIds] = useState<string[]>([])
+  const [confirmedGateSignature, setConfirmedGateSignature] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [showContextPopover, setShowContextPopover] = useState(false)
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -162,6 +163,15 @@ export default function Home() {
     ).length ?? 0
     return evaluateGate(fams, runnableProviderCount)
   }, [catalog, enabledIds, selection.selected])
+
+  const gateSignature = JSON.stringify({
+    level: gate.level,
+    reasons: gate.reasons,
+    enabledIds: [...enabledIds].sort(),
+    selected: [...selection.selected].sort(),
+    pins: selection.pins,
+  })
+  const degradedConfirmed = confirmedGateSignature === gateSignature
 
   useEffect(() => {
     const refreshKeys = () => {
@@ -300,6 +310,10 @@ export default function Home() {
     if ((!question.trim() && attachments.length === 0) || loading) return
     if (gate.level === "BLOCKED") {
       setStatus(makeChatStatus(gate.reasons[0] ?? "No model families ready.", "info"))
+      return
+    }
+    if (gate.level === "DEGRADED" && !degradedConfirmed) {
+      setStatus(makeChatStatus("Confirm the single-family run below before launching.", "info"))
       return
     }
     setLoading(true)
@@ -757,11 +771,16 @@ export default function Home() {
             <div
               data-testid="diversity-chip"
               className={`assembly-readiness-chip flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${
-                gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : "border-danger/30 bg-danger/10"
+                gate.level === "OK" ? "border-success/30 bg-success-subtle/40" : gate.level === "WARN" ? "border-warning/30 bg-warning-subtle" : gate.level === "DEGRADED" ? "border-danger/30 bg-danger/10" : "border-border bg-card"
               }`}
             >
               <span className="font-medium">{gateChipText(gate)}</span>
               {gate.level !== "OK" && <span className="text-muted-foreground">{gate.reasons[0]}</span>}
+              {gate.level === "DEGRADED" && !degradedConfirmed && (
+                <Button variant="outline" size="sm" className="min-h-8" data-testid="degraded-confirm" onClick={() => setConfirmedGateSignature(gateSignature)}>
+                  Run anyway
+                </Button>
+              )}
             </div>
 
             {catalogFailed && (
