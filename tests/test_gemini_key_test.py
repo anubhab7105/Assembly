@@ -59,7 +59,9 @@ def _stub_list(
     invalid_key_signal: bool = False,
     metadata: dict[str, dict[str, int]] | None = None,
 ) -> None:
-    async def _fake(key: str) -> tuple[int | None, list[str], bool, dict[str, dict[str, int]]]:
+    async def _fake(
+        key: str,
+    ) -> tuple[int | None, list[str], bool, dict[str, dict[str, int]]]:
         return status, ids, invalid_key_signal, metadata or {}
 
     monkeypatch.setattr(keys_mod, "_list_gemini", _fake)
@@ -180,7 +182,9 @@ def test_list_timeout_is_unreachable_never_invalid(monkeypatch, fake_key: str) -
 def test_trailing_newline_key_is_trimmed_before_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, str] = {}
 
-    async def _capture(key: str) -> tuple[int, list[str], bool, dict[str, dict[str, int]]]:
+    async def _capture(
+        key: str,
+    ) -> tuple[int, list[str], bool, dict[str, dict[str, int]]]:
         seen["key"] = key
         return 200, ["gemini-3.8-flash"], False, {}
 
@@ -390,9 +394,14 @@ def test_disabled_provider_key_can_be_verified_without_enabling_routing(
     assert fake_key not in response.text
 
 
-
 @pytest.mark.parametrize(
-    ("provider", "status_code", "has_invalid_key_marker", "expected_error", "expected_rate_limited"),
+    (
+        "provider",
+        "status_code",
+        "has_invalid_key_marker",
+        "expected_error",
+        "expected_rate_limited",
+    ),
     [
         ("gemini", 400, True, "auth_error", False),
         ("gemini", 400, False, "bad_response", False),  # malformed/non-specific 400
@@ -420,6 +429,7 @@ def test_upstream_error_payloads_are_not_returned_or_logged(
     """Only normalized classifications cross the provider/API boundary."""
     marker = "UPSTREAM_SECRET_CANARY_987654"
     response_text = f"provider diagnostic body {marker}"
+
     async def allow_rate_limit(*_args, **_kwargs) -> None:
         return None
 
