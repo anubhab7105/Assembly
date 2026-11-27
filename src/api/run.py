@@ -455,6 +455,7 @@ async def start_run(req: RunRequest, request: Request):
         if ctx.quota_snapshot_token is not None:
             get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
             ctx.quota_snapshot_token = None
+        await ctx.aclose()
         return JSONResponse(
             status_code=400,
             content={
@@ -492,6 +493,7 @@ async def start_run(req: RunRequest, request: Request):
                 if ctx.quota_snapshot_token is not None:
                     limiter.reset_usage_snapshot(ctx.quota_snapshot_token)
                     ctx.quota_snapshot_token = None
+                await ctx.aclose()
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Tier not feasible with current quota."},
@@ -505,6 +507,7 @@ async def start_run(req: RunRequest, request: Request):
             if ctx.quota_snapshot_token is not None:
                 get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
                 ctx.quota_snapshot_token = None
+            await ctx.aclose()
             return JSONResponse(
                 status_code=429, content={"detail": "Server busy, try again later."}
             )
@@ -513,6 +516,7 @@ async def start_run(req: RunRequest, request: Request):
             if ctx.quota_snapshot_token is not None:
                 get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
                 ctx.quota_snapshot_token = None
+            await ctx.aclose()
             return JSONResponse(
                 status_code=429,
                 content={
