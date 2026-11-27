@@ -467,6 +467,15 @@ async def test_gemini_uses_google_genai_async_client(monkeypatch) -> None:
     assert async_models.request["config"].max_output_tokens == 256
 
 
+
+def test_nvidia_and_mistral_env_keys_are_mapped() -> None:
+    from src.core.keystore import EnvKeyStore
+
+    attrs = EnvKeyStore._key_attrs()
+    assert attrs["mistral"] == "mistral_api_key"
+    assert attrs["nvidia"] == "nvidia_api_key"
+
+
 # ── Registry ──────────────────────────────────────────────────────────
 
 
