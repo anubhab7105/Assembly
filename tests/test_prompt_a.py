@@ -305,10 +305,33 @@ def test_blocked_returns_400_with_code(web_mode, caplog) -> None:
     body = res.json()
     assert body["code"] == "blocked_no_usable_keys"
     assert "model families" in body["detail"]
-    assert body["minimum_families"] == 3
+    assert body["minimum_families"] == 2
     # No provider call was attempted and nothing sensitive echoed.
     assert "generating" not in caplog.text
     assert CANARY_Q not in res.text
+
+
+def test_run_blocks_single_family_before_provider_calls(web_mode, caplog) -> None:
+    from src.main import app
+
+    client = TestClient(app)
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        res = client.post(
+            "/api/run",
+            json={
+                "question": CANARY_Q,
+                "time_budget_minutes": 3,
+                "provider_keys": {"groq": CANARY_PROV},
+                "model_selection": {"selected": [], "pins": {}},
+                "usage_snapshot": [],
+            },
+        )
+    assert res.status_code == 400, res.text
+    body = res.json()
+    assert body["code"] == "blocked_no_usable_keys"
+    assert body["minimum_families"] == 2
+    assert "at least 2 distinct" in body["detail"]
+    assert "generating" not in caplog.text
 
 
 # ── 6. Salt per mode ─────────────────────────────────────────────────────

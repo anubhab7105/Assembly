@@ -84,7 +84,7 @@ def test_builder_empty_keys_is_blocked() -> None:
 def test_builder_fake_keys_offline() -> None:
     from src.api.request_context import _diversity_is_blocked
 
-    ctx = _ctx(provider_keys={"groq": CANARY_PROV})
+    ctx = _ctx(provider_keys={"groq": CANARY_PROV, "openrouter": "sk-CANARY-OPENROUTER"})
     assert _diversity_is_blocked(ctx.router, ctx.allowed) is False
     assert isinstance(ctx.quota_snapshot, list)
 
@@ -93,13 +93,30 @@ def test_builder_selection_and_search_flag() -> None:
     ctx = _ctx(
         provider_keys={"groq": CANARY_PROV},
         search_keys={"tavily": CANARY_SEARCH},
-        selected=["openai/gpt-oss-20b", "no-such-model"],
+        selected=["openai/gpt-oss-20b"],
         pins={"solver": "openai/gpt-oss-20b"},
     )
     assert ctx.allowed == {"openai/gpt-oss-20b"}
     assert ctx.pins == {"solver": "openai/gpt-oss-20b"}
     assert ctx.has_search_key is True
 
+
+
+def test_unknown_selected_model_is_rejected() -> None:
+    from src.providers.router import PinViolationError
+
+    with pytest.raises(PinViolationError, match="not in the enabled model catalog"):
+        _ctx(
+            provider_keys={"groq": CANARY_PROV},
+            selected=["not-a-real-model"],
+        )
+
+
+def test_single_family_request_context_is_blocked() -> None:
+    from src.api.request_context import _diversity_is_blocked
+
+    ctx = _ctx(provider_keys={"groq": CANARY_PROV})
+    assert _diversity_is_blocked(ctx.router, ctx.allowed) is True
 
 def test_builder_empty_search_value_means_keyless() -> None:
     ctx = _ctx(search_keys={"tavily": ""})
@@ -231,6 +248,20 @@ def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:
                     }
                 ],
                 available_families=lambda: ["gemini", "qwen", "gpt-oss"],
+                diversity_gate=lambda *_: SimpleNamespace(
+                    level="OK",
+                    families_count=3,
+                    families_ready=["gemini", "qwen", "gpt-oss"],
+                    providers_count=2,
+                    reasons=["3 distinct solver/critic families ready."],
+                    to_dict=lambda: {
+                        "level": "OK",
+                        "families_count": 3,
+                        "families_ready": ["gemini", "qwen", "gpt-oss"],
+                        "providers_count": 2,
+                        "reasons": ["3 distinct solver/critic families ready."],
+                    },
+                ),
             ),
             allowed=set(),
             pins={},
@@ -285,7 +316,8 @@ def test_preflight_real_context_builder_is_stateless(
         )
 
     assert response.status_code == 200, response.text
-    assert "feasible" in response.json()
+    assert response.json()["feasible"] is False
+    assert response.json()["diversity"]["level"] == "BLOCKED"
     assert not isolated_web_database.exists()
 
 
