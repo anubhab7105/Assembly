@@ -227,7 +227,7 @@ The hosted deployment must keep `APP_MODE=web` (as configured in `render.yaml` a
 |---|---|---|
 | python-jose[cryptography] | >=3.3.0 | Community-maintained; slow releases. Consider migrating to PyJWT. |
 | passlib[bcrypt] | >=1.7.4 | passlib is unmaintained (last release 2023). Consider bcrypt directly or argon2-cffi. |
-| google-generativeai | >=0.8.0 | No upper bound; breaking 0.x change could auto-install. Pin to minor version. |
+| google-genai | >=1.0.0,<3.0.0 | Google’s supported Gen AI SDK; keep below the next major version until explicitly reviewed. |
 | aiohttp | >=3.9.0 | Not used in codebase (httpx used instead). Remove to reduce surface area. |
 
 ---
