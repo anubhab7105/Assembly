@@ -260,7 +260,7 @@ async def _list_gemini(
 
 
 def _provider_invalid_key_signal(response: httpx.Response) -> bool:
-    """Extract a minimal invalid-key signal from documented error fields."""
+    """Extract an invalid-key marker without retaining provider diagnostics."""
     try:
         payload = response.json()
     except ValueError:
@@ -269,11 +269,19 @@ def _provider_invalid_key_signal(response: httpx.Response) -> bool:
     if not isinstance(error, dict):
         return False
 
-    # Google uses API_KEY_INVALID; some OpenAI-compatible APIs use
-    # invalid_api_key. Inspect only error classification fields and discard
-    # the full provider payload immediately.
-    for field in ("code", "status", "message"):
-        value = error.get(field)
+    # Google uses API_KEY_INVALID in ErrorInfo details[].reason; some
+    # OpenAI-compatible APIs use invalid_api_key in top-level error fields.
+    # Inspect only classification strings and discard the payload.
+    candidates = [error.get(field) for field in ("code", "status", "message")]
+    details = error.get("details")
+    if isinstance(details, list):
+        candidates.extend(
+            detail.get("reason")
+            for detail in details
+            if isinstance(detail, dict)
+        )
+
+    for value in candidates:
         if not isinstance(value, str):
             continue
         normalized = value.lower().replace("-", "_").replace(" ", "_")
