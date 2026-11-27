@@ -56,8 +56,8 @@ describe("ModelPicker family counting", () => {
     expect((await screen.findByTestId("picker-gate-chip")).textContent).toContain(
       "2 families ready",
     )
-    expect(screen.getByRole("checkbox", { name: /gemma-free/ })).toBeDisabled()
-    expect(screen.getByRole("checkbox", { name: /cereb-llama/ })).toBeDisabled()
+    expect((screen.getByRole("checkbox", { name: /gemma-free/ }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole("checkbox", { name: /cereb-llama/ }) as HTMLInputElement).disabled).toBe(true)
     const pinSelect = screen.getByRole("combobox", { name: "Pin model" })
     expect(Array.from((pinSelect as HTMLSelectElement).options).map((option) => option.value)).toEqual([
       "", "gpt-oss-20b", "qwen-27b",
@@ -71,6 +71,6 @@ describe("ModelPicker family counting", () => {
     expect((await screen.findByTestId("picker-gate-chip")).textContent).toContain(
       "0 families ready",
     )
-    expect(screen.getByRole("checkbox", { name: /gpt-oss-20b/ })).toBeDisabled()
+    expect((screen.getByRole("checkbox", { name: /gpt-oss-20b/ }) as HTMLInputElement).disabled).toBe(true)
   })
 })

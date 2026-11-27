@@ -153,6 +153,13 @@ def test_single_family_is_blocked_before_team_routing(tmp_path) -> None:
         router.route_team(_team("solver", "critic"))
 
 
+def test_single_agent_routing_remains_available_below_team_minimum(tmp_path) -> None:
+    router, _ = _router(tmp_path, _fam1(), {"pa": "k1", "pb": "k2", "pc": "k3"})
+    decision = router.route("solver")
+    assert decision.family == "gpt-oss"
+    assert decision.model == "pa-fast"
+
+
 # ── Fallback chains ─────────────────────────────────────────────────
 
 

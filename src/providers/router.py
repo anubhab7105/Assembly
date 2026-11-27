@@ -772,6 +772,8 @@ class ModelRouter:
         family diversity. `allowed_families` (bench pins) constrains the
         choice; no pinned candidate raises PinViolationError.
         """
+        if not self._providers:
+            raise RuntimeError("No usable model providers are available for routing.")
         allowed = normalize_allowed_families(allowed_families)
 
         if (
