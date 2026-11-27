@@ -489,6 +489,12 @@ class RequestContext:
     quota_snapshot_token: object | None = None
     provider_issues: list[str] = field(default_factory=list)
 
+    async def aclose(self) -> None:
+        """Release resources owned by this short-lived request router."""
+        close_router = getattr(self.router, "aclose", None)
+        if callable(close_router):
+            await close_router()
+
 
 def build_request_context(
     provider_keys: dict[str, str] | None,
