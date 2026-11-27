@@ -14,33 +14,53 @@ from src.providers.quota import fingerprint_key, get_limiter
 
 
 def _resolve_selection(selected: list[str]) -> tuple[set[str], dict[str, str]]:
-    """Validate selected model ids against the catalog.
+    """Validate selected model ids; Auto is represented by an empty selection."""
+    from src.providers.config import provider_limits_issue
+    from src.providers.router import PinViolationError
 
-    Returns (allowed model ids, model id -> provider). Empty selection
-    means Auto (all catalog models allowed).
-    """
-    wanted = [s.strip() for s in (selected or []) if s and s.strip()][:50]
+    raw = selected or []
+    if len(raw) > 50:
+        raise PinViolationError("Select no more than 50 models.")
+    wanted = list(dict.fromkeys(value.strip() for value in raw if value and value.strip()))
     if not wanted:
         return set(), {}
+
     catalog = load_models_config()
     known: dict[str, str] = {}
-    for pid, spec in catalog.providers.items():
-        if not spec.enabled:
-            continue
-        for m in spec.models:
-            known[m.id] = pid
-    allowed = {m for m in wanted if m in known}
-    # Unknown ids are dropped (fail-soft); all-unknown falls back to Auto.
-    if not allowed:
-        return set(), {}
-    return allowed, {m: known[m] for m in allowed}
+    disabled: set[str] = set()
+    unready: dict[str, str] = {}
+    for provider_id, spec in catalog.providers.items():
+        for model in spec.models:
+            if not spec.enabled:
+                disabled.add(model.id)
+                continue
+            issue = provider_limits_issue(provider_id, spec)
+            if issue:
+                unready[model.id] = issue
+            else:
+                known[model.id] = provider_id
+
+    for model_id in wanted:
+        if model_id in disabled:
+            raise PinViolationError(
+                f"Selected model {model_id!r} belongs to a disabled provider."
+            )
+        if model_id in unready:
+            raise PinViolationError(
+                f"Selected model {model_id!r} is not routable: {unready[model_id]}"
+            )
+        if model_id not in known:
+            raise PinViolationError(
+                f"Selected model {model_id!r} is not in the enabled model catalog."
+            )
+    return set(wanted), {model_id: known[model_id] for model_id in wanted}
 
 
 def _diversity_is_blocked(router: object, allowed: set[str]) -> bool:
-    """True when fewer than two distinct model families are usable for this run.
+    """True when fewer than two usable solver/critic families are available.
 
-    Routers with a family diversity gate use it; routers without one
-    (test doubles) fall back to catalog families under the selection.
+    Routers with a family diversity gate use it; test doubles fall back to
+    catalog models that support at least one core reasoning role.
     """
     gate = None
     diversity_gate = getattr(router, "diversity_gate", None)
@@ -50,16 +70,20 @@ def _diversity_is_blocked(router: object, allowed: set[str]) -> bool:
         except Exception:  # noqa: BLE001 — gate trouble reads as blocked
             return True
     if gate is not None:
-        return gate.level == "BLOCKED" or gate.families_count < 2
+        return gate.level == "BLOCKED" or getattr(gate, "families_count", 0) < 2
     catalog = load_models_config()
     fams: set[str] = set()
+    roles: set[str] = set()
     for spec in catalog.providers.values():
         if not spec.enabled:
             continue
-        for m in spec.models:
-            if not allowed or m.id in allowed:
-                fams.add(m.family)
-    return len(fams) < 2
+        for model in spec.models:
+            if (not allowed or model.id in allowed) and (
+                "solver" in model.roles or "critic" in model.roles
+            ):
+                fams.add(model.family)
+                roles.update({"solver", "critic"}.intersection(model.roles))
+    return len(fams) < 2 or not {"solver", "critic"}.issubset(roles)
 
 
 def diversity_payload(router: object, allowed: set[str]) -> dict[str, object]:
@@ -137,11 +161,14 @@ def _filtered_router(
     # survived the active selection. Never quietly widen that selection.
     catalog = load_models_config()
     pin_specs: dict[str, tuple[str, object]] = {}
-    for role, model_id in list(pins.items())[:10]:
+    if len(pins) > 10:
+        raise PinViolationError("Pin no more than 10 model roles.")
+    valid_roles = {"solver", "researcher", "critic", "synthesizer", "planner"}
+    for role, model_id in pins.items():
         role = str(role).strip()
         model_id = str(model_id).strip()
-        if not role or not model_id:
-            continue
+        if not role or not model_id or role not in valid_roles:
+            raise PinViolationError("A model pin contains an empty or unsupported role/model.")
         match = next(
             (
                 (pid, model)
@@ -166,7 +193,12 @@ def _filtered_router(
         if provider_id not in base_router._providers:
             raise PinViolationError(
                 f"Pinned provider for {role!r} is not configured or available. "
-                "Add a valid API key for that provider, then retry."
+                "Add a valid API key and verify quota metadata, then retry."
+            )
+        if not base_router._usable_model(provider_id, model.id):
+            raise PinViolationError(
+                f"Pinned model {model_id!r} is exhausted or cooling down for {role!r}. "
+                "Choose another model or retry after its quota resets."
             )
         if role not in model.roles:
             raise PinViolationError(
@@ -329,9 +361,29 @@ def build_request_context(
     """
     from src.core.keystore import reveal, wrap_keys
 
-    allowed, _ = _resolve_selection(list(selected or []))
+    allowed, selected_providers = _resolve_selection(list(selected or []))
     resolved_pins = dict(pins or {})
-    router = _filtered_router(dict(provider_keys or {}), allowed, resolved_pins)
+    supplied_keys = dict(provider_keys or {})
+    from src.providers.router import PinViolationError
+
+    for provider_id in set(selected_providers.values()):
+        if not str(supplied_keys.get(provider_id, "")).strip():
+            raise PinViolationError(
+                f"Selected models from {provider_id!r} require a saved API key for that provider."
+            )
+    router = _filtered_router(supplied_keys, allowed, resolved_pins)
+    live_router = getattr(router, "_w", router)
+    unavailable = sorted(
+        provider_id
+        for provider_id in set(selected_providers.values())
+        if provider_id not in getattr(live_router, "_providers", {})
+    )
+    if unavailable:
+        raise PinViolationError(
+            "Selected models are unavailable for providers: "
+            + ", ".join(unavailable)
+            + ". Test the saved API key and verify its quota metadata."
+        )
     limiter = get_limiter()
     key_ids = {
         provider: fingerprint_key(key)
