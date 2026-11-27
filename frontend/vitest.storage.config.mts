@@ -11,6 +11,7 @@ export default defineConfig({
       "src/lib/history-import.test.ts",
       "src/lib/attachments.test.ts",
       "src/app/executions/external-links.test.tsx",
+      "src/app/reduced-motion.test.ts",
     ],
   },
   resolve: {
