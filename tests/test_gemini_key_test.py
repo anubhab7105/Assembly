@@ -7,7 +7,9 @@ pasted-key whitespace never turns a valid key invalid.
 
 import logging
 
+import httpx
 import pytest
+import respx
 from pytest import LogCaptureFixture
 
 from fastapi.testclient import TestClient
@@ -386,3 +388,56 @@ def test_disabled_provider_key_can_be_verified_without_enabling_routing(
     assert "disabled" in body["verification"]["quota_metadata_issue"]
     assert "still disabled" in body["message"]
     assert fake_key not in response.text
+
+
+@pytest.mark.parametrize(
+    ("provider", "status_code", "expected_error", "expected_rate_limited"),
+    [
+        ("gemini", 400, "auth_error", False),
+        ("groq", 429, "rate_limited", True),
+        ("huggingface", 500, "unreachable", False),
+    ],
+)
+@respx.mock
+def test_upstream_error_payloads_are_not_returned_or_logged(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_key: str,
+    caplog: LogCaptureFixture,
+    provider: str,
+    status_code: int,
+    expected_error: str,
+    expected_rate_limited: bool,
+) -> None:
+    """Only normalized classifications cross the provider/API boundary."""
+    marker = "UPSTREAM_SECRET_CANARY_987654"
+    response_text = f"provider diagnostic body {marker}"
+    if provider == "gemini":
+        respx.get(keys_mod._GEMINI_LIST_URL).mock(
+            return_value=httpx.Response(
+                status_code,
+                json={"error": {"message": f"API_KEY_INVALID {response_text}"}},
+            )
+        )
+    elif provider == "groq":
+        respx.get("https://api.groq.com/openai/v1/models").mock(
+            return_value=httpx.Response(status_code, text=response_text)
+        )
+    else:
+        from src.providers.config import load_models_config
+
+        model = load_models_config().providers["huggingface"].models[0].id
+        respx.get(keys_mod._HF_MODEL_URL.format(model=model)).mock(
+            return_value=httpx.Response(status_code, text=response_text)
+        )
+
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        response = _client(monkeypatch).post(
+            "/api/keys/test", json={"provider": provider, "key": fake_key}
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["error_code"] == expected_error
+    assert payload["rate_limited"] is expected_rate_limited
+    assert marker not in response.text
+    assert marker not in caplog.text
