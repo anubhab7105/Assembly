@@ -54,11 +54,11 @@ def _stub_list(
     monkeypatch: pytest.MonkeyPatch,
     status: int | None,
     ids: list[str],
-    body: str = "",
+    invalid_key_signal: bool = False,
     metadata: dict[str, dict[str, int]] | None = None,
 ) -> None:
-    async def _fake(key: str) -> tuple[int | None, list[str], str, dict[str, dict[str, int]]]:
-        return status, ids, body, metadata or {}
+    async def _fake(key: str) -> tuple[int | None, list[str], bool, dict[str, dict[str, int]]]:
+        return status, ids, invalid_key_signal, metadata or {}
 
     monkeypatch.setattr(keys_mod, "_list_gemini", _fake)
 
@@ -106,7 +106,7 @@ def test_list_400_api_key_invalid_is_invalid(monkeypatch, fake_key: str) -> None
         monkeypatch,
         400,
         [],
-        '{"error": {"code": 400, "message": "API key not valid. API_KEY_INVALID"}}',
+        invalid_key_signal=True,
     )
     body = (
         _client(monkeypatch)
@@ -118,7 +118,7 @@ def test_list_400_api_key_invalid_is_invalid(monkeypatch, fake_key: str) -> None
 
 
 def test_list_401_is_invalid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, 401, [], '{"error": {"status": "UNAUTHENTICATED"}}')
+    _stub_list(monkeypatch, 401, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -129,7 +129,7 @@ def test_list_401_is_invalid(monkeypatch, fake_key: str) -> None:
 
 
 def test_list_403_is_invalid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, 403, [], '{"error": {"status": "PERMISSION_DENIED"}}')
+    _stub_list(monkeypatch, 403, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -140,7 +140,7 @@ def test_list_403_is_invalid(monkeypatch, fake_key: str) -> None:
 
 
 def test_list_429_is_quota_not_invalid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, 429, [], '{"error": {"status": "RESOURCE_EXHAUSTED"}}')
+    _stub_list(monkeypatch, 429, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -152,7 +152,7 @@ def test_list_429_is_quota_not_invalid(monkeypatch, fake_key: str) -> None:
 
 
 def test_list_404_model_is_key_valid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, 404, [], '{"error": {"status": "NOT_FOUND"}}')
+    _stub_list(monkeypatch, 404, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -164,7 +164,7 @@ def test_list_404_model_is_key_valid(monkeypatch, fake_key: str) -> None:
 
 
 def test_list_timeout_is_unreachable_never_invalid(monkeypatch, fake_key: str) -> None:
-    _stub_list(monkeypatch, None, [], "")
+    _stub_list(monkeypatch, None, [])
     body = (
         _client(monkeypatch)
         .post("/api/keys/test", json={"provider": "gemini", "key": fake_key})
@@ -178,9 +178,9 @@ def test_list_timeout_is_unreachable_never_invalid(monkeypatch, fake_key: str) -
 def test_trailing_newline_key_is_trimmed_before_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, str] = {}
 
-    async def _capture(key: str) -> tuple[int, list[str], str, dict[str, dict[str, int]]]:
+    async def _capture(key: str) -> tuple[int, list[str], bool, dict[str, dict[str, int]]]:
         seen["key"] = key
-        return 200, ["gemini-3.8-flash"], "", {}
+        return 200, ["gemini-3.8-flash"], False, {}
 
     monkeypatch.setattr(keys_mod, "_list_gemini", _capture)
     body = (
@@ -222,7 +222,7 @@ def test_max_tokens_empty_generation_is_distinct_non_auth_error() -> None:
 
 
 def test_canary_never_in_test_response_or_logs(monkeypatch: pytest.MonkeyPatch, caplog: LogCaptureFixture) -> None:
-    _stub_list(monkeypatch, 401, [], "unauthorized")
+    _stub_list(monkeypatch, 401, [])
     with caplog.at_level(logging.INFO, logger="assembly"):
         res = _client(monkeypatch).post(
             "/api/keys/test", json={"provider": "gemini", "key": CANARY}
@@ -370,7 +370,7 @@ def test_disabled_provider_key_can_be_verified_without_enabling_routing(
     model = load_models_config().providers["cerebras"].models[0].id
 
     async def _fake_openai(_url: str, _key: str, _headers: dict[str, str]):
-        return 200, [model], "", {}, {}
+        return 200, [model], False, {}, {}
 
     monkeypatch.setattr(keys_mod, "_list_openai", _fake_openai)
     response = _client(monkeypatch).post(
