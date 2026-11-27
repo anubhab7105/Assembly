@@ -137,11 +137,11 @@ export function KeysManager() {
   const [verifications, setVerifications] = useState<Record<string, KeyMetadataVerification>>({})
   const verificationGenerations = React.useRef<Record<string, number>>({})
 
-  const nextVerificationGeneration = (providerId: string): number => {
+  const nextVerificationGeneration = React.useCallback((providerId: string): number => {
     const generation = (verificationGenerations.current[providerId] ?? 0) + 1
     verificationGenerations.current[providerId] = generation
     return generation
-  }
+  }, [])
 
   const invalidateVerificationGenerations = (providerIds: string[]) => {
     for (const providerId of providerIds) nextVerificationGeneration(providerId)
@@ -149,7 +149,7 @@ export function KeysManager() {
 
   // Restored credentials are not considered run-ready until the exact saved
   // key has been checked against the current provider catalogue again.
-  const verifyRestoredProviderKeys = async (
+  const verifyRestoredProviderKeys = React.useCallback(async (
     keys: Record<string, string>,
     providerCatalog: Catalog | null,
   ) => {
@@ -193,7 +193,7 @@ export function KeysManager() {
         }
       }),
     )
-  }
+  }, [nextVerificationGeneration])
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
@@ -239,7 +239,7 @@ export function KeysManager() {
       setVaultLoaded(true)
     }
     load()
-  }, [])
+  }, [verifyRestoredProviderKeys])
 
   // Auto-detect provider when typing or pasting into universal bar
   const handleUniversalInputChange = (val: string) => {
@@ -443,7 +443,7 @@ export function KeysManager() {
       return next
     })
     toast({ title: "Key removed", description: `${providerId} key removed. Other providers are unchanged.` })
-  }, [toast])
+  }, [toast, nextVerificationGeneration])
 
   useEffect(() => {
     if (!pendingDelete) return
