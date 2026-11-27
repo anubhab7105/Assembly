@@ -37,7 +37,7 @@ def _resolve_selection(selected: list[str]) -> tuple[set[str], dict[str, str]]:
 
 
 def _diversity_is_blocked(router: object, allowed: set[str]) -> bool:
-    """True when fewer than two distinct model families are usable for this run.
+    """True when zero model families are usable for this run's keys.
 
     Routers with a family diversity gate use it; routers without one
     (test doubles) fall back to catalog families under the selection.
@@ -50,7 +50,7 @@ def _diversity_is_blocked(router: object, allowed: set[str]) -> bool:
         except Exception:  # noqa: BLE001 — gate trouble reads as blocked
             return True
     if gate is not None:
-        return gate.level == "BLOCKED" or gate.families_count < 2
+        return gate.level == "BLOCKED"
     catalog = load_models_config()
     fams: set[str] = set()
     for spec in catalog.providers.values():
@@ -59,7 +59,7 @@ def _diversity_is_blocked(router: object, allowed: set[str]) -> bool:
         for m in spec.models:
             if not allowed or m.id in allowed:
                 fams.add(m.family)
-    return len(fams) < 2
+    return len(fams) == 0
 
 
 def diversity_payload(router: object, allowed: set[str]) -> dict[str, object]:
