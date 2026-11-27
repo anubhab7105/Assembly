@@ -36,7 +36,7 @@ export interface KeyMetadataVerification {
   model_catalog_checked: boolean
   models: Array<{
     id: string
-    available: boolean
+    available: boolean | null
     context_tokens?: number | null
     output_tokens?: number | null
   }>
