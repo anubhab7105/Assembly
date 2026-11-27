@@ -254,8 +254,8 @@ async def _list_gemini(
     return response.status_code, sorted(ids), False, metadata
 
 
-def _gemini_invalid_key_signal(response: httpx.Response) -> bool:
-    """Extract only Gemini's documented invalid-key marker; discard the body."""
+def _provider_invalid_key_signal(response: httpx.Response) -> bool:
+    """Extract a minimal invalid-key signal from documented error fields."""
     try:
         payload = response.json()
     except ValueError:
@@ -263,14 +263,18 @@ def _gemini_invalid_key_signal(response: httpx.Response) -> bool:
     error = payload.get("error") if isinstance(payload, dict) else None
     if not isinstance(error, dict):
         return False
-    # Google APIs identify this specific 400 case with API_KEY_INVALID.
-    status_value = error.get("status")
-    message = error.get("message")
-    return (
-        isinstance(status_value, str) and status_value.upper() == "API_KEY_INVALID"
-    ) or (
-        isinstance(message, str) and "API_KEY_INVALID" in message.upper()
-    )
+
+    # Google uses API_KEY_INVALID; some OpenAI-compatible APIs use
+    # invalid_api_key. Inspect only error classification fields and discard
+    # the full provider payload immediately.
+    for field in ("code", "status", "message"):
+        value = error.get(field)
+        if not isinstance(value, str):
+            continue
+        normalized = value.lower().replace("-", "_").replace(" ", "_")
+        if "api_key_invalid" in normalized or "invalid_api_key" in normalized:
+            return True
+    return False
 
 
 async def _list_openai(
