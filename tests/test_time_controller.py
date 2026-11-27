@@ -609,3 +609,49 @@ def test_api_cancel_unknown_is_404(monkeypatch) -> None:
     client = _authed_client(monkeypatch)
     response = client.post("/api/executions/does-not-exist/cancel")
     assert response.status_code == 404
+
+# ── Orchestration phase deadline wiring ────────────────────────────────
+
+
+def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
+    """Keep each orchestration provider phase wired to the shared deadline.
+
+    This is deliberately a structural regression test: timeout enforcement
+    belongs to the orchestrator for planning/synthesis and to the manager
+    entry points for solve/debate. Runtime tests above exercise the actual
+    timeout and cancellation behavior with fake providers.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    orchestrator = (root / "src/orchestration/orchestrator.py").read_text()
+    planner = (root / "src/orchestration/planner.py").read_text()
+    manager = (root / "src/orchestration/agent_manager.py").read_text()
+    debate = (root / "src/orchestration/debate.py").read_text()
+
+    # Planning contains two provider attempts (initial + schema retry);
+    # the orchestrator wraps the whole operation so neither can outlive
+    # the deadline-derived planner call window.
+    assert orchestrator.count("deadline.timeout_for_call(PLANNER_CALL_SECONDS)") == 1
+    assert "async with asyncio.timeout(" in orchestrator
+    assert "await planner.plan(" in orchestrator
+    assert planner.count(".generate(") == 2
+
+    # Independent solve and every debate round receive the remaining
+    # deadline-derived timeout, enforced around each provider-facing call.
+    assert orchestrator.count("timeout_s=deadline.timeout_for_call()") >= 2
+    assert "async with asyncio.timeout(timeout_s):" in manager
+    assert "async with asyncio.timeout(timeout_s):" in debate
+
+    # Synthesis has its own bounded final window and a minimum completion
+    # allowance; task trackers drain phase stragglers on all exits.
+    assert "async with asyncio.timeout(deadline.synthesis_timeout()):" in orchestrator
+    assert manager.count("await own_tracker.drain()") == 1
+    assert debate.count("await own_tracker.drain()") == 1
+
+    # Settled executions drop their cancellation registration. Cancellation
+    # and ordinary failure both have terminal events and clean up resources.
+    assert 'self._deadlines.pop(execution_id, None)' in orchestrator
+    assert "ProgressEventType.EXECUTION_CANCELLED" in orchestrator
+    assert "ProgressEventType.EXECUTION_FAILED_PARTIAL" in orchestrator
+    assert orchestrator.count("key_store.clear()") >= 3
