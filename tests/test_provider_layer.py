@@ -400,8 +400,6 @@ def test_classify_exception_shapes() -> None:
     assert isinstance(classify_exception("p", RuntimeError("weird")), ProviderDown)
 
 
-
-
 @pytest.mark.asyncio
 async def test_gemini_uses_google_genai_async_client(monkeypatch) -> None:
     from types import SimpleNamespace
@@ -446,8 +444,12 @@ async def test_gemini_uses_google_genai_async_client(monkeypatch) -> None:
     monkeypatch.setattr("src.providers.quota.get_limiter", lambda: Limiter())
 
     provider = GeminiProvider(api_key="test-key", default_model="gemini-test")
+    assert provider.is_available()
     response = await provider._generate_inner(
-        [ChatMessage(role="system", content="Be concise"), ChatMessage(role="user", content="Hello")],
+        [
+            ChatMessage(role="system", content="Be concise"),
+            ChatMessage(role="user", content="Hello"),
+        ],
         "gemini-test",
         0.3,
         256,
