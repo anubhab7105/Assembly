@@ -40,24 +40,23 @@ export function ModelPicker({
     onChange({ ...value, selected: next })
   }
 
+  const keyed = new Set(keyedProviderIds ?? [])
+  const providerCanRun = (provider: Catalog["providers"][number]) =>
+    provider.enabled && provider.limits_ready && keyed.has(provider.id)
+  const eligibleModels = catalog?.providers.flatMap((provider) =>
+    providerCanRun(provider) ? provider.models : [],
+  ) ?? []
   const families = new Set<string>()
-  let keyedProviders = 0
-  if (catalog) {
-    const keyed = keyedProviderIds ? new Set(keyedProviderIds) : null
-    for (const p of catalog.providers) {
-      if (!p.enabled) continue
-      if (keyed && !keyed.has(p.id)) continue
-      keyedProviders += 1
-      for (const m of p.models) {
-        if (value.selected.length === 0 || value.selected.includes(m.id)) {
-          families.add(m.family)
-        }
+  const eligibleProviders = catalog?.providers.filter(providerCanRun) ?? []
+  for (const provider of eligibleProviders) {
+    for (const model of provider.models) {
+      if (value.selected.length === 0 || value.selected.includes(model.id)) {
+        families.add(model.family)
       }
     }
   }
-  const gate = evaluateGate([...families], keyedProviders)
-
-  const allModels = catalog?.providers.flatMap((p) => p.models) ?? []
+  const gate = evaluateGate([...families], eligibleProviders.length)
+  const pinChoices = eligibleModels.filter((model) => model.roles.includes(pinRole))
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-4" data-testid="model-picker">
@@ -86,21 +85,28 @@ export function ModelPicker({
           <div key={p.id}>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
               {p.id}
+              {!p.enabled && <span className="ml-2 normal-case text-danger">disabled</span>}
+              {p.enabled && !p.limits_ready && <span className="ml-2 normal-case text-warning">{p.limits_issue || "quota limits unverified"}</span>}
+              {p.enabled && p.limits_ready && !keyed.has(p.id) && <span className="ml-2 normal-case text-muted-foreground">add API key to enable</span>}
             </p>
             <div className="flex flex-wrap gap-2">
               {p.models.map((m) => (
                 <label
                   key={m.id}
-                  className={`flex min-h-11 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
+                  className={`flex min-h-11 items-center gap-1.5 rounded-md border px-2.5 py-2 text-xs font-mono transition-colors ${
+                    !providerCanRun(p) ? "cursor-not-allowed opacity-45" : "cursor-pointer"
+                  } ${
                     value.selected.includes(m.id)
                       ? "border-brand bg-brand/10 text-foreground"
                       : "border-border text-muted-foreground hover:text-foreground"
                   }`}
+                  title={!p.enabled ? "Provider is disabled" : !p.limits_ready ? (p.limits_issue || "Quota limits are not verified") : !keyed.has(p.id) ? "Add an API key for this provider" : undefined}
                 >
                   <input
                     type="checkbox"
                     className="accent-brand"
                     checked={value.selected.includes(m.id)}
+                    disabled={!providerCanRun(p) && !value.selected.includes(m.id)}
                     onChange={() => toggle(m.id)}
                   />
                   {m.id}
@@ -134,7 +140,7 @@ export function ModelPicker({
           className="min-h-11 rounded-md border border-border bg-background px-2 py-2 text-xs max-w-56"
         >
           <option value="">none</option>
-          {allModels.map((m) => (
+          {pinChoices.map((m) => (
             <option key={m.id} value={m.id}>
               {m.id}
             </option>
