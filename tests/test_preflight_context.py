@@ -274,7 +274,7 @@ def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:
     async def _fake_verify(provider_keys, selected):
         return dict(provider_keys or {}), list(selected or []), []
 
-    monkeypatch.setattr(preflight_mod, "verify_run_provider_keys", _fake)
+    monkeypatch.setattr(preflight_mod, "verify_run_provider_keys", _fake_verify)
     client = TestClient(app)
     with caplog.at_level(logging.INFO, logger="assembly"):
         res = client.post(
@@ -422,8 +422,7 @@ async def test_run_verification_rejects_selected_model_unavailable_for_key(
     import src.api.keys as keys_mod
     from src.api.keys import KeyMetadataVerification, KeyTestResponse, VerifiedModelMetadata
     from src.api.request_context import verify_run_provider_keys
-    from src.providers.config import default_catalog_path
-    from src.providers.router import PinViolationError
+        from src.providers.router import PinViolationError
     from tests.conftest import make_models_yaml
 
     path = make_models_yaml(
@@ -459,7 +458,7 @@ async def test_run_verification_rejects_selected_model_unavailable_for_key(
         )
 
     monkeypatch.setattr(keys_mod, "verify_provider_key", fake_verify)
-    with pytest.raises(PinViolationError, match="not confirmed available"):
+    with pytest.raises(PinViolationError, match="did not confirm any configured model is available"):
         await verify_run_provider_keys(
             {"groq": "fake-groq-key"},
             ["groq-model"],
