@@ -1089,3 +1089,9 @@
 - Added a deadline wrapper for adversarial critic calls. A timeout now returns the lifecycle to evaluation and goes directly to synthesis, avoiding a fallback debate call that could consume the synthesis reserve.
 - Replaced independent planner timeout substring assertions with an AST check that proves the planner await is inside the timeout context. Extended the phase-wiring test to search and adversarial calls; added hanging fake-provider tests for research cancellation and adversarial cancellation. Existing hung-planner test remains the runtime proof for planner timeout behavior.
 - Validation: pending CI on the updated PR head. No live providers or real credentials are used by the added tests.
+
+## 2026-11-27 — Second Codex review pass for Issue #87
+
+- Added an AST check that specifically verifies the `execute()` call to `_run_adversarial_round` passes `deadline.timeout_for_call()` as its `timeout_s` argument.
+- Made the AST traversal scope-aware: it does not descend into nested functions, async functions, classes, or lambdas, and it matches the actual awaited receiver as well as the method name. Added a negative fixture proving that an await inside a deferred nested async function does not satisfy the outer timeout check.
+- Resolved both additional Codex review threads. Full CI run #615 passed on commit `f0bd20d` (backend: 729 passed, 1 skipped; frontend build/test/lint pipeline: success). The new AST test update is on the next PR head and requires its own CI run.
