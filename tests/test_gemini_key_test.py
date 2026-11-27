@@ -475,3 +475,52 @@ def test_upstream_error_payloads_are_not_returned_or_logged(
     assert payload["rate_limited"] is expected_rate_limited
     assert marker not in response.text
     assert marker not in caplog.text
+
+
+@respx.mock
+def test_gemini_nested_error_info_reason_classifies_invalid_key_without_leak(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_key: str,
+    caplog: LogCaptureFixture,
+) -> None:
+    """Google's nested ErrorInfo reason is used without retaining its payload."""
+    marker = "NESTED_PROVIDER_DIAGNOSTIC_CANARY"
+
+    async def allow_rate_limit(*_args, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(keys_mod, "check_rate_limit", allow_rate_limit)
+    respx.get(keys_mod._GEMINI_LIST_URL).mock(
+        return_value=httpx.Response(
+            400,
+            json={
+                "error": {
+                    "code": 400,
+                    "status": "INVALID_ARGUMENT",
+                    "message": "Request had an invalid argument.",
+                    "details": [
+                        {
+                            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                            "reason": "API_KEY_INVALID",
+                            "domain": "googleapis.com",
+                            "metadata": {"diagnostic": marker},
+                        }
+                    ],
+                }
+            },
+        )
+    )
+
+    with caplog.at_level(logging.INFO, logger="assembly"):
+        response = _client(monkeypatch).post(
+            "/api/keys/test", json={"provider": "gemini", "key": fake_key}
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["valid"] is False
+    assert payload["error_code"] == "auth_error"
+    assert marker not in response.text
+    assert marker not in caplog.text
+    assert fake_key not in response.text
+    assert fake_key not in caplog.text
