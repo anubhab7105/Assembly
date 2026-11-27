@@ -392,10 +392,11 @@ def test_disabled_provider_key_can_be_verified_without_enabling_routing(
 
 
 @pytest.mark.parametrize(
-    ("provider", "status_code", "is_gemini_invalid", "expected_error", "expected_rate_limited"),
+    ("provider", "status_code", "has_invalid_key_marker", "expected_error", "expected_rate_limited"),
     [
         ("gemini", 400, True, "auth_error", False),
         ("gemini", 400, False, "bad_response", False),  # malformed/non-specific 400
+        ("groq", 400, True, "auth_error", False),
         ("gemini", 429, False, "rate_limited", True),
         ("groq", 401, False, "auth_error", False),
         ("groq", 429, False, "rate_limited", True),
@@ -412,7 +413,7 @@ def test_upstream_error_payloads_are_not_returned_or_logged(
     caplog: LogCaptureFixture,
     provider: str,
     status_code: int,
-    is_gemini_invalid: bool,
+    has_invalid_key_marker: bool,
     expected_error: str,
     expected_rate_limited: bool,
 ) -> None:
@@ -423,10 +424,15 @@ def test_upstream_error_payloads_are_not_returned_or_logged(
         return None
 
     monkeypatch.setattr(keys_mod, "check_rate_limit", allow_rate_limit)
-    if provider == "gemini":
+    if provider in ("gemini", "groq"):
         payload = (
-            {"error": {"message": f"API_KEY_INVALID {response_text}"}}
-            if is_gemini_invalid
+            {
+                "error": {
+                    "code": "API_KEY_INVALID",
+                    "message": f"API_KEY_INVALID {response_text}",
+                }
+            }
+            if has_invalid_key_marker
             else None
         )
         upstream = (
@@ -434,11 +440,12 @@ def test_upstream_error_payloads_are_not_returned_or_logged(
             if payload is not None
             else httpx.Response(status_code, text=response_text)
         )
-        respx.get(keys_mod._GEMINI_LIST_URL).mock(return_value=upstream)
-    elif provider == "groq":
-        respx.get("https://api.groq.com/openai/v1/models").mock(
-            return_value=httpx.Response(status_code, text=response_text)
+        url = (
+            keys_mod._GEMINI_LIST_URL
+            if provider == "gemini"
+            else "https://api.groq.com/openai/v1/models"
         )
+        respx.get(url).mock(return_value=upstream)
     else:
         from src.providers.config import load_models_config
 
