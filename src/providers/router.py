@@ -9,8 +9,7 @@ fastest/cheapest model first; tight budgets automatically get fast models).
 Diversity is counted by MODEL FAMILY, never by provider: two providers
 serving the same family are one vote, one failure domain, one bias.
 
-Runs are gated on distinct usable families: >=3 OK, 2 WARN, 1 DEGRADED
-(confirm + lower-confidence label), 0 BLOCKED.
+Runs are gated on distinct usable families: >=3 OK, 2 WARN, fewer than 2 BLOCKED.
 """
 
 from collections.abc import Mapping
@@ -37,9 +36,9 @@ MIN_REQUIRED_PROVIDERS = 3  # Deprecated: kept for imports; the live gate is
 MIN_AFFORDABLE_CALLS = 2  # a routed provider should afford solve + critique
 
 # Family-diversity gate (PRD FR-10, D3): one constant, no scattered literals.
-# >= OK → run; == WARN_AT → run with visible warning; == 1 → DEGRADED
-# (confirm + lower-confidence label); == 0 → BLOCKED.
+# >= OK → run; == WARN_AT → run with visible warning; fewer than WARN_AT → BLOCKED.
 FAMILY_GATE_THRESHOLDS: dict[str, int] = {"ok": 3, "warn": 2}
+MIN_FAMILIES_TO_START = FAMILY_GATE_THRESHOLDS["warn"]
 
 # Key prefixes that mean "not configured" (mirrors Settings.has_provider).
 _PLACEHOLDER_PREFIXES = (
@@ -83,8 +82,7 @@ class DiversityGate:
     """Family-count gate verdict (PRD FR-10, D3).
 
     Levels: OK (>=3 families) → run; WARN (2) → run with visible warning;
-    DEGRADED (1) → run only after user confirms, final answer labeled
-    lower-confidence; BLOCKED (0) → refuse with a clear message.
+    BLOCKED (<2) → refuse with a clear, actionable message.
     """
 
     level: str = "BLOCKED"
@@ -241,7 +239,7 @@ class ModelRouter:
             logger.error(
                 f"Router  │ ⚠ No usable model family. {' '.join(gate.reasons)}"
             )
-        elif gate.level in ("WARN", "DEGRADED"):
+        elif gate.level == "WARN"
             logger.warning(f"Router  │ {' '.join(gate.reasons)}")
 
     def get_available_providers(self) -> list[str]:
@@ -298,22 +296,19 @@ class ModelRouter:
                 f"Only {count} distinct model families ready ({', '.join(families)}): "
                 "independent reasoning is weakened. " + self._suggest_families(families)
             ]
-        elif count == 1:
-            level = "DEGRADED"
-            reasons = [
-                f"Only 1 model family ready ({', '.join(families)}): "
-                "agents cannot reason independently. Run only after confirming; "
-                "the final answer will be labeled lower-confidence. "
-                + self._suggest_families(families)
-            ]
         else:
             level = "BLOCKED"
-            reasons = [
-                (
-                    "No model families ready. Add keys for at least two providers "
-                    "covering 3 model families, then try again."
-                )
-            ]
+            if count == 1:
+                reasons = [
+                    f"Only 1 distinct model family ready ({', '.join(families)}). "
+                    "Assembly requires at least 2 independent model families to run. "
+                    + self._suggest_families(families)
+                ]
+            else:
+                reasons = [
+                    "No model families ready. Add valid keys for providers with at "
+                    "least 2 distinct usable model families, then try again."
+                ]
         return DiversityGate(
             level=level,
             families_ready=families,
@@ -323,11 +318,11 @@ class ModelRouter:
         )
 
     def _enforce_minimum(self) -> None:
-        """Block only when zero usable families remain (family gate)."""
+        """Require two distinct usable model families before routing a team."""
         gate = self.diversity_gate()
-        if gate.level == "BLOCKED":
+        if gate.families_count < MIN_FAMILIES_TO_START:
             raise RuntimeError(
-                "Assembly needs at least 1 usable model family to run. "
+                "Assembly requires at least 2 distinct usable model families. "
                 + " ".join(gate.reasons)
             )
 
@@ -570,7 +565,7 @@ class ModelRouter:
         - Solvers go first, each on a fresh family while one is available.
         - The critic avoids every solver family (it reviews those positions).
         - Other roles spread across unused families, then reuse.
-        - 2 available families → proceed with a warning; 1 → degraded flag.
+        - 2 available families → proceed with a warning; fewer than 2 → blocked by the gate.
         - `allowed_families` (bench pins) constrains every assignment to
           those families; a role with zero pinned candidates raises
           PinViolationError instead of substituting silently.
@@ -591,12 +586,6 @@ class ModelRouter:
             warnings.append(
                 f"Only 2 distinct model families available ({', '.join(available)}): "
                 "independent reasoning is weakened; answers carry correlated-error risk."
-            )
-        elif len(available) <= 1:
-            degraded = True
-            warnings.append(
-                f"Degraded mode: a single model family available ({', '.join(available) or 'none'}). "
-                "No independence between agents; treat consensus with suspicion."
             )
 
         # Solvers first (distinct families), then the rest in spec order so
