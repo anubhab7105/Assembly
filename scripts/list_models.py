@@ -43,6 +43,14 @@ def main() -> None:
         openai_compatible_models(
             "cerebras", "https://api.cerebras.ai/v1", settings.cerebras_api_key
         )
+    if settings.has_provider("mistral"):
+        openai_compatible_models(
+            "mistral", "https://api.mistral.ai/v1", settings.mistral_api_key
+        )
+    if settings.has_provider("nvidia"):
+        openai_compatible_models(
+            "nvidia", "https://integrate.api.nvidia.com/v1", settings.nvidia_api_key
+        )
     # OpenRouter model catalog is public (no key needed).
     try:
         response = httpx.get("https://openrouter.ai/api/v1/models", timeout=30.0)
