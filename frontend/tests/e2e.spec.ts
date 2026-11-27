@@ -228,7 +228,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
 
     // Keep the same document so the unlocked vault remains available.
     await page.getByRole("link", { name: /Back to investigation/i }).click()
-    await expect(page).toHaveURL(/\\/chat/)
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/chat")
     await expect(page.getByTestId("diversity-chip")).toContainText("2 families ready")
 
     await page.locator("#research-question").fill("Can the capacity check recover after a quota cooldown?")
@@ -241,7 +241,7 @@ test.describe("Assembly End-to-End flow (stateless)", () => {
     await expect(page.getByRole("button", { name: /Start run/i })).toBeEnabled()
     await page.getByRole("button", { name: /Start run/i }).click()
 
-    await expect(page).toHaveURL(/\\/executions\\?id=local-.+/)
+    await expect.poll(() => new URL(page.url()).searchParams.get("id")).toMatch(/^local-/)
     expect(preflightAttempts).toBe(2)
   })
 
