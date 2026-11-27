@@ -390,12 +390,19 @@ def test_disabled_provider_key_can_be_verified_without_enabling_routing(
     assert fake_key not in response.text
 
 
+
 @pytest.mark.parametrize(
-    ("provider", "status_code", "expected_error", "expected_rate_limited"),
+    ("provider", "status_code", "is_gemini_invalid", "expected_error", "expected_rate_limited"),
     [
-        ("gemini", 400, "auth_error", False),
-        ("groq", 429, "rate_limited", True),
-        ("huggingface", 500, "unreachable", False),
+        ("gemini", 400, True, "auth_error", False),
+        ("gemini", 400, False, "bad_response", False),  # malformed/non-specific 400
+        ("gemini", 429, False, "rate_limited", True),
+        ("groq", 401, False, "auth_error", False),
+        ("groq", 429, False, "rate_limited", True),
+        ("groq", 502, False, "unreachable", False),
+        ("huggingface", 401, False, "auth_error", False),
+        ("huggingface", 429, False, "rate_limited", True),
+        ("huggingface", 500, False, "unreachable", False),
     ],
 )
 @respx.mock
@@ -405,19 +412,29 @@ def test_upstream_error_payloads_are_not_returned_or_logged(
     caplog: LogCaptureFixture,
     provider: str,
     status_code: int,
+    is_gemini_invalid: bool,
     expected_error: str,
     expected_rate_limited: bool,
 ) -> None:
     """Only normalized classifications cross the provider/API boundary."""
     marker = "UPSTREAM_SECRET_CANARY_987654"
     response_text = f"provider diagnostic body {marker}"
+    async def allow_rate_limit(*_args, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(keys_mod, "check_rate_limit", allow_rate_limit)
     if provider == "gemini":
-        respx.get(keys_mod._GEMINI_LIST_URL).mock(
-            return_value=httpx.Response(
-                status_code,
-                json={"error": {"message": f"API_KEY_INVALID {response_text}"}},
-            )
+        payload = (
+            {"error": {"message": f"API_KEY_INVALID {response_text}"}}
+            if is_gemini_invalid
+            else None
         )
+        upstream = (
+            httpx.Response(status_code, json=payload)
+            if payload is not None
+            else httpx.Response(status_code, text=response_text)
+        )
+        respx.get(keys_mod._GEMINI_LIST_URL).mock(return_value=upstream)
     elif provider == "groq":
         respx.get("https://api.groq.com/openai/v1/models").mock(
             return_value=httpx.Response(status_code, text=response_text)
