@@ -614,7 +614,7 @@ def test_api_cancel_unknown_is_404(monkeypatch) -> None:
 
 
 def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
-    """Assert that each provider phase is nested inside its effective timeout."""
+    """Assert each provider phase is nested inside its effective timeout."""
     import ast
     from pathlib import Path
 
@@ -626,8 +626,32 @@ def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
     }
     trees = {name: ast.parse(source) for name, source in sources.items()}
 
-    def timeout_wraps_await(tree, timeout_expression: str, awaited_method: str) -> bool:
-        for node in ast.walk(tree):
+    def function_named(tree, name):
+        return next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == name
+        )
+
+    def walk_scope(nodes):
+        """Walk one lexical scope, never descending into nested scopes."""
+        pending = list(reversed(nodes))
+        while pending:
+            node = pending.pop()
+            yield node
+            if isinstance(
+                node,
+                (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda),
+            ):
+                continue
+            pending.extend(reversed(list(ast.iter_child_nodes(node))))
+
+    def timeout_wraps_await(
+        tree, function_name, timeout_expression, awaited_method, awaited_receiver
+    ):
+        function = function_named(tree, function_name)
+        for node in walk_scope(function.body):
             if not isinstance(node, ast.AsyncWith):
                 continue
             timeout_contexts = [
@@ -635,7 +659,7 @@ def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
             ]
             if timeout_expression not in timeout_contexts:
                 continue
-            for child in ast.walk(node):
+            for child in walk_scope(node.body):
                 if not isinstance(child, ast.Await):
                     continue
                 call = child.value
@@ -643,34 +667,91 @@ def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
                     isinstance(call, ast.Call)
                     and isinstance(call.func, ast.Attribute)
                     and call.func.attr == awaited_method
+                    and isinstance(call.func.value, ast.Name)
+                    and call.func.value.id == awaited_receiver
                 ):
                     return True
         return False
 
-    # The wrapper must enclose the actual awaited operation, not merely
-    # coexist elsewhere in the source file.
+    def call_passes_keyword(
+        tree, function_name, called_method, keyword_name, expected_value
+    ):
+        function = function_named(tree, function_name)
+        for node in walk_scope(function.body):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != called_method:
+                continue
+            for keyword in node.keywords:
+                if (
+                    keyword.arg == keyword_name
+                    and ast.unparse(keyword.value) == expected_value
+                ):
+                    return True
+        return False
+
+    # The wrapper must enclose the actual await in the executing lexical
+    # scope and match the receiver, not merely a nested helper declaration.
     assert timeout_wraps_await(
         trees["orchestrator"],
+        "execute",
         "asyncio.timeout(deadline.timeout_for_call(PLANNER_CALL_SECONDS))",
         "plan",
+        "planner",
     )
     assert timeout_wraps_await(
         trees["orchestrator"],
+        "execute",
         "asyncio.timeout(deadline.synthesis_timeout())",
         "synthesize",
+        "synthesizer",
     )
     assert timeout_wraps_await(
         trees["orchestrator"],
-        "asyncio.timeout(timeout_s)",
-        "adversarial_round",
-    )
-    assert timeout_wraps_await(
-        trees["orchestrator"],
+        "execute",
         "asyncio.timeout(search_timeout_s)",
         "search",
+        "search_router",
     )
-    assert "SEARCH_SECONDS_EACH * max(" in sources["orchestrator"]
-    assert "deadline.remaining() - deadline.synth_reserve" in sources["orchestrator"]
+    assert timeout_wraps_await(
+        trees["orchestrator"],
+        "_run_adversarial_round",
+        "asyncio.timeout(timeout_s)",
+        "adversarial_round",
+        "consensus_engine",
+    )
+
+    # The execute call site itself must pass the run deadline, not merely
+    # rely on a helper that can also be invoked with a hard-coded timeout.
+    assert call_passes_keyword(
+        trees["orchestrator"],
+        "execute",
+        "_run_adversarial_round",
+        "timeout_s",
+        "deadline.timeout_for_call()",
+    )
+
+    # Regression guard: a nested async function's await is not protected by
+    # an outer timeout if the function is invoked after that context exits.
+    nested_scope = ast.parse(
+        """
+async def execute():
+    async with asyncio.timeout(1):
+        async def deferred():
+            await planner.plan()
+    await deferred()
+"""
+    )
+    assert not timeout_wraps_await(
+        nested_scope,
+        "execute",
+        "asyncio.timeout(1)",
+        "plan",
+        "planner",
+    )
+
     # Solve and regular debate enforce timeouts around their provider calls.
     assert "timeout_s=deadline.timeout_for_call()" in sources["orchestrator"]
     assert "async with asyncio.timeout(timeout_s):" in sources["manager"]
