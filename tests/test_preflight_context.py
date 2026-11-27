@@ -420,9 +420,13 @@ async def test_run_verification_rejects_selected_model_unavailable_for_key(
     from datetime import UTC, datetime
 
     import src.api.keys as keys_mod
-    from src.api.keys import KeyMetadataVerification, KeyTestResponse, VerifiedModelMetadata
+    from src.api.keys import (
+        KeyMetadataVerification,
+        KeyTestResponse,
+        VerifiedModelMetadata,
+    )
     from src.api.request_context import verify_run_provider_keys
-        from src.providers.router import PinViolationError
+    from src.providers.router import PinViolationError
     from tests.conftest import make_models_yaml
 
     path = make_models_yaml(
