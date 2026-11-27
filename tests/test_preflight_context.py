@@ -270,6 +270,11 @@ def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:
         )
 
     monkeypatch.setattr(preflight_mod, "build_request_context", _fake)
+
+    async def _fake_verify(provider_keys, selected):
+        return dict(provider_keys or {}), list(selected or []), []
+
+    monkeypatch.setattr(preflight_mod, "verify_run_provider_keys", _fake)
     client = TestClient(app)
     with caplog.at_level(logging.INFO, logger="assembly"):
         res = client.post(
