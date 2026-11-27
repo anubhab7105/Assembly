@@ -794,17 +794,26 @@ class Orchestrator:
                     adversarial_done = True
                     # The strike is a targeted round: EVALUATING → DEBATING.
                     state_machine.transition(ExecState.DEBATING)
-                    challenged = await self._run_adversarial_round(
-                        consensus_engine,
-                        agents,
-                        question,
-                        outputs,
-                        round_number,
-                        budget,
-                        emit_event,
-                        agent_manager,
-                        attachment_context=attachment_context,
-                    )
+                    try:
+                        challenged = await self._run_adversarial_round(
+                            consensus_engine,
+                            agents,
+                            question,
+                            outputs,
+                            round_number,
+                            budget,
+                            emit_event,
+                            agent_manager,
+                            timeout_s=deadline.timeout_for_call(),
+                            attachment_context=attachment_context,
+                        )
+                    except TimeoutError:
+                        logger.warning(
+                            "Exec    │ Adversarial challenge timed out; "
+                            "proceeding to synthesis"
+                        )
+                        state_machine.transition(ExecState.EVALUATING)
+                        break
                     await emit_breaker_trips()
                     if challenged is not None:
                         outputs, consensus_result, challenge = challenged
@@ -1286,6 +1295,7 @@ class Orchestrator:
         budget,
         emit_event,
         agent_manager=None,
+        timeout_s: float | None = None,
         attachment_context: str = "",
     ):
         """One WORKFLOW 5b strike: a different-family critic attacks the consensus.
@@ -1322,14 +1332,29 @@ class Orchestrator:
             },
         )
         try:
-            new_outputs, report = await consensus_engine.adversarial_round(
-                critic,
-                question,
-                outputs,
-                round_number,
-                time_for_round=budget.has_time_for_debate(),
-                quota_ok=not budget.is_token_limited(),
-            )
+            if timeout_s is None:
+                new_outputs, report = await consensus_engine.adversarial_round(
+                    critic,
+                    question,
+                    outputs,
+                    round_number,
+                    time_for_round=budget.has_time_for_debate(),
+                    quota_ok=not budget.is_token_limited(),
+                )
+            else:
+                async with asyncio.timeout(timeout_s):
+                    new_outputs, report = await consensus_engine.adversarial_round(
+                        critic,
+                        question,
+                        outputs,
+                        round_number,
+                        time_for_round=budget.has_time_for_debate(),
+                        quota_ok=not budget.is_token_limited(),
+                    )
+        except TimeoutError:
+            # Let the caller route directly to synthesis; falling back to a
+            # normal debate round here could consume the reserved final window.
+            raise
         except Exception as e:  # noqa: BLE001 — a failed strike must not kill the run
             logger.error("Orchestrator │ Adversarial round failed (type=%s)", type(e).__name__)
             if agent_manager is not None:
