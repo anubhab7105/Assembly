@@ -49,6 +49,22 @@ async def preflight(req: RunRequest, request: Request):
             content={"code": "pin_violation", "detail": str(exc)},
         )
     try:
+        from src.api.request_context import _diversity_is_blocked
+
+        if _diversity_is_blocked(ctx.router, ctx.allowed):
+            from src.api.run import BLOCKED_CODE, MINIMUM_FAMILIES
+
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "code": BLOCKED_CODE,
+                    "detail": (
+                        "Not enough usable model families. Add valid keys for at least "
+                        f"{MINIMUM_FAMILIES} distinct model families. Three are recommended."
+                    ),
+                    "minimum_families": MINIMUM_FAMILIES,
+                },
+            )
         return _build_preflight(
             question,
             req.time_budget_minutes,

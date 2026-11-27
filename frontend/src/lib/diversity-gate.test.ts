@@ -16,10 +16,11 @@ describe("diversity-gate chip states", () => {
     expect(gate.reasons[0]).toContain("to reach 3 families");
   });
 
-  it("1 family gives DEGRADED with confirm + lower-confidence note", () => {
+  it("1 family is blocked because independent reasoning needs 2 families", () => {
     const gate = evaluateGate(["llama"], 2);
-    expect(gate.level).toBe("DEGRADED");
-    expect(gate.reasons[0]).toContain("lower-confidence");
+    expect(gate.level).toBe("BLOCKED");
+    expect(gate.families_count).toBe(1);
+    expect(gate.reasons[0]).toContain("at least 2 independent model families");
   });
 
   it("0 families gives BLOCKED", () => {
@@ -34,7 +35,7 @@ describe("diversity-gate chip states", () => {
 
   it("same family twice counts once", () => {
     const gate = evaluateGate(["llama", "llama"], 2);
-    expect(gate.level).toBe("DEGRADED");
+    expect(gate.level).toBe("BLOCKED");
     expect(gate.families_count).toBe(1);
   });
 });
