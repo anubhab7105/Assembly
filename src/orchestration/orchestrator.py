@@ -613,8 +613,8 @@ class Orchestrator:
                     1, len(search_router.providers)
                 )
                 search_timeout_s = min(
-                    deadline.timeout_for_call(search_estimate),
-                    deadline.remaining() - deadline.synth_reserve,
+                    search_estimate,
+                    max(0.0, deadline.remaining() - deadline.synth_reserve),
                 )
                 raw_search_results = []
                 if search_timeout_s > 0:
