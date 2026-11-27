@@ -9,7 +9,7 @@
 
 export const FAMILY_GATE_THRESHOLDS = { ok: 3, warn: 2 } as const;
 
-export type GateLevel = "OK" | "WARN" | "BLOCKED";
+export type GateLevel = "OK" | "WARN" | "DEGRADED" | "BLOCKED";
 
 export interface DiversityGate {
   level: GateLevel;
@@ -48,20 +48,29 @@ export function evaluateGate(families: string[], providersCount: number): Divers
       ],
     };
   }
+  if (count === 1) {
+    return {
+      level: "DEGRADED",
+      families_ready: ready,
+      families_count: count,
+      providers_count: providersCount,
+      reasons: [
+        `Only 1 model family ready (${ready.join(", ")}): agents cannot reason independently. Confirm to run anyway; the final answer will be labeled lower-confidence. ${suggestFix(ready)}`,
+      ],
+    };
+  }
   return {
     level: "BLOCKED",
-    families_ready: ready,
-    families_count: count,
+    families_ready: [],
+    families_count: 0,
     providers_count: providersCount,
     reasons: [
-      count === 1
-        ? `Only 1 distinct model family ready (${ready.join(", ")}). Assembly requires at least 2 independent model families to run. ${suggestFix(ready)}`
-        : "No model families ready. Add valid keys for providers with at least 2 distinct usable model families, then try again.",
+      "No model families ready. Add keys for at least two providers covering 3 model families, then try again.",
     ],
   };
 }
 
 export function gateChipText(gate: DiversityGate): string {
-  if (gate.level === "BLOCKED") return `${gate.families_count} families ready`;
+  if (gate.level === "BLOCKED") return "0 families ready";
   return `${gate.families_count} families ready: ${gate.families_ready.join(", ")}`;
 }
