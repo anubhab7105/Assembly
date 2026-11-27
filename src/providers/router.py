@@ -254,6 +254,23 @@ class ModelRouter:
         """Return the number of currently live providers."""
         return len(self._providers)
 
+    async def aclose(self) -> None:
+        """Close provider resources owned by this router after its run settles."""
+        providers = list({id(provider): provider for provider in self._providers.values()}.values())
+        self._providers.clear()
+        self._fingerprints.clear()
+        for provider in providers:
+            close = getattr(provider, "aclose", None)
+            if not callable(close):
+                continue
+            try:
+                await close()
+            except Exception as exc:  # noqa: BLE001 — cleanup must not mask the run result
+                provider_name = getattr(provider, "provider_name", "unknown")
+                logger.warning(
+                    f"Router  │ {provider_name} cleanup failed (type={type(exc).__name__})"
+                )
+
     def _suggest_families(self, ready: list[str]) -> str:
         """Actionable fix hint naming catalog families the user lacks."""
         missing: list[str] = []
