@@ -8,7 +8,7 @@ import respx
 from pydantic import ValidationError
 
 from src.core.config import settings
-from src.providers.config import load_models_config
+from src.providers.config import ModelsConfig, load_models_config
 from src.providers.errors import (
     AuthError,
     BadResponse,
@@ -415,8 +415,25 @@ def test_registry_builds_generic_and_gemini() -> None:
 def test_registry_rejects_unknown_and_disabled() -> None:
     with pytest.raises(KeyError):
         get_provider("skynet", "k")
+    catalog = load_models_config()
+    disabled = catalog.providers["huggingface"].model_copy(update={"enabled": False})
+    config = catalog.model_copy(
+        update={"providers": {**catalog.providers, "huggingface": disabled}}
+    )
     with pytest.raises(ProviderDisabledError):
-        get_provider("huggingface", "k")
+        get_provider("huggingface", "k", config=config)
+
+
+def test_mistral_is_available_for_key_setup_but_not_routing_without_limits() -> None:
+    from src.providers.config import provider_limits_issue
+
+    catalog = load_models_config()
+    spec = catalog.providers["mistral"]
+    assert spec.enabled is True
+    assert provider_limits_issue("mistral", spec) is not None
+    provider = get_provider("mistral", "test-key", config=catalog)
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.get_available_models() == [model.id for model in spec.models]
 
 
 # ── Switching a model id = editing only models.yaml ───────────────────
