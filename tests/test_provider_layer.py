@@ -8,7 +8,7 @@ import respx
 from pydantic import ValidationError
 
 from src.core.config import settings
-from src.providers.config import ModelsConfig, load_models_config
+from src.providers.config import load_models_config
 from src.providers.errors import (
     AuthError,
     BadResponse,
@@ -397,6 +397,71 @@ def test_classify_exception_shapes() -> None:
     original = RateLimited("p", "x", retry_after=1.0)
     assert classify_exception("p", original) is original
     assert isinstance(classify_exception("p", RuntimeError("weird")), ProviderDown)
+
+
+
+
+@pytest.mark.asyncio
+async def test_gemini_uses_google_genai_async_client(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    import src.providers.gemini_provider as gemini_module
+
+    class Lease:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+    class Limiter:
+        async def acquire(self, *args, **kwargs):
+            return Lease()
+
+    class AsyncModels:
+        def __init__(self):
+            self.request = None
+
+        async def generate_content(self, **kwargs):
+            self.request = kwargs
+            return SimpleNamespace(
+                candidates=[
+                    SimpleNamespace(
+                        finish_reason="STOP",
+                        content=SimpleNamespace(
+                            parts=[SimpleNamespace(text="Gemini response")]
+                        ),
+                    )
+                ],
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=3,
+                    candidates_token_count=4,
+                ),
+            )
+
+    async_models = AsyncModels()
+    client = SimpleNamespace(aio=SimpleNamespace(models=async_models))
+    monkeypatch.setattr(gemini_module.genai, "Client", lambda api_key: client)
+    monkeypatch.setattr("src.providers.quota.get_limiter", lambda: Limiter())
+
+    provider = GeminiProvider(api_key="test-key", default_model="gemini-test")
+    response = await provider._generate_inner(
+        [ChatMessage(role="system", content="Be concise"), ChatMessage(role="user", content="Hello")],
+        "gemini-test",
+        0.3,
+        256,
+    )
+
+    assert response.content == "Gemini response"
+    assert response.finish_reason == "STOP"
+    assert response.input_tokens == 3
+    assert response.output_tokens == 4
+    assert async_models.request["model"] == "gemini-test"
+    assert async_models.request["contents"] == [
+        {"role": "user", "parts": ["Hello"]}
+    ]
+    assert async_models.request["config"].system_instruction == "Be concise"
+    assert async_models.request["config"].max_output_tokens == 256
 
 
 # ── Registry ──────────────────────────────────────────────────────────
