@@ -690,6 +690,7 @@ async def test_adversarial_challenge_timeout_cancels_provider() -> None:
     from src.agents.base_agent import AgentOutput
     from src.orchestration.budget_controller import BudgetController
     from src.orchestration.consensus import ConsensusEngine
+    from src.orchestration.orchestrator import Orchestrator
 
     cancelled = asyncio.Event()
 
