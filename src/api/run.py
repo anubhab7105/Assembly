@@ -22,6 +22,7 @@ from src.api.request_context import (
     _filtered_router,
     build_request_context,
     diversity_payload,
+    verify_run_provider_keys,
 )
 from src.core.config import settings
 from src.core.logging_config import logger
@@ -430,12 +431,17 @@ async def start_run(req: RunRequest, request: Request):
     from src.providers.router import PinViolationError
 
     try:
-        ctx = build_request_context(
+        verified_keys, verified_models, provider_issues = await verify_run_provider_keys(
             dict(req.provider_keys or {}),
-            dict(req.search_keys) if req.search_keys is not None else None,
             list(req.model_selection.selected or []),
+        )
+        ctx = build_request_context(
+            verified_keys,
+            dict(req.search_keys) if req.search_keys is not None else None,
+            verified_models,
             dict(req.model_selection.pins or {}),
             [u.model_dump() for u in (req.usage_snapshot or [])],
+            provider_issues,
         )
     except PinViolationError as exc:
         return JSONResponse(
