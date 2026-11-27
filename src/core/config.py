@@ -237,6 +237,7 @@ class Settings(BaseSettings):
             "hf_your",
             "csk_your",
             "xpl_your",
+            "nvapi-your",
         )
         return bool(key) and not any(key.startswith(p) for p in placeholders)
 
