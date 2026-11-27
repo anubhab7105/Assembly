@@ -671,7 +671,11 @@ async def providers_status() -> ProvidersStatusResponse:
     families: set[str] = set()
     capacity: int | None = None
     for provider_id, spec in catalog.providers.items():
-        available = spec.enabled and provider_id in held
+        available = (
+            spec.enabled
+            and provider_id in held
+            and provider_limits_issue(provider_id, spec) is None
+        )
         provider_families = sorted({model.family for model in spec.models})
         entry = ProviderStatus(
             id=provider_id,
