@@ -48,7 +48,9 @@ router = APIRouter(prefix="/api/run", tags=["run"])
 BLOCKED_CODE = "blocked_no_usable_keys"
 
 #: Minimum distinct model families for a healthy team (mirrors catalog).
-MINIMUM_FAMILIES = 2
+from src.providers.router import MIN_FAMILIES_TO_START
+
+MINIMUM_FAMILIES = MIN_FAMILIES_TO_START
 
 
 def _sanitized_code(name: str) -> str:
@@ -453,8 +455,8 @@ async def start_run(req: RunRequest, request: Request):
             content={
                 "code": BLOCKED_CODE,
                 "detail": (
-                    "Not enough usable model families. Add valid keys for at least "
-                    f"{MINIMUM_FAMILIES} distinct model families. Three are recommended."
+                    "Not enough usable solver/critic model families. Add valid keys "
+                    + f"for at least {MINIMUM_FAMILIES} distinct families; three are recommended."
                 ),
                 "minimum_families": MINIMUM_FAMILIES,
             },

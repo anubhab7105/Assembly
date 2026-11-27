@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
 
 from src.providers.config import QUOTA_METADATA_MAX_AGE_DAYS, load_models_config, provider_limits_issue
+from src.providers.router import FAMILY_GATE_THRESHOLDS
 
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 
@@ -15,8 +16,9 @@ SENSITIVE_SIGNUP_FALLBACK = (
     "skip this provider (Assembly is free-tier only)"
 )
 
-#: Minimum distinct model families for a healthy team (2 works with warning).
-MIN_FAMILIES_TO_START = 2
+#: Distinct family policy shared with the runtime router.
+MIN_FAMILIES_TO_START = FAMILY_GATE_THRESHOLDS["warn"]
+RECOMMENDED_FAMILIES = FAMILY_GATE_THRESHOLDS["ok"]
 
 
 class CatalogModel(BaseModel):
@@ -53,6 +55,7 @@ class CatalogResponse(BaseModel):
     families: list[str]
     recommended_order: list[str] = []
     minimum_families: int = MIN_FAMILIES_TO_START
+    recommended_families: int = RECOMMENDED_FAMILIES
     sensitive_signup_fallback: str = SENSITIVE_SIGNUP_FALLBACK
 
 
@@ -123,5 +126,6 @@ def get_catalog() -> CatalogResponse:
         families=sorted(families),
         recommended_order=recommended_provider_order(catalog),
         minimum_families=MIN_FAMILIES_TO_START,
+        recommended_families=RECOMMENDED_FAMILIES,
         sensitive_signup_fallback=SENSITIVE_SIGNUP_FALLBACK,
     )

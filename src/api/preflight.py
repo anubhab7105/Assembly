@@ -49,27 +49,23 @@ async def preflight(req: RunRequest, request: Request):
             content={"code": "pin_violation", "detail": str(exc)},
         )
     try:
-        from src.api.request_context import _diversity_is_blocked
-
-        if _diversity_is_blocked(ctx.router, ctx.allowed):
-            from src.api.run import BLOCKED_CODE, MINIMUM_FAMILIES
-
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "code": BLOCKED_CODE,
-                    "detail": (
-                        "Not enough usable model families. Add valid keys for at least "
-                        f"{MINIMUM_FAMILIES} distinct model families. Three are recommended."
-                    ),
-                    "minimum_families": MINIMUM_FAMILIES,
-                },
-            )
-        return _build_preflight(
+        result = _build_preflight(
             question,
             req.time_budget_minutes,
             router_override=ctx.router,
         )
+        if result.diversity.level == "BLOCKED":
+            result = result.model_copy(
+                update={
+                    "feasible": False,
+                    "explanation": (
+                        result.diversity.reasons[0]
+                        if result.diversity.reasons
+                        else "At least 2 distinct usable solver/critic model families are required."
+                    ),
+                }
+            )
+        return result
     finally:
         if ctx.quota_snapshot_token is not None:
             get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
