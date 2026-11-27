@@ -5,6 +5,7 @@ model selection, so the preflight verdict and run routing cannot diverge.
 Keys stay in memory only and are never logged (names alone are ever logged).
 """
 
+import asyncio
 from dataclasses import dataclass, field
 
 from src.core.keystore import wrap_keys
@@ -55,6 +56,124 @@ def _resolve_selection(selected: list[str]) -> tuple[set[str], dict[str, str]]:
             )
     return set(wanted), {model_id: known[model_id] for model_id in wanted}
 
+
+
+
+async def verify_run_provider_keys(
+    provider_keys: dict[str, str] | None,
+    selected: list[str] | None,
+) -> tuple[dict[str, str], list[str], list[str]]:
+    """Verify the exact keys and models supplied for this preflight/run.
+
+    Provider enablement is permission to configure a provider. A key becomes
+    eligible for this request only after its own auth-only model-list test
+    succeeds and the provider's quota metadata is fresh and complete. The
+    returned model ids are limited to models confirmed for those keys.
+    """
+    from src.api.keys import verify_provider_key
+    from src.providers.config import load_models_config, provider_limits_issue
+    from src.providers.router import PinViolationError
+
+    catalog = load_models_config()
+    wanted = list(dict.fromkeys(
+        value.strip() for value in (selected or []) if value and value.strip()
+    ))
+    selected_providers: dict[str, str] = {}
+    if wanted:
+        _allowed, selected_providers = _resolve_selection(wanted)
+
+    supplied = {
+        str(provider).strip(): str(key).strip()
+        for provider, key in (provider_keys or {}).items()
+        if str(provider).strip() and str(key).strip()
+    }
+    required_providers = set(selected_providers.values()) if wanted else set(supplied)
+    for provider_id in required_providers:
+        if not supplied.get(provider_id):
+            raise PinViolationError(
+                f"Models from {provider_id!r} require an API key for this run."
+            )
+
+    semaphore = asyncio.Semaphore(8)
+
+    async def check_one(provider_id: str, key: str):
+        spec = catalog.providers.get(provider_id)
+        if spec is None:
+            return provider_id, None, "Provider is not in the enabled model catalog."
+        if not spec.enabled:
+            return provider_id, None, "Provider is not permitted in the current catalog."
+        async with semaphore:
+            result = await verify_provider_key(provider_id, key, catalog=catalog)
+        if not result.valid:
+            return provider_id, None, result.message or "The API key test failed."
+        verification = result.verification
+        if verification is None:
+            return provider_id, None, "The provider did not return verification metadata."
+        if not verification.quota_metadata_ready:
+            return (
+                provider_id,
+                None,
+                verification.quota_metadata_issue
+                or "Quota metadata is missing or stale; update it from the provider dashboard.",
+            )
+        available = {
+            model.id
+            for model in verification.models
+            if model.available is True
+        }
+        if not available:
+            return (
+                provider_id,
+                None,
+                "The key test did not confirm any configured model is available for this key.",
+            )
+        # Keep the shared readiness guard as a second check, using the same
+        # source/date/limits policy that the router and capacity limiter use.
+        issue = provider_limits_issue(provider_id, spec)
+        if issue:
+            return provider_id, None, issue
+        return provider_id, available, None
+
+    checks = await asyncio.gather(
+        *(
+            check_one(provider_id, supplied[provider_id])
+            for provider_id in required_providers
+            if provider_id in supplied
+        )
+    )
+    valid_keys: dict[str, str] = {}
+    models_by_provider: dict[str, set[str]] = {}
+    issues: list[str] = []
+    for provider_id, available, issue in checks:
+        if issue:
+            issues.append(f"{provider_id}: {issue}")
+            continue
+        valid_keys[provider_id] = supplied[provider_id]
+        models_by_provider[provider_id] = available or set()
+
+    if wanted:
+        for model_id in wanted:
+            provider_id = selected_providers[model_id]
+            if provider_id not in valid_keys:
+                detail = next(
+                    (item for item in issues if item.startswith(f"{provider_id}:")),
+                    f"{provider_id}: the key is not verified for this run.",
+                )
+                raise PinViolationError(
+                    f"Selected model {model_id!r} is not ready: {detail}"
+                )
+            if model_id not in models_by_provider.get(provider_id, set()):
+                raise PinViolationError(
+                    f"Selected model {model_id!r} was not confirmed available for the supplied {provider_id!r} key."
+                )
+        return valid_keys, wanted, issues
+
+    eligible_models = sorted(
+        model_id
+        for available in models_by_provider.values()
+        for model_id in available
+    )
+    return valid_keys, eligible_models, issues
 
 def _diversity_is_blocked(router: object, allowed: set[str]) -> bool:
     """True when fewer than two usable solver/critic families are available.
@@ -346,6 +465,7 @@ class RequestContext:
     quota_snapshot: list[dict] = field(default_factory=list)
     has_search_key: bool = False
     quota_snapshot_token: object | None = None
+    provider_issues: list[str] = field(default_factory=list)
 
 
 def build_request_context(
@@ -354,6 +474,7 @@ def build_request_context(
     selected: list[str] | None,
     pins: dict[str, str] | None,
     usage_snapshot: list[dict] | None,
+    provider_issues: list[str] | None = None,
 ) -> RequestContext:
     """Build the shared context for preflight and run (keys in, names out).
 
@@ -409,4 +530,5 @@ def build_request_context(
         quota_snapshot=list(snapshot or []),
         has_search_key=has_search,
         quota_snapshot_token=snapshot_token,
+        provider_issues=list(provider_issues or []),
     )
