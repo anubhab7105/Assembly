@@ -21,13 +21,31 @@ export function AssemblyHeroExperience() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState(0);
 
-  // Tab Auto-Rotation Interval
+  // Pause automatic tab rotation when the user requests reduced motion.
+  // Manual tab selection remains available.
   useEffect(() => {
-    const timer = setInterval(() => {
-      setActiveTab((prev) => (prev + 1) % PRODUCT_TABS.length);
-    }, 2400);
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let timer: ReturnType<typeof setInterval> | null = null;
 
-    return () => clearInterval(timer);
+    const syncRotation = () => {
+      if (motionPreference.matches) {
+        if (timer !== null) clearInterval(timer);
+        timer = null;
+        return;
+      }
+      if (timer === null) {
+        timer = setInterval(() => {
+          setActiveTab((prev) => (prev + 1) % PRODUCT_TABS.length);
+        }, 2400);
+      }
+    };
+
+    syncRotation();
+    motionPreference.addEventListener("change", syncRotation);
+    return () => {
+      motionPreference.removeEventListener("change", syncRotation);
+      if (timer !== null) clearInterval(timer);
+    };
   }, []);
 
   // IntersectionObserver for reveal animation (.rv -> .revealed)

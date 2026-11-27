@@ -510,6 +510,31 @@
   }
 }
 
+
+/*
+ * Respect users who request reduced motion. Keep progress and state information
+ * visible, but remove decorative loops and nonessential transitions/scrolling.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+
+  /* Keep the progress track and textual stage/status, without a moving bar. */
+  .animate-progress-indeterminate {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
 /* Ensure Next.js dev overlay / portal never blocks pointer clicks in automated tests or dev */
 nextjs-portal {
   pointer-events: none !important;
