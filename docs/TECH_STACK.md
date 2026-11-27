@@ -119,8 +119,10 @@ providers:
 One shape only: limits live under each model (`rpm/rpd/tpm/context_tokens`,
 each an int, `unlimited`, or null) with a `scope` (`model` = per key+model
 bucket, `account` = shared bucket). There is no provider-level `limits:`.
-Null on an enabled provider fails startup loudly (`validate_limits_filled`);
-unfilled providers stay `enabled: false`.
+Null or stale quota metadata keeps an enabled provider visible for API-key
+setup but excludes it from routing (`provider_limits_issue`). The API remains
+available and reports degraded provider readiness; never fill quota values
+or verification dates by guesswork.
 
 Most providers above expose an OpenAI-compatible endpoint, so **one generic provider class plus config** covers most of them. Gemini keeps its own class.
 
