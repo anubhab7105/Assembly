@@ -12,7 +12,7 @@ platformdirs>=4.0.0
 
 # AI Providers (all OpenAI-compatible traffic goes through async httpx now;
 # no vendor SDKs except Gemini's; Hugging Face is optional)
-google-genai>=1.0.0
+google-genai>=1.0.0,<3.0.0
 huggingface-hub>=0.20.0
 pyyaml>=6.0.0
 keyring>=25.0.0              # Desktop mode: Windows Credential Manager (needs pywin32 on Windows)
