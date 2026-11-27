@@ -270,9 +270,10 @@ def _provider_invalid_key_signal(response: httpx.Response) -> bool:
         return False
 
     # Google uses API_KEY_INVALID in ErrorInfo details[].reason; some
-    # OpenAI-compatible APIs use invalid_api_key in top-level error fields.
-    # Inspect only classification strings and discard the payload.
-    candidates = [error.get(field) for field in ("code", "status", "message")]
+    # OpenAI-compatible APIs use invalid_api_key in top-level code fields.
+    # Google may put API_KEY_INVALID in details[].reason. Avoid retaining or
+    # scanning free-form provider messages and discard the payload.
+    candidates = [error.get(field) for field in ("code", "status")]
     details = error.get("details")
     if isinstance(details, list):
         candidates.extend(
