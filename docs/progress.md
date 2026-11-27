@@ -1103,3 +1103,11 @@
 - Added an AST check that specifically verifies the `execute()` call to `_run_adversarial_round` passes `deadline.timeout_for_call()` as its `timeout_s` argument.
 - Made the AST traversal scope-aware: it does not descend into nested functions, async functions, classes, or lambdas, and it matches the actual awaited receiver as well as the method name. Added a negative fixture proving that an await inside a deferred nested async function does not satisfy the outer timeout check.
 - Resolved both additional Codex review threads. Full CI run #615 passed on commit `f0bd20d` (backend: 729 passed, 1 skipped; frontend build/test/lint pipeline: success). The new AST test update is on the next PR head and requires its own CI run.
+
+
+## 2026-11-27 — CI corrections for Issue #35
+
+- Fixed the frontend lint failure by replacing the Model Picker's synchronous pin-selection state update inside an effect with role-scoped draft state derived during render.
+- Restricted the two-family minimum enforcement to team/run formation. Single-agent routing can still choose an available model for fallback/retry paths; preflight and team routing continue to enforce the two-family minimum.
+- Updated capacity endpoint test stubs to expose a valid three-family diversity gate, and updated single-family routing regression expectations to require rejection. The last-resort role test now uses two compliant families.
+- Validation: GitHub Actions CI run #621 is running on the updated PR head; results pending.
