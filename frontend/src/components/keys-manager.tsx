@@ -451,20 +451,35 @@ export function KeysManager() {
     }
   }
 
+  const runReadyProviders = providers.filter((provider) => {
+    const verification = verifications[provider.id]
+    const status = statuses[provider.id]
+    return (
+      provider.enabled &&
+      provider.limits_ready &&
+      Boolean(savedKeys[provider.id]) &&
+      (status === "valid" || status === "model_unavailable") &&
+      Boolean(verification?.quota_metadata_ready) &&
+      Boolean(verification?.models.some((model) => model.available === true))
+    )
+  })
   const readyFamilies = new Set<string>()
   const rolesReady = new Set<string>()
-  providers.forEach((p) => {
-    if (p.enabled && p.limits_ready && savedKeys[p.id] && statuses[p.id] !== "invalid") {
-      p.models.forEach((model) => {
-        const coreRoles = ["solver", "critic"].filter((role) => model.roles.includes(role))
-        if (coreRoles.length > 0) readyFamilies.add(model.family)
-        coreRoles.forEach((role) => rolesReady.add(role))
-      })
-    }
+  runReadyProviders.forEach((provider) => {
+    const verifiedModels = new Set(
+      verifications[provider.id].models
+        .filter((model) => model.available === true)
+        .map((model) => model.id),
+    )
+    provider.models.filter((model) => verifiedModels.has(model.id)).forEach((model) => {
+      const coreRoles = ["solver", "critic"].filter((role) => model.roles.includes(role))
+      if (coreRoles.length > 0) readyFamilies.add(model.family)
+      coreRoles.forEach((role) => rolesReady.add(role))
+    })
   })
   const gate = evaluateGate(
     [...readyFamilies],
-    providers.filter((p) => p.enabled && p.limits_ready && savedKeys[p.id] && statuses[p.id] !== "invalid").length,
+    runReadyProviders.length,
     [...rolesReady],
   )
 
