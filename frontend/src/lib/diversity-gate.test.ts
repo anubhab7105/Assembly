@@ -20,6 +20,7 @@ describe("diversity-gate chip states", () => {
     const gate = evaluateGate(["llama"], 2);
     expect(gate.level).toBe("BLOCKED");
     expect(gate.families_count).toBe(1);
+    expect(gateChipText(gate)).toBe("1 families ready: llama");
     expect(gate.reasons[0]).toContain("at least 2 independent model families");
   });
 

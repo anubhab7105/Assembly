@@ -11,9 +11,9 @@ const VAULT_PASSPHRASE = "assembly-e2e-vault-passphrase-2026";
 
 const CATALOG = {
   providers: [
-    { id: "groq", enabled: true, limits_ready: true, limits_issue: null, key_url: "", models: [{ id: "openai/gpt-oss-20b", family: "gpt-oss", roles: ["solver"], scope: "model" }] },
-    { id: "gemini", enabled: true, limits_ready: false, limits_issue: "Limits not verified: rpm, rpd, tpm", key_url: "", models: [{ id: "gemini-3.8-flash", family: "gemini", roles: ["solver"], scope: "model" }] },
-    { id: "openrouter", enabled: true, limits_ready: true, limits_issue: null, key_url: "", models: [{ id: "google/gemma-4-26b-a4b-it:free", family: "gemma", roles: ["solver"], scope: "account" }] },
+    { id: "groq", enabled: true, limits_ready: true, limits_issue: null, key_url: "", models: [{ id: "openai/gpt-oss-20b", family: "gpt-oss", roles: ["solver", "critic"], scope: "model" }] },
+    { id: "gemini", enabled: true, limits_ready: false, limits_issue: "Limits not verified: rpm, rpd, tpm", key_url: "", models: [{ id: "gemini-3.8-flash", family: "gemini", roles: ["solver", "critic"], scope: "model" }] },
+    { id: "openrouter", enabled: true, limits_ready: true, limits_issue: null, key_url: "", models: [{ id: "google/gemma-4-26b-a4b-it:free", family: "gemma", roles: ["solver", "critic"], scope: "account" }] },
   ],
   families: ["gpt-oss", "gemma"],
 };

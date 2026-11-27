@@ -74,6 +74,8 @@ export function evaluateGate(
 }
 
 export function gateChipText(gate: DiversityGate): string {
-  if (gate.level === "BLOCKED") return `${gate.families_count} families ready`;
-  return `${gate.families_count} families ready: ${gate.families_ready.join(", ")}`;
+  const readyFamilies = gate.families_ready.length
+    ? `: ${gate.families_ready.join(", ")}`
+    : ""
+  return `${gate.families_count} families ready${readyFamilies}`
 }
