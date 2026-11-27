@@ -1082,3 +1082,10 @@
 - Added unit and Playwright regression coverage for ciphertext-only storage, reload/lock/unlock, wrong passphrase, tampering, legacy migration, and failed migration writes.
 - Security limitation: encryption at rest does not prevent same-origin script access while unlocked; lost passphrases cannot be recovered.
 - Validation: pending CI on PR.
+
+## 2026-11-27 — Codex review fixes for Issue #87
+
+- Verified all three Codex findings against the PR branch. Added a deadline wrapper for sequential web research, using provider-count cost estimation and the remaining time after the synthesis reserve; timed-out research is cancelled and the run continues without external results.
+- Added a deadline wrapper for adversarial critic calls. A timeout now returns the lifecycle to evaluation and goes directly to synthesis, avoiding a fallback debate call that could consume the synthesis reserve.
+- Replaced independent planner timeout substring assertions with an AST check that proves the planner await is inside the timeout context. Extended the phase-wiring test to search and adversarial calls; added hanging fake-provider tests for research cancellation and adversarial cancellation. Existing hung-planner test remains the runtime proof for planner timeout behavior.
+- Validation: pending CI on the updated PR head. No live providers or real credentials are used by the added tests.
