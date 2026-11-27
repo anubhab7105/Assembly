@@ -20,13 +20,11 @@ from src.providers.errors import RateLimited, TruncatedResponse, classify_except
 GENERATION_TIMEOUT_SECONDS = 120.0
 
 
-
-
 def _finish_to_string(finish: object) -> str:
     """Normalize SDK/REST finish reasons to the REST vocabulary.
 
-    The legacy SDK surfaces protobuf ints (STOP=1, MAX_TOKENS=2,
-    SAFETY=3, ...) while REST uses strings. Unknown shapes read as "".
+    SDKs may expose numeric values or string enums; REST uses strings.
+    Unknown shapes read as "".
     """
     if finish is None:
         return ""
@@ -208,7 +206,11 @@ class GeminiProvider(AIProvider):
                         est_tokens=max_tokens + reserve,
                     ):
                         response = await asyncio.wait_for(
-                            gen_model.generate_content_async(gemini_messages),
+                            self._client.aio.models.generate_content(
+                                model=model_name,
+                                contents=gemini_messages,
+                                config=generation_config,
+                            ),
                             timeout=GENERATION_TIMEOUT_SECONDS,
                         )
                 except RateLimited as exc:
@@ -259,7 +261,7 @@ class GeminiProvider(AIProvider):
             raise structured from e
 
     def is_available(self) -> bool:
-        return settings.has_provider("gemini")
+        return self._client is not None and bool(self._fingerprint)
 
     def get_available_models(self) -> list[str]:
         return list(self._models)
