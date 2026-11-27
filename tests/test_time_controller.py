@@ -659,6 +659,12 @@ def test_provider_facing_phases_are_bound_to_run_deadline() -> None:
         "asyncio.timeout(deadline.synthesis_timeout())",
         "synthesize",
     )
+    assert timeout_wraps_await(
+        trees["orchestrator"],
+        "asyncio.timeout(timeout_s)",
+        "adversarial_round",
+    )
+    assert "timeout_s=deadline.timeout_for_call()" in sources["orchestrator"]
 
     # Solve and regular debate enforce timeouts around their provider calls.
     assert "timeout_s=deadline.timeout_for_call()" in sources["orchestrator"]
