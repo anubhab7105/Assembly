@@ -331,13 +331,8 @@ export function TextIntroScene() {
   const hasFiredTriggerRef = useRef(false);
 
   useEffect(() => {
-    if (!isClient) return;
+    if (!isClient || prefersReducedMotion) return;
     if (hasFiredTriggerRef.current) return;
-    if (prefersReducedMotion) {
-      hasFiredTriggerRef.current = true;
-      setIsTriggered(true);
-      return;
-    }
     const el = containerRef.current;
     if (!el) return;
 
@@ -451,7 +446,7 @@ export function TextIntroScene() {
       {/* 3. Foreground Layer: Kinetic Chromatic Assembling Wordmark + Button */}
       <div className="assembly-intro-foreground-stage">
         <KineticAssemblyWordmark
-          isTriggered={isTriggered}
+          isTriggered={isTriggered || prefersReducedMotion}
           onSettled={() => setIsSettled(true)}
         />
 
