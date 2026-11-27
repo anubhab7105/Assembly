@@ -26,6 +26,7 @@ from src.orchestration.budget_controller import BudgetController
 from src.orchestration.capacity import (
     AGENT_CALL_SECONDS,
     PLANNER_CALL_SECONDS,
+    SEARCH_SECONDS_EACH,
     KeyBudget,
     heuristic_suggestion,
     plan_capacity,
@@ -591,7 +592,11 @@ class Orchestrator:
             # PHASE 3: WEB RESEARCH (if needed)
             # ════════════════════════════════════════════════════════════
             search_results = []
-            if plan.needs_research and budget.can_search():
+            if (
+                plan.needs_research
+                and budget.can_search()
+                and not deadline.should_synthesize_now()
+            ):
                 await emit_event(
                     ProgressEventType.AGENT_STATUS,
                     {
@@ -601,9 +606,31 @@ class Orchestrator:
                     },
                 )
 
-                raw_search_results = await search_router.search(
-                    question, problem_type=getattr(plan, "problem_type", "general")
+                # SearchRouter may try several providers sequentially. Bound
+                # the complete provider pass by both its estimated cost and
+                # the room left after protecting the synthesis reserve.
+                search_estimate = SEARCH_SECONDS_EACH * max(
+                    1, len(search_router.providers)
                 )
+                search_timeout_s = min(
+                    deadline.timeout_for_call(search_estimate),
+                    deadline.remaining() - deadline.synth_reserve,
+                )
+                raw_search_results = []
+                if search_timeout_s > 0:
+                    try:
+                        async with asyncio.timeout(search_timeout_s):
+                            raw_search_results = await search_router.search(
+                                question,
+                                problem_type=getattr(plan, "problem_type", "general"),
+                            )
+                    except TimeoutError:
+                        warning = (
+                            "Web research timed out within the execution budget; "
+                            "continuing without external search results."
+                        )
+                        warnings.append(warning)
+                        logger.warning("Research │ Search phase timed out; continuing")
                 budget.record_search(len(raw_search_results))
                 used_sources = search_router.last_providers_used
 
