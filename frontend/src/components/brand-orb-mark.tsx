@@ -167,6 +167,22 @@ export function BrandDottedAMark({
       animId = requestAnimationFrame(render);
     };
 
+    let themeObserver: MutationObserver | null = null;
+
+    const stopObservingTheme = () => {
+      themeObserver?.disconnect();
+      themeObserver = null;
+    };
+
+    const observeThemeWhileStatic = () => {
+      if (themeObserver || typeof MutationObserver === "undefined") return;
+      themeObserver = new MutationObserver(() => paint(0));
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+    };
+
     const handleMotionPreferenceChange = () => {
       if (animId !== null) {
         cancelAnimationFrame(animId);
@@ -174,7 +190,9 @@ export function BrandDottedAMark({
       }
       if (motionPreference.matches) {
         paint(0);
+        observeThemeWhileStatic();
       } else {
+        stopObservingTheme();
         animId = requestAnimationFrame(render);
       }
     };
@@ -182,12 +200,15 @@ export function BrandDottedAMark({
     // The logo remains visible as a static mark when motion is reduced.
     paint(0);
     motionPreference.addEventListener("change", handleMotionPreferenceChange);
-    if (!motionPreference.matches) {
+    if (motionPreference.matches) {
+      observeThemeWhileStatic();
+    } else {
       animId = requestAnimationFrame(render);
     }
 
     return () => {
       motionPreference.removeEventListener("change", handleMotionPreferenceChange);
+      stopObservingTheme();
       if (animId !== null) cancelAnimationFrame(animId);
     };
   }, [size, darkColor]);

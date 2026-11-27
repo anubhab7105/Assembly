@@ -26,6 +26,13 @@ describe("global reduced-motion support", () => {
     expect(executionPage).toContain("STAGES[Math.min(stageIndex, STAGES.length - 1)]")
   })
 
+  it("repaints the static brand mark when the document theme class changes", () => {
+    expect(brandOrbMark).toContain("new MutationObserver(() => paint(0))")
+    expect(brandOrbMark).toContain("themeObserver.observe(document.documentElement")
+    expect(brandOrbMark).toContain('attributeFilter: ["class"]')
+    expect(brandOrbMark).toContain("themeObserver?.disconnect()")
+  })
+
   it("pauses scripted decorative motion and automatic tab rotation", () => {
     expect(brandOrbMark).toContain('window.matchMedia("(prefers-reduced-motion: reduce)")')
     expect(textIntroScene).toContain("if (motionPreference.matches) completeWithoutMotion()")
