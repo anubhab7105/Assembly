@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     cerebras_api_key: SecretStr = Field(default=SecretStr(""))
     openrouter_api_key: SecretStr = Field(default=SecretStr(""))
     mistral_api_key: SecretStr = Field(default=SecretStr(""))
+    nvidia_api_key: SecretStr = Field(default=SecretStr(""))
     huggingface_api_key: SecretStr = Field(default=SecretStr(""))
 
     # ── Research / Web Search ────────────────────────────────────────
@@ -224,6 +225,7 @@ class Settings(BaseSettings):
             "cerebras": self.cerebras_api_key,
             "openrouter": self.openrouter_api_key,
             "mistral": self.mistral_api_key,
+            "nvidia": self.nvidia_api_key,
             "huggingface": self.huggingface_api_key,
         }
         raw = key_map.get(provider)
