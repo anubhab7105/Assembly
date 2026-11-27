@@ -173,7 +173,15 @@ export default function Home() {
     selected: [...selection.selected].sort(),
     pins: selection.pins,
   })
-  const shownGate = preflightGate?.signature === gateSignature ? preflightGate.gate : gate
+  const preflightGateIsCurrent = preflightGate?.signature === gateSignature
+  // The backend gate also includes live provider cooldowns, which the
+  // browser-side catalog mirror cannot observe. Let the user clear a cached
+  // backend BLOCKED verdict when the local key/model configuration is runnable.
+  const canRetryCachedPreflight =
+    preflightGateIsCurrent &&
+    preflightGate?.gate.level === "BLOCKED" &&
+    gate.level !== "BLOCKED"
+  const shownGate = preflightGateIsCurrent ? preflightGate.gate : gate
 
   useEffect(() => {
     const refreshKeys = () => {
@@ -759,13 +767,36 @@ export default function Home() {
           <div className="assembly-chat-banners-stack space-y-3">
             {shownGate.level === "BLOCKED" && (
               <div className="assembly-chat-warning-banner rounded-xl border px-3.5 py-2.5">
-                <p className="text-xs font-medium text-warning leading-relaxed">
-                  Set up your provider keys in{" "}
-                  <Link href="/settings" className="underline underline-offset-2 font-semibold hover:opacity-80">
-                    Settings
-                  </Link>{" "}
-                  to start an investigation. At least two distinct usable families with solver and critic coverage are required; three are recommended.
-                </p>
+                {canRetryCachedPreflight ? (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs font-medium text-warning leading-relaxed">
+                      Current provider capacity is below the two-family minimum. Quota cooldowns may recover, so you can check availability again.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      data-testid="retry-preflight"
+                      onClick={() => {
+                        setPreflightGate(null)
+                        setStatus(makeChatStatus(
+                          "The previous capacity verdict was cleared. Start the run again to check current availability.",
+                          "info",
+                        ))
+                      }}
+                    >
+                      Recheck availability
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-xs font-medium text-warning leading-relaxed">
+                    Set up your provider keys in{" "}
+                    <Link href="/settings" className="underline underline-offset-2 font-semibold hover:opacity-80">
+                      Settings
+                    </Link>{" "}
+                    to start an investigation. At least two distinct usable families with solver and critic coverage are required; three are recommended.
+                  </p>
+                )}
               </div>
             )}
 
