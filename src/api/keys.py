@@ -226,9 +226,9 @@ async def _list_gemini(
                 headers={"x-goog-api-key": key, "Content-Type": "application/json"},
             )
     except Exception:  # noqa: BLE001 — any transport failure reads as unreachable
-        return None, [], "", {}
+        return None, [], False, {}
     if response.status_code != 200:
-        return response.status_code, [], _gemini_invalid_key_signal(response), {}
+        return response.status_code, [], (_gemini_invalid_key_signal(response) if response.status_code == 400 else False), {}
     try:
         data = response.json()
     except ValueError:
@@ -251,7 +251,7 @@ async def _list_gemini(
                 limits[target] = value
         if limits:
             metadata[model_id] = limits
-    return response.status_code, sorted(ids), "", metadata
+    return response.status_code, sorted(ids), False, metadata
 
 
 def _gemini_invalid_key_signal(response: httpx.Response) -> bool:
@@ -284,7 +284,7 @@ async def _list_openai(
                 headers={"Authorization": f"Bearer {key}", **extra_headers},
             )
     except Exception:  # noqa: BLE001 — any transport failure reads as unreachable
-        return None, [], "", {}, {}
+        return None, [], False, {}, {}
     if response.status_code != 200:
         return response.status_code, [], False, {}, {}
     try:
@@ -315,7 +315,7 @@ async def _list_openai(
         for name, value in response.headers.items()
         if name.lower() in allowed_headers and _positive_int(value) is not None
     }
-    return response.status_code, sorted(ids), "", metadata, safe_headers
+    return response.status_code, sorted(ids), False, metadata, safe_headers
 
 
 async def _openrouter_key_info(key: str) -> dict[str, int]:
