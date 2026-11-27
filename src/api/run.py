@@ -31,10 +31,10 @@ from src.core.rate_limit import (
     client_ip,
     count_invalid_request,
 )
-from src.providers.router import MIN_FAMILIES_TO_START
 from src.database.schemas import RunRequest
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
 from src.providers.quota import get_limiter
+from src.providers.router import MIN_FAMILIES_TO_START
 from src.research.attachments import (
     Attachment,
     AttachmentContext,

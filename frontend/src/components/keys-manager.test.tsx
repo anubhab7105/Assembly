@@ -135,7 +135,7 @@ describe("KeysManager setup page (FR-30 snapshot)", () => {
     );
     expect(await screen.findByTestId("minimum-to-start-banner")).toBeDefined();
     const readinessText = (await screen.findByTestId("minimum-to-start-text")).textContent ?? "";
-    expect(readinessText).toContain("Minimum to start: met");
+    expect(readinessText).toContain("at least 2 distinct solver/critic model families");
     expect(readinessText).toContain("Three families are recommended");
     expect(await screen.findByTestId("stepper-groq")).toBeDefined();
     expect(await screen.findByTestId("copy-link-groq")).toBeDefined();
