@@ -189,6 +189,7 @@ class EnvKeyStore(KeyStore):
             "groq": "groq_api_key",
             "cerebras": "cerebras_api_key",
             "openrouter": "openrouter_api_key",
+            "mistral": "mistral_api_key",
             "huggingface": "huggingface_api_key",
         }
 
