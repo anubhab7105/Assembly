@@ -190,6 +190,7 @@ class EnvKeyStore(KeyStore):
             "cerebras": "cerebras_api_key",
             "openrouter": "openrouter_api_key",
             "mistral": "mistral_api_key",
+            "nvidia": "nvidia_api_key",
             "huggingface": "huggingface_api_key",
         }
 
