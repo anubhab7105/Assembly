@@ -24,7 +24,27 @@ async function mockNetwork(page: Page) {
   })
   await page.route("**/api/keys/test", async route => {
     const body = route.request().postDataJSON() as { provider?: string } | null
-    await route.fulfill({ json: { provider: body?.provider ?? "groq", valid: true, rate_limited: false } })
+    const provider = CATALOG.providers.find((item) => item.id === body?.provider)
+    const models = provider?.models ?? []
+    await route.fulfill({
+      json: {
+        provider: body?.provider ?? "groq",
+        valid: true,
+        rate_limited: false,
+        available_models: models.map((model) => model.id),
+        verification: {
+          checked_at: "2026-11-27T18:00:00.000Z",
+          provider_enabled: Boolean(provider?.enabled),
+          model_catalog_checked: true,
+          models: models.map((model) => ({ id: model.id, available: true })),
+          observed_quotas: [],
+          unverified_fields: provider?.limits_ready ? [] : ["rpm", "rpd", "tpm"],
+          quota_metadata_ready: Boolean(provider?.limits_ready),
+          quota_metadata_issue: provider?.limits_issue ?? null,
+          note: "Mocked provider-key verification.",
+        },
+      },
+    })
   })
   await page.route("**/api/preflight", async route => {
     await route.fulfill({ json: { feasible: true, explanation: "fits" } })
@@ -68,7 +88,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await page.reload()
     await unlockVault(page)
     await expect(page.getByTestId("provider-card-groq")).toBeVisible({ timeout: 10000 })
-    // Restored keys count toward readiness without re-testing this session.
+    // Restored keys are re-tested with their exact saved values before readiness is counted.
     await expect(page.getByTestId("readiness-chip")).toContainText("gpt-oss", { timeout: 10000 })
     // Placeholder shows the masked restored key, not the empty prompt.
     await expect(page.getByTestId("provider-card-groq").locator('input[type="password"]')).toHaveAttribute(
