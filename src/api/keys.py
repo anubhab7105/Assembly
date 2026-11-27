@@ -143,7 +143,7 @@ async def verify_provider_key(
         catalog = catalog or load_models_config()
     except (FileNotFoundError, ValueError, TypeError):
         return KeyTestResponse(
-            provider=req.provider,
+            provider=provider_id,
             valid=False,
             rate_limited=False,
             error_code="error",
@@ -193,7 +193,7 @@ async def verify_provider_key(
         return result
     else:  # Unreachable: config validation restricts base to known backends.
         return KeyTestResponse(
-            provider=req.provider,
+            provider=provider_id,
             valid=False,
             rate_limited=False,
             error_code="error",
@@ -201,7 +201,7 @@ async def verify_provider_key(
         )
 
     result = _classify_list_result(
-        req.provider, label, model, list_status, listed, invalid_key_signal
+        provider_id, label, model, list_status, listed, invalid_key_signal
     )
     if list_status == 200:
         result.verification = _build_key_metadata_verification(
