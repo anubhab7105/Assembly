@@ -71,6 +71,7 @@ async def verify_run_provider_keys(
     returned model ids are limited to models confirmed for those keys.
     """
     from src.api.keys import verify_provider_key
+    from src.core.keystore import clean_key
     from src.providers.config import load_models_config, provider_limits_issue
     from src.providers.router import PinViolationError
 
@@ -102,9 +103,9 @@ async def verify_run_provider_keys(
         selected_providers[model_id] = provider_id
 
     supplied = {
-        str(provider).strip(): str(key).strip()
+        str(provider).strip(): clean_key(key)
         for provider, key in (provider_keys or {}).items()
-        if str(provider).strip() and str(key).strip()
+        if str(provider).strip() and clean_key(key)
     }
     required_providers = set(selected_providers.values()) if wanted else set(supplied)
     if not required_providers:
