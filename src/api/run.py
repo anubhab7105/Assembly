@@ -34,7 +34,6 @@ from src.core.rate_limit import (
 from src.database.schemas import RunRequest
 from src.orchestration.capacity import KeyBudget, heuristic_suggestion, plan_capacity
 from src.providers.quota import get_limiter
-from src.providers.router import MIN_FAMILIES_TO_START
 from src.research.attachments import (
     Attachment,
     AttachmentContext,
@@ -49,7 +48,7 @@ router = APIRouter(prefix="/api/run", tags=["run"])
 BLOCKED_CODE = "blocked_no_usable_keys"
 
 #: Minimum distinct model families for a healthy team (mirrors catalog).
-MINIMUM_FAMILIES = MIN_FAMILIES_TO_START
+MINIMUM_FAMILIES = 3
 
 
 def _sanitized_code(name: str) -> str:
@@ -454,8 +453,9 @@ async def start_run(req: RunRequest, request: Request):
             content={
                 "code": BLOCKED_CODE,
                 "detail": (
-                    "Not enough usable model families. Add valid keys for at least "
-                    f"{MINIMUM_FAMILIES} distinct model families. Three are recommended."
+                    "No usable model families. Add keys for at least "
+                    f"{MINIMUM_FAMILIES} model families (2 work with a "
+                    "warning)."
                 ),
                 "minimum_families": MINIMUM_FAMILIES,
             },
