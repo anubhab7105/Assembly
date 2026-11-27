@@ -77,6 +77,7 @@ async def preflight(req: RunRequest, request: Request):
             )
         return result
     finally:
+        await ctx.aclose()
         if ctx.quota_snapshot_token is not None:
             get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
             ctx.quota_snapshot_token = None
