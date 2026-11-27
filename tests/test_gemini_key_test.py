@@ -373,7 +373,19 @@ def test_disabled_provider_key_can_be_verified_without_enabling_routing(
 ) -> None:
     from src.providers.config import load_models_config
 
-    model = load_models_config().providers["cerebras"].models[0].id
+    catalog = load_models_config()
+    cerebras = catalog.providers["cerebras"]
+    disabled_cerebras = cerebras.model_copy(update={"enabled": False})
+    config = catalog.model_copy(
+        update={
+            "providers": {
+                **catalog.providers,
+                "cerebras": disabled_cerebras,
+            }
+        }
+    )
+    monkeypatch.setattr(keys_mod, "load_models_config", lambda: config)
+    model = config.providers["cerebras"].models[0].id
 
     async def _fake_openai(_url: str, _key: str, _headers: dict[str, str]):
         return 200, [model], False, {}, {}
