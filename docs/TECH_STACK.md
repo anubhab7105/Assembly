@@ -111,7 +111,7 @@ providers:
         scope: model   # or `account` when the cap is shared across models
         limits:
           rpm: <fill>             # or `unlimited` / null (unknown)
-          rpd: <fill>             # null on an enabled model fails startup
+          rpd: <fill>             # null keeps API available but excludes this provider from routing
           tpm: <fill>
           context_tokens: <fill>  # source + checked-date comment on each
 ```
