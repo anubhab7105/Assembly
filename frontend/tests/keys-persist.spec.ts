@@ -101,6 +101,9 @@ async function restoreIndexedDbDelete(page: Page) {
 
 test.describe("Keys survive refresh (P0)", () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("assembly:cookie-choice", "accepted")
+    })
     await mockNetwork(page)
   })
 
@@ -418,11 +421,6 @@ test.describe("Keys survive refresh (P0)", () => {
     await page.reload()
     await unlockVault(page)
     await expect(page.getByTestId("test-result-groq")).toContainText(/testing/i)
-    const cookieNotice = page.getByRole("region", { name: "Cookie notice" })
-    if (await cookieNotice.isVisible().catch(() => false)) {
-      await cookieNotice.getByRole("button", { name: "Accept" }).click()
-      await expect(cookieNotice).toBeHidden()
-    }
     await page.getByTestId("lock-vault").click()
     await blockIndexedDbDelete(page)
     await page.getByTestId("forget-keys").click()
