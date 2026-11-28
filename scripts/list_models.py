@@ -3,6 +3,7 @@
 Usage:  python scripts/list_models.py
 """
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -18,12 +19,13 @@ from src.core.config import settings
 from src.core.keystore import reveal
 
 
-def openai_compatible_models(label: str, base_url: str, key: str) -> None:
+async def openai_compatible_models(
+    client: httpx.AsyncClient, label: str, base_url: str, key: str
+) -> None:
     try:
-        response = httpx.get(
-            f"{base_url}/models",
+        response = await client.get(
+            f"{base_url.rstrip('/')}/models",
             headers={"Authorization": f"Bearer {reveal(key)}"},
-            timeout=30.0,
         )
         response.raise_for_status()
         ids = sorted(m["id"] for m in response.json().get("data", []))
@@ -34,59 +36,69 @@ def openai_compatible_models(label: str, base_url: str, key: str) -> None:
         print(f"{label}: FAILED ({type(exc).__name__})")
 
 
-def main() -> None:
-    if settings.has_provider("groq"):
-        openai_compatible_models(
-            "groq", "https://api.groq.com/openai/v1", settings.groq_api_key
-        )
-    if settings.has_provider("cerebras"):
-        openai_compatible_models(
-            "cerebras", "https://api.cerebras.ai/v1", settings.cerebras_api_key
-        )
-    if settings.has_provider("mistral"):
-        openai_compatible_models(
-            "mistral", "https://api.mistral.ai/v1", settings.mistral_api_key
-        )
-    if settings.has_provider("nvidia"):
-        openai_compatible_models(
-            "nvidia", "https://integrate.api.nvidia.com/v1", settings.nvidia_api_key
-        )
-    # OpenRouter model catalog is public (no key needed).
-    try:
-        response = httpx.get("https://openrouter.ai/api/v1/models", timeout=30.0)
-        response.raise_for_status()
-        free = sorted(
-            m["id"]
-            for m in response.json().get("data", [])
-            if any(ep.get("pricing", {}).get("prompt") == "0" for ep in [m])
-            or ":free" in m["id"]
-        )
-        print(f"openrouter free ({len(free)}):")
-        for model_id in free:
-            print(f"  {model_id}")
-    except Exception as exc:  # noqa: BLE001 — probe must report FAILED, never crash
-        print(f"openrouter: FAILED ({type(exc).__name__})")
+async def gemini_models() -> None:
+    """List Gemini models through the SDK's async iterator and close its client."""
+    from google import genai
 
-    # Gemini via SDK model listing.
+    client = genai.Client(api_key=reveal(settings.gemini_api_key))
+    ids: list[str] = []
+    try:
+        async for model in await client.aio.models.list():
+            if "generateContent" in (model.supported_actions or []):
+                ids.append(model.name.removeprefix("models/"))
+    finally:
+        await client.aio.aclose()
+    print(f"gemini ({len(ids)}):")
+    for model_id in sorted(ids):
+        print(f"  {model_id}")
+
+
+async def main() -> None:
+    timeout = httpx.Timeout(30.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        if settings.has_provider("groq"):
+            await openai_compatible_models(
+                client, "groq", "https://api.groq.com/openai/v1", settings.groq_api_key
+            )
+        if settings.has_provider("cerebras"):
+            await openai_compatible_models(
+                client, "cerebras", "https://api.cerebras.ai/v1", settings.cerebras_api_key
+            )
+        if settings.has_provider("mistral"):
+            await openai_compatible_models(
+                client, "mistral", "https://api.mistral.ai/v1", settings.mistral_api_key
+            )
+        if settings.has_provider("nvidia"):
+            await openai_compatible_models(
+                client, "nvidia", "https://integrate.api.nvidia.com/v1", settings.nvidia_api_key
+            )
+
+        # OpenRouter's model catalogue is public (no key needed).
+        try:
+            response = await client.get("https://openrouter.ai/api/v1/models")
+            response.raise_for_status()
+            free = sorted(
+                model["id"]
+                for model in response.json().get("data", [])
+                if any(
+                    endpoint.get("pricing", {}).get("prompt") == "0"
+                    for endpoint in [model]
+                )
+                or ":free" in model["id"]
+            )
+            print(f"openrouter free ({len(free)}):")
+            for model_id in free:
+                print(f"  {model_id}")
+        except Exception as exc:  # noqa: BLE001 — probe must report FAILED, never crash
+            print(f"openrouter: FAILED ({type(exc).__name__})")
+
+    # SDK client has its own async transport lifecycle, outside httpx.
     if settings.has_provider("gemini"):
         try:
-            from google import genai
-
-            client = genai.Client(api_key=reveal(settings.gemini_api_key))
-            try:
-                ids = sorted(
-                    model.name.removeprefix("models/")
-                    for model in client.models.list()
-                    if "generateContent" in (model.supported_actions or [])
-                )
-            finally:
-                client.close()
-            print(f"gemini ({len(ids)}):")
-            for model_id in ids:
-                print(f"  {model_id}")
+            await gemini_models()
         except Exception as exc:  # noqa: BLE001 — probe must report FAILED, never crash
             print(f"gemini: FAILED ({type(exc).__name__})")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
