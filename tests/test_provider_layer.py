@@ -468,8 +468,9 @@ async def test_gemini_uses_google_genai_async_client(monkeypatch) -> None:
     assert response.output_tokens == 4
     assert async_models.request["model"] == "gemini-test"
     assert async_models.request["contents"] == [
-        {"role": "user", "parts": ["Hello"]}
+        {"role": "user", "parts": [{"text": "Hello"}]}
     ]
+    assert async_models.request["contents"][0]["role"] == "user"
     assert async_models.request["config"].system_instruction == "Be concise"
     assert async_models.request["config"].max_output_tokens == 256
 
