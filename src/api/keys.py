@@ -160,6 +160,7 @@ async def verify_provider_key(
     model_metadata: dict[str, dict[str, int]] = {}
     quota_headers: dict[str, str] = {}
     openrouter_key_info: dict[str, int] = {}
+    openrouter_key_status: int | None = 200
     if spec.base == "google-genai":
         list_status, listed, invalid_key_signal, model_metadata = await _list_gemini(key)
     elif spec.base == "openai-compatible":
@@ -167,7 +168,7 @@ async def verify_provider_key(
             spec.url or "", key, dict(spec.headers)
         )
         if provider_id == "openrouter" and list_status == 200:
-            openrouter_key_info = await _openrouter_key_info(key)
+            openrouter_key_status, openrouter_key_info = await _openrouter_key_info(key)
     elif spec.base == "huggingface":
         result = await _test_huggingface(provider_id, model, key)
         if result.valid:
@@ -203,7 +204,40 @@ async def verify_provider_key(
     result = _classify_list_result(
         provider_id, label, model, list_status, listed, invalid_key_signal
     )
-    if list_status == 200:
+    if provider_id == "openrouter" and list_status == 200:
+        if openrouter_key_status in (401, 403):
+            result = KeyTestResponse(
+                provider=provider_id,
+                valid=False,
+                rate_limited=False,
+                error_code="auth_error",
+                model=model or None,
+                model_available=None,
+                message=f"Key was rejected by {provider_id}. {_COPY_HINT}",
+            )
+        elif openrouter_key_status != 200:
+            # Transient, rate-limited, malformed and unexpected responses are
+            # retryable rather than evidence that the credential is invalid.
+            result = KeyTestResponse(
+                provider=provider_id,
+                valid=False,
+                rate_limited=openrouter_key_status == 429,
+                error_code=(
+                    "rate_limited" if openrouter_key_status == 429 else "unreachable"
+                ),
+                model=model or None,
+                model_available=None,
+                message=(
+                    "OpenRouter key verification was rate-limited; try again shortly."
+                    if openrouter_key_status == 429
+                    else "Couldn't verify the OpenRouter key right now; try again."
+                ),
+            )
+        else:
+            result.verification = _build_key_metadata_verification(
+                provider_id, spec, listed, model_metadata, quota_headers, openrouter_key_info
+            )
+    elif list_status == 200:
         result.verification = _build_key_metadata_verification(
             provider_id, spec, listed, model_metadata, quota_headers, openrouter_key_info
         )
@@ -353,11 +387,12 @@ async def _list_openai(
     return response.status_code, sorted(ids), False, metadata, safe_headers
 
 
-async def _openrouter_key_info(key: str) -> dict[str, int]:
-    """Read OpenRouter's documented per-key free-model daily allowance.
+async def _openrouter_key_info(key: str) -> tuple[int | None, dict[str, int]]:
+    """Verify an OpenRouter key and read its per-key free-model allowance.
 
-    Credit budgets and the deprecated rate_limit object are intentionally
-    excluded: they are not RPM/RPD/TPM values for the shared model catalogue.
+    Preserve the response status so an auth rejection is distinguishable from
+    transient outages. Non-auth failures block routing until a retry succeeds,
+    but do not mark the user's credential invalid.
     """
     try:
         async with httpx.AsyncClient(timeout=_LIST_TIMEOUT_SECONDS) as client:
@@ -365,21 +400,28 @@ async def _openrouter_key_info(key: str) -> dict[str, int]:
                 "https://openrouter.ai/api/v1/key",
                 headers={"Authorization": f"Bearer {key}"},
             )
-        if response.status_code != 200:
-            return {}
+    except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError):
+        return None, {}
+
+    if response.status_code != 200:
+        return response.status_code, {}
+    try:
         payload = response.json()
-    except Exception:  # noqa: BLE001 — optional metadata check must not invalidate a good key
-        return {}
+    except ValueError:
+        return None, {}
+
     data = payload.get("data", {}) if isinstance(payload, dict) else {}
-    free_limits = (
-        data.get("free_model_daily_requests", {})
-        if isinstance(data, dict)
-        else {}
+    if not isinstance(data, dict):
+        return None, {}
+    free_limits = data.get("free_model_daily_requests", {})
+    limit = (
+        _positive_int(free_limits.get("limit"))
+        if isinstance(free_limits, dict)
+        else None
     )
-    if not isinstance(free_limits, dict):
-        return {}
-    limit = _positive_int(free_limits.get("limit"))
-    return {"free_model_requests_per_day": limit} if limit is not None else {}
+    return response.status_code, (
+        {"free_model_requests_per_day": limit} if limit is not None else {}
+    )
 
 
 def _positive_int(value: object) -> int | None:
