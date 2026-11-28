@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from src.api.executions import _build_preflight
-from src.api.request_context import build_request_context
+from src.api.request_context import build_request_context, verify_run_provider_keys
 from src.core.config import settings
 from src.core.rate_limit import check_rate_limit, client_ip
 from src.database.schemas import PreflightResponse, RunRequest
@@ -36,12 +36,17 @@ async def preflight(req: RunRequest, request: Request):
     from src.providers.router import PinViolationError
 
     try:
-        ctx = build_request_context(
+        verified_keys, verified_models, provider_issues = await verify_run_provider_keys(
             dict(req.provider_keys or {}),
-            dict(req.search_keys) if req.search_keys is not None else None,
             list(req.model_selection.selected or []),
+        )
+        ctx = build_request_context(
+            verified_keys,
+            dict(req.search_keys) if req.search_keys is not None else None,
+            verified_models,
             dict(req.model_selection.pins or {}),
             [u.model_dump() for u in (req.usage_snapshot or [])],
+            provider_issues,
         )
     except PinViolationError as exc:
         return JSONResponse(
@@ -59,14 +64,20 @@ async def preflight(req: RunRequest, request: Request):
                 update={
                     "feasible": False,
                     "explanation": (
-                        result.diversity.reasons[0]
-                        if result.diversity.reasons
-                        else "At least 2 distinct usable solver/critic model families are required."
+                        (result.diversity.reasons[0]
+                         if result.diversity.reasons
+                         else "At least 2 distinct usable solver/critic model families are required.")
+                        + ((" Provider readiness: " + "; ".join(ctx.provider_issues[:4])) if ctx.provider_issues else "")
                     ),
                 }
             )
+        if ctx.provider_issues:
+            result = result.model_copy(
+                update={"warnings": [*result.warnings, *ctx.provider_issues]}
+            )
         return result
     finally:
+        await ctx.aclose()
         if ctx.quota_snapshot_token is not None:
             get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
             ctx.quota_snapshot_token = None

@@ -348,6 +348,29 @@ async def test_orchestrator_records_routing(orchestrator) -> None:
     assert any("model family" in w for w in result.warnings)
 
 
+@pytest.mark.asyncio
+async def test_model_router_closes_each_unique_provider_once() -> None:
+    router = ModelRouter.__new__(ModelRouter)
+    calls = {"closed": 0}
+
+    class ClosableProvider:
+        provider_name = "test-provider"
+
+        async def aclose(self):
+            calls["closed"] += 1
+
+    provider = ClosableProvider()
+    router._providers = {"provider-a": provider, "provider-b": provider}
+    router._fingerprints = {"provider-a": "fingerprint-a", "provider-b": "fingerprint-b"}
+
+    await router.aclose()
+    await router.aclose()
+
+    assert calls["closed"] == 1
+    assert router.get_live_count() == 0
+    assert router._fingerprints == {}
+
+
 # ── Family pins (bench integrity) ───────────────────────────────────
 
 

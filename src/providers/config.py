@@ -3,8 +3,9 @@
 Single source of truth for providers, models, families, roles, context
 sizes, and rate limits. Fails loudly (FileNotFoundError / ValueError /
 pydantic ValidationError) on unknown families, missing fields, a missing
-file, or a half-migrated shape — a misconfigured catalog must crash at
-startup, never silently route to the wrong model.
+file, or a half-migrated shape — a misconfigured catalog must never silently
+route to the wrong model. Missing or stale quota metadata keeps a provider
+visible for key setup but excludes it from routing.
 
 Shape (one shape only — no legacy aliases):
   providers.<id>: quota_source + quota_last_verified
@@ -13,9 +14,9 @@ Shape (one shape only — no legacy aliases):
 
 Each limit accepts an int (>0), the literal "unlimited" (provider
 enforces no limit on that field — the limiter skips it), or null
-(unknown). Null on any ENABLED provider with models is a startup error:
-see validate_limits_filled — fill it from the provider dashboard or set
-enabled: false.
+(unknown). Null on any ENABLED provider with models is a readiness error:
+see validate_limits_filled — fill it from the provider dashboard. The API
+stays available, but the affected provider is excluded from routing.
 """
 
 from datetime import date, timedelta

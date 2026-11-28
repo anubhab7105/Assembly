@@ -44,6 +44,15 @@ def _mock_filtered_router(monkeypatch):
 
     monkeypatch.setattr(context_mod, "_filtered_router", _fake_filtered_router)
 
+    async def _fake_verify(provider_keys, selected):
+        return dict(provider_keys or {}), list(selected or []), []
+
+    import src.api.run as run_mod
+    import src.api.preflight as preflight_mod
+
+    monkeypatch.setattr(run_mod, "verify_run_provider_keys", _fake_verify)
+    monkeypatch.setattr(preflight_mod, "verify_run_provider_keys", _fake_verify)
+
 
 def test_web_mode_creates_no_database_file(
     web_mode, isolated_web_database, tmp_path

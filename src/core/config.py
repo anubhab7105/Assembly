@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr = Field(default=SecretStr(""))
     cerebras_api_key: SecretStr = Field(default=SecretStr(""))
     openrouter_api_key: SecretStr = Field(default=SecretStr(""))
+    mistral_api_key: SecretStr = Field(default=SecretStr(""))
+    nvidia_api_key: SecretStr = Field(default=SecretStr(""))
     huggingface_api_key: SecretStr = Field(default=SecretStr(""))
 
     # ── Research / Web Search ────────────────────────────────────────
@@ -222,6 +224,8 @@ class Settings(BaseSettings):
             "groq": self.groq_api_key,
             "cerebras": self.cerebras_api_key,
             "openrouter": self.openrouter_api_key,
+            "mistral": self.mistral_api_key,
+            "nvidia": self.nvidia_api_key,
             "huggingface": self.huggingface_api_key,
         }
         raw = key_map.get(provider)
@@ -233,6 +237,7 @@ class Settings(BaseSettings):
             "hf_your",
             "csk_your",
             "xpl_your",
+            "nvapi-your",
         )
         return bool(key) and not any(key.startswith(p) for p in placeholders)
 

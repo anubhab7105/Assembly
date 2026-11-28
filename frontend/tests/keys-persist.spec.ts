@@ -24,7 +24,27 @@ async function mockNetwork(page: Page) {
   })
   await page.route("**/api/keys/test", async route => {
     const body = route.request().postDataJSON() as { provider?: string } | null
-    await route.fulfill({ json: { provider: body?.provider ?? "groq", valid: true, rate_limited: false } })
+    const provider = CATALOG.providers.find((item) => item.id === body?.provider)
+    const models = provider?.models ?? []
+    await route.fulfill({
+      json: {
+        provider: body?.provider ?? "groq",
+        valid: true,
+        rate_limited: false,
+        available_models: models.map((model) => model.id),
+        verification: {
+          checked_at: "2026-11-27T18:00:00.000Z",
+          provider_enabled: Boolean(provider?.enabled),
+          model_catalog_checked: true,
+          models: models.map((model) => ({ id: model.id, available: true })),
+          observed_quotas: [],
+          unverified_fields: provider?.limits_ready ? [] : ["rpm", "rpd", "tpm"],
+          quota_metadata_ready: Boolean(provider?.limits_ready),
+          quota_metadata_issue: provider?.limits_issue ?? null,
+          note: "Mocked provider-key verification.",
+        },
+      },
+    })
   })
   await page.route("**/api/preflight", async route => {
     await route.fulfill({ json: { feasible: true, explanation: "fits" } })
@@ -55,6 +75,30 @@ async function saveKey(page: Page, provider: string, key: string) {
   await expect(card.getByTestId(`test-result-${provider}`)).toContainText(/valid/i, { timeout: 10000 })
 }
 
+async function blockIndexedDbDelete(page: Page) {
+  await page.evaluate(() => {
+    const target = window as unknown as {
+      __assemblyOriginalIdbDelete?: typeof IDBObjectStore.prototype.delete
+    }
+    target.__assemblyOriginalIdbDelete = IDBObjectStore.prototype.delete
+    IDBObjectStore.prototype.delete = (() => {
+      throw new Error("storage blocked")
+    }) as typeof IDBObjectStore.prototype.delete
+  })
+}
+
+async function restoreIndexedDbDelete(page: Page) {
+  await page.evaluate(() => {
+    const target = window as unknown as {
+      __assemblyOriginalIdbDelete?: typeof IDBObjectStore.prototype.delete
+    }
+    if (target.__assemblyOriginalIdbDelete) {
+      IDBObjectStore.prototype.delete = target.__assemblyOriginalIdbDelete
+      delete target.__assemblyOriginalIdbDelete
+    }
+  })
+}
+
 test.describe("Keys survive refresh (P0)", () => {
   test.beforeEach(async ({ page }) => {
     await mockNetwork(page)
@@ -68,7 +112,7 @@ test.describe("Keys survive refresh (P0)", () => {
     await page.reload()
     await unlockVault(page)
     await expect(page.getByTestId("provider-card-groq")).toBeVisible({ timeout: 10000 })
-    // Restored keys count toward readiness without re-testing this session.
+    // Restored keys are re-tested with their exact saved values before readiness is counted.
     await expect(page.getByTestId("readiness-chip")).toContainText("gpt-oss", { timeout: 10000 })
     // Placeholder shows the masked restored key, not the empty prompt.
     await expect(page.getByTestId("provider-card-groq").locator('input[type="password"]')).toHaveAttribute(
@@ -274,6 +318,120 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page.getByTestId("vault-error")).toContainText(/storage|update saved keys/i, { timeout: 10000 })
     // Nothing claimed saved: no readiness, no masked placeholder.
     await expect(page.getByTestId("readiness-chip")).toContainText("0 families ready")
+  })
+
+  test("10. failed single-key deletion restores retryable status after invalidating a pending check", async ({ page }) => {
+    await page.goto("/settings")
+    await saveKey(page, "groq", CANARY_GROQ)
+    const card = page.getByTestId("provider-card-groq")
+    await page.route("**/api/keys/test", async route => {
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      await route.fulfill({
+        json: {
+          provider: "groq",
+          valid: true,
+          rate_limited: false,
+          verification: {
+            checked_at: "2026-11-27T18:00:00.000Z",
+            provider_enabled: true,
+            model_catalog_checked: true,
+            models: [{ id: "openai/gpt-oss-20b", available: true }],
+            observed_quotas: [],
+            unverified_fields: [],
+            quota_metadata_ready: true,
+            note: "Mocked verification.",
+          },
+        },
+      })
+    })
+    await page.reload()
+    await unlockVault(page)
+    await expect(card.getByTestId("test-result-groq")).toContainText(/testing/i)
+    await page.evaluate(() => {
+      IDBObjectStore.prototype.put = (() => { throw new Error("storage blocked") }) as typeof IDBObjectStore.prototype.put
+    })
+    await card.getByTestId("remove-groq").click()
+    await page.getByTestId("confirm-delete-btn").click()
+    await expect(card.getByTestId("test-result-groq")).toContainText("Not tested")
+    await expect(card.locator('button[aria-label="Save & Test"]')).toBeEnabled()
+  })
+
+  test("11. failed clear-all restores retryable status for retained keys", async ({ page }) => {
+    await page.goto("/settings")
+    await saveKey(page, "groq", CANARY_GROQ)
+    const card = page.getByTestId("provider-card-groq")
+    await page.route("**/api/keys/test", async route => {
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      await route.fulfill({
+        json: {
+          provider: "groq",
+          valid: true,
+          rate_limited: false,
+          verification: {
+            checked_at: "2026-11-27T18:00:00.000Z",
+            provider_enabled: true,
+            model_catalog_checked: true,
+            models: [{ id: "openai/gpt-oss-20b", available: true }],
+            observed_quotas: [],
+            unverified_fields: [],
+            quota_metadata_ready: true,
+            note: "Mocked verification.",
+          },
+        },
+      })
+    })
+    await page.reload()
+    await unlockVault(page)
+    await expect(card.getByTestId("test-result-groq")).toContainText(/testing/i)
+    await page.evaluate(() => {
+      IDBObjectStore.prototype.delete = (() => { throw new Error("storage blocked") }) as typeof IDBObjectStore.prototype.delete
+    })
+    page.on("dialog", dialog => dialog.accept())
+    await page.getByTestId("clear-all-keys").click()
+    await expect(card.getByTestId("test-result-groq")).toContainText("Not tested")
+    await expect(page.getByTestId("clear-all-keys")).toBeVisible()
+  })
+
+  test("12. failed forget keeps the encrypted vault and lets the user unlock again", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("assembly:cookie-choice", "accepted")
+    })
+    await page.goto("/settings")
+    await saveKey(page, "groq", CANARY_GROQ)
+    await page.route("**/api/keys/test", async route => {
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      await route.fulfill({
+        json: {
+          provider: "groq",
+          valid: true,
+          rate_limited: false,
+          verification: {
+            checked_at: "2026-11-27T18:00:00.000Z",
+            provider_enabled: true,
+            model_catalog_checked: true,
+            models: [{ id: "openai/gpt-oss-20b", available: true }],
+            observed_quotas: [],
+            unverified_fields: [],
+            quota_metadata_ready: true,
+            note: "Mocked verification.",
+          },
+        },
+      })
+    })
+    await page.reload()
+    await unlockVault(page)
+    await expect(page.getByTestId("test-result-groq")).toContainText(/testing/i)
+    await page.getByTestId("lock-vault").click()
+    await blockIndexedDbDelete(page)
+    await page.getByTestId("forget-keys").click()
+    await expect(page.getByTestId("forget-keys")).toBeVisible()
+    await expect(page.getByText("Unable to remove saved keys")).toBeVisible()
+    // Let the subsequent unlock read the original encrypted vault normally.
+    await restoreIndexedDbDelete(page)
+    await unlockVault(page)
+    const card = page.getByTestId("provider-card-groq")
+    await expect(card).toBeVisible()
+    await expect(card.getByTestId("test-result-groq")).toContainText(/valid|testing/i)
   })
 
   test("9. keys never appear in URLs, console logs, or localStorage plaintext", async ({ page }) => {

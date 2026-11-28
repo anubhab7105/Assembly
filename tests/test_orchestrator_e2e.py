@@ -60,6 +60,32 @@ async def test_full_execution_end_to_end(orchestrator: Orchestrator) -> None:
     assert result.providers_used != []
 
 
+async def test_execution_closes_owned_router_after_completion(
+    orchestrator: Orchestrator,
+) -> None:
+    class ClosableRouter:
+        def __init__(self, delegate):
+            self.delegate = delegate
+            self.closed = False
+
+        def __getattr__(self, name):
+            return getattr(self.delegate, name)
+
+        async def aclose(self):
+            self.closed = True
+
+    router = ClosableRouter(orchestrator.router)
+    result = await orchestrator.execute(
+        execution_id="test-exec-router-cleanup",
+        question="What is the mock answer?",
+        time_budget_minutes=3,
+        router_override=router,
+    )
+
+    assert result.status == "completed"
+    assert router.closed is True
+
+
 async def test_attachment_context_is_announced_without_crashing(
     orchestrator: Orchestrator,
 ) -> None:

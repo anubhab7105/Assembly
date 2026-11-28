@@ -8,6 +8,7 @@ import respx
 from pydantic import ValidationError
 
 from src.core.config import settings
+from src.providers.base import ChatMessage
 from src.providers.config import load_models_config
 from src.providers.errors import (
     AuthError,
@@ -399,6 +400,103 @@ def test_classify_exception_shapes() -> None:
     assert isinstance(classify_exception("p", RuntimeError("weird")), ProviderDown)
 
 
+@pytest.mark.asyncio
+async def test_gemini_uses_google_genai_async_client(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    import src.providers.gemini_provider as gemini_module
+
+    class Lease:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+    class Limiter:
+        async def acquire(self, *args, **kwargs):
+            return Lease()
+
+    class AsyncModels:
+        def __init__(self):
+            self.request = None
+
+        async def generate_content(self, **kwargs):
+            self.request = kwargs
+            return SimpleNamespace(
+                candidates=[
+                    SimpleNamespace(
+                        finish_reason="STOP",
+                        content=SimpleNamespace(
+                            parts=[SimpleNamespace(text="Gemini response")]
+                        ),
+                    )
+                ],
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=3,
+                    candidates_token_count=4,
+                ),
+            )
+
+    async_models = AsyncModels()
+    cleanup = {"calls": 0}
+
+    async def close_async_client():
+        cleanup["calls"] += 1
+
+    client = SimpleNamespace(
+        aio=SimpleNamespace(models=async_models, aclose=close_async_client)
+    )
+    monkeypatch.setattr(gemini_module.genai, "Client", lambda api_key: client)
+    monkeypatch.setattr("src.providers.quota.get_limiter", lambda: Limiter())
+
+    provider = GeminiProvider(api_key="test-key", default_model="gemini-test")
+    assert provider.is_available()
+    response = await provider._generate_inner(
+        [
+            ChatMessage(role="system", content="Be concise"),
+            ChatMessage(role="user", content="Hello"),
+        ],
+        "gemini-test",
+        0.3,
+        256,
+    )
+
+    assert response.content == "Gemini response"
+    assert response.finish_reason == "STOP"
+    assert response.input_tokens == 3
+    assert response.output_tokens == 4
+    assert async_models.request["model"] == "gemini-test"
+    assert async_models.request["contents"] == [
+        {"role": "user", "parts": [{"text": "Hello"}]}
+    ]
+    assert async_models.request["contents"][0]["role"] == "user"
+    assert async_models.request["config"].system_instruction == "Be concise"
+    assert async_models.request["config"].max_output_tokens == 256
+
+    await provider.aclose()
+    await provider.aclose()
+    assert cleanup["calls"] == 1
+    assert provider.is_available() is False
+
+
+
+
+def test_nvidia_example_placeholder_is_not_treated_as_a_real_key(monkeypatch) -> None:
+    from pydantic import SecretStr
+
+    monkeypatch.setattr(settings, "nvidia_api_key", SecretStr("nvapi-your-nvidia-api-key"))
+    assert settings.has_provider("nvidia") is False
+
+
+def test_nvidia_and_mistral_env_keys_are_mapped() -> None:
+    from src.core.keystore import EnvKeyStore
+
+    attrs = EnvKeyStore._key_attrs()
+    assert attrs["mistral"] == "mistral_api_key"
+    assert attrs["nvidia"] == "nvidia_api_key"
+
+
 # ── Registry ──────────────────────────────────────────────────────────
 
 
@@ -415,8 +513,25 @@ def test_registry_builds_generic_and_gemini() -> None:
 def test_registry_rejects_unknown_and_disabled() -> None:
     with pytest.raises(KeyError):
         get_provider("skynet", "k")
+    catalog = load_models_config()
+    disabled = catalog.providers["huggingface"].model_copy(update={"enabled": False})
+    config = catalog.model_copy(
+        update={"providers": {**catalog.providers, "huggingface": disabled}}
+    )
     with pytest.raises(ProviderDisabledError):
-        get_provider("huggingface", "k")
+        get_provider("huggingface", "k", config=config)
+
+
+def test_mistral_is_available_for_key_setup_but_not_routing_without_limits() -> None:
+    from src.providers.config import provider_limits_issue
+
+    catalog = load_models_config()
+    spec = catalog.providers["mistral"]
+    assert spec.enabled is True
+    assert provider_limits_issue("mistral", spec) is not None
+    provider = get_provider("mistral", "test-key", config=catalog)
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.get_available_models() == [model.id for model in spec.models]
 
 
 # ── Switching a model id = editing only models.yaml ───────────────────

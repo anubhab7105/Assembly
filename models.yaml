@@ -129,9 +129,10 @@ providers:
     base: openai-compatible
     url: https://api.cerebras.ai/v1
     key_url: https://cloud.cerebras.ai
-    # Disabled 2026-10-09: key returns 402 payment-required on every model
-    # (verify report); re-enable only with a funded key + filled limits.
-    enabled: false
+    # Enabled for key setup. A prior probe returned 402 payment-required;
+    # use only with an account whose access/billing is confirmed. Null quota
+    # limits intentionally keep it out of routing until dashboard verification.
+    enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
       - "Sign in or create an account."
@@ -211,8 +212,9 @@ providers:
     base: openai-compatible
     url: https://api.mistral.ai/v1
     key_url: https://console.mistral.ai
-    # Disabled until a key is added (no MISTRAL_API_KEY locally 2026-10-09).
-    enabled: false
+    # Enabled for key setup. Routing remains blocked until account/model
+    # quota and context limits are verified from the provider dashboard.
+    enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
       - "Sign in or create an account."
@@ -239,11 +241,9 @@ providers:
     base: openai-compatible
     url: https://integrate.api.nvidia.com/v1
     key_url: https://build.nvidia.com
-    # Disabled 2026-10-12: no NVIDIA_API_KEY configured and limits unfilled.
-    # Enable only if you intend to use this provider: add the key, fill
-    # rpm/rpd/tpm from build.nvidia.com limits (or a verify run), then flip
-    # this back. The frontend setup card is hidden while disabled.
-    enabled: false
+    # Enabled for key setup. The router will still reject this provider until
+    # its account limits and model context sizes are verified and recorded.
+    enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
       - "Sign in or create an account."
@@ -285,9 +285,9 @@ providers:
   huggingface:
     base: huggingface
     key_url: https://huggingface.co/settings/tokens
-    # Disabled by default: free credit is tiny (~$0.10/mo), not enough for
-    # multi-agent runs. Set enabled: true only if you know what you are doing.
-    enabled: false
+    # Enabled for key setup at the user's request. Hugging Face free credit
+    # is very limited; use cautiously. Unknown quotas keep it unroutable.
+    enabled: true
     key_steps:
       - "Open the key page via the Get free key link."
       - "Sign in or create an account."

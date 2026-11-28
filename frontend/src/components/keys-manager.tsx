@@ -45,6 +45,7 @@ const TARGET_PROVIDERS: TargetProvider[] = [
   { id: "groq", env: "GROQ_API_KEY", name: "Groq", placeholder: "gsk_your-groq-api-key" },
   { id: "cerebras", env: "CEREBRAS_API_KEY", name: "Cerebras", placeholder: "csk-your-cerebras-api-key" },
   { id: "openrouter", env: "OPENROUTER_API_KEY", name: "OpenRouter", placeholder: "sk-or-your-openrouter-api-key" },
+  { id: "mistral", env: "MISTRAL_API_KEY", name: "Mistral", placeholder: "your-mistral-api-key" },
   { id: "huggingface", env: "HUGGINGFACE_API_KEY", name: "Hugging Face", placeholder: "hf_your-huggingface-api-key" },
   { id: "nvidia", env: "NVIDIA_API_KEY", name: "NVIDIA", placeholder: "nvapi-your-nvidia-api-key" },
 ]
@@ -78,6 +79,12 @@ const PROVIDER_METADATA: Record<
     roles: ["Solver", "Critic", "Synthesizer"],
     highlight: "Multi-architecture open weight diversity",
     link: "https://openrouter.ai/keys",
+  },
+  mistral: {
+    models: "Mistral models from your account catalog",
+    roles: ["Solver", "Critic"],
+    highlight: "General-purpose text generation with an independent model family",
+    link: "https://console.mistral.ai/api-keys/",
   },
   huggingface: {
     models: "Mistral 7B, Qwen 2.5 Coder",
@@ -130,15 +137,73 @@ export function KeysManager() {
   const [verifications, setVerifications] = useState<Record<string, KeyMetadataVerification>>({})
   const verificationGenerations = React.useRef<Record<string, number>>({})
 
-  const nextVerificationGeneration = (providerId: string): number => {
+  const nextVerificationGeneration = React.useCallback((providerId: string): number => {
     const generation = (verificationGenerations.current[providerId] ?? 0) + 1
     verificationGenerations.current[providerId] = generation
     return generation
-  }
+  }, [])
 
   const invalidateVerificationGenerations = (providerIds: string[]) => {
     for (const providerId of providerIds) nextVerificationGeneration(providerId)
   }
+
+  const resetTestingStatuses = (providerIds: string[]) => {
+    setStatuses((prev) => {
+      const next = { ...prev }
+      for (const providerId of providerIds) {
+        if (next[providerId] === "testing") next[providerId] = "unknown"
+      }
+      return next
+    })
+  }
+
+  // Restored credentials are not considered run-ready until the exact saved
+  // key has been checked against the current provider catalogue again.
+  const verifyRestoredProviderKeys = React.useCallback(async (
+    keys: Record<string, string>,
+    providerCatalog: Catalog | null,
+  ) => {
+    const providersToVerify = (providerCatalog?.providers ?? []).filter(
+      (provider) =>
+        provider.enabled &&
+        typeof keys[provider.id] === "string" &&
+        keys[provider.id].trim().length > 0,
+    )
+    if (providersToVerify.length === 0) return
+
+    const generations = new Map<string, number>()
+    for (const provider of providersToVerify) {
+      generations.set(provider.id, nextVerificationGeneration(provider.id))
+    }
+
+    setStatuses((prev) => {
+      const next = { ...prev }
+      for (const provider of providersToVerify) next[provider.id] = "testing"
+      return next
+    })
+    setVerifications((prev) => {
+      const next = { ...prev }
+      for (const provider of providersToVerify) delete next[provider.id]
+      return next
+    })
+
+    await Promise.all(
+      providersToVerify.map(async (provider) => {
+        const generation = generations.get(provider.id)
+        try {
+          const result = await ApiClient.testKey(provider.id, keys[provider.id])
+          if (generation !== verificationGenerations.current[provider.id]) return
+          setStatuses((prev) => ({ ...prev, [provider.id]: result.status }))
+          if (result.verification) {
+            setVerifications((prev) => ({ ...prev, [provider.id]: result.verification! }))
+          }
+        } catch {
+          if (generation !== verificationGenerations.current[provider.id]) return
+          setStatuses((prev) => ({ ...prev, [provider.id]: "unreachable" }))
+        }
+      }),
+    )
+  }, [nextVerificationGeneration])
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
   const [passphrase, setPassphrase] = useState("")
   const [vaultLoaded, setVaultLoaded] = useState(false)
@@ -159,15 +224,19 @@ export function KeysManager() {
   useEffect(() => {
     async function load() {
       ApiClient.wakeup()
+      let loadedCatalog: Catalog | null = null
       try {
-        setCatalog(await ApiClient.catalog())
+        loadedCatalog = await ApiClient.catalog()
+        setCatalog(loadedCatalog)
       } catch {
         setCatalog(null)
       }
       try {
         if (globalVault.isUnlocked()) {
-          setSavedKeys(await globalVault.allKeys())
+          const keys = await globalVault.allKeys()
+          setSavedKeys(keys)
           setVaultUnlocked(true)
+          void verifyRestoredProviderKeys(keys, loadedCatalog)
         } else {
           const hasStored = await globalVault.hasPersisted()
           const hasLegacy = await globalVault.hasLegacyEncrypted()
@@ -180,7 +249,7 @@ export function KeysManager() {
       setVaultLoaded(true)
     }
     load()
-  }, [])
+  }, [verifyRestoredProviderKeys])
 
   // Auto-detect provider when typing or pasting into universal bar
   const handleUniversalInputChange = (val: string) => {
@@ -195,6 +264,7 @@ export function KeysManager() {
     try {
       const keys = await globalVault.unlock(passphrase)
       setSavedKeys(keys)
+      void verifyRestoredProviderKeys(keys, catalog)
       setNeedsUnlock(false)
       setNeedsSetup(false)
       setVaultUnlocked(true)
@@ -213,6 +283,7 @@ export function KeysManager() {
     try {
       await globalVault.clearAll()
     } catch {
+      resetTestingStatuses(Object.keys({ ...savedKeys, ...verificationGenerations.current }))
       toast({
         title: "Unable to remove saved keys",
         description: "Browser storage rejected the deletion, so some keys may still be saved. Try again or clear browser/site data.",
@@ -350,6 +421,7 @@ export function KeysManager() {
       await globalVault.removeKey(providerId)
     } catch {
       if (verificationGenerations.current[providerId] !== generation) return
+      resetTestingStatuses([providerId])
       toast({
         title: "Unable to remove key",
         description: "Browser storage rejected the deletion, so this key may still be saved. Try again or clear browser/site data.",
@@ -383,7 +455,7 @@ export function KeysManager() {
       return next
     })
     toast({ title: "Key removed", description: `${providerId} key removed. Other providers are unchanged.` })
-  }, [toast])
+  }, [toast, nextVerificationGeneration])
 
   useEffect(() => {
     if (!pendingDelete) return
@@ -407,6 +479,7 @@ export function KeysManager() {
     try {
       await globalVault.clearAll()
     } catch {
+      resetTestingStatuses(Object.keys({ ...savedKeys, ...verificationGenerations.current }))
       toast({
         title: "Unable to clear saved keys",
         description: "Browser storage rejected the deletion, so some keys may still be saved. Try again or clear browser/site data.",
@@ -421,6 +494,9 @@ export function KeysManager() {
         await ApiClient.clearAllKeys()
       } catch {
         desktopStoreCleared = false
+        // The OS-backed keys were not confirmed deleted. Keep their state
+        // retryable rather than leaving invalidated checks stuck at testing.
+        resetTestingStatuses(Object.keys({ ...savedKeys, ...verificationGenerations.current }))
       }
     }
     setNeedsUnlock(false)
@@ -444,20 +520,35 @@ export function KeysManager() {
     }
   }
 
+  const runReadyProviders = providers.filter((provider) => {
+    const verification = verifications[provider.id]
+    const status = statuses[provider.id]
+    return (
+      provider.enabled &&
+      provider.limits_ready &&
+      Boolean(savedKeys[provider.id]) &&
+      (status === "valid" || status === "model_unavailable") &&
+      Boolean(verification?.quota_metadata_ready) &&
+      Boolean(verification?.models.some((model) => model.available === true))
+    )
+  })
   const readyFamilies = new Set<string>()
   const rolesReady = new Set<string>()
-  providers.forEach((p) => {
-    if (p.enabled && p.limits_ready && savedKeys[p.id] && statuses[p.id] !== "invalid") {
-      p.models.forEach((model) => {
-        const coreRoles = ["solver", "critic"].filter((role) => model.roles.includes(role))
-        if (coreRoles.length > 0) readyFamilies.add(model.family)
-        coreRoles.forEach((role) => rolesReady.add(role))
-      })
-    }
+  runReadyProviders.forEach((provider) => {
+    const verifiedModels = new Set(
+      verifications[provider.id].models
+        .filter((model) => model.available === true)
+        .map((model) => model.id),
+    )
+    provider.models.filter((model) => verifiedModels.has(model.id)).forEach((model) => {
+      const coreRoles = ["solver", "critic"].filter((role) => model.roles.includes(role))
+      if (coreRoles.length > 0) readyFamilies.add(model.family)
+      coreRoles.forEach((role) => rolesReady.add(role))
+    })
   })
   const gate = evaluateGate(
     [...readyFamilies],
-    providers.filter((p) => p.enabled && p.limits_ready && savedKeys[p.id] && statuses[p.id] !== "invalid").length,
+    runReadyProviders.length,
     [...rolesReady],
   )
 

@@ -119,57 +119,62 @@ class ProvidersStatusResponse(BaseModel):
     diversity: DiversityGateResponse = DiversityGateResponse()
 
 
-@router.post("/keys/test", response_model=KeyTestResponse)
-async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
-    """Validate a key with one auth-only models-list call; echo nothing."""
-    ip = client_ip(request)
-    await check_rate_limit(
-        f"ip:{ip}", "test_keys", settings.rate_limit_key_test_per_min_per_ip, 60
-    )
-    key = clean_key(req.key)
+async def verify_provider_key(
+    provider_id: str,
+    raw_key: str | SecretStr,
+    *,
+    catalog=None,
+) -> KeyTestResponse:
+    """Verify this exact key against the provider model catalogue.
+
+    Performs only provider-authenticated model-list/metadata checks. It never
+    generates content, stores the key, or logs/returns key material.
+    """
+    key = clean_key(raw_key)
     if not key:
         return KeyTestResponse(
-            provider=req.provider,
+            provider=provider_id,
             valid=False,
             rate_limited=False,
             error_code="auth_error",
             message=f"No key entered. {_COPY_HINT}",
         )
     try:
-        catalog = load_models_config()
+        catalog = catalog or load_models_config()
     except (FileNotFoundError, ValueError, TypeError):
         return KeyTestResponse(
-            provider=req.provider,
+            provider=provider_id,
             valid=False,
             rate_limited=False,
             error_code="error",
             message="Server catalog is unavailable; try again.",
         )
-    spec = catalog.providers.get(req.provider)
+    spec = catalog.providers.get(provider_id)
     if spec is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unknown provider: {req.provider}",
+            detail=f"Unknown provider: {provider_id}",
         )
     model = spec.models[0].id if spec.models else ""
-    label = "Google" if spec.base == "google-genai" else req.provider
+    label = "Google" if spec.base == "google-genai" else provider_id
     model_metadata: dict[str, dict[str, int]] = {}
     quota_headers: dict[str, str] = {}
     openrouter_key_info: dict[str, int] = {}
+    openrouter_key_status: int | None = 200
     if spec.base == "google-genai":
         list_status, listed, invalid_key_signal, model_metadata = await _list_gemini(key)
     elif spec.base == "openai-compatible":
         list_status, listed, invalid_key_signal, model_metadata, quota_headers = await _list_openai(
             spec.url or "", key, dict(spec.headers)
         )
-        if req.provider == "openrouter" and list_status == 200:
-            openrouter_key_info = await _openrouter_key_info(key)
+        if provider_id == "openrouter" and list_status == 200:
+            openrouter_key_status, openrouter_key_info = await _openrouter_key_info(key)
     elif spec.base == "huggingface":
-        result = await _test_huggingface(req.provider, model, key)
+        result = await _test_huggingface(provider_id, model, key)
         if result.valid:
             model_availability: dict[str, bool | None] = {model: result.model_available}
             for configured in spec.models[1:]:
-                probe = await _test_huggingface(req.provider, configured.id, key)
+                probe = await _test_huggingface(provider_id, configured.id, key)
                 model_availability[configured.id] = (
                     probe.model_available if probe.valid or probe.error_code == "model_not_found" else None
                 )
@@ -178,18 +183,18 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
             ]
             result.available_models = available_models
             result.verification = _build_key_metadata_verification(
-                req.provider, spec, available_models, {}, {}, {},
+                provider_id, spec, available_models, {}, {}, {},
                 model_availability=model_availability,
             )
         if not spec.enabled and result.valid:
             result.message = (
-                f"Key verified; {req.provider} is still disabled in models.yaml "
+                f"Key verified; {provider_id} is still disabled in models.yaml "
                 "and will not be used for runs."
             )
         return result
     else:  # Unreachable: config validation restricts base to known backends.
         return KeyTestResponse(
-            provider=req.provider,
+            provider=provider_id,
             valid=False,
             rate_limited=False,
             error_code="error",
@@ -197,18 +202,61 @@ async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
         )
 
     result = _classify_list_result(
-        req.provider, label, model, list_status, listed, invalid_key_signal
+        provider_id, label, model, list_status, listed, invalid_key_signal
     )
-    if list_status == 200:
+    if provider_id == "openrouter" and list_status == 200:
+        if openrouter_key_status in (401, 403):
+            result = KeyTestResponse(
+                provider=provider_id,
+                valid=False,
+                rate_limited=False,
+                error_code="auth_error",
+                model=model or None,
+                model_available=None,
+                message=f"Key was rejected by {provider_id}. {_COPY_HINT}",
+            )
+        elif openrouter_key_status != 200:
+            # Transient, rate-limited, malformed and unexpected responses are
+            # retryable rather than evidence that the credential is invalid.
+            result = KeyTestResponse(
+                provider=provider_id,
+                valid=False,
+                rate_limited=openrouter_key_status == 429,
+                error_code=(
+                    "rate_limited" if openrouter_key_status == 429 else "unreachable"
+                ),
+                model=model or None,
+                model_available=None,
+                message=(
+                    "OpenRouter key verification was rate-limited; try again shortly."
+                    if openrouter_key_status == 429
+                    else "Couldn't verify the OpenRouter key right now; try again."
+                ),
+            )
+        else:
+            result.verification = _build_key_metadata_verification(
+                provider_id, spec, listed, model_metadata, quota_headers, openrouter_key_info
+            )
+    elif list_status == 200:
         result.verification = _build_key_metadata_verification(
-            req.provider, spec, listed, model_metadata, quota_headers, openrouter_key_info
+            provider_id, spec, listed, model_metadata, quota_headers, openrouter_key_info
         )
     if not spec.enabled and result.valid:
         result.message = (
-            f"Key verified; {req.provider} is still disabled in models.yaml "
+            f"Key verified; {provider_id} is still disabled in models.yaml "
             "and will not be used for runs."
         )
     return result
+
+
+@router.post("/keys/test", response_model=KeyTestResponse)
+async def test_key(req: KeyTestRequest, request: Request) -> KeyTestResponse:
+    """Validate one key with an auth-only model-list call; echo nothing."""
+    ip = client_ip(request)
+    await check_rate_limit(
+        f"ip:{ip}", "test_keys", settings.rate_limit_key_test_per_min_per_ip, 60
+    )
+    return await verify_provider_key(req.provider, req.key)
 
 
 async def _list_gemini(
@@ -339,11 +387,12 @@ async def _list_openai(
     return response.status_code, sorted(ids), False, metadata, safe_headers
 
 
-async def _openrouter_key_info(key: str) -> dict[str, int]:
-    """Read OpenRouter's documented per-key free-model daily allowance.
+async def _openrouter_key_info(key: str) -> tuple[int | None, dict[str, int]]:
+    """Verify an OpenRouter key and read its per-key free-model allowance.
 
-    Credit budgets and the deprecated rate_limit object are intentionally
-    excluded: they are not RPM/RPD/TPM values for the shared model catalogue.
+    Preserve the response status so an auth rejection is distinguishable from
+    transient outages. Non-auth failures block routing until a retry succeeds,
+    but do not mark the user's credential invalid.
     """
     try:
         async with httpx.AsyncClient(timeout=_LIST_TIMEOUT_SECONDS) as client:
@@ -351,21 +400,28 @@ async def _openrouter_key_info(key: str) -> dict[str, int]:
                 "https://openrouter.ai/api/v1/key",
                 headers={"Authorization": f"Bearer {key}"},
             )
-        if response.status_code != 200:
-            return {}
+    except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPError):
+        return None, {}
+
+    if response.status_code != 200:
+        return response.status_code, {}
+    try:
         payload = response.json()
-    except Exception:  # noqa: BLE001 — optional metadata check must not invalidate a good key
-        return {}
+    except ValueError:
+        return None, {}
+
     data = payload.get("data", {}) if isinstance(payload, dict) else {}
-    free_limits = (
-        data.get("free_model_daily_requests", {})
-        if isinstance(data, dict)
-        else {}
+    if not isinstance(data, dict):
+        return None, {}
+    free_limits = data.get("free_model_daily_requests", {})
+    limit = (
+        _positive_int(free_limits.get("limit"))
+        if isinstance(free_limits, dict)
+        else None
     )
-    if not isinstance(free_limits, dict):
-        return {}
-    limit = _positive_int(free_limits.get("limit"))
-    return {"free_model_requests_per_day": limit} if limit is not None else {}
+    return response.status_code, (
+        {"free_model_requests_per_day": limit} if limit is not None else {}
+    )
 
 
 def _positive_int(value: object) -> int | None:
@@ -671,7 +727,11 @@ async def providers_status() -> ProvidersStatusResponse:
     families: set[str] = set()
     capacity: int | None = None
     for provider_id, spec in catalog.providers.items():
-        available = spec.enabled and provider_id in held
+        available = (
+            spec.enabled
+            and provider_id in held
+            and provider_limits_issue(provider_id, spec) is None
+        )
         provider_families = sorted({model.family for model in spec.models})
         entry = ProviderStatus(
             id=provider_id,

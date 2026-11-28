@@ -327,6 +327,130 @@ def test_groq_verification_maps_documented_headers_without_inventing_rpm() -> No
     assert result.models[0].context_tokens == 131_072
 
 
+@pytest.mark.parametrize(
+    ("key_status", "expected_error", "expected_valid", "expected_rate_limited"),
+    [
+        (200, None, True, False),
+        (401, "auth_error", False, False),
+        (403, "auth_error", False, False),
+        (429, "rate_limited", False, True),
+        (500, "unreachable", False, False),
+        (503, "unreachable", False, False),
+    ],
+)
+@respx.mock
+def test_openrouter_key_endpoint_controls_authentication_state(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_key: str,
+    key_status: int,
+    expected_error: str | None,
+    expected_valid: bool,
+    expected_rate_limited: bool,
+) -> None:
+    from src.providers.config import load_models_config
+
+    model = load_models_config().providers["openrouter"].models[0].id
+
+    async def allow_rate_limit(*_args, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(keys_mod, "check_rate_limit", allow_rate_limit)
+    respx.get("https://openrouter.ai/api/v1/models").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": model}]})
+    )
+    respx.get("https://openrouter.ai/api/v1/key").mock(
+        return_value=httpx.Response(
+            key_status,
+            json={"data": {"free_model_daily_requests": {"limit": 50}}}
+            if key_status == 200 else {"error": {"message": "diagnostic"}},
+        )
+    )
+
+    response = _client(monkeypatch).post(
+        "/api/keys/test", json={"provider": "openrouter", "key": fake_key}
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["valid"] is expected_valid
+    assert payload["rate_limited"] is expected_rate_limited
+    assert payload["error_code"] == expected_error
+    if expected_valid:
+        assert payload["verification"] is not None
+    else:
+        assert payload["verification"] is None
+    assert fake_key not in response.text
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        httpx.ReadTimeout("timeout"),
+        httpx.ConnectError("network unavailable"),
+    ],
+)
+@respx.mock
+def test_openrouter_key_endpoint_transport_failure_is_retryable_not_auth_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_key: str,
+    failure: Exception,
+) -> None:
+    from src.providers.config import load_models_config
+
+    model = load_models_config().providers["openrouter"].models[0].id
+
+    async def allow_rate_limit(*_args, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(keys_mod, "check_rate_limit", allow_rate_limit)
+    respx.get("https://openrouter.ai/api/v1/models").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": model}]})
+    )
+    respx.get("https://openrouter.ai/api/v1/key").mock(side_effect=failure)
+
+    response = _client(monkeypatch).post(
+        "/api/keys/test", json={"provider": "openrouter", "key": fake_key}
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["valid"] is False
+    assert payload["rate_limited"] is False
+    assert payload["error_code"] == "unreachable"
+    assert "verify" in payload["message"].lower()
+    assert fake_key not in response.text
+
+
+@pytest.mark.parametrize("key_status", [200, 401, 403, 429, 500, 503])
+@respx.mock
+def test_openrouter_key_verification_status_is_required_for_routing(
+    monkeypatch: pytest.MonkeyPatch, fake_key: str, key_status: int
+) -> None:
+    from src.api.request_context import verify_run_provider_keys
+    from src.providers.config import load_models_config
+
+    model = load_models_config().providers["openrouter"].models[0].id
+
+    async def allow_rate_limit(*_args, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(keys_mod, "check_rate_limit", allow_rate_limit)
+    respx.get("https://openrouter.ai/api/v1/models").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": model}]})
+    )
+    respx.get("https://openrouter.ai/api/v1/key").mock(
+        return_value=httpx.Response(
+            key_status,
+            json={"data": {}} if key_status == 200 else {"error": {}},
+        )
+    )
+
+    response = _client(monkeypatch).post(
+        "/api/keys/test", json={"provider": "openrouter", "key": fake_key}
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["valid"] is (key_status == 200)
+
+
 def test_openrouter_verification_keeps_free_daily_cap_distinct_from_rpd() -> None:
     from src.providers.config import ProviderSpec
 
@@ -373,7 +497,19 @@ def test_disabled_provider_key_can_be_verified_without_enabling_routing(
 ) -> None:
     from src.providers.config import load_models_config
 
-    model = load_models_config().providers["cerebras"].models[0].id
+    catalog = load_models_config()
+    cerebras = catalog.providers["cerebras"]
+    disabled_cerebras = cerebras.model_copy(update={"enabled": False})
+    config = catalog.model_copy(
+        update={
+            "providers": {
+                **catalog.providers,
+                "cerebras": disabled_cerebras,
+            }
+        }
+    )
+    monkeypatch.setattr(keys_mod, "load_models_config", lambda: config)
+    model = config.providers["cerebras"].models[0].id
 
     async def _fake_openai(_url: str, _key: str, _headers: dict[str, str]):
         return 200, [model], False, {}, {}

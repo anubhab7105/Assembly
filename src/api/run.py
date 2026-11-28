@@ -22,6 +22,7 @@ from src.api.request_context import (
     _filtered_router,
     build_request_context,
     diversity_payload,
+    verify_run_provider_keys,
 )
 from src.core.config import settings
 from src.core.logging_config import logger
@@ -430,12 +431,17 @@ async def start_run(req: RunRequest, request: Request):
     from src.providers.router import PinViolationError
 
     try:
-        ctx = build_request_context(
+        verified_keys, verified_models, provider_issues = await verify_run_provider_keys(
             dict(req.provider_keys or {}),
-            dict(req.search_keys) if req.search_keys is not None else None,
             list(req.model_selection.selected or []),
+        )
+        ctx = build_request_context(
+            verified_keys,
+            dict(req.search_keys) if req.search_keys is not None else None,
+            verified_models,
             dict(req.model_selection.pins or {}),
             [u.model_dump() for u in (req.usage_snapshot or [])],
+            provider_issues,
         )
     except PinViolationError as exc:
         return JSONResponse(
@@ -449,13 +455,15 @@ async def start_run(req: RunRequest, request: Request):
         if ctx.quota_snapshot_token is not None:
             get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
             ctx.quota_snapshot_token = None
+        await ctx.aclose()
         return JSONResponse(
             status_code=400,
             content={
                 "code": BLOCKED_CODE,
                 "detail": (
-                    "Not enough usable solver/critic model families. Add valid keys "
+                    "Not enough usable solver/critic model families. Add tested keys with fresh quota configuration "
                     + f"for at least {MINIMUM_FAMILIES} distinct families; three are recommended."
+                    + ((" Provider readiness: " + "; ".join(ctx.provider_issues[:4])) if ctx.provider_issues else "")
                 ),
                 "minimum_families": MINIMUM_FAMILIES,
             },
@@ -485,6 +493,7 @@ async def start_run(req: RunRequest, request: Request):
                 if ctx.quota_snapshot_token is not None:
                     limiter.reset_usage_snapshot(ctx.quota_snapshot_token)
                     ctx.quota_snapshot_token = None
+                await ctx.aclose()
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Tier not feasible with current quota."},
@@ -498,6 +507,7 @@ async def start_run(req: RunRequest, request: Request):
             if ctx.quota_snapshot_token is not None:
                 get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
                 ctx.quota_snapshot_token = None
+            await ctx.aclose()
             return JSONResponse(
                 status_code=429, content={"detail": "Server busy, try again later."}
             )
@@ -506,6 +516,7 @@ async def start_run(req: RunRequest, request: Request):
             if ctx.quota_snapshot_token is not None:
                 get_limiter().reset_usage_snapshot(ctx.quota_snapshot_token)
                 ctx.quota_snapshot_token = None
+            await ctx.aclose()
             return JSONResponse(
                 status_code=429,
                 content={
@@ -545,7 +556,7 @@ async def start_run(req: RunRequest, request: Request):
             run_id,
             question,
             req.time_budget_minutes,
-            dict(req.provider_keys or {}),
+            verified_keys,
             allowed,
             pins,
             [u.model_dump() for u in (req.usage_snapshot or [])],

@@ -6,7 +6,8 @@ Implements the AIProvider interface for Google Gemini models.
 
 import asyncio
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from pydantic import SecretStr
 
 from src.core.config import settings
@@ -15,22 +16,15 @@ from src.core.logging_config import logger
 from src.providers.base import AIProvider, ChatMessage, ProviderResponse
 from src.providers.errors import RateLimited, TruncatedResponse, classify_exception
 
-# Bound a single generation call: the legacy SDK has no timeout of its own,
-# and an unbounded await here freezes the whole execution past its budget.
+# Bound a single generation call so an upstream stall cannot exceed the run budget.
 GENERATION_TIMEOUT_SECONDS = 120.0
-
-# Legacy google.generativeai 0.8.6 GenerationConfig takes only
-# candidate_count/stop_sequences/max_output_tokens/temperature/top_p/top_k/
-# response_mime_type/response_schema/presence_penalty/frequency_penalty —
-# there is NO thinking-budget parameter, so none is set (verified against
-# the installed SDK; do not add one by guess).
 
 
 def _finish_to_string(finish: object) -> str:
     """Normalize SDK/REST finish reasons to the REST vocabulary.
 
-    The legacy SDK surfaces protobuf ints (STOP=1, MAX_TOKENS=2,
-    SAFETY=3, ...) while REST uses strings. Unknown shapes read as "".
+    SDKs may expose numeric values or string enums; REST uses strings.
+    Unknown shapes read as "".
     """
     if finish is None:
         return ""
@@ -108,8 +102,7 @@ class GeminiProvider(AIProvider):
         if not default_model:
             raise ValueError("GeminiProvider needs default_model (from models.yaml)")
         key = clean_key(api_key) or clean_key(settings.gemini_api_key)
-        if key:
-            genai.configure(api_key=key)
+        self._client = genai.Client(api_key=key) if key else None
         # SecretStr so the value never renders in logs/repr; revealed only
         # for the quota fingerprint at the call site below.
         self._api_key = SecretStr(key)
@@ -172,15 +165,15 @@ class GeminiProvider(AIProvider):
                     system_instruction = msg.content
                 else:
                     role = "model" if msg.role == "assistant" else "user"
-                    gemini_messages.append({"role": role, "parts": [msg.content]})
+                    gemini_messages.append({"role": role, "parts": [{"text": msg.content}]})
 
-            gen_model = genai.GenerativeModel(
-                model_name=model_name,
+            if self._client is None:
+                raise ValueError("Gemini API key is required to generate content")
+
+            generation_config = types.GenerateContentConfig(
+                temperature=temperature,
+                max_output_tokens=max_tokens,
                 system_instruction=system_instruction,
-                generation_config=genai.GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
-                ),
             )
 
             limiter = None
@@ -197,7 +190,11 @@ class GeminiProvider(AIProvider):
             if limiter is None:
                 # Fail-open: no quota guard when the limiter is unavailable.
                 response = await asyncio.wait_for(
-                    gen_model.generate_content_async(gemini_messages),
+                    self._client.aio.models.generate_content(
+                        model=model_name,
+                        contents=gemini_messages,
+                        config=generation_config,
+                    ),
                     timeout=GENERATION_TIMEOUT_SECONDS,
                 )
             else:
@@ -209,7 +206,11 @@ class GeminiProvider(AIProvider):
                         est_tokens=max_tokens + reserve,
                     ):
                         response = await asyncio.wait_for(
-                            gen_model.generate_content_async(gemini_messages),
+                            self._client.aio.models.generate_content(
+                                model=model_name,
+                                contents=gemini_messages,
+                                config=generation_config,
+                            ),
                             timeout=GENERATION_TIMEOUT_SECONDS,
                         )
                 except RateLimited as exc:
@@ -259,8 +260,14 @@ class GeminiProvider(AIProvider):
             )
             raise structured from e
 
+    async def aclose(self) -> None:
+        """Close the async Google Gen AI transport owned by this provider."""
+        client, self._client = self._client, None
+        if client is not None:
+            await client.aio.aclose()
+
     def is_available(self) -> bool:
-        return settings.has_provider("gemini")
+        return self._client is not None and bool(self._fingerprint)
 
     def get_available_models(self) -> list[str]:
         return list(self._models)
@@ -269,9 +276,8 @@ class GeminiProvider(AIProvider):
     def _extract_reasoning_tokens(usage_metadata: object) -> int:
         """Best-effort thinking/reasoning tokens from Gemini usage metadata.
 
-        The surface varies by SDK and API version: the legacy
-        ``google.generativeai`` SDK exposes snake_case attributes while the
-        REST API (and newer SDKs) use camelCase ``thoughtsTokenCount``.
+        The surface varies by SDK and API version; probe both snake_case
+        and camelCase spellings and return zero for unknown shapes.
         Every known equivalent is probed; unknown shapes read as 0.
         Informational per call; the tpm lease instead reserves a measured
         average up front because actuals are known too late.

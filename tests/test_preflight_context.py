@@ -270,6 +270,11 @@ def test_preflight_uses_request_keys(monkeypatch, caplog, tmp_path) -> None:
         )
 
     monkeypatch.setattr(preflight_mod, "build_request_context", _fake)
+
+    async def _fake_verify(provider_keys, selected):
+        return dict(provider_keys or {}), list(selected or []), []
+
+    monkeypatch.setattr(preflight_mod, "verify_run_provider_keys", _fake_verify)
     client = TestClient(app)
     with caplog.at_level(logging.INFO, logger="assembly"):
         res = client.post(
@@ -340,3 +345,138 @@ def test_preflight_canary_never_in_422(caplog) -> None:
     assert CANARY_SEARCH not in res.text
     assert CANARY_PROV not in caplog.text
     assert CANARY_SEARCH not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_run_verification_filters_each_key_to_its_own_readiness(
+    monkeypatch, tmp_path
+) -> None:
+    from datetime import UTC, datetime
+
+    import src.api.keys as keys_mod
+    from src.api.keys import (
+        KeyMetadataVerification,
+        KeyTestResponse,
+        VerifiedModelMetadata,
+    )
+    from src.api.request_context import verify_run_provider_keys
+    from tests.conftest import make_models_yaml
+
+    path = make_models_yaml(
+        tmp_path,
+        {
+            "groq": [{
+                "id": "groq-model",
+                "family": "gpt-oss",
+                "roles": ["solver", "critic"],
+            }],
+            "openrouter": [{
+                "id": "openrouter-model",
+                "family": "gemma",
+                "roles": ["solver", "critic"],
+            }],
+        },
+    )
+    monkeypatch.setattr(
+        "src.providers.config.default_catalog_path", lambda: path
+    )
+
+    async def fake_verify(provider_id, key, *, catalog=None):
+        model_id = f"{provider_id}-model"
+        ready = provider_id == "groq"
+        return KeyTestResponse(
+            provider=provider_id,
+            valid=True,
+            rate_limited=False,
+            verification=KeyMetadataVerification(
+                checked_at=datetime.now(UTC).isoformat(),
+                provider_enabled=True,
+                model_catalog_checked=True,
+                models=[VerifiedModelMetadata(id=model_id, available=True)],
+                observed_quotas=[],
+                unverified_fields=[] if ready else ["rpm"],
+                quota_metadata_ready=ready,
+                quota_metadata_issue=None if ready else "quota metadata is stale",
+                note="test only",
+            ),
+        )
+
+    monkeypatch.setattr(keys_mod, "verify_provider_key", fake_verify)
+    raw_keys = {"groq": "fake-groq-key", "openrouter": "fake-openrouter-key"}
+
+    valid_keys, models, issues = await verify_run_provider_keys(raw_keys, [])
+
+    assert valid_keys == {"groq": "fake-groq-key"}
+    assert models == ["groq-model"]
+    assert len(issues) == 1
+    assert issues[0].startswith("openrouter:")
+    assert "quota metadata is stale" in issues[0]
+
+
+@pytest.mark.asyncio
+async def test_run_verification_rejects_selected_model_unavailable_for_key(
+    monkeypatch, tmp_path
+) -> None:
+    from datetime import UTC, datetime
+
+    import src.api.keys as keys_mod
+    from src.api.keys import (
+        KeyMetadataVerification,
+        KeyTestResponse,
+        VerifiedModelMetadata,
+    )
+    from src.api.request_context import verify_run_provider_keys
+    from src.providers.router import PinViolationError
+    from tests.conftest import make_models_yaml
+
+    path = make_models_yaml(
+        tmp_path,
+        {
+            "groq": [{
+                "id": "groq-model",
+                "family": "gpt-oss",
+                "roles": ["solver", "critic"],
+            }],
+        },
+    )
+    monkeypatch.setattr(
+        "src.providers.config.default_catalog_path", lambda: path
+    )
+
+    async def fake_verify(provider_id, key, *, catalog=None):
+        return KeyTestResponse(
+            provider=provider_id,
+            valid=True,
+            rate_limited=False,
+            verification=KeyMetadataVerification(
+                checked_at=datetime.now(UTC).isoformat(),
+                provider_enabled=True,
+                model_catalog_checked=True,
+                models=[VerifiedModelMetadata(id="groq-model", available=False)],
+                observed_quotas=[],
+                unverified_fields=[],
+                quota_metadata_ready=True,
+                quota_metadata_issue=None,
+                note="test only",
+            ),
+        )
+
+    monkeypatch.setattr(keys_mod, "verify_provider_key", fake_verify)
+    with pytest.raises(PinViolationError, match="did not confirm any configured model is available"):
+        await verify_run_provider_keys(
+            {"groq": "fake-groq-key"},
+            ["groq-model"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_run_verification_reports_missing_keys() -> None:
+    from src.api.request_context import verify_run_provider_keys
+
+    valid_keys, models, issues = await verify_run_provider_keys({}, [])
+
+    assert valid_keys == {}
+    assert models == []
+    assert issues == ["No API keys were supplied for this run."]
+
+

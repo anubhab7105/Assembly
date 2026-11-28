@@ -1261,6 +1261,18 @@ class Orchestrator:
             # The run settled: drop the deadline registration so a later
             # cancel request correctly reports "unknown run".
             self._deadlines.pop(execution_id, None)
+            # Routers built from request keys or supplied by the request
+            # context are run-owned. Shared APP_MODE routers stay open.
+            if router_override is not None or key_store is not None:
+                close_router = getattr(router, "aclose", None)
+                if callable(close_router):
+                    try:
+                        await close_router()
+                    except Exception as cleanup_error:  # noqa: BLE001 — preserve the run result
+                        logger.warning(
+                            "Exec    │ Provider cleanup failed (type=%s)",
+                            type(cleanup_error).__name__,
+                        )
 
     @staticmethod
     def _advisory_capacity_check(
