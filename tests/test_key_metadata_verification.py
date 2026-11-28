@@ -109,7 +109,9 @@ async def test_openrouter_key_info_reports_free_model_allowance_not_credit_budge
 
     result = await keys_mod._openrouter_key_info(fake_key)
 
-    assert result == {"free_model_requests_per_day": 50}
+    status_code, metadata = result
+    assert status_code == 200
+    assert metadata == {"free_model_requests_per_day": 50}
     assert route.calls[0].request.headers["Authorization"] == f"Bearer {fake_key}"
     assert fake_key not in repr(result)
 
@@ -132,7 +134,9 @@ async def test_openrouter_invalid_unicode_digit_limit_stays_unverified(fake_key:
             200, json={"data": {"free_model_daily_requests": {"limit": "²"}}}
         )
     )
-    assert await keys_mod._openrouter_key_info(fake_key) == {}
+    status_code, metadata = await keys_mod._openrouter_key_info(fake_key)
+    assert status_code == 200
+    assert metadata == {}
 
 
 @pytest.mark.asyncio
