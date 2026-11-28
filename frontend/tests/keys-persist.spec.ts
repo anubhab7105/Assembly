@@ -75,6 +75,30 @@ async function saveKey(page: Page, provider: string, key: string) {
   await expect(card.getByTestId(`test-result-${provider}`)).toContainText(/valid/i, { timeout: 10000 })
 }
 
+async function blockIndexedDbDelete(page: Page) {
+  await page.evaluate(() => {
+    const target = window as unknown as {
+      __assemblyOriginalIdbDelete?: typeof IDBObjectStore.prototype.delete
+    }
+    target.__assemblyOriginalIdbDelete = IDBObjectStore.prototype.delete
+    IDBObjectStore.prototype.delete = (() => {
+      throw new Error("storage blocked")
+    }) as typeof IDBObjectStore.prototype.delete
+  })
+}
+
+async function restoreIndexedDbDelete(page: Page) {
+  await page.evaluate(() => {
+    const target = window as unknown as {
+      __assemblyOriginalIdbDelete?: typeof IDBObjectStore.prototype.delete
+    }
+    if (target.__assemblyOriginalIdbDelete) {
+      IDBObjectStore.prototype.delete = target.__assemblyOriginalIdbDelete
+      delete target.__assemblyOriginalIdbDelete
+    }
+  })
+}
+
 test.describe("Keys survive refresh (P0)", () => {
   test.beforeEach(async ({ page }) => {
     await mockNetwork(page)
@@ -395,16 +419,12 @@ test.describe("Keys survive refresh (P0)", () => {
     await unlockVault(page)
     await expect(page.getByTestId("test-result-groq")).toContainText(/testing/i)
     await page.getByTestId("lock-vault").click()
-    await page.evaluate(() => {
-      IDBObjectStore.prototype.delete = (() => { throw new Error("storage blocked") }) as typeof IDBObjectStore.prototype.delete
-    })
+    await blockIndexedDbDelete(page)
     await page.getByTestId("forget-keys").click()
     await expect(page.getByTestId("forget-keys")).toBeVisible()
     await expect(page.getByText("Unable to remove saved keys")).toBeVisible()
-    await page.evaluate(() => {
-      // Let the subsequent unlock read the original encrypted vault normally.
-      IDBObjectStore.prototype.delete = originalObjectStoreDelete
-    })
+    // Let the subsequent unlock read the original encrypted vault normally.
+    await restoreIndexedDbDelete(page)
     await unlockVault(page)
     const card = page.getByTestId("provider-card-groq")
     await expect(card).toBeVisible()
