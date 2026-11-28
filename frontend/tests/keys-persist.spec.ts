@@ -296,6 +296,48 @@ test.describe("Keys survive refresh (P0)", () => {
     await expect(page.getByTestId("readiness-chip")).toContainText("0 families ready")
   })
 
+  test("10. failed single-key deletion restores Save & Test after invalidating a pending check", async ({ page }) => {
+    await page.goto("/settings")
+    await unlockVault(page)
+    const card = page.getByTestId("provider-card-groq")
+    await card.locator('input[type="password"]').fill(CANARY_GROQ)
+    await card.getByRole("button", { name: /Save & Test/i }).click()
+    await expect(card.getByTestId("test-result-groq")).toContainText(/valid/i)
+
+    await page.route("**/api/keys/test", async route => {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      await route.fulfill({ json: { provider: "groq", valid: true, rate_limited: false } })
+    })
+    await page.reload()
+    await unlockVault(page)
+    await expect(card.getByTestId("test-result-groq")).toContainText(/testing/i)
+    await page.evaluate(() => {
+      const proto = Object.getPrototypeOf(indexedDB) as IDBFactory
+      proto.transaction = (() => { throw new Error("storage blocked") }) as typeof proto.transaction
+    })
+    await card.getByTestId("remove-groq").click()
+    const confirm = page.getByTestId("confirm-delete-btn")
+    if (await confirm.isVisible().catch(() => false)) await confirm.click()
+    await expect(card.getByRole("button", { name: /Save & Test/i })).toBeEnabled()
+    await expect(card.getByTestId("test-result-groq")).toContainText(/not tested/i)
+  })
+
+  test("11. failed clear-all and forget operations restore retryable statuses", async ({ page }) => {
+    await page.goto("/settings")
+    await saveKey(page, "groq", CANARY_GROQ)
+    await page.evaluate(() => {
+      const proto = Object.getPrototypeOf(indexedDB) as IDBFactory
+      proto.transaction = (() => { throw new Error("storage blocked") }) as typeof proto.transaction
+    })
+    page.on("dialog", dialog => dialog.accept())
+    await page.getByRole("button", { name: /clear all/i }).click().catch(() => {})
+    const card = page.getByTestId("provider-card-groq")
+    await expect(card.getByRole("button", { name: /Save & Test/i })).toBeEnabled()
+
+    await page.getByTestId("forget-keys").click()
+    await expect(card.getByRole("button", { name: /Save & Test/i })).toBeEnabled()
+  })
+
   test("9. keys never appear in URLs, console logs, or localStorage plaintext", async ({ page }) => {
     const consoleLogs: string[] = []
     page.on("console", msg => {
