@@ -494,6 +494,9 @@ export function KeysManager() {
         await ApiClient.clearAllKeys()
       } catch {
         desktopStoreCleared = false
+        // The OS-backed keys were not confirmed deleted. Keep their state
+        // retryable rather than leaving invalidated checks stuck at testing.
+        resetTestingStatuses(Object.keys({ ...savedKeys, ...verificationGenerations.current }))
       }
     }
     setNeedsUnlock(false)
