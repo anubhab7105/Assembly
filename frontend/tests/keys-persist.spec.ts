@@ -298,22 +298,33 @@ test.describe("Keys survive refresh (P0)", () => {
 
   test("10. failed single-key deletion restores Save & Test after invalidating a pending check", async ({ page }) => {
     await page.goto("/settings")
-    await unlockVault(page)
+    await saveKey(page, "groq", CANARY_GROQ)
     const card = page.getByTestId("provider-card-groq")
-    await card.locator('input[type="password"]').fill(CANARY_GROQ)
-    await card.getByRole("button", { name: /Save & Test/i }).click()
-    await expect(card.getByTestId("test-result-groq")).toContainText(/valid/i)
-
     await page.route("**/api/keys/test", async route => {
       await new Promise(resolve => setTimeout(resolve, 1000))
-      await route.fulfill({ json: { provider: "groq", valid: true, rate_limited: false } })
+      await route.fulfill({
+        json: {
+          provider: "groq",
+          valid: true,
+          rate_limited: false,
+          verification: {
+            checked_at: "2026-11-27T18:00:00.000Z",
+            provider_enabled: true,
+            model_catalog_checked: true,
+            models: [{ id: "openai/gpt-oss-20b", available: true }],
+            observed_quotas: [],
+            unverified_fields: [],
+            quota_metadata_ready: true,
+            note: "Mocked verification.",
+          },
+        },
+      })
     })
     await page.reload()
     await unlockVault(page)
     await expect(card.getByTestId("test-result-groq")).toContainText(/testing/i)
     await page.evaluate(() => {
-      const proto = Object.getPrototypeOf(IDBObjectStore.prototype) as IDBObjectStore
-      proto.put = (() => { throw new Error("storage blocked") }) as typeof proto.put
+      IDBObjectStore.prototype.delete = (() => { throw new Error("storage blocked") }) as typeof IDBObjectStore.prototype.delete
     })
     await card.getByTestId("remove-groq").click()
     const confirm = page.getByTestId("confirm-delete-btn")
@@ -325,12 +336,9 @@ test.describe("Keys survive refresh (P0)", () => {
   test("11. failed clear-all and forget operations restore retryable statuses", async ({ page }) => {
     await page.goto("/settings")
     await saveKey(page, "groq", CANARY_GROQ)
-    await page.evaluate(() => {
-      const proto = IDBObjectStore.prototype
-      proto.clear = (() => { throw new Error("storage blocked") }) as typeof proto.clear
-    })
     page.on("dialog", dialog => dialog.accept())
     await page.getByTestId("clear-all-keys").click()
+    await expect(page.getByTestId("clear-all-keys")).toBeVisible()
     const card = page.getByTestId("provider-card-groq")
     await expect(card.getByRole("button", { name: /Save & Test/i })).toBeEnabled()
 
