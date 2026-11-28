@@ -165,7 +165,7 @@ class GeminiProvider(AIProvider):
                     system_instruction = msg.content
                 else:
                     role = "model" if msg.role == "assistant" else "user"
-                    gemini_messages.append({"role": role, "parts": [msg.content]})
+                    gemini_messages.append({"role": role, "parts": [{"text": msg.content}]})
 
             if self._client is None:
                 raise ValueError("Gemini API key is required to generate content")
