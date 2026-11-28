@@ -101,9 +101,6 @@ async function restoreIndexedDbDelete(page: Page) {
 
 test.describe("Keys survive refresh (P0)", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem("assembly:cookie-choice", "accepted")
-    })
     await mockNetwork(page)
   })
 
@@ -396,6 +393,9 @@ test.describe("Keys survive refresh (P0)", () => {
   })
 
   test("12. failed forget keeps the encrypted vault and lets the user unlock again", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("assembly:cookie-choice", "accepted")
+    })
     await page.goto("/settings")
     await saveKey(page, "groq", CANARY_GROQ)
     await page.route("**/api/keys/test", async route => {
