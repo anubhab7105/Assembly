@@ -312,8 +312,8 @@ test.describe("Keys survive refresh (P0)", () => {
     await unlockVault(page)
     await expect(card.getByTestId("test-result-groq")).toContainText(/testing/i)
     await page.evaluate(() => {
-      const proto = Object.getPrototypeOf(indexedDB) as IDBFactory
-      proto.transaction = (() => { throw new Error("storage blocked") }) as typeof proto.transaction
+      const proto = Object.getPrototypeOf(IDBObjectStore.prototype) as IDBObjectStore
+      proto.put = (() => { throw new Error("storage blocked") }) as typeof proto.put
     })
     await card.getByTestId("remove-groq").click()
     const confirm = page.getByTestId("confirm-delete-btn")
@@ -326,11 +326,11 @@ test.describe("Keys survive refresh (P0)", () => {
     await page.goto("/settings")
     await saveKey(page, "groq", CANARY_GROQ)
     await page.evaluate(() => {
-      const proto = Object.getPrototypeOf(indexedDB) as IDBFactory
-      proto.transaction = (() => { throw new Error("storage blocked") }) as typeof proto.transaction
+      const proto = IDBObjectStore.prototype
+      proto.clear = (() => { throw new Error("storage blocked") }) as typeof proto.clear
     })
     page.on("dialog", dialog => dialog.accept())
-    await page.getByRole("button", { name: /clear all/i }).click().catch(() => {})
+    await page.getByTestId("clear-all-keys").click()
     const card = page.getByTestId("provider-card-groq")
     await expect(card.getByRole("button", { name: /Save & Test/i })).toBeEnabled()
 
