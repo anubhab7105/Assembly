@@ -147,6 +147,16 @@ export function KeysManager() {
     for (const providerId of providerIds) nextVerificationGeneration(providerId)
   }
 
+  const resetTestingStatuses = (providerIds: string[]) => {
+    setStatuses((prev) => {
+      const next = { ...prev }
+      for (const providerId of providerIds) {
+        if (next[providerId] === "testing") next[providerId] = "unknown"
+      }
+      return next
+    })
+  }
+
   // Restored credentials are not considered run-ready until the exact saved
   // key has been checked against the current provider catalogue again.
   const verifyRestoredProviderKeys = React.useCallback(async (
@@ -273,6 +283,7 @@ export function KeysManager() {
     try {
       await globalVault.clearAll()
     } catch {
+      resetTestingStatuses(Object.keys({ ...savedKeys, ...verificationGenerations.current }))
       toast({
         title: "Unable to remove saved keys",
         description: "Browser storage rejected the deletion, so some keys may still be saved. Try again or clear browser/site data.",
@@ -410,6 +421,7 @@ export function KeysManager() {
       await globalVault.removeKey(providerId)
     } catch {
       if (verificationGenerations.current[providerId] !== generation) return
+      resetTestingStatuses([providerId])
       toast({
         title: "Unable to remove key",
         description: "Browser storage rejected the deletion, so this key may still be saved. Try again or clear browser/site data.",
@@ -467,6 +479,7 @@ export function KeysManager() {
     try {
       await globalVault.clearAll()
     } catch {
+      resetTestingStatuses(Object.keys({ ...savedKeys, ...verificationGenerations.current }))
       toast({
         title: "Unable to clear saved keys",
         description: "Browser storage rejected the deletion, so some keys may still be saved. Try again or clear browser/site data.",
